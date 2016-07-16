@@ -2,10 +2,6 @@
 #
 # Drop-in replacement for python that runs python in our docker image, e.g. for Rodeo
 
-echo "$@" >> /tmp/bubo-python
+bin="`dirname "$0"`"
 
-exec docker run -i `if tty -s; then echo -t; fi` \
-  -v /Users:/Users \
-  -w "$PWD" \
-  caffe-jupyter:latest \
-  sh -c "python $*"
+exec "$bin"/docker-run python "$@"

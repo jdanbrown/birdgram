@@ -1,0 +1,9 @@
+#!/bin/bash -eux
+
+echo "$0" "$@" >> /tmp/bubo-python
+
+exec docker run -i `if tty -s; then echo -t; fi` \
+  -v /Users:/Users \
+  -w "$PWD" \
+  caffe-jupyter \
+  sh -c "$*"
