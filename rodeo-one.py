@@ -1,5 +1,5 @@
 # TODO Make this work from rodeo prefs to docker
-import os; os.chdir('/Users/danb/hack/bubo')
+# import os; os.chdir('/Users/danb/hack/bubo')
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +13,7 @@ import caffe
 # If you get "No module named _caffe", either you have not built pycaffe or you have the wrong path.
 
 # set display defaults
-#%matplotlib inline
+%matplotlib inline
 plt.rcParams['figure.figsize']      = (10, 10)  # large images
 plt.rcParams['image.interpolation'] = 'nearest' # don't interpolate: show square pixels
 plt.rcParams['image.cmap']          = 'gray'    # use grayscale output rather than a (potentially misleading) color heatmap
@@ -182,9 +182,11 @@ for layer_name, blob in net.blobs.iteritems():
 # The first fully connected layer, `fc6` (rectified)
 # - We show the output values and the histogram of the positive values
 plt.subplot(3, 1, 1); plt.plot(net.blobs['fc6'].data[0].flat)
-plt.subplot(3, 1, 2); plt.hist(net.blobs['fc6'].data[0].flat[net.blobs['fc6'].data[0].flat > 0], bins=100)
+plt.subplot(3, 1, 2); plt.hist(net.blobs['fc6'].data[0].flat[net.blobs['fc6'].data[0].flat > 0], bins=100); None
 
 # The final probability output, `prob`
 # - Note the cluster of strong predictions; the labels are sorted semantically
 # - The top peaks correspond to the top predicted labels, as shown above
 plt.subplot(3, 1, 3); plt.plot(net.blobs['prob'].data[0].flat)
+
+# eof

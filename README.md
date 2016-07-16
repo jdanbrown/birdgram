@@ -18,6 +18,9 @@ Run notebook in docker image:
 $ docker run -it -v ~/hack/bubo:/root/bubo -p 8888:8888 caffe-jupyter:latest sh -c 'jupyter notebook --ip 0.0.0.0 --debug --no-browser'
 ```
 
+XXX `--net=host` doesn't work as expected in Docker for Mac, since the "host" is xhyve, not osx:
+- https://forums.docker.com/t/should-docker-run-net-host-work/14215
+
 TODO Enable cpu parallelism in caffe:
 - http://stackoverflow.com/questions/31395729/how-to-enable-multithreading-with-caffe
 - https://github.com/BVLC/caffe/issues/1539
