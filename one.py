@@ -1,5 +1,4 @@
-# TODO Make this work from rodeo prefs to docker
-# import os; os.chdir('/Users/danb/hack/bubo')
+# TODO Encapsulate plt.savefig in backend, so we can use Xee (works in docker too!)
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +12,6 @@ import caffe
 # If you get "No module named _caffe", either you have not built pycaffe or you have the wrong path.
 
 # set display defaults
-%matplotlib inline
 plt.rcParams['figure.figsize']      = (10, 10)  # large images
 plt.rcParams['image.interpolation'] = 'nearest' # don't interpolate: show square pixels
 plt.rcParams['image.cmap']          = 'gray'    # use grayscale output rather than a (potentially misleading) color heatmap
@@ -23,6 +21,8 @@ model_id      = 'bvlc_reference_caffenet' # A variant of alexnet
 #model_id     = 'bvlc_alexnet'
 model_def     = '%(caffe_root)s/models/%(model_id)s/deploy.prototxt'         % locals()
 model_weights = '%(caffe_root)s/models/%(model_id)s/%(model_id)s.caffemodel' % locals()
+
+###
 
 if os.path.isfile(model_weights):
     print 'Found model[%(model_id)s]' % locals()
@@ -58,6 +58,8 @@ net.blobs['data'].reshape(
     #224, 224,  # image size is 227x227 [TODO Make googlenet work]
 )
 
+###
+
 # Pick your image
 image_path = caffe_root + 'examples/images/cat.jpg'
 #image_path = 'spectrograms/PC1_20090705_070000_0040.bmp'
@@ -71,6 +73,8 @@ net.blobs['data'].data[...] = transformed_image
 output = net.forward()
 output_prob = output['prob'][0] # the output probability vector for the first image in the batch
 print 'predicted class is:', output_prob.argmax()
+
+###
 
 # load ImageNet labels
 labels_file = caffe_root + 'data/ilsvrc12/synset_words.txt'
@@ -145,11 +149,11 @@ def tile_tiles(data):
     )
 
 #vis_pretiled(tile(lambda n: 7, net.params['conv2'][0].data[0]))
-vis_pretiled(tile_tiles(net.params['conv1'][0].data))
-vis_pretiled(tile_tiles(net.params['conv2'][0].data))
-vis_pretiled(tile_tiles(net.params['conv3'][0].data))
-vis_pretiled(tile_tiles(net.params['conv4'][0].data))
-vis_pretiled(tile_tiles(net.params['conv5'][0].data))
+vis_pretiled(tile_tiles(net.params['conv1'][0].data)); plt.savefig('conv1.png')
+vis_pretiled(tile_tiles(net.params['conv2'][0].data)); plt.savefig('conv2.png')
+vis_pretiled(tile_tiles(net.params['conv3'][0].data)); plt.savefig('conv3.png')
+vis_pretiled(tile_tiles(net.params['conv4'][0].data)); plt.savefig('conv4.png')
+vis_pretiled(tile_tiles(net.params['conv5'][0].data)); plt.savefig('conv5.png')
 
 ###
 
@@ -189,4 +193,4 @@ plt.subplot(3, 1, 2); plt.hist(net.blobs['fc6'].data[0].flat[net.blobs['fc6'].da
 # - The top peaks correspond to the top predicted labels, as shown above
 plt.subplot(3, 1, 3); plt.plot(net.blobs['prob'].data[0].flat)
 
-# eof
+plt.savefig('fc.png')

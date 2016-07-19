@@ -1,22 +1,19 @@
 #!/bin/bash -eux
 
+bin="`dirname "$0"`"
+
 # Else `ipython kernel -f ... --ip 0.0.0.0 ...` will reuse params from the existing file and ignore cli args
 rm -fv hydrogen/connection.json
 
 # `--net=host` doesn't work in Docker for Mac, have to explicitly map all ports we use:
-# -  https://forums.docker.com/t/should-docker-run-net-host-work/14215
-exec docker run -i `if tty -s; then echo -t; fi` \
-  -v /Users:/Users \
-  -w "$PWD" \
-  -p 53000-53004:53000-53004 \
-  caffe-jupyter \
-  sh -c '
-    ipython kernel \
-      -f hydrogen/connection.json \
-      --ip 0.0.0.0 \
-      --control=53000 \
-      --shell=53001 \
-      --iopub=53002 \
-      --hb=53003 \
-      --stdin=53004
-  '
+# - https://forums.docker.com/t/should-docker-run-net-host-work/14215
+RUN_ARGS='-p 53000-53004:53000-53004' \
+exec "$bin"/docker-run \
+  ipython kernel \
+  -f hydrogen/connection.json \
+  --ip 0.0.0.0 \
+  --control=53000 \
+  --shell=53001 \
+  --iopub=53002 \
+  --hb=53003 \
+  --stdin=53004

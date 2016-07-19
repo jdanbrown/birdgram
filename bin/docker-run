@@ -1,9 +1,10 @@
 #!/bin/bash -eux
 
-echo "$0" "$@" >> /tmp/bubo-python
+#echo "$0" "$@" >> /tmp/bubo-python
 
 exec docker run -i `if tty -s; then echo -t; fi` \
-  -v /Users:/Users \
-  -w "$PWD" \
-  caffe-jupyter \
-  sh -c "$*"
+  ${RUN_v:--v "$HOME"/.ipython:/root/.ipython -v "$HOME"/.jupyter:/root/.jupyter -v /Users:/Users} \
+  ${RUN_w:--w "$PWD"} \
+  ${RUN_ARGS:-} \
+  ${IMAGE:-caffe-jupyter} \
+  ${RUN_SH:-sh -c} "$*"

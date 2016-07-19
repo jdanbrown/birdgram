@@ -7,7 +7,7 @@ bird song classifier, ftw
 
 Build docker image with caffe + jupyter:
 ```sh
-$ docker build docker/ -t caffe-jupyter:latest
+$ docker build -t caffe-jupyter:latest docker/
 ```
 
 Run notebook in docker image:
@@ -15,7 +15,12 @@ Run notebook in docker image:
   - https://github.com/ipython/ipython/issues/7062
   - https://github.com/jupyter-attic/docker-notebook/pull/6
 ```sh
-$ docker run -it -v ~/hack/bubo:/root/bubo -p 8888:8888 caffe-jupyter:latest sh -c 'jupyter notebook --ip 0.0.0.0 --debug --no-browser'
+$ RUN_ARGS='-p 8888:8888' bin/docker-run jupyter notebook --ip 0.0.0.0 --debug --no-browser
+```
+
+Run ipython in docker image:
+```
+$ bin/docker-run ipython
 ```
 
 XXX `--net=host` doesn't work as expected in Docker for Mac, since the "host" is xhyve, not osx:
