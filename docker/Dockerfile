@@ -48,6 +48,7 @@ RUN pip install --upgrade \
       jupyter==1.0.0 \
       jupyterlab==0.1.1 \
       jupyter-console==5.0.0 \
+      ggplot==0.10.4 \
       PyWavelets==0.4.0 \
       PyGASP==0.2
 
@@ -58,3 +59,8 @@ RUN mkdir -p $(jupyter --data-dir)/nbextensions \
  && pip install https://github.com/ipython-contrib/IPython-notebook-extensions/tarball/fd82fd6 \
  && (cd $(jupyter --data-dir)/nbextensions && git clone https://github.com/lambdalisue/jupyter-vim-binding vim_binding) \
  && (cd $(jupyter --data-dir)/nbextensions/vim_binding && git checkout 94769bd)
+
+# Make linux look in the same place for matplotlibrc as all other platforms (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)
+# (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)
+# - http://matplotlib.org/users/customizing.html#customizing-matplotlib
+ENV MATPLOTLIBRC "/root/.matplotlib"

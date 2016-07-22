@@ -1,10 +1,19 @@
-#!/bin/bash -eux
+#!/bin/bash -eu
 
-#echo "$0" "$@" >> /tmp/bubo-python
+if tty -s; then
+  it='-it'
+else
+  it='-i'
+fi
 
-exec docker run -i `if tty -s; then echo -t; fi` \
-  ${RUN_v:--v "$HOME"/.ipython:/root/.ipython -v "$HOME"/.jupyter:/root/.jupyter -v /Users:/Users} \
-  ${RUN_w:--w "$PWD"} \
+set -x
+
+exec docker run "$it" \
+  -v "$HOME"/.ipython:/root/.ipython \
+  -v "$HOME"/.jupyter:/root/.jupyter \
+  -v "$HOME"/.matplotlib:/root/.matplotlib \
+  -v /Users:/Users \
+  -w "$PWD" \
   ${RUN_ARGS:-} \
   ${IMAGE:-caffe-jupyter} \
-  ${RUN_SH:-sh -c} "$*"
+  ${*:+${RUN_SH:-sh -c} "$*"}
