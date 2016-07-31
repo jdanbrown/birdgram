@@ -21,6 +21,7 @@ from matplotlib._pylab_helpers import Gcf
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.backend_bases import FigureManagerBase
 from matplotlib.figure import Figure
+import matplotlib.image
 import matplotlib.pyplot
 from PIL import Image
 
@@ -45,10 +46,18 @@ def new_figure_manager(num, *args, **kwargs):
         num,
     )
 
+def new_fig_path():
+    figs_dir = _rcParams['xee.path']
+    os.system("mkdir -p '%s'" % figs_dir) # Don't error like os.makedirs
+    return os.path.join(
+        figs_dir,
+        'fig-%s.png' % datetime.utcnow().isoformat().replace(':', '-').replace('.', '-'),
+    )
+
 class FigureManagerXee(FigureManagerBase):
 
     def show(self):
-        fig_path = self._new_fig_path()
+        fig_path = new_fig_path()
         if _rcParams['xee.show_via'] == 'savefig':
             self._show_via_savefig(fig_path)
         else:
@@ -78,13 +87,5 @@ class FigureManagerXee(FigureManagerBase):
     # TODO Maybe bad to call multiple times?
     def close(self):
         Gcf.destroy(self.num)
-
-    def _new_fig_path(self):
-        figs_dir = _rcParams['xee.path']
-        os.system("mkdir -p '%s'" % figs_dir) # Don't error like os.makedirs
-        return os.path.join(
-            figs_dir,
-            'fig-%s.png' % datetime.utcnow().isoformat().replace(':', '-').replace('.', '-'),
-        )
 
 FigureManager = FigureManagerXee
