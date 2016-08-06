@@ -61,8 +61,9 @@ RUN mkdir -p $(jupyter --data-dir)/nbextensions \
  && (cd $(jupyter --data-dir)/nbextensions/vim_binding && git checkout 94769bd)
 
 # More python packages [TODO Merge into pip install above]
-RUN pip install --upgrade \
-      ipdb==0.10.1
+RUN pip install \
+      ipdb==0.10.1 \
+      ggplot==0.11.0
 
 # Make linux look in the same place for matplotlibrc as all other platforms (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)
 # (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)

@@ -1,17 +1,23 @@
 import caffe
 from contextlib import contextmanager
+import ggplot as gg
 import ipdb
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import pandas as pd
 from pprint import pprint
 
-import bubo.util;            reload(bubo.util)            # XXX dev: Reload in case we're in repl
-import bubo.mpl_backend_xee; reload(bubo.mpl_backend_xee) # XXX dev: Reload in case we're in repl
+import bubo.util;            reload(bubo.util)            # XXX dev: repl workflow
+import bubo.mpl_backend_xee; reload(bubo.mpl_backend_xee) # XXX dev: repl workflow
 
-from bubo.util import caffe_root, plot_image, show_shapes
+from bubo.util import caffe_root, plot_img, plot_gg, show_shapes, show_tuple_tight
+from bubo.util import gg_layer, gg_xtight, gg_ytight, gg_tight
 from bubo.util import shell, singleton, puts
+
+###
+# Setup
 
 model_id      = 'bvlc_reference_caffenet' # A variant of alexnet
 #model_id     = 'bvlc_googlenet' # TODO
@@ -27,12 +33,12 @@ else:
 
 caffe.set_mode_cpu()
 net = caffe.Net(
-    model_def,      # defines the structure of the model
-    model_weights,  # contains the trained weights
-    caffe.TEST,     # use test mode (e.g., don't perform dropout)
+    model_def,      # Defines the structure of the model
+    model_weights,  # Contains the trained weights
+    caffe.TEST,     # Use test mode (e.g. don't perform dropout)
 )
 
-# load the mean ImageNet image (as distributed with Caffe) for subtraction
+# Load the mean ImageNet image (as distributed with Caffe) for subtraction
 mu = np.load('%(caffe_root)s/python/caffe/imagenet/ilsvrc_2012_mean.npy' % locals())
 mu = mu.mean(1).mean(1)  # average over pixels to obtain the mean (BGR) pixel values
 print 'mean-subtracted values:', zip('BGR', mu)
@@ -44,8 +50,8 @@ transformer.set_mean('data', mu)            # subtract the dataset-mean value in
 transformer.set_raw_scale('data', 255)      # rescale from [0, 1] to [0, 255]
 transformer.set_channel_swap('data', (2,1,0))  # swap channels from RGB to BGR
 
-# set the size of the input (we can skip this if we're happy
-# with the default; we can also change it later, e.g., for different batch sizes)
+# Set the size of the input (we can skip this if we're happy with the default; we can also change it later, e.g., for
+# different batch sizes)
 net.blobs['data'].reshape(
     50,        # batch size
     3,         # 3-channel (BGR) images
@@ -53,50 +59,35 @@ net.blobs['data'].reshape(
     #224, 224, # image size is 227x227 [TODO Make googlenet work]
 )
 
-# Pick your image
-image_path = '%(caffe_root)s/examples/images/cat.jpg' % locals()
-#image_path = 'spectrograms/PC1_20090705_070000_0040.bmp'
-image = caffe.io.load_image(image_path)
-transformed_image = transformer.preprocess('data', image)
-plot_image(image)
-
 ###
-
-# copy the image data into the memory allocated for the net
-net.blobs['data'].data[...] = transformed_image
-# perform classification (slow, ~secs)
-output = net.forward()
-output_prob = output['prob'][0] # the output probability vector for the first image in the batch
-print 'predicted class is:', output_prob.argmax()
-
-# load ImageNet labels
-labels_file = '%(caffe_root)s/data/ilsvrc12/synset_words.txt' % locals()
-if not os.path.exists(labels_file):
-    shell('%(caffe_root)s/data/ilsvrc12/get_ilsvrc_aux.sh' % locals())
-labels = np.loadtxt(labels_file, str, delimiter='\t')
-print 'probabilities and labels:'
-top_inds = output_prob.argsort()[::-1][:20] # top k predictions from softmax output
-pprint(zip(output_prob[top_inds], labels[top_inds]))
-
 # For each layer, show the shapes of the activations and params:
 #   blob       activations  (batch_size, channel_dim, height, width) -- typically, but not always
 #   params[0]  weights      (output_channels, input_channels, filter_height, filter_width)
 #   params[1]  biases       (output_channels,)
+
 def show_shape(shape, name, fields):
     return '%s(%s)' % (name, ', '.join(['%s=%s' % (d,s) for (s,d) in zip(shape, fields)]))
-for layer_name, blob in net.blobs.iteritems():
-    [param_weights, param_biases] = net.params.get(layer_name, [None, None])
+
+for layer, blob in net.blobs.iteritems():
+    [param_weights, param_biases] = net.params.get(layer, [None, None])
     print '%-52s %-29s %-31s %s' % (
-        layer_name,
+        layer,
         show_shape(blob.data.shape, 'act', ('b', 'c', 'h', 'w')),
         param_weights and show_shape(param_weights.data.shape, 'weight', ('o', 'i', 'h', 'w')) or '',
         param_biases  and show_shape(param_biases.data.shape,  'bias',   ('o', 'i', 'h', 'w')) or '',
     )
 
 ###
+# Plot params
 
 def norm(data):
     return (data - data.min()) / (data.max() - data.min())
+
+def w_from_figure_wh_ratio(n_out):
+    [w_figure_in, h_figure_in] = plt.rcParams['figure.figsize']
+    figure_wh_ratio            = w_figure_in / float(h_figure_in)
+    w_tiles_per_figure         = np.sqrt(n_out * figure_wh_ratio)
+    return w_tiles_per_figure
 
 def tile(w, data):
     show_shapes('tile.pre', data)
@@ -150,58 +141,108 @@ def tile_tiles(data):
     )
     return show_shapes('tile_tiles.post', data)
 
-def vis_layer_params(net, layer_name):
-    data = net.params[layer_name][0].data # [param_weights, param_biases]
-    with show_shapes.bracketing('vis_layer_params[%s]' % layer_name, data):
-        plot_image(tile_tiles(data))
+# Projections from layer params: net.params[layer] = [weights, biases]
+just_weights                     = lambda (ws,bs): ws.data
+just_weights_sorted_by_bias      = lambda (ws,bs): np.array(map(lambda (w,b): w, _sorted_by_bias((ws,bs))))
+weights_plus_bias                = lambda (ws,bs): np.array(map(lambda (x,y): x+y, zip(ws.data, bs.data)))
+weights_plus_bias_sorted_by_bias = lambda (ws,bs): np.array(map(lambda (w,b): w+b, _sorted_by_bias((ws,bs))))
+_sorted_by_bias                  = lambda (ws,bs): sorted(zip(ws.data, bs.data), key = lambda (w,b): -b)
 
-vis_layer_params(net, 'conv1')
-vis_layer_params(net, 'conv2')
-vis_layer_params(net, 'conv3')
-vis_layer_params(net, 'conv4')
-vis_layer_params(net, 'conv5')
+def plot_layer_params_weights(net, layer, data_f, get_weights = just_weights):
+    data = get_weights(net.params[layer])
+    with show_shapes.bracketing('plot_layer_params_weights[%s]' % layer, data, disable=True):
+        plot_img(
+            data_f(data),
+            'layer-params-weights-%s-%s' % (layer, show_tuple_tight(data.shape)),
+        )
+
+conv_layers = filter(lambda (layer, (weights, biases)): len(weights.data.shape) == 4, net.params.items())
+fc_layers   = filter(lambda (layer, (weights, biases)): len(weights.data.shape) != 4, net.params.items())
+
+# Plot layer weights
+for layer, params in conv_layers:
+    plot_layer_params_weights(net, layer, tile_tiles)
+for layer, params in fc_layers:
+    # Very slow, very big, very hardly insightful...
+    plot_layer_params_weights(net, layer, lambda x: x.transpose(1,0))
+
+# Plot layer biases
+plot_gg(gg_layer(
+    gg.ggplot(gg.aes(x='layer', y='bias'),
+        pd.DataFrame([
+            {'bias': bias, 'layer': layer}
+            for layer, (weights, biases) in net.params.items()
+            for bias in biases.data
+        ])
+    ),
+    gg.geom_violin(),
+    gg.ggtitle('layer params biases'),
+))
 
 ###
+# Run net forward
 
-# TODO You are here (currently produces lots of junk)
+# Pick image
+img_path  = '%(caffe_root)s/examples/images/cat.jpg' % locals()
+#img_path = 'spectrograms/PC1_20090705_070000_0040.bmp'
 
-def vis_square(data):
-    'data: an array of shape (n, height, width) or (n, height, width, 3)'
-    plot_image(tile(np.sqrt, norm(data)))
+# Load image
+img                         = caffe.io.load_image(img_path)
+transformed_img             = transformer.preprocess('data', img)
+net.blobs['data'].data[...] = transformed_img # Copy the image data onto the data layer
 
-for layer_name, blob in net.blobs.iteritems():
+# Perform classification (slow, ~secs)
+output      = net.forward()
+output_prob = output['prob'][0] # The output probability vector for the first image in the batch
+print 'Predicted class: %s' % output_prob.argmax()
 
-    [param_weights, param_biases] = net.params.get(layer_name, [None, None])
-    print '\nlayer[%s]\n- blob.data.shape[%s]\n- param_weights.data.shape[%s]\n- param_biases.data.shape[%s]\n' % (
-        layer_name,
-        blob.data.shape,
-        param_weights and param_weights.data.shape,
-        param_biases  and param_biases.data.shape,
+# Show probs with ImageNet labels
+labels_file = '%(caffe_root)s/data/ilsvrc12/synset_words.txt' % locals()
+if not os.path.exists(labels_file):
+    shell('%(caffe_root)s/data/ilsvrc12/get_ilsvrc_aux.sh' % locals())
+labels = np.loadtxt(labels_file, str, delimiter='\t')
+top_inds = output_prob.argsort()[::-1][:20] # Top k predictions from softmax output
+pprint(zip(output_prob[top_inds], labels[top_inds]))
+
+###
+# Plot activations
+#   - FIXME Make gg_tight work with facet('free') [https://github.com/yhat/ggplot/issues/516]
+
+plot_img(img, 'img-%s' % os.path.basename(os.path.splitext(img_path)[0]))
+
+# Only plot first image in batch (50), for now
+batch_i = 0
+
+def plot_conv_acts(layer, acts):
+    data = acts.data[batch_i]
+    plot_img(
+        tile(w_from_figure_wh_ratio, norm(data)),
+        'layer-acts-%s-%s-(i=%s)' % (layer, show_tuple_tight(data.shape), batch_i),
     )
 
-    try:
-        vis_square(blob.data[0])
-    except Exception, e:
-        print '    Error:', e
+conv_layers = filter(lambda (layer, acts): len(acts.data.shape) == 4, net.blobs.items())
+fc_layers   = filter(lambda (layer, acts): len(acts.data.shape) != 4, net.blobs.items())
 
-    if not param_weights:
-        print 'layer[%s], param_weights[%s]' % (layer_name, param_weights)
-    else:
-        print 'layer[%s], param_weights.data.shape[%s]' % (layer_name, param_weights.data.shape)
-        try:
-            vis_square(param_weights.data.transpose(0, 2, 3, 1)) # e.g. (96,3,11,11) -> (96,11,11,3)
-        except Exception, e:
-            print '    Error:', e
+# Plot conv acts
+for layer, acts in conv_layers:
+    plot_conv_acts(layer, acts)
 
-###
-
-# The first fully connected layer, `fc6` (rectified)
-# - We show the output values and the histogram of the positive values
-plt.subplot(3, 1, 1); plt.plot(net.blobs['fc6'].data[0].flat)
-plt.subplot(3, 1, 2); plt.hist(net.blobs['fc6'].data[0].flat[net.blobs['fc6'].data[0].flat > 0], bins=100); None
-# The final probability output, `prob`
-# - Note the cluster of strong predictions; the labels are sorted semantically
-# - The top peaks correspond to the top predicted labels, as shown above
-plt.subplot(3, 1, 3); plt.plot(net.blobs['prob'].data[0].flat)
-plt.tight_layout()
-plt.show()
+# Plot fc acts
+df = pd.concat([
+    pd.DataFrame({'act': acts.data[batch_i], 'layer': layer}).reset_index()
+    for layer, acts in fc_layers
+])
+plot_gg(gg_layer(
+    gg.ggplot(df, gg.aes(y='act', x='index')),
+    gg.geom_point(alpha=.5),
+    gg.facet_wrap(x='layer', scales='free'),
+    gg.ggtitle('layer acts fc/prob points (i=%s)' % batch_i),
+))
+plot_gg(gg_layer(
+    gg.ggplot(df, gg.aes(x='act')),
+    gg.geom_histogram(bins=25, size=0),
+    gg.facet_wrap(x='layer', scales='free'),
+    gg.scale_y_log(),
+    gg.ylim(low=0.1),
+    gg.ggtitle('layer acts fc/prob histo (i=%s)' % batch_i),
+))

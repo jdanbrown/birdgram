@@ -1,4 +1,6 @@
 from contextlib import contextmanager
+from copy import deepcopy
+import ggplot as gg
 import matplotlib as mpl
 import matplotlib.image
 import matplotlib.pyplot as plt
@@ -18,15 +20,63 @@ def shell(cmd):
 def singleton(cls):
     return cls()
 
+def show_tuple_tight(xs):
+    return '(%s)' % ','.join(map(str, xs))
+
 def puts(x):
     print x
     return x
 
-def plot_image(data):
-    matplotlib.image.imsave(bubo.mpl_backend_xee.new_fig_path(), data)
+class gg_xtight(object):
+    def __init__(self, margin=0.05):
+        self.margin = margin
+    def __radd__(self, g):
+        g          = deepcopy(g)
+        xs         = g.data[g._aes['x']]
+        lims       = [xs.min(), xs.max()]
+        margin_abs = float(self.margin) * (lims[1] - lims[0])
+        g.xlimits  = [xs.min() - margin_abs, xs.max() + margin_abs]
+        return g
 
-def plot_image_via_imshow(data):
-    'Results in lots of distorted pixels, huge PITA, use plot_image instead'
+class gg_ytight(object):
+    def __init__(self, margin=0.05):
+        self.margin = margin
+    def __radd__(self, g):
+        g          = deepcopy(g)
+        ys         = g.data[g._aes['y']]
+        lims       = [ys.min(), ys.max()]
+        margin_abs = float(self.margin) * (lims[1] - lims[0])
+        g.ylimits  = [ys.min() - margin_abs, ys.max() + margin_abs]
+        return g
+
+class gg_tight(object):
+    def __init__(self, margin=0.05):
+        self.margin = margin
+    def __radd__(self, g):
+        return g + gg_xtight(self.margin) + gg_ytight(self.margin)
+
+def gg_layer(*args):
+    'More uniform syntax than \ and + for many-line layer addition'
+    return reduce(lambda a,b: a + b, args)
+
+class gg_theme_keep_defaults_for(gg.theme_gray):
+    def __init__(self, *rcParams):
+        super(gg_theme_keep_defaults_for, self).__init__()
+        for x in rcParams:
+            del self._rcParams[x]
+
+def plot_gg(ggplot):
+    ggplot += gg_theme_keep_defaults_for('figure.figsize')
+    with bubo.mpl_backend_xee.basename_suffix(ggplot.title):
+        repr(ggplot) # (Over)optimized for repl/notebook usage (repr(ggplot) = ggplot.make(); plt.show())
+    #return ggplot # Don't return to avoid plotting a second time if repl/notebook
+
+def plot_img(data, basename_suffix=''):
+    with bubo.mpl_backend_xee.basename_suffix(basename_suffix):
+        return bubo.mpl_backend_xee.imsave_xee(data)
+
+def plot_img_via_imshow(data):
+    'Makes lots of distorted pixels, huge PITA, use imsave/plot_img instead'
     (h,w) = data.shape[:2] # (h,w) | (h,w,3)
     dpi   = 100
     k     = 1 # Have to scale this up to ~4 to avoid distorted pixels
@@ -59,14 +109,17 @@ class show_shapes:
         self.shapes = None
 
     @contextmanager
-    def bracketing(self, desc, data):
-        self.shapes = []
-        self.shapes.append(self._format_shape(data.shape))
-        try:
+    def bracketing(self, desc, data, disable=False):
+        if disable:
             yield
-            print '%s.show_shapes:%s' % (desc, self._show_compressed_shapes(1, self._compress_seq_pairs(self.shapes)))
-        finally:
-            self.shapes = None
+        else:
+            self.shapes = []
+            self.shapes.append(self._format_shape(data.shape))
+            try:
+                yield
+                print '%s.show_shapes:%s' % (desc, self._show_compressed_shapes(1, self._compress_seq_pairs(self.shapes)))
+            finally:
+                self.shapes = None
 
     def __call__(self, desc, data):
         if self.shapes is not None:
