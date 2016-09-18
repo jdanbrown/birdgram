@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 
-class DynVar:
+class dynvar:
 
     def __init__(self, value):
         self._values = [value]

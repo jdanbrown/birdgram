@@ -26,13 +26,13 @@ import matplotlib.pyplot
 from PIL import Image
 import re
 
-from bubo.dynvar import DynVar
+from bubo.dynvar import dynvar
 
 # TODO Where to put these? Any way to get custom keys into matplotlibrc?
 #   - https://github.com/matplotlib/matplotlib/blob/master/lib/matplotlib/rcsetup.py#L885
 #   - https://github.com/matplotlib/matplotlib/blob/master/lib/matplotlib/__init__.py#L1119
 _rcParams = {
-    'xee.path':                     'data/figs',
+    'xee.path':                     'data/fig',
     'xee.show_via':                 'savefig', # savefig | canvas
     'xee.platform.Darwin.open_cmd': 'open -g -a Xee³ %(fig_path)s',
     'xee.platform.Linux.open_cmd':  '',
@@ -77,7 +77,7 @@ class FigureManagerXee(FigureManagerBase):
 
 FigureManager = FigureManagerXee
 
-basename_suffix = DynVar(None)
+basename_suffix = dynvar(None)
 
 def new_fig_path():
     figs_dir = _rcParams['xee.path']
@@ -87,7 +87,7 @@ def new_fig_path():
         '%s.png' % '-'.join(filter(lambda x: x, [
             'fig',
             re.sub('[:.-]', '', datetime.utcnow().isoformat()),
-            re.sub('[\s/]', '-', (basename_suffix.value() or '')).lower(),
+            re.sub('[\s/:]+', '-', (basename_suffix.value() or '')).lower(),
         ]))
     )
 

@@ -9,15 +9,20 @@ import os
 import pandas as pd
 from pprint import pprint
 
-import bubo.util;            reload(bubo.util)            # XXX dev: repl workflow
-import bubo.mpl_backend_xee; reload(bubo.mpl_backend_xee) # XXX dev: repl workflow
+# XXX dev: repl workflow
+exec '; '.join(['import %s; reload(%s)' % (m, m) for m in [
+    'bubo.util',
+    'bubo.dynvar',
+    'bubo.mpl_backend_xee',
+]])
 
 from bubo.util import caffe_root, plot_img, plot_gg, show_shapes, show_tuple_tight
 from bubo.util import gg_layer, gg_xtight, gg_ytight, gg_tight
 from bubo.util import shell, singleton, puts
 
-###
+#
 # Setup
+#
 
 model_id      = 'bvlc_reference_caffenet' # A variant of alexnet
 #model_id     = 'bvlc_googlenet' # TODO
@@ -59,11 +64,12 @@ net.blobs['data'].reshape(
     #224, 224, # image size is 227x227 [TODO Make googlenet work]
 )
 
-###
+#
 # For each layer, show the shapes of the activations and params:
 #   blob       activations  (batch_size, channel_dim, height, width) -- typically, but not always
 #   params[0]  weights      (output_channels, input_channels, filter_height, filter_width)
 #   params[1]  biases       (output_channels,)
+#
 
 def show_shape(shape, name, fields):
     return '%s(%s)' % (name, ', '.join(['%s=%s' % (d,s) for (s,d) in zip(shape, fields)]))
@@ -77,8 +83,9 @@ for layer, blob in net.blobs.iteritems():
         param_biases  and show_shape(param_biases.data.shape,  'bias',   ('o', 'i', 'h', 'w')) or '',
     )
 
-###
-# Plot params
+#
+# Plot params: defs (fast)
+#
 
 def norm(data):
     return (data - data.min()) / (data.max() - data.min())
@@ -156,6 +163,10 @@ def plot_layer_params_weights(net, layer, data_f, get_weights = just_weights):
             'layer-params-weights-%s-%s' % (layer, show_tuple_tight(data.shape)),
         )
 
+#
+# Plot params: go (slow)
+#
+
 conv_layers = filter(lambda (layer, (weights, biases)): len(weights.data.shape) == 4, net.params.items())
 fc_layers   = filter(lambda (layer, (weights, biases)): len(weights.data.shape) != 4, net.params.items())
 
@@ -179,17 +190,28 @@ plot_gg(gg_layer(
     gg.ggtitle('layer params biases'),
 ))
 
-###
-# Run net forward
+#
+# Image to classify
+#
 
 # Pick image
-img_path  = '%(caffe_root)s/examples/images/cat.jpg' % locals()
-#img_path = 'spectrograms/PC1_20090705_070000_0040.bmp'
+#img_path  = '%(caffe_root)s/examples/images/cat.jpg' % locals()
+#img_path  = 'data/img/cat-pizza.jpg'
+#img_path = 'data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090705_070000_0040.bmp'
+img_path = 'data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100705_050001_0040.bmp'
+#img_path = ... # TODO
 
 # Load image
+img_desc                    = 'img-%s' % os.path.basename(os.path.splitext(img_path)[0])
 img                         = caffe.io.load_image(img_path)
 transformed_img             = transformer.preprocess('data', img)
 net.blobs['data'].data[...] = transformed_img # Copy the image data onto the data layer
+
+plot_img(img, img_desc)
+
+#
+# Run net forward
+#
 
 # Perform classification (slow, ~secs)
 output      = net.forward()
@@ -204,11 +226,10 @@ labels = np.loadtxt(labels_file, str, delimiter='\t')
 top_inds = output_prob.argsort()[::-1][:20] # Top k predictions from softmax output
 pprint(zip(output_prob[top_inds], labels[top_inds]))
 
-###
+#
 # Plot activations
 #   - FIXME Make gg_tight work with facet('free') [https://github.com/yhat/ggplot/issues/516]
-
-plot_img(img, 'img-%s' % os.path.basename(os.path.splitext(img_path)[0]))
+#
 
 # Only plot first image in batch (50), for now
 batch_i = 0
@@ -217,7 +238,7 @@ def plot_conv_acts(layer, acts):
     data = acts.data[batch_i]
     plot_img(
         tile(w_from_figure_wh_ratio, norm(data)),
-        'layer-acts-%s-%s-(i=%s)' % (layer, show_tuple_tight(data.shape), batch_i),
+        '%s-layer-acts-%s-%s-(i=%s)' % (img_desc, layer, show_tuple_tight(data.shape), batch_i),
     )
 
 conv_layers = filter(lambda (layer, acts): len(acts.data.shape) == 4, net.blobs.items())
@@ -236,7 +257,7 @@ plot_gg(gg_layer(
     gg.ggplot(df, gg.aes(y='act', x='index')),
     gg.geom_point(alpha=.5),
     gg.facet_wrap(x='layer', scales='free'),
-    gg.ggtitle('layer acts fc/prob points (i=%s)' % batch_i),
+    gg.ggtitle('%s layer acts fc/prob points (i=%s)' % (img_desc, batch_i)),
 ))
 plot_gg(gg_layer(
     gg.ggplot(df, gg.aes(x='act')),
@@ -244,5 +265,5 @@ plot_gg(gg_layer(
     gg.facet_wrap(x='layer', scales='free'),
     gg.scale_y_log(),
     gg.ylim(low=0.1),
-    gg.ggtitle('layer acts fc/prob histo (i=%s)' % batch_i),
+    gg.ggtitle('%s layer acts fc/prob histo (i=%s)' % (img_desc, batch_i)),
 ))
