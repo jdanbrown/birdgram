@@ -1,3 +1,8 @@
+.Rproj.user/
+bubo.Rproj
+*.Rhistory
+*.RData
+*.Ruserdata
 *.pyc
 .ipynb_checkpoints/
 data
