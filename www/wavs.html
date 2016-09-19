@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8"/>
+<title>Wavs</title>
+
+<!-- http://wavesurfer-js.org/docs/ -->
+<script src="lib/wavesurfer.min.js"></script>
+
+<script src="//code.jquery.com/jquery-3.1.0.min.js"></script>
+<script src="//underscorejs.org/underscore-min.js"></script>
+<!--
+<script src="https://facebook.github.io/react/js/react.js"></script>
+<script src="https://facebook.github.io/react/js/react-dom.js"></script>
+<script src="https://unpkg.com/babel-core@5.8.38/browser.min.js"></script>
+-->
+
+<style type="text/css">
+
+wave canvas {
+  display: none; /* So we can show a bg img */
+}
+
+</style>
+</head>
+<body>
+
+<div id="wavs"/>
+
+<script>
+
+var wavSetConfs = {
+  'recordings': {head: null},
+  'mlsp-2013':  {head: null},
+};
+
+var state = {
+  playing: false,
+  activeWS: null,
+  wss: [],
+}
+
+var togglePlayPause = function() {
+  //console.log(state.playing ? 'Pausing' : 'Playing');
+  state.playing = !state.playing;
+  if (state.activeWS) {
+    state.activeWS.playPause();
+  }
+};
+
+var seekTo = function(ws, x) {
+  //console.log('Seek:', ws.container.id, x);
+  ws.seekTo(x);
+};
+
+$.getJSON('wavs.json', null, function(wavs) {
+  window.wavs = wavs;
+  $(wavs).each(function(i, wavSet) {
+    var conf = wavSetConfs[wavSet.id];
+    console.log('Loading set: ' + wavSet.id + ' [' + JSON.stringify(conf) + ']');
+    $(wavSet.uris).slice(0, Number.isInteger(conf.head) ? conf.head : wavSet.uris.length).each(function(i, wav) {
+      mkWav(wav.wavUri, wav.imgUri);
+    });
+  });
+});
+
+var mkWav = function(wavUri, imgUri) {
+
+  var wavContainer = $('<div>', {'id': 'container-' + wavUri});
+  wavContainer.appendTo($('#wavs'));
+
+  $('<p>')
+    .text(wavUri)
+    .css({'margin-bottom': '0', 'margin-top': '5px'})
+    .appendTo(wavContainer);
+
+  var wav = $('<div>', {'id': wavUri}).get(0);
+  wav.style.backgroundImage = "url('" + imgUri + "')";
+  wav.style.backgroundSize  = '100% 100%';
+  $(wav).appendTo(wavContainer);
+
+  var ws = WaveSurfer.create({
+    container: wav,
+    interact: false,
+  });
+  ws.load(wavUri);
+  state.wss.push(ws);
+
+  $(wav).on('click', function(e) {
+    seekTo(ws, (e.pageX - $(wav).offset().left) / $(wav).width());
+    togglePlayPause();
+  });
+
+  $(wav).on('mousemove', function(e) {
+    if (state.playing) {
+      seekTo(ws, (e.pageX - $(wav).offset().left) / $(wav).width());
+    }
+  });
+
+  $(wav).on('mouseenter', function(e) {
+    state.activeWS = ws;
+    if (state.playing) {
+      ws.play();
+    }
+  });
+
+  $(wav).on('mouseleave', function(e) {
+    state.activeWS = null;
+    if (state.playing) {
+      ws.pause();
+    }
+  });
+
+};
+
+$(document).keypress(function(e) {
+  if (e.key == ' ') {
+    togglePlayPause();
+    e.preventDefault();
+  }
+});
+
+</script>
+
+</body>
+</html>

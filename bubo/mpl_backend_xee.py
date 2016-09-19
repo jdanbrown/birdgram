@@ -77,19 +77,23 @@ class FigureManagerXee(FigureManagerBase):
 
 FigureManager = FigureManagerXee
 
-basename_suffix = dynvar(None)
+basename_suffix   = dynvar(None)
+override_fig_path = dynvar(None)
 
 def new_fig_path():
-    figs_dir = _rcParams['xee.path']
-    os.system("mkdir -p '%s'" % figs_dir) # Don't error like os.makedirs
-    return os.path.join(
-        figs_dir,
-        '%s.png' % '-'.join(filter(lambda x: x, [
-            'fig',
-            re.sub('[:.-]', '', datetime.utcnow().isoformat()),
-            re.sub('[\s/:]+', '-', (basename_suffix.value() or '')).lower(),
-        ]))
-    )
+    if override_fig_path.value():
+        return override_fig_path.value()
+    else:
+        figs_dir = _rcParams['xee.path']
+        os.system("mkdir -p '%s'" % figs_dir) # Don't error like os.makedirs
+        return os.path.join(
+            figs_dir,
+            '%s.png' % '-'.join(filter(lambda x: x, [
+                'fig',
+                re.sub('[:.-]', '', datetime.utcnow().isoformat()),
+                re.sub('[\s/:]+', '-', (basename_suffix.value() or '')).lower(),
+            ]))
+        )
 
 def open_fig(fig_path):
     open_cmd = _rcParams.get('xee.platform.%s.open_cmd' % platform.system())

@@ -1,0 +1,2680 @@
+[
+  {
+    "id": "recordings",
+    "uris": [
+      {
+        "wavUri": "data/recordings/Recording 0001.wav",
+        "imgUri": "data/recordings/Recording 0001.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/Recording 0002.wav",
+        "imgUri": "data/recordings/Recording 0002.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/Recording 0003.wav",
+        "imgUri": "data/recordings/Recording 0003.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/Recording 0018.wav",
+        "imgUri": "data/recordings/Recording 0018.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/Recording 0019.wav",
+        "imgUri": "data/recordings/Recording 0019.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/cal towhee.wav",
+        "imgUri": "data/recordings/cal towhee.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/chickadee funny noise, other chirp song sparrow.wav",
+        "imgUri": "data/recordings/chickadee funny noise, other chirp song sparrow.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/crow, not phoebe, hummingbird.wav",
+        "imgUri": "data/recordings/crow, not phoebe, hummingbird.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/hairy woodpecker (2).wav",
+        "imgUri": "data/recordings/hairy woodpecker (2).wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/noise.wav",
+        "imgUri": "data/recordings/noise.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/raven, noise.wav",
+        "imgUri": "data/recordings/raven, noise.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/red tailed hawk, noise.wav",
+        "imgUri": "data/recordings/red tailed hawk, noise.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/red tailed hawk.wav",
+        "imgUri": "data/recordings/red tailed hawk.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/scrub jay.wav",
+        "imgUri": "data/recordings/scrub jay.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/unknown sparrow (song?).wav",
+        "imgUri": "data/recordings/unknown sparrow (song?).wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/various, cal towhee.wav",
+        "imgUri": "data/recordings/various, cal towhee.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/various, long.wav",
+        "imgUri": "data/recordings/various, long.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/various, noisy.wav",
+        "imgUri": "data/recordings/various, noisy.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/various.wav",
+        "imgUri": "data/recordings/various.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/white crowned ?.wav",
+        "imgUri": "data/recordings/white crowned ?.wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/white crowned sparrow (2).wav",
+        "imgUri": "data/recordings/white crowned sparrow (2).wav.spec.png"
+      },
+      {
+        "wavUri": "data/recordings/white crowned, house sparrow, various.wav",
+        "imgUri": "data/recordings/white crowned, house sparrow, various.wav.spec.png"
+      }
+    ]
+  },
+  {
+    "id": "mlsp-2013",
+    "uris": [
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090513_054500_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090513_054500_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090513_054500_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090513_054500_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090513_054500_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090513_054500_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090513_054500_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090513_054500_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090513_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090513_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090513_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090513_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090513_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090513_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090513_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090513_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090606_054500_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090606_054500_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090606_054500_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090606_054500_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090606_054500_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090606_054500_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090606_054500_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090606_054500_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090606_074500_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090606_074500_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090606_074500_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090606_074500_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090606_074500_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090606_074500_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090606_074500_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090606_074500_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090705_044500_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090705_044500_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090705_044500_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090705_044500_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090705_044500_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090705_044500_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090705_044500_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090705_044500_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090705_071500_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090705_071500_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090705_071500_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090705_071500_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090705_071500_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090705_071500_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090705_071500_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090705_071500_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090804_050012_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090804_050012_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090804_050012_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090804_050012_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090804_050012_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090804_050012_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090804_050012_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090804_050012_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090804_070012_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090804_070012_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090804_070012_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090804_070012_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090804_070012_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090804_070012_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20090804_070012_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20090804_070012_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100513_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100513_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100513_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100513_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100513_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100513_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100513_043000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100513_043000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100513_043000_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100513_043000_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100513_043000_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100513_043000_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100513_043000_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100513_043000_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100606_053000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100606_053000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100606_053000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100606_053000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100606_053000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100606_053000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100606_053000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100606_053000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC10_20100804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC10_20100804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090513_050300_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090513_050300_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090513_050300_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090513_050300_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090513_050300_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090513_050300_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090513_050300_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090513_050300_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090513_070300_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090513_070300_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090513_070300_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090513_070300_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090513_070300_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090513_070300_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090513_070300_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090513_070300_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100513_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100513_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100513_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100513_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100513_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100513_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100513_043000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100513_043000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100513_043000_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100513_043000_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100513_043000_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100513_043000_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100513_043000_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100513_043000_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100606_053000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100606_053000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100606_053000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100606_053000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100606_053000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100606_053000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100606_053000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100606_053000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100606_073000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100606_073000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100606_073000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100606_073000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100606_073000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100606_073000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100606_073000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100606_073000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC11_20100705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC11_20100705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090513_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090513_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090513_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090513_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090513_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090513_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090513_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090513_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090513_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090513_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090513_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090513_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090513_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090513_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090513_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090513_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20090606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20090606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100513_043015_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100513_043015_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100513_043015_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100513_043015_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100513_043015_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100513_043015_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100513_043015_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100513_043015_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100513_043015_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100513_043015_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100513_043015_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100513_043015_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100513_043015_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100513_043015_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100513_043015_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100513_043015_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100606_050001_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100606_050001_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100606_050001_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100606_050001_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100606_050001_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100606_050001_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100606_050001_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100606_050001_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100606_070001_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100606_070001_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100606_070001_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100606_070001_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100606_070001_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100606_070001_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC13_20100606_070001_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC13_20100606_070001_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090513_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090513_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090513_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090513_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090513_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090513_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090513_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090513_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090513_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090513_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090513_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090513_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090513_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090513_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090513_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090513_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090606_050011_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090606_050011_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090606_050011_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090606_050011_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090606_050011_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090606_050011_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090606_050011_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090606_050011_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090606_070011_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090606_070011_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090606_070011_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090606_070011_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090606_070011_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090606_070011_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090606_070011_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090606_070011_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20090804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20090804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100513_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100513_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100513_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100513_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100513_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100513_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100513_043000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100513_043000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100513_043000_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100513_043000_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100513_043000_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100513_043000_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100513_043000_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100513_043000_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100606_064100_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100606_064100_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100606_064100_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100606_064100_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100606_064100_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100606_064100_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100606_064100_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100606_064100_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC15_20100804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC15_20100804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090513_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090513_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090513_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090513_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090513_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090513_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090513_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090513_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090513_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090513_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090513_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090513_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090513_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090513_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20090804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20090804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100513_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100513_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100513_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100513_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100513_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100513_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100513_043000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100513_043000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100513_043000_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100513_043000_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100513_043000_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100513_043000_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100513_043000_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100513_043000_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC16_20100804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC16_20100804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20090804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20090804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100513_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100513_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100513_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100513_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100513_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100513_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100513_043000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100513_043000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100513_043000_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100513_043000_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100513_043000_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100513_043000_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100513_043000_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100513_043000_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100513_043000_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100513_043000_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100705_050002_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100705_050002_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100705_050002_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100705_050002_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100705_050002_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100705_050002_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100705_050002_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100705_050002_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100705_070002_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100705_070002_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100705_070002_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100705_070002_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100705_070002_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100705_070002_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100705_070002_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100705_070002_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100804_050020_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100804_050020_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100804_050020_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100804_050020_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100804_050020_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100804_050020_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100804_050020_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100804_050020_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100804_070020_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100804_070020_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100804_070020_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100804_070020_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100804_070020_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100804_070020_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC17_20100804_070020_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC17_20100804_070020_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20090804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20090804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100513_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100513_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100513_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100513_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100513_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100513_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100513_043000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100513_043000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100513_043000_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100513_043000_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100513_043000_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100513_043000_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100513_043000_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100513_043000_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100513_043000_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100513_043000_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100804_050020_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100804_050020_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100804_050020_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100804_050020_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100804_050020_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100804_050020_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100804_050020_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100804_050020_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100804_070020_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100804_070020_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100804_070020_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100804_070020_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC18_20100804_070020_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC18_20100804_070020_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090513_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090513_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090513_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090513_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090513_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090513_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090513_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090513_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090513_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090513_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090513_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090513_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090513_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090513_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090513_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090513_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090606_050012_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090606_050012_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090606_050012_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090606_050012_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090606_050012_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090606_050012_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090606_050012_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090606_050012_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090606_070012_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090606_070012_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090606_070012_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090606_070012_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090606_070012_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090606_070012_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090606_070012_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090606_070012_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090804_050011_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090804_050011_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090804_050011_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090804_050011_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090804_050011_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090804_050011_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090804_050011_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090804_050011_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090804_070012_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090804_070012_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090804_070012_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090804_070012_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090804_070012_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090804_070012_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20090804_070012_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20090804_070012_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100513_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100513_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100513_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100513_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100513_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100513_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100513_043000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100513_043000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100513_043000_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100513_043000_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100513_043000_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100513_043000_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100513_043000_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100513_043000_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100513_043000_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100513_043000_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100606_053000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100606_053000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100606_053000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100606_053000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100606_053000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100606_053000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100606_053000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100606_053000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100705_050001_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100705_050001_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100705_050001_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100705_050001_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100705_050001_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100705_050001_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100705_050001_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100705_050001_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100705_070002_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100705_070002_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100705_070002_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100705_070002_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100705_070002_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100705_070002_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100705_070002_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100705_070002_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC1_20100804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC1_20100804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090513_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090513_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090513_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090513_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090513_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090513_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090513_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090513_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090513_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090513_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090513_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090513_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090513_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090513_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090513_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090513_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100513_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100513_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100513_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100513_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100513_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100513_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100513_043000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100513_043000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100513_043000_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100513_043000_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100513_043000_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100513_043000_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100513_043000_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100513_043000_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100513_043000_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100513_043000_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100606_052906_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100606_052906_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100606_052906_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100606_052906_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100606_052906_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100606_052906_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100606_052906_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100606_052906_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100606_052906_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100606_052906_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100606_052906_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100606_052906_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100606_052906_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100606_052906_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100606_052906_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100606_052906_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100705_050001_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100705_050001_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100705_050001_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100705_050001_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100705_050001_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100705_050001_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100705_050001_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100705_050001_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100705_070001_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100705_070001_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100705_070001_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100705_070001_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100705_070001_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100705_070001_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC2_20100705_070001_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC2_20100705_070001_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20090804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20090804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100513_043013_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100513_043013_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100513_043013_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100513_043013_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100513_043013_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100513_043013_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100513_043013_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100513_043013_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100513_043013_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100513_043013_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100513_043013_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100513_043013_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100513_043013_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100513_043013_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC4_20100804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC4_20100804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090513_051500_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090513_051500_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090513_051500_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090513_051500_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090513_051500_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090513_051500_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090513_051500_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090513_051500_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090513_071500_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090513_071500_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090513_071500_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090513_071500_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090513_071500_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090513_071500_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090513_071500_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090513_071500_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20090804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20090804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100705_050002_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100705_050002_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100705_050002_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100705_050002_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100705_050002_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100705_050002_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100705_050002_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100705_050002_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100705_070002_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100705_070002_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100705_070002_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100705_070002_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100705_070002_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100705_070002_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100705_070002_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100705_070002_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC5_20100804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC5_20100804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090513_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090513_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090513_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090513_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090513_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090513_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090513_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090513_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090513_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090513_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090513_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090513_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090513_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090513_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090513_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090513_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090606_050011_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090606_050011_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090606_050011_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090606_050011_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090606_050011_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090606_050011_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090606_050011_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090606_050011_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090606_070011_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090606_070011_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090606_070011_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090606_070011_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090606_070011_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090606_070011_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090606_070011_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090606_070011_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20090804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20090804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100513_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100513_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100513_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100513_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100513_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100513_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100513_043000_0720.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100513_043000_0720.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100513_043000_0730.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100513_043000_0730.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100513_043000_0740.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100513_043000_0740.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100513_043000_0750.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100513_043000_0750.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100606_043000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100606_043000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100606_043000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100606_043000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100606_043000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100606_043000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100606_043000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100606_043000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100606_070104_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100606_070104_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100606_070104_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100606_070104_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100606_070104_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100606_070104_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100606_070104_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100606_070104_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100804_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100804_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100804_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100804_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100804_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100804_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100804_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100804_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100804_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100804_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100804_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100804_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100804_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100804_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC7_20100804_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC7_20100804_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090606_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090606_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090606_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090606_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090606_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090606_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090606_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090606_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090606_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090606_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090606_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090606_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090606_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090606_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090606_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090606_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20090705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20090705_070000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100606_050001_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100606_050001_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100606_050001_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100606_050001_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100606_050001_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100606_050001_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100606_050001_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100606_050001_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100606_070001_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100606_070001_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100606_070001_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100606_070001_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100606_070001_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100606_070001_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100606_070001_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100606_070001_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100705_050000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100705_050000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100705_050000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100705_050000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100705_050000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100705_050000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100705_050000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100705_050000_0040.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100705_070000_0010.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100705_070000_0010.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100705_070000_0020.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100705_070000_0020.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100705_070000_0030.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100705_070000_0030.bmp"
+      },
+      {
+        "wavUri": "data/MLSP 2013/mlsp_contest_dataset/essential_data/src_wavs/PC8_20100705_070000_0040.wav",
+        "imgUri": "data/MLSP 2013/mlsp_contest_dataset/supplemental_data/spectrograms/PC8_20100705_070000_0040.bmp"
+      }
+    ]
+  }
+]

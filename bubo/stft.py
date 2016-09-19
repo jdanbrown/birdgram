@@ -19,6 +19,7 @@ exec '; '.join(['import %s; reload(%s)' % (m, m) for m in [
     'bubo.mpl_backend_xee',
 ]])
 
+import bubo.mpl_backend_xee
 from bubo.util import caffe_root, plot_img, plot_gg, show_shapes, show_tuple_tight, tmp_rcParams
 from bubo.util import gg_layer, gg_xtight, gg_ytight, gg_tight
 from bubo.util import shell, singleton, puts
@@ -101,7 +102,7 @@ def f0():
     scalogram(tree)
     pylab.show()
 
-f0()
+#f0()
 
 # http://www.pybytes.com/pywavelets/ref/dwt-discrete-wavelet-transform.html
 #   - http://wavelets.pybytes.com/wavelet/dmey/
@@ -112,16 +113,17 @@ f0()
 #print cD
 #print len(signal), len(cA), len(cD)
 
-# http://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.cwt.html
-# http://docs.scipy.org/doc/scipy/reference/signal.html
-path = '%(dir)s/white crowned sparrow (2).wav' % locals()
-print path
-sample_rate, signal = wav.read(path)
-signal              = signal[450000:480000]
-cwtmatr             = sig.cwt(signal, sig.ricker, widths=np.arange(1, 31))
-print cwtmatr.shape
-plt.imshow(cwtmatr, extent=[-1, 1, 31, 1], cmap='PRGn', aspect='auto', vmax=abs(cwtmatr).max(), vmin=-abs(cwtmatr).max())
-plt.show()
+if False:
+    # http://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.cwt.html
+    # http://docs.scipy.org/doc/scipy/reference/signal.html
+    path = '%(dir)s/white crowned sparrow (2).wav' % locals()
+    print path
+    sample_rate, signal = wav.read(path)
+    signal              = signal[450000:480000]
+    cwtmatr             = sig.cwt(signal, sig.ricker, widths=np.arange(1, 31))
+    print cwtmatr.shape
+    plt.imshow(cwtmatr, extent=[-1, 1, 31, 1], cmap='PRGn', aspect='auto', vmax=abs(cwtmatr).max(), vmin=-abs(cwtmatr).max())
+    plt.show()
 
 #
 # Spectrum / spectrogram
@@ -129,7 +131,9 @@ plt.show()
 
 # XXX Hand-picked examples
 paths = [
+    #'%(dir)s/Recording 0001.wav' % locals(),
     '%(dir)s/white crowned sparrow (2).wav' % locals(),
+    #'%(dir)s/crow, not phoebe, hummingbird.wav' % locals(), # TODO Pegs python/docker cpu, doesn't terminate...
     #'%(dir)s/chickadee funny noise, other chirp song sparrow.wav' % locals(), # TODO Pegs python/docker cpu, doesn't terminate...
 ]
 
@@ -142,41 +146,58 @@ for i, path in enumerate(paths):
     with tmp_rcParams({
         'image.cmap': 'jet' # Undo grayscale from ~/.matplotlib/matplotlibrc
     }):
-        plt.figure(figsize = (10, 5))
-        plt.xlabel('time')
-        plt.ylabel('freq')
+
+        ## Save as fig
+        #plt.figure(figsize = (10, 5))
+        #plt.xlabel('time')
+        #plt.ylabel('freq')
+        #signal_len      = 8192
+        #segment_len     = 256
+        #segment_overlap = signal_len/64
+        #plt.specgram(signal, NFFT=segment_len, noverlap=segment_overlap, sides='onesided')
+        ##cb = plt.colorbar(); cb.set_label('amplitude')
+        #plt.autoscale(tight=True)
+        #plt.tight_layout()
+        #plt.show()
+
+        # Save .png alongside .wav
+        #   - TODO For wavs.html, how to kill all padding so that spec fills all the img pixels?
+        #       - TODO plt.specgram -> http://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.spectrogram.html
+        fig = plt.figure(figsize = (10, 5))
+        plt.axes(frameon=False) # Killed by plt.specgram...
         signal_len      = 8192
         segment_len     = 256
         segment_overlap = signal_len/64
         plt.specgram(signal, NFFT=segment_len, noverlap=segment_overlap, sides='onesided')
-        #cb = plt.colorbar(); cb.set_label('amplitude')
         plt.autoscale(tight=True)
-        plt.tight_layout()
-        plt.show()
+        plt.tight_layout(pad=0) # (Negative numbers do do something...)
+        plt.axis('off')
+        #plt.show() # XXX Save as fig for faster dev
+        with bubo.mpl_backend_xee.override_fig_path(path + '.spec.png'): # TODO
+            plt.show()
 
-    # Signal
-    signal_df      = pd.DataFrame()
-    signal_df['t'] = np.arange(len(signal)) / float(len(signal))
-    signal_df['y'] = signal
+    ## Signal
+    #signal_df      = pd.DataFrame()
+    #signal_df['t'] = np.arange(len(signal)) / float(len(signal))
+    #signal_df['y'] = signal
+    #plot_gg(gg_layer(
+    #    gg.ggplot(signal_df, gg.aes(x='t', y='y')),
+    #    gg.geom_line(size=.1),
+    #    gg_tight(),
+    #    gg.ggtitle('signal: %s' % path),
+    #))
 
-    plot_gg(gg_layer(
-        gg.ggplot(signal_df, gg.aes(x='t', y='y')),
-        gg.geom_line(size=.1),
-        gg_tight(),
-        gg.ggtitle('signal: %s' % path),
-    ))
+    ## Spectrum
+    #spectrum_df      = pd.DataFrame()
+    #spectrum_df['Y'] = np.fft.fft(signal_df['y']) / len(signal_df['y'])                # fft (with 1/n normalization)
+    #spectrum_df['f'] = np.arange(len(spectrum_df['Y'])) / float(len(spectrum_df['Y'])) # freq
+    #spectrum_df['a'] = np.abs(spectrum_df['Y'])                                        # amplitude
+    #spectrum_df['p'] = np.abs(spectrum_df['Y'])**2                                     # power
+    #spectrum_h_df    = spectrum_df[:len(spectrum_df)/2]                                # positive half (real signal -> hermitian spectrum)
+    #plot_gg(gg_layer(
+    #    gg.ggplot(spectrum_h_df, gg.aes(x='f', y='a')),
+    #    gg.geom_point(size=10, alpha=.2),
+    #    gg_tight(),
+    #    gg.ggtitle('spectrum: %s' % path),
+    #))
 
-    # Spectrum
-    spectrum_df      = pd.DataFrame()
-    spectrum_df['Y'] = np.fft.fft(signal_df['y']) / len(signal_df['y'])                # fft (with 1/n normalization)
-    spectrum_df['f'] = np.arange(len(spectrum_df['Y'])) / float(len(spectrum_df['Y'])) # freq
-    spectrum_df['a'] = np.abs(spectrum_df['Y'])                                        # amplitude
-    spectrum_df['p'] = np.abs(spectrum_df['Y'])**2                                     # power
-    spectrum_h_df    = spectrum_df[:len(spectrum_df)/2]                                # positive half (real signal -> hermitian spectrum)
-
-    plot_gg(gg_layer(
-        gg.ggplot(spectrum_h_df, gg.aes(x='f', y='a')),
-        gg.geom_point(size=10, alpha=.2),
-        gg_tight(),
-        gg.ggtitle('spectrum: %s' % path),
-    ))

@@ -12,6 +12,7 @@ exec docker run "$it" \
   -v "$HOME"/.ipython:/root/.ipython \
   -v "$HOME"/.jupyter:/root/.jupyter \
   -v "$HOME"/.matplotlib:/root/.matplotlib \
+  -v "$HOME"/.dotfiles-secret/.matplotlib:/root/.dotfiles-secret/.matplotlib \
   -v /Users:/Users \
   -w "$PWD" \
   ${RUN_ARGS:-} \
