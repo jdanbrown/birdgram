@@ -1,10 +1,13 @@
-dir_data <- "~/BirdSong/MLSP 2013/"
+source(global.R)
+
+## MLSP 2013 labels
+dir_mlsp_essential_data <- paste0(dir_bubo, "/data/MLSP 2013/mlsp_contest_dataset/essential_data/")
 
 ## ------------------------------------------------------------------------------------
 ## Format labels
 
-recid2fn <- read.csv('~/BirdSong/MLSP 2013/mlsp_contest_dataset/essential_data/rec_id2filename.txt', row.names = 1)
-labels <- read.csv('~/BirdSong/MLSP 2013/mlsp_contest_dataset/essential_data/rec_labels_test_hidden.csv', row.names = NULL, header = T, stringsAsFactors = F)
+recid2fn <- read.csv(paste0(dir_mlsp_essential_data, "rec_id2filename.txt"), row.names = 1)
+labels <- read.csv(paste0(dir_mlsp_essential_data, "rec_labels_test_hidden.csv"), row.names = NULL, header = T, stringsAsFactors = F)
 
 # Format table
 labels_f <- labels %>%
