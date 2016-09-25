@@ -13,10 +13,12 @@ Test:
 
 from datetime import datetime
 import os.path
+import pipes
 import platform
 import subprocess
 import sys
 
+import matplotlib as mpl
 from matplotlib._pylab_helpers import Gcf
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.backend_bases import FigureManagerBase
@@ -80,12 +82,17 @@ FigureManager = FigureManagerXee
 basename_suffix   = dynvar(None)
 override_fig_path = dynvar(None)
 
+def mkdir_p(dir):
+    os.system("mkdir -p %s" % pipes.quote(dir)) # Don't error like os.makedirs
+
 def new_fig_path():
     if override_fig_path.value():
-        return override_fig_path.value()
+        fig_path = override_fig_path.value()
+        mkdir_p(os.path.dirname(fig_path))
+        return fig_path
     else:
         figs_dir = _rcParams['xee.path']
-        os.system("mkdir -p '%s'" % figs_dir) # Don't error like os.makedirs
+        mkdir_p(figs_dir)
         return os.path.join(
             figs_dir,
             '%s.png' % '-'.join(filter(lambda x: x, [
@@ -108,6 +115,10 @@ def open_fig(fig_path):
 def imsave_xee(data):
     fig_path = new_fig_path()
     print 'img_backend_xee: %s' % fig_path
-    img = matplotlib.image.imsave(fig_path, data)
+    img = matplotlib.image.imsave(
+        fig_path,
+        data,
+        cmap = mpl.rcParams.get('image.cmap'),
+    )
     open_fig(fig_path)
     return img

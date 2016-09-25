@@ -31,8 +31,10 @@ wave canvas {
 <script>
 
 var wavSetConfs = {
-  'recordings': {head: null},
-  'mlsp-2013':  {head: null},
+  'recordings':    {head: 5},
+  'mlsp-2013':     {head: 5},
+  //'xxx':           {head: 5},
+  'birdclef-2015': {head: 5},
 };
 
 var state = {
@@ -65,6 +67,10 @@ $.getJSON('wavs.json', null, function(wavs) {
   });
 });
 
+var encodeUri = function(uri) {
+  return uri.replace(/\?/g, '%3f') + "?" + new Date().getTime();
+};
+
 var mkWav = function(wavUri, imgUri) {
 
   var wavContainer = $('<div>', {'id': 'container-' + wavUri});
@@ -76,7 +82,7 @@ var mkWav = function(wavUri, imgUri) {
     .appendTo(wavContainer);
 
   var wav = $('<div>', {'id': wavUri}).get(0);
-  wav.style.backgroundImage = "url('" + imgUri + "')";
+  wav.style.backgroundImage = "url('" + encodeUri(imgUri) + "')";
   wav.style.backgroundSize  = '100% 100%';
   $(wav).appendTo(wavContainer);
 
@@ -84,7 +90,7 @@ var mkWav = function(wavUri, imgUri) {
     container: wav,
     interact: false,
   });
-  ws.load(wavUri);
+  ws.load(encodeUri(wavUri));
   state.wss.push(ws);
 
   $(wav).on('click', function(e) {

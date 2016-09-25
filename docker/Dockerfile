@@ -63,7 +63,17 @@ RUN mkdir -p $(jupyter --data-dir)/nbextensions \
 # More python packages [TODO Merge into pip install above]
 RUN pip install \
       ipdb==0.10.1 \
-      ggplot==0.11.0
+      pandas==0.18.1 \
+      scipy==0.18.1
+
+# More python packages [TODO Merge into pip install above]
+RUN pip install \
+      ggplot==0.11.0 \
+      wavio==0.0.3 \
+      dask==0.11.0 \
+      cloudpickle==0.2.1 \
+      progressbar2 \
+      tqdm
 
 # Make linux look in the same place for matplotlibrc as all other platforms (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)
 # (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)

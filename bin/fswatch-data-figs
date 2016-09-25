@@ -4,5 +4,5 @@ dir="`dirname "$0"`/.."
 
 show_cmd() { echo "\$ $@" >&2; "$@"; }
 
-fswatch "$dir"/data/fig/ --latency=0.1 --extended --include='\.(png|jpg|gif)$' --exclude='.*' \
+fswatch "$dir"/data/fig/ "$dir"/data/recordings/ --latency=0.1 --extended --include='\.(png|jpg|gif)$' --exclude='.*' \
   | while read x; do if [ -e "$x" ]; then show_cmd open -g -a Xee³ "$x"; fi; done

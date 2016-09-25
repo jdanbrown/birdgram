@@ -1,5 +1,9 @@
 import caffe
 from contextlib import contextmanager
+import dask
+import dask.bag
+import dask.multiprocessing
+from functools import partial
 import ggplot as gg
 import ipdb
 import matplotlib as mpl
@@ -9,8 +13,12 @@ import os
 import pandas as pd
 from pprint import pprint
 import pywt
-import scipy.io.wavfile as wav
+import random
+import scipy
 import scipy.signal as sig
+import time
+import traceback
+import wavio
 
 # XXX dev: repl workflow
 exec '; '.join(['import %s; reload(%s)' % (m, m) for m in [
@@ -28,153 +36,67 @@ from bubo.util import shell, singleton, puts
 # Paths
 #
 
-dir   = 'data/recordings'
+#dir   = 'data/recordings'
+#dir   = 'data/mlsp-2013-wavs'
+#dir   = 'data/xxx-wavs'
+dir   = 'data/birdclef-2015-wavs'
 files = os.listdir(dir)
 paths = sorted([os.path.join(dir, x) for x in files if x.endswith('.wav')])
 pprint(paths)
 
 #
-# Wavelets: non-working attempts...
-#   - Illustration of various wavelets:
-#       - http://wavelets.pybytes.com/wavelet/dmey/
-#   - Pretty plot of a wavelet transform:
-#       - https://docs.obspy.org/tutorial/code_snippets/continuous_wavelet_transform.html
-#   - Example of what bird call transformed through wavelets might should look like:
-#       - https://www.researchgate.net/publication/26620207_Wavelets_in_Recognition_of_Bird_Sounds
-#   - Other informative papers:
-#       - http://www.ncbi.nlm.nih.gov/pmc/articles/PMC4728069/
-#       - http://arxiv.org/abs/1311.4764
-#   - http://pythonhosted.org/PyGASP/
-#       - https://bitbucket.org/bowmanat/pygasp/src/master/pygasp/dwt.py
-#
-
-path = '%(dir)s/white crowned sparrow (2).wav' % locals()
-
-from pygasp.dwt import dwt
-
-# Very slow...
-#rate, signal = wav.read(path)
-#signal_dwt = dwt.dwt(signal, wav='db3', levels=5, mode='zpd')
-#signal_dwt
-
-# Never terminates...
-#dwt.scalogram(signal_dwt)
-
-# http://stackoverflow.com/questions/16482166/basic-plotting-of-wavelet-analysis-output-in-matplotlib
-# - Maybe also try https://github.com/nigma/pywt/blob/master/demo/wp_scalogram.py
-path = '%(dir)s/white crowned sparrow (2).wav' % locals()
-def f0():
-
-    import pylab
-    import scipy.io.wavfile as wavfile
-
-    # Find the highest power of two less than or equal to the input.
-    def lepow2(x):
-        return 2 ** pylab.floor(pylab.log2(x))
-
-    # Make a scalogram given an MRA tree.
-    def scalogram(data):
-        bottom = 0
-
-        vmin = min(map(lambda x: min(abs(x)), data))
-        vmax = max(map(lambda x: max(abs(x)), data))
-
-        pylab.gca().set_autoscale_on(False)
-
-        for row in range(0, len(data)):
-            scale = 2.0 ** (row - len(data))
-
-            pylab.imshow(
-                pylab.array([abs(data[row])]),
-                interpolation = 'nearest',
-                vmin = vmin,
-                vmax = vmax,
-                extent = [0, 1, bottom, bottom + scale])
-
-            bottom += scale
-
-    # Load the signal, take the first channel, limit length to a power of 2 for simplicity.
-    rate, signal = wavfile.read(path)
-    signal = signal[0:lepow2(len(signal))]
-    tree = pywt.wavedec(signal, 'db10')
-
-    #pylab.gray()
-    scalogram(tree)
-    pylab.show()
-
-#f0()
-
-# http://www.pybytes.com/pywavelets/ref/dwt-discrete-wavelet-transform.html
-#   - http://wavelets.pybytes.com/wavelet/dmey/
-#   - TODO Plot individual wavelets:
-#       - http://stackoverflow.com/questions/1094655/wavelet-plot-with-python-libraries
-#cA, cD = pywt.dwt(signal, pywt.Wavelet('db1'))
-#print cA
-#print cD
-#print len(signal), len(cA), len(cD)
-
-if False:
-    # http://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.cwt.html
-    # http://docs.scipy.org/doc/scipy/reference/signal.html
-    path = '%(dir)s/white crowned sparrow (2).wav' % locals()
-    print path
-    sample_rate, signal = wav.read(path)
-    signal              = signal[450000:480000]
-    cwtmatr             = sig.cwt(signal, sig.ricker, widths=np.arange(1, 31))
-    print cwtmatr.shape
-    plt.imshow(cwtmatr, extent=[-1, 1, 31, 1], cmap='PRGn', aspect='auto', vmax=abs(cwtmatr).max(), vmin=-abs(cwtmatr).max())
-    plt.show()
-
-#
 # Spectrum / spectrogram
 #
 
-# XXX Hand-picked examples
-paths = [
-    #'%(dir)s/Recording 0001.wav' % locals(),
-    '%(dir)s/white crowned sparrow (2).wav' % locals(),
-    #'%(dir)s/crow, not phoebe, hummingbird.wav' % locals(), # TODO Pegs python/docker cpu, doesn't terminate...
-    #'%(dir)s/chickadee funny noise, other chirp song sparrow.wav' % locals(), # TODO Pegs python/docker cpu, doesn't terminate...
-]
+## XXX Hand-picked examples
+#paths = [
+#    #'data/recordings/cal towhee.wav',
+#    #'data/recordings/Recording 0001.wav',
+#    #'data/recordings/white crowned sparrow (2).wav',
+#    #'data/recordings/crow, not phoebe, hummingbird.wav',
+#    #'data/recordings/chickadee funny noise, other chirp song sparrow.wav',
+#    'data/mlsp-2013-wavs/PC10_20090513_054500_0010.wav',
+#    #'data/mlsp-2013-wavs/PC10_20090513_054500_0020.wav',
+#    #'data/mlsp-2013-wavs/PC10_20090606_054500_0020.wav',
+#]
 
-for i, path in enumerate(paths):
+def spec_path(wav_path):
+    return wav_path.replace('data/', 'data/spec/', 1) + '.png'
 
-    print '(%s/%s) %s' % (i+1, len(paths), path)
-    sample_rate, signal = wav.read(path)
+def make_spec(wav_path):
+
+    # Use wavio because scipy.io.wavfile.read(wav_path) spin-hangs on metadata chunks
+    #   - Also prints warning "WavFileWarning: Chunk (non-data) not understood, skipping it."
+    #   - http://stackoverflow.com/a/14348968/397334
+    wav = wavio.read(wav_path)
+    (w_shape0, w_shape1) = wav.data.shape # Not sure why it's 2D; assume it's (N,1) and squash to 1D
+    assert w_shape1 == 1
+    signal      = wav.data.reshape((w_shape0,))
+    sample_rate = wav.rate
 
     # Spectrogram
-    with tmp_rcParams({
-        'image.cmap': 'jet' # Undo grayscale from ~/.matplotlib/matplotlibrc
-    }):
-
-        ## Save as fig
-        #plt.figure(figsize = (10, 5))
-        #plt.xlabel('time')
-        #plt.ylabel('freq')
-        #signal_len      = 8192
-        #segment_len     = 256
-        #segment_overlap = signal_len/64
-        #plt.specgram(signal, NFFT=segment_len, noverlap=segment_overlap, sides='onesided')
-        ##cb = plt.colorbar(); cb.set_label('amplitude')
-        #plt.autoscale(tight=True)
-        #plt.tight_layout()
-        #plt.show()
-
-        # Save .png alongside .wav
-        #   - TODO For wavs.html, how to kill all padding so that spec fills all the img pixels?
-        #       - TODO plt.specgram -> http://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.spectrogram.html
-        fig = plt.figure(figsize = (10, 5))
-        plt.axes(frameon=False) # Killed by plt.specgram...
-        signal_len      = 8192
-        segment_len     = 256
-        segment_overlap = signal_len/64
-        plt.specgram(signal, NFFT=segment_len, noverlap=segment_overlap, sides='onesided')
-        plt.autoscale(tight=True)
-        plt.tight_layout(pad=0) # (Negative numbers do do something...)
-        plt.axis('off')
-        #plt.show() # XXX Save as fig for faster dev
-        with bubo.mpl_backend_xee.override_fig_path(path + '.spec.png'): # TODO
-            plt.show()
+    #   - Save .png alongside .wav (scipy.sig.spectrogram + plot_img)
+    #   - Make img from scipy.sig.spectrogram using matplotlib.pyplot.specgram impl as reference:
+    #   - TODO Continue diffing with plt.specgram to make sure we aren't doing anything dumb:
+    #       - https://github.com/matplotlib/matplotlib/blob/master/lib/matplotlib/pyplot.py#L3205
+    #       - https://github.com/matplotlib/matplotlib/blob/master/lib/matplotlib/axes/_axes.py#L7090
+    #       - (Sxx, f, t, im) = plt.specgram(signal, NFFT=nperseg, noverlap=noverlap, sides='onesided')
+    nperseg  = 256
+    noverlap = nperseg // 2
+    (f, t, Sxx) = sig.spectrogram(
+        x               = signal,
+        fs              = sample_rate,
+        nperseg         = nperseg,
+        noverlap        = noverlap,
+        return_onesided = True,           # (Real valued, two-sided is symmetric)
+        #window         = ('tukey', .25), # Default
+        window          = 'hann',         # Default for plt.specgram
+    )
+    img = np.flipud(Sxx)
+    img = np.log10(img)
+    img = scipy.misc.imresize(img, (400, 800))
+    with bubo.mpl_backend_xee.override_fig_path(spec_path(wav_path)):
+        plot_img(img)
 
     ## Signal
     #signal_df      = pd.DataFrame()
@@ -184,7 +106,7 @@ for i, path in enumerate(paths):
     #    gg.ggplot(signal_df, gg.aes(x='t', y='y')),
     #    gg.geom_line(size=.1),
     #    gg_tight(),
-    #    gg.ggtitle('signal: %s' % path),
+    #    gg.ggtitle('signal: %s' % wav_path),
     #))
 
     ## Spectrum
@@ -198,6 +120,30 @@ for i, path in enumerate(paths):
     #    gg.ggplot(spectrum_h_df, gg.aes(x='f', y='a')),
     #    gg.geom_point(size=10, alpha=.2),
     #    gg_tight(),
-    #    gg.ggtitle('spectrum: %s' % path),
+    #    gg.ggtitle('spectrum: %s' % wav_path),
     #))
 
+def with_progress(f, total_i, start_time, prob_print, i, *args):
+    if random.random() < .25:
+        elapsed_i   = i + 1
+        elapsed_s   = int((time.time() - start_time) * 10) / 10.
+        remaining_s = float('inf') if elapsed_i == 0 else int((float(total_i - elapsed_i) * (float(elapsed_s) / elapsed_i)) * 10) / 10.
+        #print dict(total_i=total_i, elapsed_i=elapsed_i, elapsed_s=elapsed_s, remaining_s=remaining_s)
+        print '[%ss remaining, %s/%s]' % (remaining_s, elapsed_i, total_i)
+    try:
+        return f(*args)
+    except Exception, e:
+        return dict(args=args, i=i, e=e, e_tb=traceback.format_exc())
+
+print 'Filtering %s total wav paths to find missing specs...' % len(paths)
+paths_missing = (dask.bag.from_sequence(paths)
+    .filter(lambda x: not os.path.exists(spec_path(x)))
+    .compute()
+)
+print 'Making %s/%s missing specs...' % (len(paths_missing), len(paths))
+errs = (dask.bag.from_sequence(enumerate(paths_missing))
+    .map(partial(with_progress, make_spec, len(paths_missing), time.time(), .25))
+    .filter(lambda x: x is not None)
+    .compute()
+)
+errs

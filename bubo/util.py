@@ -94,12 +94,15 @@ def plot_img_via_imshow(data):
 
 @contextmanager
 def tmp_rcParams(kw):
-    _save = mpl.RcParams(**plt.rcParams)
+    _save_mpl = mpl.RcParams(**mpl.rcParams)
+    _save_plt = mpl.RcParams(**plt.rcParams)
     try:
-        plt.rcParams.update(kw)
+        mpl.rcParams.update(kw)
+        plt.rcParams.update(kw) # TODO WHY ARE THESE DIFFERENT
         yield
     finally:
-        plt.rcParams = _save
+        mpl.rcParams = _save_mpl
+        plt.rcParams = _save_plt
 
 # Gross and horrible, but useful to help me understand how np.array shapes change as we transform them
 @singleton
