@@ -33,20 +33,33 @@ from bubo.util import gg_layer, gg_xtight, gg_ytight, gg_tight
 from bubo.util import shell, singleton, puts
 
 #
-# Paths
+# Util
 #
 
-#dir   = 'data/recordings'
-#dir   = 'data/mlsp-2013-wavs'
-#dir   = 'data/xxx-wavs'
-dir   = 'data/birdclef-2015-wavs'
-files = os.listdir(dir)
-paths = sorted([os.path.join(dir, x) for x in files if x.endswith('.wav')])
-pprint(paths)
+def with_progress(f, total_i, start_time, prob_print, i, *args):
+    if random.random() < .25:
+        elapsed_i   = i + 1
+        elapsed_s   = int((time.time() - start_time) * 10) / 10.
+        remaining_s = float('inf') if elapsed_i == 0 else int((float(total_i - elapsed_i) * (float(elapsed_s) / elapsed_i)) * 10) / 10.
+        print '[%ss remaining, %s/%s]' % (remaining_s, elapsed_i, total_i)
+    try:
+        return f(*args)
+    except Exception, e:
+        return dict(args=args, i=i, e=e, e_tb=traceback.format_exc())
 
 #
 # Spectrum / spectrogram
 #
+
+dir   = 'data/recordings'
+#dir   = 'data/nips4b-wavs'
+#dir   = 'data/mlsp-2013-wavs'
+#dir   = 'data/warblr-2016-ff1010bird-wavs'
+#dir   = 'data/warblr-2016-warblrb10k-wavs'
+#dir   = 'data/birdclef-2015-wavs'
+files = os.listdir(dir)
+paths = sorted([os.path.join(dir, x) for x in files if x.endswith('.wav')])
+pprint(paths)
 
 ## XXX Hand-picked examples
 #paths = [
@@ -98,43 +111,6 @@ def make_spec(wav_path):
     with bubo.mpl_backend_xee.override_fig_path(spec_path(wav_path)):
         plot_img(img)
 
-    ## Signal
-    #signal_df      = pd.DataFrame()
-    #signal_df['t'] = np.arange(len(signal)) / float(len(signal))
-    #signal_df['y'] = signal
-    #plot_gg(gg_layer(
-    #    gg.ggplot(signal_df, gg.aes(x='t', y='y')),
-    #    gg.geom_line(size=.1),
-    #    gg_tight(),
-    #    gg.ggtitle('signal: %s' % wav_path),
-    #))
-
-    ## Spectrum
-    #spectrum_df      = pd.DataFrame()
-    #spectrum_df['Y'] = np.fft.fft(signal_df['y']) / len(signal_df['y'])                # fft (with 1/n normalization)
-    #spectrum_df['f'] = np.arange(len(spectrum_df['Y'])) / float(len(spectrum_df['Y'])) # freq
-    #spectrum_df['a'] = np.abs(spectrum_df['Y'])                                        # amplitude
-    #spectrum_df['p'] = np.abs(spectrum_df['Y'])**2                                     # power
-    #spectrum_h_df    = spectrum_df[:len(spectrum_df)/2]                                # positive half (real signal -> hermitian spectrum)
-    #plot_gg(gg_layer(
-    #    gg.ggplot(spectrum_h_df, gg.aes(x='f', y='a')),
-    #    gg.geom_point(size=10, alpha=.2),
-    #    gg_tight(),
-    #    gg.ggtitle('spectrum: %s' % wav_path),
-    #))
-
-def with_progress(f, total_i, start_time, prob_print, i, *args):
-    if random.random() < .25:
-        elapsed_i   = i + 1
-        elapsed_s   = int((time.time() - start_time) * 10) / 10.
-        remaining_s = float('inf') if elapsed_i == 0 else int((float(total_i - elapsed_i) * (float(elapsed_s) / elapsed_i)) * 10) / 10.
-        #print dict(total_i=total_i, elapsed_i=elapsed_i, elapsed_s=elapsed_s, remaining_s=remaining_s)
-        print '[%ss remaining, %s/%s]' % (remaining_s, elapsed_i, total_i)
-    try:
-        return f(*args)
-    except Exception, e:
-        return dict(args=args, i=i, e=e, e_tb=traceback.format_exc())
-
 print 'Filtering %s total wav paths to find missing specs...' % len(paths)
 paths_missing = (dask.bag.from_sequence(paths)
     .filter(lambda x: not os.path.exists(spec_path(x)))
@@ -147,3 +123,29 @@ errs = (dask.bag.from_sequence(enumerate(paths_missing))
     .compute()
 )
 errs
+
+## Signal
+#signal_df      = pd.DataFrame()
+#signal_df['t'] = np.arange(len(signal)) / float(len(signal))
+#signal_df['y'] = signal
+#plot_gg(gg_layer(
+#    gg.ggplot(signal_df, gg.aes(x='t', y='y')),
+#    gg.geom_line(size=.1),
+#    gg_tight(),
+#    gg.ggtitle('signal: %s' % wav_path),
+#))
+
+## Spectrum
+#spectrum_df      = pd.DataFrame()
+#spectrum_df['Y'] = np.fft.fft(signal_df['y']) / len(signal_df['y'])                # fft (with 1/n normalization)
+#spectrum_df['f'] = np.arange(len(spectrum_df['Y'])) / float(len(spectrum_df['Y'])) # freq
+#spectrum_df['a'] = np.abs(spectrum_df['Y'])                                        # amplitude
+#spectrum_df['p'] = np.abs(spectrum_df['Y'])**2                                     # power
+#spectrum_h_df    = spectrum_df[:len(spectrum_df)/2]                                # positive half (real signal -> hermitian spectrum)
+#plot_gg(gg_layer(
+#    gg.ggplot(spectrum_h_df, gg.aes(x='f', y='a')),
+#    gg.geom_point(size=10, alpha=.2),
+#    gg_tight(),
+#    gg.ggtitle('spectrum: %s' % wav_path),
+#))
+

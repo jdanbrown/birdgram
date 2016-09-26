@@ -31,10 +31,14 @@ wave canvas {
 <script>
 
 var wavSetConfs = {
-  'recordings':    {head: 5},
-  'mlsp-2013':     {head: 5},
-  //'xxx':           {head: 5},
-  'birdclef-2015': {head: 5},
+  //'recordings':             {head: null}, // O(10)
+  //'mlsp-2013':              {head: 100},  // 600
+  //'nips4b':                 {head: null}, // 1600
+  'warblr-2016-ff1010bird': {head: 100},  // 6000
+  //'warblr-2016-warblrb10k': {head: 100},  // 7000
+  //'birdclef-2015':          {head: 100},
+  //'birdclef-2015':          {head: 1000}, // Chrome at rest: ~7GB ram + ~100-200% cpu
+  //'birdclef-2015':          {head: null}, // 33000
 };
 
 var state = {
@@ -60,10 +64,12 @@ $.getJSON('wavs.json', null, function(wavs) {
   window.wavs = wavs;
   $(wavs).each(function(i, wavSet) {
     var conf = wavSetConfs[wavSet.id];
-    console.log('Loading set: ' + wavSet.id + ' [' + JSON.stringify(conf) + ']');
-    $(wavSet.uris).slice(0, Number.isInteger(conf.head) ? conf.head : wavSet.uris.length).each(function(i, wav) {
-      mkWav(wav.wavUri, wav.imgUri);
-    });
+    if (conf) {
+      console.log('Loading set: ' + wavSet.id + ' [' + JSON.stringify(conf) + ']');
+      $(wavSet.uris).slice(0, Number.isInteger(conf.head) ? conf.head : wavSet.uris.length).each(function(i, wav) {
+        mkWav(wav.wavUri, wav.imgUri, wav.wavMTime);
+      });
+    }
   });
 });
 
@@ -71,24 +77,28 @@ var encodeUri = function(uri) {
   return uri.replace(/\?/g, '%3f') + "?" + new Date().getTime();
 };
 
-var mkWav = function(wavUri, imgUri) {
+var mkWav = function(wavUri, imgUri, wavMTime) {
+
+  var height = 80;
 
   var wavContainer = $('<div>', {'id': 'container-' + wavUri});
   wavContainer.appendTo($('#wavs'));
 
   $('<p>')
-    .text(wavUri)
+    .text(wavUri + ' (' + wavMTime + ')')
     .css({'margin-bottom': '0', 'margin-top': '5px'})
     .appendTo(wavContainer);
 
   var wav = $('<div>', {'id': wavUri}).get(0);
   wav.style.backgroundImage = "url('" + encodeUri(imgUri) + "')";
   wav.style.backgroundSize  = '100% 100%';
+  wav.style.height          = height + 'px';
   $(wav).appendTo(wavContainer);
 
   var ws = WaveSurfer.create({
     container: wav,
-    interact: false,
+    interact:  false,
+    height:    height,
   });
   ws.load(encodeUri(wavUri));
   state.wss.push(ws);
