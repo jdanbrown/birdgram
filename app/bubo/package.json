@@ -1,0 +1,24 @@
+{
+  "name": "bubo",
+  "version": "0.0.0",
+  "description": "Hello Exponent!",
+  "author": null,
+  "main": "main.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "jest": {
+    "preset": "jest-exponent"
+  },
+  "dependencies": {
+    "@exponent/ex-navigation": "~2.0.0",
+    "@exponent/samples": "~1.0.2",
+    "@exponent/vector-icons": "~1.0.1",
+    "exponent": "~11.0.0",
+    "react": "~15.3.2",
+    "react-native": "git+https://github.com/exponentjs/react-native#sdk-11.0.1"
+  },
+  "devDependencies": {
+    "jest-exponent": "~0.1.3"
+  }
+}
