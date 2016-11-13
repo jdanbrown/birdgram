@@ -7,28 +7,30 @@ Goal:
 - app: Show ranked list
 
 TODO
-- Shunt spectrogram.js (web audio + canvas) into Exponent project:
-  - ...
-- Shunt spectrogram.js (web audio + canvas) into react-native AwesomeProject:
+- [x] setup exponent
+- [x] create gcp project
+- [ ] mock backend
+- [ ] mock show result list
+- [ ] mock upload recording
+- [ ] mock live spectrogram
+- Shunt spectrogram.js (web audio + canvas) into Exponent bubo / react-native AwesomeProject:
   - Need web <canvas> in react-native:
     - https://facebook.github.io/react-native/docs/webview.html
     - http://stackoverflow.com/questions/34403231/react-native-canvas-in-webview
     - https://github.com/lwansbrough/react-native-canvas/blob/master/Canvas.js
     - https://github.com/Flipboard/react-canvas
 
-Happy workflow 2:
+Happy workflow A (easy):
+- hard: inspect [how to do it at all?]
 - edit: vim + syntastic:flow
-- inspect, console, debug, deploy: Exponent XDE
+- console, debug, deploy: Exponent XDE
 - repl: https://babeljs.io/repl
-- docs:
-  - https://facebook.github.io/react-native/docs/
+- docs: https://facebook.github.io/react-native/docs/
+- docs: https://docs.getexponent.com/
+- example: https://github.com/exponentjs/native-component-list
 
-Exponent:
-- https://docs.getexponent.com/
-Examples:
-- https://github.com/exponentjs/native-component-list
-
-Happy workflow 1:
+Happy workflow B (more work + more control):
+- hard: deploy (via xcode + dev install / app store)
 - edit: vim + syntastic:flow
 - inspect, console, debug: https://nuclide.io/docs/platforms/react-native/
   - Atom: "Add Project Folder" -> project dir
@@ -61,6 +63,13 @@ Repls:
 Resources:
 - https://facebook.github.io/react-native/releases/next/docs/more-resources.html
 - https://github.com/jondot/awesome-react-native
+
+APIs and libs:
+- ebird:
+  - https://confluence.cornell.edu/display/CLOISAPI/eBird+API+1.1
+  - https://confluence.cornell.edu/display/CLOISAPI/eBird-1.1-URIPatterns
+  - js + barcharts: http://accubirder.com/bquery.php
+  - (4y old) py + ebird: https://github.com/carsonmcdonald/python-ebird-wrapper
 
 Audio (native):
 - https://github.com/jsierles/react-native-audio/

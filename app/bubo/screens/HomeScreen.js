@@ -20,6 +20,9 @@ export default class HomeScreen extends React.Component {
   }
 
   render() {
+    console.log('log!!');
+    //console.warn('warn!');
+    //console.error('error!');
     return (
       <View style={styles.container}>
         <ScrollView
@@ -48,7 +51,7 @@ export default class HomeScreen extends React.Component {
             </View>
 
             <Text style={styles.getStartedText}>
-              Change this text and your app will automatically reload.
+              Change TURKEY BISCUITS and your app will automatically reload.
             </Text>
           </View>
 
