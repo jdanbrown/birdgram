@@ -1,0 +1,7 @@
+structlog==16.1.0
+pyyaml==3.12
+pp-ez==0.2.0
+pprintpp==0.2.3
+requests==2.11.1
+flask==0.10.1
+pandas==0.19.0
