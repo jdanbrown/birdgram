@@ -1,6 +1,5 @@
 import pandas as pd
 import re
-import requests
 import structlog
 
 from api.request import cached_request
@@ -43,7 +42,7 @@ def barchart():
         (9, 'Frequency of observations in the selected location\(s\).:.*'),
         (10, 'Number of taxa: .*'),
         (11, ''),
-        (12, '\tJan\t\t\t\tFeb\t\t\t\tMar\t\t\t\tApr\t\t\t\tMay\t\t\t\tJun\t\t\t\tJul\t\t\t\tAug\t\t\t\tSep\t\t\t\tOct\t\t\t\tNov\t\t\t\tDec\t\t\t\t'),
+        (12, '\tJan\t\t\t\tFeb\t\t\t\tMar\t\t\t\tApr\t\t\t\tMay\t\t\t\tJun\t\t\t\tJul\t\t\t\tAug\t\t\t\tSep\t\t\t\tOct\t\t\t\tNov\t\t\t\tDec\t\t\t\t'),  # noqa
         (13, 'Sample Size:.*'),
         (-1, ''),
     ]:
