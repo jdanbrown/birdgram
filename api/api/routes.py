@@ -24,7 +24,7 @@ def health():
     return jsonify('healthy')
 
 
-@bp.route('/error')
+@bp.route('/debug/error')
 def error():
     raise Exception('oops')
 

@@ -6,7 +6,7 @@ import yaml
 from collections import OrderedDict
 from flask import Flask
 
-import jdanbrown.pandas
+import potoo.pandas
 
 import api.routes
 
@@ -19,7 +19,7 @@ def new_app(
 ):
 
     init_logging()
-    jdanbrown.pandas.set_display()
+    potoo.pandas.set_display()
 
     app = Flask(__name__)
 
