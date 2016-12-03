@@ -2,6 +2,7 @@ import hashlib
 import json
 import requests
 import structlog
+from datetime import datetime
 
 from api import cache
 
@@ -26,6 +27,7 @@ def cached_request(method, url, **kw):
         sort_keys  = True,
         separators = (',', ':'),
         obj        = dict(
+            date   = datetime.utcnow().date().isoformat(),  # TODO Expose to caller
             method = method,
             url    = url,
             **kw

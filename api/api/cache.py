@@ -9,30 +9,30 @@ log       = structlog.get_logger(__name__)
 cache_dir = '/tmp/bubo-api-cache'
 
 
-def get_or_put(k, f, dumps=pickle.dumps, loads=pickle.loads):
-    v = get(k, loads)
-    if v is not None:
-        return v
+def get_or_put(key, value_f, dumps=pickle.dumps, loads=pickle.loads):
+    value = get(key, loads)
+    if value is not None:
+        return value
     else:
-        v = f()
-        put(k, v, dumps)
-        return v
+        value = value_f()
+        put(key, value, dumps)
+        return value
 
 
-def get(k, loads=pickle.loads):
+def get(key, loads=pickle.loads):
     try:
-        with open(os.path.join(cache_dir, k), 'rb') as f:
-            v = f.read()
-        log.info('cache_get_hit', k=k)
+        with open(os.path.join(cache_dir, key), 'rb') as f:
+            value = f.read()
+        log.info('cache_hit', key=key)
     except OSError:
-        log.info('cache_get_miss', k=k)
+        log.info('cache_miss', key=key)
         return None
     else:
-        return loads(v)
+        return loads(value)
 
 
-def put(k, v, dumps=pickle.dumps):
+def put(key, value, dumps=pickle.dumps):
     mkdir_p(cache_dir)
-    with open(os.path.join(cache_dir, k), 'wb') as f:
-        f.write(dumps(v))
-    log.info('cache_put', k=k)
+    with open(os.path.join(cache_dir, key), 'wb') as f:
+        f.write(dumps(value))
+    log.info('cache_write', key=key)

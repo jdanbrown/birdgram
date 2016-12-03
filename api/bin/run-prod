@@ -1,0 +1,7 @@
+#!/bin/bash -eux
+
+bin="`dirname "$0"`"
+
+export CONFIG_YAML=config-prod.yaml
+
+exec "$bin"/_run-gunicorn "$@"

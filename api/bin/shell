@@ -1,0 +1,10 @@
+#!/bin/bash -eux
+#
+# http://flask.pocoo.org/docs/0.11/cli/
+
+bin="`dirname "$0"`"
+
+export CONFIG_YAML=config-dev.yaml
+export FLASK_DEBUG=true # Can't get DEBUG:True to work from config
+
+FLASK_APP=main exec flask shell "$@"

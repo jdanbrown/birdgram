@@ -1,9 +1,24 @@
+# Docs:
+#   - https://confluence.cornell.edu/display/CLOISAPI/eBird+API+1.1
+#   - https://confluence.cornell.edu/display/CLOISAPI/eBird-1.1-RecentNearbyObservations
+#   - http://ebird.org/ebird/GuideMe?cmd=changeLocation
+#   - http://help.ebird.org/customer/portal/articles/1010553-understanding-the-ebird-bar-charts
+# Examples:
+#   - Example using of bar charts "api":
+#       - https://github.com/ZacharyDeBruine/bquery/blob/master/v1.js
+#       - http://accubirder.com/bquery.php
+#       - http://accubirder.com/bquery.php#get.hotspots
+#       - http://accubirder.com/bquery.php#get.graph
+#       - http://accubirder.com/bquery.php#get.barchart
+#       - repl: http://localhost:8080/spectrogram.html
+
+
 import pandas as pd
 import re
 import structlog
 
 from api.request import cached_request
-from api.util import pp
+from api.util import flatten, pp
 
 
 log = structlog.get_logger(__name__)
@@ -12,9 +27,8 @@ log = structlog.get_logger(__name__)
 def barchart():
 
     # Cache key:
-    #   - (lat,lon) -> k nearest hotspots -> stable cache key per outing
-    #   - TODO Add day to cache key
-    rep = cached_request('GET', 'http://ebird.org/ebird/BarChart', params = dict(
+    #   - (lat,lon) -> k nearest hotspots -> stable cache key per "user session"
+    rep = cached_request('GET', 'http://ebird.org/ebird/BarChart', params=dict(
         cmd          = 'getChart',
         displayType  = 'download',
         getLocations = 'hotspots',
@@ -61,14 +75,10 @@ def barchart():
     #   final period ranges from seven to ten days, depending on if the month has 28, 29, 30, or 31
     #   days. The fact that the final period is consistently longer does not seem to bias the
     #   results strongly, but please do keep this in mind as you explore data using this tool."
-    pseudo_weeks = [
-        x
-        for xs in [
-            [x+'/1', x+'/7', x+'/14', x+'/21']
-            for x in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        ]
-        for x in xs
-    ]
+    pseudo_weeks = flatten([
+        [x+'/1', x+'/7', x+'/14', x+'/21']
+        for x in ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    ])
 
     sample_sizes = pd.DataFrame(
         columns = pseudo_weeks,
@@ -87,5 +97,5 @@ def barchart():
 
 
 if __name__ == '__main__':
-    import jdanbrown.pandas; jdanbrown.pandas.set_display()
-    pp(barchart())
+    from api.app import init; init()
+    [(pp(k), pp(v)) for k,v in sorted(barchart().items())]
