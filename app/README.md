@@ -9,7 +9,13 @@ Goal:
 TODO
 - [x] setup exponent
 - [x] create gcp project
-- [ ] mock backend
+- [x] mock backend: flask + ebird + /barchart + cache
+- [ ] target kNN idea inspired by google t-SNE demo? https://paper.dropbox.com/doc/Bubo-notes-and-research-yu5ji2nwtKWNkhRAH21RH
+- [ ] v0 api between app + backend
+  - app: show, expose sorting, expose filters; very lightweight
+  - backend: process user data (audio), fetch features (ebird), rank
+  - TODO solve for api
+- [ ] mock backend: deploy /barchart endpoint to k8s
 - [ ] mock show result list
 - [ ] mock upload recording
 - [ ] mock live spectrogram
