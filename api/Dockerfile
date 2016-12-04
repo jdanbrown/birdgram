@@ -32,6 +32,8 @@ RUN curl -sf https://repo.continuum.io/miniconda/Miniconda3-4.1.11-Linux-x86_64.
  && conda install pip --yes
 
 # Install app + deps
+# - Pre-copy reqs.txt so that we don't pip install if reqs.txt doesn't change
 WORKDIR /app
-COPY . .
+COPY requirements.txt ./
 RUN pip install -r requirements.txt
+COPY . ./
