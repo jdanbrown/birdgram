@@ -1,0 +1,10 @@
+#!/bin/bash -eux
+
+VERSION="`git describe --always --long --dirty="-dirty-$(date --utc +%s)"`"
+
+docker build . -t bubo/api:"$VERSION"
+docker push bubo/api:"$VERSION"
+
+cat k8s/api.yaml | sed -E "s/DEPLOY_SUB_VERSION/$VERSION/g" | kubectl apply -f-
+
+kubectl get svc,ep,deploy,rs,po

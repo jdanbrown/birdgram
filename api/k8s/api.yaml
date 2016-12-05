@@ -30,5 +30,5 @@ spec:
     spec:
       containers:
       - name: api
-        image: 'bubo/api:0'
+        image: 'bubo/api:DEPLOY_SUB_VERSION'
         command: ['bin/run-prod']
