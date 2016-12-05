@@ -40,3 +40,9 @@ docker push bubo/api:"$GIT_SHA"
 # TODO ...
 # TODO -> bin/deploy
 ```
+
+Query:
+```sh
+http 104.197.235.14/health
+http 104.197.235.14/barchart
+```
