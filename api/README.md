@@ -24,6 +24,14 @@ Push docker image to dockerhub:
 docker push bubo/api
 ```
 
+Auth `kubectl` with GKE:
+- [Warning: bad creds get cached and must be manually removed](https://github.com/kubernetes/kubernetes/issues/38075)
+```sh
+gcloud auth login
+gcloud auth application-default login
+kubectl version
+```
+
 Deploy:
 ```sh
 GIT_SHA="`git rev-parse --short HEAD`"
