@@ -41,3 +41,8 @@ Query:
 http 104.197.235.14/health
 http 104.197.235.14/barchart
 ```
+
+See logs:
+```sh
+kubectl logs -f api-<tab>
+```
