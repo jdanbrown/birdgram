@@ -18,7 +18,7 @@ log = structlog.get_logger(__name__)
 
 def nearby_barcharts(
     lonlat: LonLat,
-    num_nearby_hotspots=3,
+    num_nearby_hotspots: int = 3,
 ) -> pd.DataFrame:
     hotspot_df = nearby_hotspots(lonlat)
     return barcharts(
@@ -28,8 +28,8 @@ def nearby_barcharts(
 
 def nearby_hotspots(
     lonlat: LonLat,
-    dist_km=50,
-    back_d=30,
+    dist_km: int = 50,
+    back_d: int = 30,
 ) -> pd.DataFrame:
     # https://confluence.cornell.edu/display/CLOISAPI/eBird-1.1-HotspotGeoReference
     df = df_from_ebird('http://ebird.org/ws1.1/ref/hotspot/geo', params=dict(
@@ -43,10 +43,10 @@ def nearby_hotspots(
 
 def barcharts(
     loc_ids: Sequence[str],
-    begin_year=date.today().year - 11,  # -10y appears usefully less noisy than -5y
-    end_year=date.today().year,
-    begin_month=1,
-    end_month=12,
+    begin_year: int = date.today().year - 11,  # -10y appears usefully less noisy than -5y
+    end_year: int = date.today().year,
+    begin_month: int = 1,
+    end_month: int = 12,
 ) -> pd.DataFrame:
     """
     Aggregate payload down to one minimal barchart per species
@@ -108,6 +108,9 @@ def barcharts(
 
     # Re-score freq, since we had to re-aggregate the base checklist counts
     df['freq_score'] = df.apply(lambda x: freq_score(x['present_checklists'], x['total_checklists']), axis=1)
+
+    # Re-label with loc_ids
+    df['loc_ids'] = ','.join(loc_ids)
 
     return df
 
@@ -237,5 +240,6 @@ def df_with_dist(df, lonlat: LonLat):
 if __name__ == '__main__':
     from api.app import new_app; new_app()
     pp(_raw_barcharts(['L5532282']))
+    pp(barcharts(['L5532282']))
     pp(nearby_hotspots(test_lonlats['home']))
     pp(nearby_barcharts(test_lonlats['home']))
