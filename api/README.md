@@ -14,19 +14,26 @@ Run prod:
 bin/run-prod
 ```
 
+Build docker base layers:
+```sh
+VERSION=... # e.g. v0
+docker --config="$DOCKER_CONFIG_DIR" build . --file Dockerfile-base -t bubo/api-base:"$VERSION"
+docker --config="$DOCKER_CONFIG_DIR" push bubo/api-base:"$VERSION"
+```
+
 Build docker image:
 ```sh
-docker build . -t bubo/api
+docker --config="$DOCKER_CONFIG_DIR" build . -t bubo/api
 ```
 
 Run prod from docker image:
 ```sh
-docker run -p8000:8000 -it bubo/api bin/run-prod
+docker --config="$DOCKER_CONFIG_DIR" run -p8000:8000 -it bubo/api bin/run-prod
 ```
 
 Push docker image to dockerhub:
 ```sh
-docker push bubo/api
+docker --config="$DOCKER_CONFIG_DIR" push bubo/api
 ```
 
 Auth `kubectl` with GKE:
@@ -39,7 +46,7 @@ kubectl version
 
 Deploy:
 ```sh
-bin/deploy
+KUBECTL_CONTEXT=... DOCKER_CONFIG_DIR=... bin/deploy
 ```
 
 Query:

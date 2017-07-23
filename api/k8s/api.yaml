@@ -1,21 +1,20 @@
-# TODO Replace this with a NodePort to avoid ~$15-20/mo cost for the LB
-#apiVersion: v1
-#kind: Service
-#metadata:
-#  name: api
-#  labels:
-#    app: api
-#spec:
-#  type: LoadBalancer
-#  # Static ip managed in https://console.cloud.google.com/networking/addresses
-#  loadBalancerIP: 104.197.235.14
-#  selector:
-#    app: api
-#  ports:
-#  - port: 80
-#    targetPort: 8000
-#    protocol: TCP
-#    name: http
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  type: LoadBalancer
+  # Static ip managed in https://console.cloud.google.com/networking/addresses
+  loadBalancerIP: 104.197.235.14
+  selector:
+    app: api
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
 ---
 apiVersion: extensions/v1beta1
 kind: Deployment

@@ -2,9 +2,9 @@
 
 VERSION="`git describe --always --long --dirty="-dirty-$(date --utc +%s)"`"
 
-docker build . -t bubo/api:"$VERSION"
-docker push bubo/api:"$VERSION"
+docker --config="$DOCKER_CONFIG_DIR" build . -t bubo/api:"$VERSION"
+docker --config="$DOCKER_CONFIG_DIR" push bubo/api:"$VERSION"
 
-cat k8s/api.yaml | sed -E "s/DEPLOY_SUB_VERSION/$VERSION/g" | kubectl apply -f-
+cat k8s/api.yaml | sed -E "s/DEPLOY_SUB_VERSION/$VERSION/g" | kubectl --context="$KUBECTL_CONTEXT" apply -f-
 
-kubectl get svc,ep,deploy,rs,po
+kubectl --context="$KUBECTL_CONTEXT" get svc,ep,deploy,po

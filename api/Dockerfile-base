@@ -1,0 +1,33 @@
+FROM ubuntu:16.04
+
+# Initial ubuntu setup:
+# - Configure a locale (http://jaredmarkell.com/docker-and-locales/)
+# - Use aws us-east-1 ubuntu mirror since default ubuntu mirrors are high variance and too often slow (e.g. <1MB/s)
+ENV DEBIAN_FRONTEND "noninteractive"
+RUN sed -i "s#http://archive.ubuntu.com/ubuntu/#http://us-east-1.ec2.archive.ubuntu.com/ubuntu/#g" /etc/apt/sources.list \
+ && apt-get update \
+ && apt-get install -y locales \
+ && dpkg-reconfigure locales \
+ && locale-gen en_US.UTF-8 \
+ && /usr/sbin/update-locale LANG=en_US.UTF-8 \
+ && echo "en_US.UTF-8 UTF-8" >>/etc/locale.gen \
+ && locale-gen
+ENV LANG     "en_US.UTF-8"
+ENV LANGUAGE "en_US:en"
+ENV LC_ALL   "en_US.UTF-8"
+
+# Basic apt packages
+RUN apt-get install -y \
+      build-essential \
+      curl \
+      git \
+      unzip
+
+# Install python 3 via miniconda, since normal ubuntu install relegates it to `python3`
+# - http://askubuntu.com/questions/320996/make-default-python-symbolic-link-to-link-to-python3
+ENV PATH "/opt/miniconda/bin:$PATH"
+RUN curl -sf https://repo.continuum.io/miniconda/Miniconda3-4.1.11-Linux-x86_64.sh >/tmp/miniconda.sh \
+ && bash /tmp/miniconda.sh -p /opt/miniconda -b && rm -f miniconda.sh \
+ && conda update --yes conda
+
+# vi: ft=dockerfile
