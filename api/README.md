@@ -3,6 +3,12 @@ Run dev:
 bin/run-dev
 ```
 
+See dev data:
+```sh
+python api/ebird.py
+http get localhost:8000/nearby_barcharts | jq .[] -c
+```
+
 Run prod:
 ```sh
 bin/run-prod
@@ -39,7 +45,7 @@ bin/deploy
 Query:
 ```sh
 http 104.197.235.14/health
-http 104.197.235.14/barchart
+http 104.197.235.14/nearby_barcharts
 ```
 
 See logs:

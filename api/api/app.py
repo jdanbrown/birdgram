@@ -10,7 +10,6 @@ import potoo.pandas
 
 import api.routes
 
-
 log = structlog.get_logger(__name__)
 
 

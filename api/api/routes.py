@@ -1,14 +1,12 @@
 # Docs:
 #   - http://flask.pocoo.org/docs/0.11/quickstart/
 
-
 import structlog
-from flask import json, Blueprint, redirect
+from flask import Blueprint, redirect, request
 from flask.json import jsonify
 
-
 from api import ebird
-
+from api.util import LonLat
 
 log = structlog.get_logger(__name__)
 bp  = Blueprint('routes', __name__)
@@ -29,9 +27,26 @@ def error():
     raise Exception('oops')
 
 
-@bp.route('/barchart', methods=['GET'])
-def barchart():
-    return jsonify({
-        k: json.loads(v.to_json())
-        for k,v in ebird.barchart().items()
-    })
+@bp.route('/nearby_hotspots', methods=['GET', 'OPTIONS'])
+def nearby_hotspots():
+    kwargs = request.args
+    kwargs['lonlat'] = LonLat(kwargs['lonlat'])
+    return jsonify_df(ebird.nearby_hotspots(**kwargs))
+
+
+@bp.route('/barcharts', methods=['GET', 'OPTIONS'])
+def barcharts():
+    kwargs = request.args
+    kwargs['loc_ids'] = [kwargs.pop['loc_id']]
+    return jsonify_df(ebird.barcharts(**kwargs))
+
+
+@bp.route('/nearby_barcharts', methods=['GET', 'OPTIONS'])
+def nearby_barcharts():
+    kwargs = request.args
+    kwargs['lonlat'] = LonLat(kwargs['lonlat'])
+    return jsonify_df(ebird.nearby_barcharts(**kwargs))
+
+
+def jsonify_df(df):
+    return jsonify(df.to_dict(orient='records'))

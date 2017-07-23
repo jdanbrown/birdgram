@@ -29,11 +29,12 @@ ENV PATH "/opt/miniconda/bin:$PATH"
 RUN curl -sf https://repo.continuum.io/miniconda/Miniconda3-4.1.11-Linux-x86_64.sh >/tmp/miniconda.sh \
  && bash /tmp/miniconda.sh -p /opt/miniconda -b && rm -f miniconda.sh \
  && conda update --yes conda \
- && conda install pip --yes
 
 # Install app + deps
-# - Pre-copy reqs.txt so that we don't pip install if reqs.txt doesn't change
+# - Pre-copy each reqs file so that we don't redo the conda/pip installs if code changes but reqs files don't
 WORKDIR /app
+COPY conda-requirements.txt ./
+RUN conda install --yes --file conda-requirements.txt
 COPY requirements-heavy.txt ./
 RUN pip install -r requirements-heavy.txt
 COPY requirements-light.txt ./
