@@ -32,3 +32,11 @@ spec:
       - name: api
         image: 'bubo/api:DEPLOY_SUB_VERSION'
         command: ['bin/run-prod']
+        readinessProbe:
+          initialDelaySeconds: 1
+          periodSeconds: 3
+          timeoutSeconds: 5
+          failureThreshold: 6
+          httpGet:
+            path: /health
+            port: 8000
