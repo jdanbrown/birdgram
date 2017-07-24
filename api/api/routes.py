@@ -35,7 +35,7 @@ def error():
     raise Exception('oops')
 
 
-@bp.route('/nearby_barcharts', methods=['GET', 'OPTIONS'])
+@bp.route('/nearby_barcharts', methods=['GET'])
 def nearby_barcharts():
     return jsonify_df(with_parsed_request_args(
         ebird.nearby_barcharts,
@@ -46,7 +46,7 @@ def nearby_barcharts():
     ))
 
 
-@bp.route('/nearby_hotspots', methods=['GET', 'OPTIONS'])
+@bp.route('/nearby_hotspots', methods=['GET'])
 def nearby_hotspots():
     return jsonify_df(with_parsed_request_args(
         ebird.nearby_hotspots,
@@ -57,7 +57,7 @@ def nearby_hotspots():
     ))
 
 
-@bp.route('/barcharts', methods=['GET', 'OPTIONS'])
+@bp.route('/barcharts', methods=['GET'])
 def barcharts():
     # Enforce only one loc_id, to push costs of accidental api abuse back to caller
     return jsonify_df(with_parsed_request_args(
