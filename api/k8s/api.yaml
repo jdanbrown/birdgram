@@ -28,6 +28,7 @@ spec:
       labels:
         app: api
     spec:
+      terminationGracePeriodSeconds: 0 # Faster node rollover, treat nodes as 100% disposable (default: 30)
       containers:
       - name: api
         image: 'bubo/api:DEPLOY_SUB_VERSION'
@@ -40,3 +41,8 @@ spec:
           httpGet:
             path: /health
             port: 8000
+        resources:
+          # GKE k8s resources: 1 cpu + 1700Mi mem (1x g1-small)
+          # - kube-system namespace occupies 728m cpu + 1084Mi mem
+          requests: { cpu: 250m, memory: 600Mi }
+          limits:   { cpu: 250m, memory: 600Mi }
