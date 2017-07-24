@@ -34,7 +34,7 @@ spec:
         command: ['bin/run-prod']
         readinessProbe:
           initialDelaySeconds: 1
-          periodSeconds: 3
+          periodSeconds: 5
           timeoutSeconds: 5
           failureThreshold: 6
           httpGet:

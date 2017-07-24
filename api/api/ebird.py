@@ -18,7 +18,7 @@ log = structlog.get_logger(__name__)
 
 def nearby_barcharts(
     lonlat: LonLat,
-    num_nearby_hotspots: int = 3,
+    num_nearby_hotspots: int = 10,  # Maybe a good idea to not allow any more than this
 ) -> pd.DataFrame:
     hotspot_df = nearby_hotspots(lonlat)
     return barcharts(
@@ -28,7 +28,7 @@ def nearby_barcharts(
 
 def nearby_hotspots(
     lonlat: LonLat,
-    dist_km: int = 50,
+    dist_km: int = 50,  # Max: 500
     back_d: int = 30,
 ) -> pd.DataFrame:
     # https://confluence.cornell.edu/display/CLOISAPI/eBird-1.1-HotspotGeoReference
@@ -38,6 +38,9 @@ def nearby_hotspots(
         dist=dist_km,
         back=back_d,
     ))
+    # If response is empty then df will have no cols and .sort_values will fail; add dummy col to avoid this
+    if 'dist_km' not in df:
+        df['dist_km'] = None
     return df.sort_values('dist_km')
 
 
@@ -61,6 +64,9 @@ def barcharts(
         begin_month=begin_month,
         end_month=end_month,
     )
+
+    if df.empty:
+        return df
 
     # What do all the columns mean?
     #   - Ref: http://help.ebird.org/customer/portal/articles/1010553-understanding-the-ebird-bar-charts
@@ -173,7 +179,11 @@ def _raw_barcharts(
 
         return df
 
-    return pd.concat(_barchart(loc_id) for loc_id in loc_ids)
+    dfs = [_barchart(loc_id) for loc_id in loc_ids]
+    if dfs:
+        return pd.concat(dfs)  # (Fails on empty list of dfs)
+    else:
+        return pd.DataFrame()
 
 
 def freq_score(present_checklists, total_checklists):
