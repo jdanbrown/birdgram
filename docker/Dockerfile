@@ -73,7 +73,8 @@ RUN pip install \
       dask==0.11.0 \
       cloudpickle==0.2.1 \
       progressbar2 \
-      tqdm
+      tqdm \
+      jupyter_nbextensions_configurator
 
 # Make linux look in the same place for matplotlibrc as all other platforms (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)
 # (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)
