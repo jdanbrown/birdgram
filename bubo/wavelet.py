@@ -20,11 +20,11 @@ import scipy.signal as sig
 # XXX dev: repl workflow
 exec '; '.join(['import %s; reload(%s)' % (m, m) for m in [
     'bubo.util',
-    'jdanbrown.dynvar',
-    'jdanbrown.mpl_backend_xee',
+    'potoo.dynvar',
+    'potoo.mpl_backend_xee',
 ]])
 
-import jdanbrown.mpl_backend_xee
+import potoo.mpl_backend_xee
 from bubo.util import caffe_root, plot_img, plot_gg, show_shapes, show_tuple_tight, tmp_rcParams
 from bubo.util import gg_layer, gg_xtight, gg_ytight, gg_tight
 from bubo.util import shell, singleton, puts

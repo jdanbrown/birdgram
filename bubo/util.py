@@ -1,8 +1,8 @@
 from contextlib import contextmanager
 
-from jdanbrown.plot import *
-from jdanbrown.util import *
-from jdanbrown.util import singleton
+from potoo.plot import *
+from potoo.util import *
+from potoo.util import singleton
 
 
 caffe_root = 'caffe-root'

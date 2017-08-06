@@ -23,11 +23,11 @@ import wavio
 # XXX dev: repl workflow
 exec '; '.join(['import %s; reload(%s)' % (m, m) for m in [
     'bubo.util',
-    'jdanbrown.dynvar',
-    'jdanbrown.mpl_backend_xee',
+    'potoo.dynvar',
+    'potoo.mpl_backend_xee',
 ]])
 
-import jdanbrown.mpl_backend_xee
+import potoo.mpl_backend_xee
 from bubo.util import caffe_root, plot_img, plot_gg, show_shapes, show_tuple_tight, tmp_rcParams
 from bubo.util import gg_layer, gg_xtight, gg_ytight, gg_tight
 from bubo.util import shell, singleton, puts
@@ -108,7 +108,7 @@ def make_spec(wav_path):
     img = np.flipud(Sxx)
     img = np.log10(img)
     img = scipy.misc.imresize(img, (400, 800))
-    with jdanbrown.mpl_backend_xee.override_fig_path(spec_path(wav_path)):
+    with potoo.mpl_backend_xee.override_fig_path(spec_path(wav_path)):
         plot_img(img)
 
 print 'Filtering %s total wav paths to find missing specs...' % len(paths)

@@ -12,8 +12,8 @@ from pprint import pprint
 # XXX dev: repl workflow
 exec '; '.join(['import %s; reload(%s)' % (m, m) for m in [
     'bubo.util',
-    'jdanbrown.dynvar',
-    'jdanbrown.mpl_backend_xee',
+    'potoo.dynvar',
+    'potoo.mpl_backend_xee',
 ]])
 
 from bubo.util import caffe_root, plot_img, plot_gg, show_shapes, show_tuple_tight
