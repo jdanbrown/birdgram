@@ -4,11 +4,12 @@
 #   - http://ebird.org/ebird/GuideMe?cmd=changeLocation
 #   - http://help.ebird.org/customer/portal/articles/1010553-understanding-the-ebird-bar-charts
 
+from datetime import date
+from typing import Sequence
+
 import pandas as pd
 import pp
 import structlog
-from datetime import date
-from typing import Sequence
 
 from api.request import cached_request
 from api.util import LonLat, haversine, snakecase, test_lonlats
@@ -88,8 +89,8 @@ def barcharts(
     df = (df
         .rename(columns={
             # Meaningful names for metrics
-            'values': 'present_checklists',
-            'values_n': 'total_checklists',
+            'values': 'present_checklist_frac',
+            'values_n': 'total_checklist_num',
             'buckets': 'freq_score',
         })
         .drop(axis=1, labels=[
@@ -113,7 +114,7 @@ def barcharts(
     )
 
     # Re-score freq, since we had to re-aggregate the base checklist counts
-    df['freq_score'] = df.apply(lambda x: freq_score(x['present_checklists'], x['total_checklists']), axis=1)
+    df['freq_score'] = df.apply(lambda x: freq_score(x['present_checklist_frac'], x['total_checklist_num']), axis=1)
 
     # Re-label with loc_ids
     df['loc_ids'] = ','.join(loc_ids)
@@ -186,22 +187,22 @@ def _raw_barcharts(
         return pd.DataFrame()
 
 
-def freq_score(present_checklists, total_checklists):
+def freq_score(present_checklist_frac, total_checklist_num):
     """
     Reimplement the "About the Frequencies" table so we can re-aggregate our own barcharts:
     - http://help.ebird.org/customer/portal/articles/1010553-understanding-the-ebird-bar-charts
     """
-    if   total_checklists   == 0:     return -1 # noqa
-    elif present_checklists == 0:     return 0  # noqa
-    elif present_checklists <  0.003: return 1  # noqa
-    elif present_checklists <  0.01:  return 2  # noqa
-    elif present_checklists <  0.05:  return 3  # noqa
-    elif present_checklists <  0.1:   return 4  # noqa
-    elif present_checklists <  0.2:   return 5  # noqa
-    elif present_checklists <  0.3:   return 6  # noqa
-    elif present_checklists <  0.4:   return 7  # noqa
-    elif present_checklists <  0.6:   return 8  # noqa
-    else:                             return 9  # noqa
+    if   total_checklist_num    == 0:     return -1 # noqa
+    elif present_checklist_frac == 0:     return 0  # noqa
+    elif present_checklist_frac <  0.003: return 1  # noqa
+    elif present_checklist_frac <  0.01:  return 2  # noqa
+    elif present_checklist_frac <  0.05:  return 3  # noqa
+    elif present_checklist_frac <  0.1:   return 4  # noqa
+    elif present_checklist_frac <  0.2:   return 5  # noqa
+    elif present_checklist_frac <  0.3:   return 6  # noqa
+    elif present_checklist_frac <  0.4:   return 7  # noqa
+    elif present_checklist_frac <  0.6:   return 8  # noqa
+    else:                                 return 9  # noqa
 
 
 def df_from_ebird(
