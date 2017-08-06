@@ -41,7 +41,8 @@ Auth `kubectl` with GKE:
 ```sh
 gcloud auth login
 gcloud auth application-default login
-kubectl version
+# Maybe also edit ~/.kube/config as per https://github.com/kubernetes/kubernetes/issues/38075
+kubectl --context=... version
 ```
 
 Deploy:
@@ -57,5 +58,5 @@ http 104.197.235.14/nearby_barcharts
 
 See logs:
 ```sh
-kubectl logs -f api-<tab>
+kubectl --context=... logs -f api-<tab>
 ```
