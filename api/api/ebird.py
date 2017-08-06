@@ -96,10 +96,6 @@ def barcharts(
         .drop(axis=1, labels=[
             # Have to recompute after re-aggregating across hotspots
             'freq_score',
-            # Drop redundant names (in what cases will we want these?)
-            'display_name',
-            'common_name',
-            'sci_name',
             # Junk, e.g. pretty_values='35%' when values=0.35
             'pretty_values',
         ])
@@ -108,7 +104,7 @@ def barcharts(
     # Aggregate metrics across hotspots
     df = (df
         .drop('loc_id', axis=1)
-        .groupby(['name', 'species_code', 'category', 'week'])
+        .groupby(['species_code', 'display_name', 'name', 'common_name', 'sci_name', 'category', 'week'])
         .agg('sum')
         .reset_index()
     )
