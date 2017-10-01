@@ -1,0 +1,50 @@
+{
+  "name": "mock-playlist-0",
+  "items": [
+    {
+      "name": "nips4b-train-001",
+      "audio_path": "assets/audio/nips4b_birds_trainfile001.wav",
+      "spec_path": "assets/spec/nips4b_birds_trainfile001.wav.png"
+    },
+    {
+      "name": "nips4b-train-002",
+      "audio_path": "assets/audio/nips4b_birds_trainfile002.wav",
+      "spec_path": "assets/spec/nips4b_birds_trainfile002.wav.png"
+    },
+    {
+      "name": "nips4b-train-003",
+      "audio_path": "assets/audio/nips4b_birds_trainfile003.wav",
+      "spec_path": "assets/spec/nips4b_birds_trainfile003.wav.png"
+    },
+    {
+      "name": "nips4b-train-004",
+      "audio_path": "assets/audio/nips4b_birds_trainfile004.wav",
+      "spec_path": "assets/spec/nips4b_birds_trainfile004.wav.png"
+    },
+    {
+      "name": "nips4b-train-005",
+      "audio_path": "assets/audio/nips4b_birds_trainfile005.wav",
+      "spec_path": "assets/spec/nips4b_birds_trainfile005.wav.png"
+    },
+    {
+      "name": "nips4b-train-006",
+      "audio_path": "assets/audio/nips4b_birds_trainfile006.wav",
+      "spec_path": "assets/spec/nips4b_birds_trainfile006.wav.png"
+    },
+    {
+      "name": "nips4b-train-007",
+      "audio_path": "assets/audio/nips4b_birds_trainfile007.wav",
+      "spec_path": "assets/spec/nips4b_birds_trainfile007.wav.png"
+    },
+    {
+      "name": "nips4b-train-008",
+      "audio_path": "assets/audio/nips4b_birds_trainfile008.wav",
+      "spec_path": "assets/spec/nips4b_birds_trainfile008.wav.png"
+    },
+    {
+      "name": "nips4b-train-009",
+      "audio_path": "assets/audio/nips4b_birds_trainfile009.wav",
+      "spec_path": "assets/spec/nips4b_birds_trainfile009.wav.png"
+    }
+  ]
+}

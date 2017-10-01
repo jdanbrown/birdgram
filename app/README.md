@@ -1,4 +1,4 @@
-Milestones:
+TODO v0:
 - [ ] v0: Show list of likely birds from ebird based on (latlon, date)
   - [ ] app: "Go" button -> svc(latlon, date) -> list[(score, bird)] -> show(birds)
     - Show list view, sorted by score desc
@@ -23,7 +23,7 @@ Milestones:
   - [ ] app: show a map with the hotspots where the data is coming from (use case: too many too far away, use fewer)
   - [ ] app inspiration: ebird's new "illustrated checklist": https://ebird.org/ebird/hotspot/L590796/media
 
-TODO
+TODO v1:
 - [x] setup expo
 - [x] create gcp project
 - [x] mock backend: flask + ebird + /barchart + cache
@@ -33,7 +33,18 @@ TODO
 - [x] mock backend: deploy /barchart endpoint to k8s
 -   [x] TODO Figure out why I can't get kubectl to auth to jdanbrown k8s cluster
 - [x] v0 api
-- [ ] port app into ~/Desktop/bubo-2 example / port example back into bubo app (is there anything useful in the app yet?)
+- [ ] use xeno-canto audio + spec data directly (e.g. stream directly to app + cache server side)
+  - Has at least as much data as Macaulay, by sample count
+    - http://www.xeno-canto.org/collection/stats/graphs vs. https://www.macaulaylibrary.org/
+  - Terms of use look feasible: http://www.xeno-canto.org/about/terms
+  - Can serve audio directly to app, e.g. http://www.xeno-canto.org/65830
+    - Need a proxy: can't CORS the audio (proxy) + can't id the specs (generate on the fly ourselves)
+    - Already very rich, but needs focus, efficiency, purpose, better workflow, etc.
+      - http://www.xeno-canto.org/explore?query=%22Greater+Roadrunner+%22+q%3AA&view=3
+    - Easy api:
+      - http://www.xeno-canto.org/api/2/recordings?query=%22Greater+Roadrunner+%22+q%3AA&view=3
+      - Docs: http://www.xeno-canto.org/article/153
+- [ ] port app from app/bubo/ into app/bubo-2/ (is there even anything useful to port?)
 - [ ] api: make slimmed-down route for app to consume (i.e. not the full set of rows from /barcharts)
 - [ ] mock show result list
 - [ ] mock upload recording
@@ -47,17 +58,21 @@ TODO
 - [ ] target kNN idea inspired by google t-SNE demo? https://paper.dropbox.com/doc/Bubo-notes-and-research-yu5ji2nwtKWNkhRAH21RH
   - [ ] Grok google t-SNE data proc code: https://github.com/kylemcdonald/AudioNotebooks
 
+TODO v2:
+- https://paper.dropbox.com/doc/Bubo-app-comparative-spectrograms-lVbQhmyyC4figs12IFHLP
+
 Happy workflow: Expo + react-native-debugger (easy + now supports inspect!)
 - workspace:
   - vim
   - Expo.app (hot reload on file modified)
     - Gear icon -> Host -> LAN for rndebugger
   - React Native Debugger.app (inspect/console/debug)
-    - Needs `package.json` patch below so that "Debug JS Remotely" opens rndebugger instead of chrome
+    - Needs `package.json` patch below so that "Debug Remote JS" opens rndebugger instead of chrome
   - Simulator.app (hot reload, inspect)
-    - cmd-d in simulator (not phone) -> "Debug JS Remotely" to open rndebugger
+    - cmd-d in simulator (not phone) -> "Debug Remote JS" to open rndebugger
     - cmd-d in simulator (not phone) -> "Toggle Element Inspector"
       - Click element -> selects in react-native-debugger + usable as `$r` in console (e.g. `$r.props`)
+      - Must: cmd-opt-I to show console + switch "top" -> "RNDebuggerWorker.js" for `$r` to work
   - phone (hot reload but no inspect, complements simulator)
 - docs: https://facebook.github.io/react-native/docs/
 - docs: https://docs.expo.io/versions/v19.0.0/index.html
@@ -79,7 +94,7 @@ Alt happy workflow: Nuclide/Atom (more work + more control):
   - Atom: "Nuclide React Native: Start Debugging"
   - Shell: `react-native run-ios` -> wait for simulator to launch
   - Simulator: cmd-d -> "Enable Hot Reloading"
-  - Simulator: cmd-d -> "Debug JS Remotely"
+  - Simulator: cmd-d -> "Debug Remote JS"
   - Simulator: Window -> Stay in Front
   - Atom: top right -> "Toggle new / old Nuclide Debugger UI" -> old UI for console
   - Atom: top right -> "(Debug) Open Web Inspector for the debugging frame" -> for console with autocomplete
@@ -95,7 +110,7 @@ Expo + react-native-debugger:
 - https://expo.io/ – build+run+logs (no editing) + hot-reload on file modified (vim!)
   - https://snack.expo.io/ – fiddle with instant reload (even though simulator/phone is ~seconds reload)
 - https://github.com/jhen0409/react-native-debugger – react inspect + js debug
-- Setup: change "Debug JS Remotely" to open in rndebugger instead of chrome
+- Setup: change "Debug Remote JS" to open in rndebugger instead of chrome
   - https://www.npmjs.com/package/react-native-debugger-open
     - TLDR: Add this to `package.json` and then `npm install`:
       ```
