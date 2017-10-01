@@ -35,6 +35,34 @@ for (id, wav_dir, wav_to_img) in [
         'uris': wav_paths,
     })
 
+wav_sets.append({
+    'id': 'xeno-canto',
+    'uris': [
+      {
+        # TODO How to incorporate xeno-canto?
+        #   - Already very rich, but needs focus, efficiency, purpose, better workflow, etc.
+        #       - http://www.xeno-canto.org/explore?query=%22Greater+Roadrunner+%22+q%3AA&view=3
+        #   - Easy api:
+        #       - http://www.xeno-canto.org/api/2/recordings?query=%22Greater+Roadrunner+%22+q%3AA&view=3
+        #       - Docs: http://www.xeno-canto.org/article/153
+        #
+        # Can't stream directly because of CORS, would need to proxy (useful anyway e.g. for caching)
+        # 'wavUri': 'http://www.xeno-canto.org/376218/download',
+        'wavUri': 'data/xeno-canto/376218/audio.mp3',
+        # How to get /uploaded/<foo>/ffts/XS<id>-full.png from http://www.xeno-canto.org/<id> ?
+        #   - Would have to trim junk off the image anyway -- simpler to generate the specs ourselves on the fly?
+        #   - Can get from html <meta> in http://www.xeno-canto.org/376218/
+        'imgUri': 'http://www.xeno-canto.org/sounds/uploaded/MGVGHKBMIZ/ffts/XC376218-full.png',
+        'wavMTime': '2016-07-09T11:38:51',
+      },
+      {
+        'wavUri': 'data/xeno-canto/65830/audio.mp3',
+        'imgUri': 'http://www.xeno-canto.org/sounds/uploaded/XEIROMUDEB/ffts/XC65830-full.png',
+        'wavMTime': '2016-07-09T11:38:51',
+      },
+    ],
+})
+
 out_path = re.sub('\.py$', '', __file__)
 with open(out_path, 'w') as f:
     json.dump(wav_sets, f, indent=2)
