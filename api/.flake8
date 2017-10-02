@@ -23,5 +23,9 @@ ignore =
     E702,
     # do not assign a lambda expression, use a def
     E731,
+    # imports in the wrong order
+    I100,
+    # missing newline before sections or imports
+    I201,
     # (allow trailing comma above)
     xxx

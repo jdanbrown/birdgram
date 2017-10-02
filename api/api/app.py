@@ -1,12 +1,12 @@
+from collections import OrderedDict
 import logging.config
 import os.path
+
+from flask import Flask
+import potoo.pandas
 import simplejson
 import structlog
 import yaml
-from collections import OrderedDict
-from flask import Flask
-
-import potoo.pandas
 
 import api.routes
 

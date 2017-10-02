@@ -1,4 +1,4 @@
-TODO v0:
+v0:
 - [ ] v0: Show list of likely birds from ebird based on (latlon, date)
   - [ ] app: "Go" button -> svc(latlon, date) -> list[(score, bird)] -> show(birds)
     - Show list view, sorted by score desc
@@ -23,7 +23,7 @@ TODO v0:
   - [ ] app: show a map with the hotspots where the data is coming from (use case: too many too far away, use fewer)
   - [ ] app inspiration: ebird's new "illustrated checklist": https://ebird.org/ebird/hotspot/L590796/media
 
-TODO v1:
+v1:
 - [x] setup expo
 - [x] create gcp project
 - [x] mock backend: flask + ebird + /barchart + cache
@@ -58,8 +58,11 @@ TODO v1:
 - [ ] target kNN idea inspired by google t-SNE demo? https://paper.dropbox.com/doc/Bubo-notes-and-research-yu5ji2nwtKWNkhRAH21RH
   - [ ] Grok google t-SNE data proc code: https://github.com/kylemcdonald/AudioNotebooks
 
-TODO v2:
+[WIP] compspectro:
 - https://paper.dropbox.com/doc/Bubo-app-comparative-spectrograms-lVbQhmyyC4figs12IFHLP
+- https://facebook.github.io/react-native/docs/components-and-apis.html
+- http://docs.nativebase.io/Components.html
+- https://docs.expo.io/
 
 Happy workflow: Expo + react-native-debugger (easy + now supports inspect!)
 - workspace:
@@ -74,8 +77,9 @@ Happy workflow: Expo + react-native-debugger (easy + now supports inspect!)
       - Click element -> selects in react-native-debugger + usable as `$r` in console (e.g. `$r.props`)
       - Must: cmd-opt-I to show console + switch "top" -> "RNDebuggerWorker.js" for `$r` to work
   - phone (hot reload but no inspect, complements simulator)
-- docs: https://facebook.github.io/react-native/docs/
-- docs: https://docs.expo.io/versions/v19.0.0/index.html
+- docs: https://facebook.github.io/react-native/docs/components-and-apis.html
+- docs: http://docs.nativebase.io/Components.html
+- docs: https://docs.expo.io/
 - inspect + debug + console: https://github.com/jhen0409/react-native-debugger
 - edit: vim (expo reloads on file modified) + syntastic:flow
 - deploy: expo

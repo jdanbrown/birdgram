@@ -17,29 +17,28 @@ bin/run-prod
 Build docker base layers:
 ```sh
 VERSION=... # e.g. v0
-docker --config="$DOCKER_CONFIG_DIR" build . --file Dockerfile-base -t bubo/api-base:"$VERSION"
-docker --config="$DOCKER_CONFIG_DIR" push bubo/api-base:"$VERSION"
+docker build . --file Dockerfile-base -t bubo/api-base:"$VERSION"
+docker push bubo/api-base:"$VERSION"
 ```
 
 Build docker image:
 ```sh
-docker --config="$DOCKER_CONFIG_DIR" build . -t bubo/api
+docker build . -t bubo/api
 ```
 
 Run prod from docker image:
 ```sh
-docker --config="$DOCKER_CONFIG_DIR" run -p8000:8000 -it bubo/api bin/run-prod
+docker run -p8000:8000 -it bubo/api bin/run-prod
 ```
 
 Push docker image to dockerhub:
 ```sh
-docker --config="$DOCKER_CONFIG_DIR" push bubo/api
+docker push bubo/api
 ```
 
 Auth `kubectl` with GKE:
 - [Warning: bad creds get cached and must be manually removed](https://github.com/kubernetes/kubernetes/issues/38075)
 ```sh
-gcloud auth login
 gcloud auth application-default login
 # Maybe also edit ~/.kube/config as per https://github.com/kubernetes/kubernetes/issues/38075
 kubectl --context=... version
@@ -47,13 +46,14 @@ kubectl --context=... version
 
 Deploy:
 ```sh
-KUBECTL_CONTEXT=... DOCKER_CONFIG_DIR=... bin/deploy
+KUBECTL_CONTEXT=... bin/deploy
 ```
 
 Query:
 ```sh
 http 104.197.235.14/health
 http 104.197.235.14/nearby_barcharts
+http 104.197.235.14/focus-birds/v0
 ```
 
 See logs:

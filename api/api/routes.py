@@ -5,14 +5,14 @@ import inspect
 import traceback
 from typing import Callable, Sequence
 
-import structlog
 from flask import Blueprint, redirect, request
 from flask.json import jsonify
+import structlog
 
-from api import ebird
+from api import compspectro, ebird
 
 log = structlog.get_logger(__name__)
-bp  = Blueprint('routes', __name__)
+bp  = Blueprint('routes', __name__, static_folder='static')
 
 
 #
@@ -33,6 +33,14 @@ def health():
 @bp.route('/debug/error')
 def error():
     raise Exception('oops')
+
+
+@bp.route('/focus-birds/v0', methods=['GET'])
+def focus_birds_v0():
+    return jsonify(with_parsed_request_args(
+        compspectro.focus_birds_v0,
+        request.args,
+    ))
 
 
 @bp.route('/nearby_barcharts', methods=['GET'])
@@ -148,8 +156,9 @@ def _parse_request_arg(func, k: str, v: str) -> any:
 
 def _validate_kwargs(func, **kwargs):
     argspec = inspect.getfullargspec(func)
-    required_args = argspec.args[:-len(argspec.defaults)]
-    optional_args = dict(zip(argspec.args[-len(argspec.defaults):], argspec.defaults))
+    argspec_defaults = argspec.defaults or []
+    required_args = argspec.args[:-len(argspec_defaults)]
+    optional_args = dict(zip(argspec.args[-len(argspec_defaults):], argspec_defaults))
     if not set(required_args).issubset(set(kwargs)):
         raise ResponseStatusException(400, 'Extraneous params',
             required=required_args,
