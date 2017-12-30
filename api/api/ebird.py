@@ -93,8 +93,12 @@ def barcharts(
             'values_n': 'total_checklist_num',
             'buckets': 'freq_score',
         })
+        .assign(
+            present_checklist_num=lambda df: df['present_checklist_frac'] * df['total_checklist_num'],
+        )
         .drop(axis=1, labels=[
             # Have to recompute after re-aggregating across hotspots
+            'present_checklist_frac',
             'freq_score',
             # Junk, e.g. pretty_values='35%' when values=0.35
             'pretty_values',
@@ -109,8 +113,15 @@ def barcharts(
         .reset_index()
     )
 
+    # Re-divide present_checklist_frac, since we had to re-aggregate the base checklist counts
+    df['present_checklist_frac'] = df.apply(axis=1, func=lambda x:
+        -1 if x['total_checklist_num'] == 0 else x['present_checklist_num'] / x['total_checklist_num']
+    )
+
     # Re-score freq, since we had to re-aggregate the base checklist counts
-    df['freq_score'] = df.apply(lambda x: freq_score(x['present_checklist_frac'], x['total_checklist_num']), axis=1)
+    df['freq_score'] = df.apply(axis=1, func=lambda x:
+        freq_score(x['present_checklist_frac'], x['total_checklist_num'])
+    )
 
     # Re-label with loc_ids
     df['loc_ids'] = ','.join(loc_ids)
