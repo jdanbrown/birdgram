@@ -14,6 +14,11 @@ Run prod:
 bin/run-prod
 ```
 
+Login to dockerhub:
+```sh
+docker login
+```
+
 Build docker base layers:
 ```sh
 VERSION=... # e.g. v0
