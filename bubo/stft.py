@@ -1,18 +1,10 @@
-import caffe
-from contextlib import contextmanager
 import dask
 import dask.bag
-import dask.multiprocessing
-from functools import partial
-import ggplot as gg
-import ipdb
-import matplotlib as mpl
-import matplotlib.pyplot as plt
+# import ggplot as gg
 import numpy as np
 import os
 import pandas as pd
-from pprint import pprint
-import pywt
+from IPython.display import display
 import random
 import scipy
 import scipy.signal as sig
@@ -20,17 +12,17 @@ import time
 import traceback
 import wavio
 
-# XXX dev: repl workflow
-exec '; '.join(['import %s; reload(%s)' % (m, m) for m in [
-    'bubo.util',
-    'potoo.dynvar',
-    'potoo.mpl_backend_xee',
-]])
+# # XXX dev: repl workflow
+# exec('; '.join(['import %s; reload(%s)' % (m, m) for m in [
+#     'bubo.util',
+#     'potoo.dynvar',
+#     'potoo.mpl_backend_xee',
+# ]]))
 
 import potoo.mpl_backend_xee
-from bubo.util import caffe_root, plot_img, plot_gg, show_shapes, show_tuple_tight, tmp_rcParams
-from bubo.util import gg_layer, gg_xtight, gg_ytight, gg_tight
-from bubo.util import shell, singleton, puts
+# from bubo.util import caffe_root, plot_img, plot_gg, show_shapes, show_tuple_tight, tmp_rcParams
+# from bubo.util import gg_layer, gg_xtight, gg_ytight, gg_tight
+from bubo.util import plot_img, shell, singleton, puts
 
 #
 # Util
@@ -41,11 +33,13 @@ def with_progress(f, total_i, start_time, prob_print, i, *args):
         elapsed_i   = i + 1
         elapsed_s   = int((time.time() - start_time) * 10) / 10.
         remaining_s = float('inf') if elapsed_i == 0 else int((float(total_i - elapsed_i) * (float(elapsed_s) / elapsed_i)) * 10) / 10.
-        print '[%ss remaining, %s/%s]' % (remaining_s, elapsed_i, total_i)
-    try:
-        return f(*args)
-    except Exception, e:
-        return dict(args=args, i=i, e=e, e_tb=traceback.format_exc())
+        print('[%ss remaining, %s/%s]' % (remaining_s, elapsed_i, total_i))
+    return f(*args)
+    # XXX WHY ARE WE SWALLOWING THE ERRORS AND THEN NOT PRINTING THEM LATER?!
+    # try:
+    #     return f(*args)
+    # except Exception as e:
+    #     return dict(args=args, i=i, e=e, e_tb=traceback.format_exc())
 
 #
 # Spectrum / spectrogram
@@ -59,7 +53,7 @@ dir   = 'data/recordings'
 #dir   = 'data/birdclef-2015-wavs'
 files = os.listdir(dir)
 paths = sorted([os.path.join(dir, x) for x in files if x.endswith('.wav')])
-pprint(paths)
+display(paths)
 
 ## XXX Hand-picked examples
 #paths = [
@@ -108,17 +102,22 @@ def make_spec(wav_path):
     img = np.flipud(Sxx)
     img = np.log10(img)
     img = scipy.misc.imresize(img, (400, 800))
-    with potoo.mpl_backend_xee.override_fig_path(spec_path(wav_path)):
+    wav_spec_path = spec_path(wav_path)
+    print(f'Rendering: {wav_spec_path} ...')
+    with potoo.mpl_backend_xee.override_fig_path(wav_spec_path):
+        print('foo')  # XXX
         plot_img(img)
+        print('foo')  # XXX
 
-print 'Filtering %s total wav paths to find missing specs...' % len(paths)
+print('Filtering %s total wav paths to find missing specs...' % len(paths))
 paths_missing = (dask.bag.from_sequence(paths)
     .filter(lambda x: not os.path.exists(spec_path(x)))
     .compute()
 )
-print 'Making %s/%s missing specs...' % (len(paths_missing), len(paths))
-errs = (dask.bag.from_sequence(enumerate(paths_missing))
-    .map(partial(with_progress, make_spec, len(paths_missing), time.time(), .25))
+print('Making %s/%s missing specs...' % (len(paths_missing), len(paths)))
+errs = (dask.bag
+    .from_sequence(enumerate(paths_missing))
+    .map(lambda i_x: with_progress(make_spec, len(paths_missing), time.time(), .25, *i_x))
     .filter(lambda x: x is not None)
     .compute()
 )
@@ -148,4 +147,3 @@ errs
 #    gg_tight(),
 #    gg.ggtitle('spectrum: %s' % wav_path),
 #))
-
