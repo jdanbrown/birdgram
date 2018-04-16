@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 
+# TODO
+#   - Manually scrape https://academy.allaboutbirds.org/peterson-field-guide-to-bird-sounds/... -> data/...
+#       - Already have full spectros
+#   - Manually scrape http://www.xeno-canto.org/species/Zonotrichia-atricapilla?view=3&pg=1 -> data/xeno-canto/...
+#       - Only have spectros with first 10s, have to compute full spectros ourselves
+#   - Btw, here's the ebird taxon api for autocomplete: https://ebird.org/ws1.1/ref/taxon/find/CL27562?locale=en&q=sparrow
+
 from datetime import datetime
 import json
 import os
