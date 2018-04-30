@@ -1,0 +1,19 @@
+attrs==17.4.0
+git+https://github.com/has2k1/plotnine.git@8b7dfb4
+git+https://github.com/jdanbrown/potoo.git@18e2f47
+joypy==0.1.8
+jupyter==1.0.0
+librosa==0.6.0
+pp-ez==0.2.0
+pprintpp==0.3.0
+python_speech_features==0.6
+requests-html==0.8.0
+rpy2==2.9.2 # >=2.9.2 so we have the fix for fractional -w/-h args to %R
+scikit-misc==0.1.1
+git+https://github.com/scikit-signal/pytftb@ac2b6a2
+statsmodels==0.8.0
+structlog==18.1.0
+
+# pydub
+pydub==0.21.0
+git+https://github.com/MaxStrange/AudioSegment.git@86a1214
