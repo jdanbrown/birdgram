@@ -4,6 +4,7 @@ git+https://github.com/jdanbrown/potoo.git@18e2f47
 joypy==0.1.8
 jupyter==1.0.0
 librosa==0.6.0
+pdbpp==0.9.2
 pp-ez==0.2.0
 pprintpp==0.3.0
 python_speech_features==0.6

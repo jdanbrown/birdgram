@@ -185,7 +185,10 @@ def mfcc(
     nperseg=1024,  # Samples per stft segment
     overlap=0.75,  # Fraction of nperseg samples that overlap between segments
     mels_div=2,  # Increase to get fewer freq bins (unsafe to decrease) [TODO Understand better]
+    first_n_mfcc=None,  # Default: all mfcc's (= len(f) = nperseg/2/mels_div)
     std=True,  # Whether to standardize the quefrency slices (rows) of M
+    dct_type=2,  # TODO librosa uses 2 (FT) but isn't 3 (IFT) more technically correct?
+    dct_norm='ortho',
     **kwargs,  # Passthru to scipy.signal.spectrogram
 ) -> (
     'q',  # quefrency indexes (s)
@@ -201,7 +204,7 @@ def mfcc(
     Returns:
     - S.shape = (len(q), len(t))
     - len(t) ≈ len(x)/stride, where stride = nperseg*(1-overlap)
-    - len(q) ≈ nperseg/2/mels_div
+    - len(q) ≈ first_n_mfcc, else nperseg/2/mels_div
 
     When to use melspectro vs. mfcc (from [2]):
     - "tl;dr: Use Mel-scaled filter banks [i.e. melspectro] if the machine learning algorithm is not susceptible to
@@ -221,18 +224,19 @@ def mfcc(
         **kwargs,
     })
 
-    # n_mfcc = len(f)  # TODO Some function of mels_div
-    n_mfcc = 4
-    M = np.dot(librosa.filters.dct(n_mfcc, len(f)), S);  plt.title('librosa dct filter bank (DCT type 2, not inverse)')
-    # M = scipy.fftpack.dct(S, axis=0, norm=None, n=n_mfcc, type=2);  plt.title('scipy DCT (type 2)')
-    # M = scipy.fftpack.dct(S, axis=0, norm=None, n=n_mfcc, type=3);  plt.title('scipy IDCT (type 3)')
-    # M = np.abs(scipy.fftpack.ifft(S, axis=0, n=n_mfcc));  plt.title('scipy IFFT')
-    print(M.shape)
-    # q = f  # TODO ?
-    # q = np.arange(M.shape[0] + 1)
-    q = np.arange(M.shape[0])
+    if first_n_mfcc is None:
+        first_n_mfcc = len(f)
 
-    # Standardize ((x - μ) / σ)
+    # M = np.dot(librosa.filters.dct(first_n_mfcc, len(f)), S)  # XXX
+    M = scipy.fftpack.dct(S, axis=0, type=dct_type, norm=dct_norm)[:first_n_mfcc]
+    # Quefrency units are time (lag?) with values 1/f
+    #   - http://rug.mnhn.fr/seewave/HTML/MAN/ceps.html -- does just 1/f
+    #   - http://azimadli.com/vibman/cepstrumterminology.htm
+    #   - TODO But how do we encode them without making plt.pcolormesh scale non-linearly? Stick with arange for now...
+    # q = f[:first_n_mfcc]
+    q = np.arange(first_n_mfcc)
+
+    # Standardize: (x - μ) / σ
     if std:
         M = (M - M.mean(axis=1)[:, np.newaxis]) / M.std(axis=1)[:, np.newaxis]
 
@@ -296,11 +300,6 @@ def _plt_spectro_func(
     assert not (fancy and ax), f"Can't supply both fancy[{fancy}] and ax[{ax}]"
     (rec, audio, x, sample_rate) = _unpack_input(rec_or_audio_or_signal)
 
-    (f, t, S) = spectro_func(audio, **kwargs)
-    S = powscale(S)
-    S_f = S.mean(axis=1)
-    S_t = S.mean(axis=0)
-
     if fancy and show_marginals:
         fig = plt.figure()
         gs = mpl.gridspec.GridSpec(nrows=2, ncols=2, width_ratios=[30, 1], height_ratios=[1, 8], wspace=0, hspace=0)
@@ -309,11 +308,20 @@ def _plt_spectro_func(
         fig = None
         gs = None
 
-    # Time-freq spectro (big central plot)
+    # Setup plot for time-freq spectro (big central plot)
     if fancy:
         ax_tf = fig.add_subplot(gs[-1, 0])
     else:
         ax_tf = ax or plt.gca()
+
+    # Compute time-freq spectro
+    #   - Do this in the context of a plt.gca(), so that spectro_func can add to it (in unusual cases like debugging)
+    (f, t, S) = spectro_func(audio, **kwargs)
+    S = powscale(S)
+    S_f = S.mean(axis=1)
+    S_t = S.mean(axis=0)
+
+    # Plot time-freq spectro (big central plot)
     ax_tf.pcolormesh(
         # Extend (t,f) by one element each to avoid dropping the last row and col from S (fence-post problem)
         #   - https://matplotlib.org/api/_as_gen/matplotlib.pyplot.pcolor.html
