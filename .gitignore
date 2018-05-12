@@ -11,3 +11,4 @@ bubo.Rproj
 data
 caffe/
 .Rproj.user
+.pytest_cache/

@@ -1,0 +1,15 @@
+# http://flake8.pycqa.org/en/latest/user/configuration.html
+
+[flake8]
+max-line-length = 120
+
+ignore =
+  E124 # closing bracket does not match visual indentation
+  E128 # continuation line under-indented for visual indent
+  E731 # do not assign a lambda expression, use a def
+
+# flake8-import-order
+import-order-style = google
+application-import-names =
+  util
+  constants
