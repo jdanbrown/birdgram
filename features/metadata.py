@@ -12,25 +12,6 @@ metadata_dir = f'{data_dir}/metadata'
 ebird_taxa_path = f'{metadata_dir}/ebird-ws1.1-taxa-species.csv'
 
 
-def from_audio(audio) -> dict:
-    name = audio.name
-    name_parts = name.split('/')
-    source = name_parts[0]
-    basename = name_parts[-1]
-    species_query = None
-    if source == 'peterson-field-guide':
-        species_query = name.split('/')[1]
-    elif source == 'recordings-new':
-        m = re.match(r'^([A-Z]{4}) ', basename)
-        if m: species_query = m.groups()[0]
-    return OrderedDict(
-        source=source,
-        species=species[species_query, 'shorthand'] or 'XX',
-        species_query=species_query,
-        basename=basename,
-    )
-
-
 @singleton
 class species:
 

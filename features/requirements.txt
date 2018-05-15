@@ -5,6 +5,7 @@ flake8-commas==2.0.0
 flake8-import-order==0.17.1
 git+https://github.com/has2k1/plotnine.git@7b129e2
 git+https://github.com/jdanbrown/potoo.git@18e2f47
+joblib==0.11
 joypy==0.1.8
 jupyter==1.0.0
 librosa==0.6.0
@@ -24,4 +25,6 @@ structlog==18.1.0
 
 # pydub
 pydub==0.21.0
-git+https://github.com/MaxStrange/AudioSegment.git@86a1214
+# TODO Switch back to MaxStrange repo after https://github.com/MaxStrange/AudioSegment/pull/2
+# git+https://github.com/MaxStrange/AudioSegment.git@86a1214
+git+https://github.com/jdanbrown/AudioSegment.git@c8dc862
