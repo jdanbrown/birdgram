@@ -1,9 +1,52 @@
+from collections import OrderedDict
 from functools import lru_cache
+import re
 
 import pandas as pd
 
-from constants import data_dir
+from constants import data_dir, unk_species
+import metadata
 from util import df_reorder_cols, singleton
+
+datasets = {
+    'recordings': 'recordings/*',
+    'recordings-new': 'recordings-new/*',
+    'peterson-field-guide': 'peterson-field-guide/*/audio/*',
+    'birdclef-2015': 'birdclef-2015/organized/wav/*',
+    'warblrb10k': 'dcase-2018/warblrb10k_public_wav/*',
+    'ff1010bird': 'dcase-2018/ff1010bird_wav/*',
+    'nips4b': 'nips4b/all_wav/*',
+    'mlsp-2013': 'mlsp-2013/mlsp_contest_dataset/essential_data/src_wavs/*',
+}
+
+
+def metadata_from_audio(dataset, audio) -> dict:
+    name = audio.name
+    name_parts = name.split('/')
+    basename = name_parts[-1]
+    species = None
+    species_query = None
+    if dataset == 'peterson-field-guide':
+        species_query = name.split('/')[1]
+    elif dataset == 'recordings-new':
+        m = re.match(r'^([A-Z]{4}) ', basename)
+        if m: species_query = m.groups()[0]
+    elif dataset == 'mlsp-2013':
+        # TODO Generalize species[species_query] to work on multi-label species (e.g. 'SOSP,WIWA')
+        #   - Works fine for now because it passes through queries it doesn't understand, and these are already codes
+        train_labels = mlsp2013.train_labels_for_filename.get(
+            basename,
+            [unk_species],  # If missing it's an unlabeled test rec
+        )
+        species = 'none' if train_labels == [] else ','.join(sorted(train_labels))
+        # TODO What did 'XXXX' vs. 'none' mean here? [see inspect_dataset_mlsp-2013.ipynb]
+    return OrderedDict(
+        dataset=dataset,
+        species=species or metadata.species[species_query, 'shorthand'] or unk_species,
+        species_query=species_query,
+        basename=basename,
+        name=audio.name,
+    )
 
 
 @singleton

@@ -6,6 +6,7 @@ from typing import Optional
 import pandas as pd
 
 from constants import data_dir
+from datatypes import Species
 from util import cache_to_file_forever, singleton
 
 metadata_dir = f'{data_dir}/metadata'
@@ -32,14 +33,14 @@ class species:
             >>> species['song sparrow', 'shorthand']
         """
         try:
-            (query, key) = x
+            (query, attr) = x
         except:
-            (query, key) = (x, None)
-        row = self._df_lookup.get(self._normalize_query(query or ''))
-        if not row or not key:
-            return row
+            (query, attr) = (x, None)
+        species = self._df_lookup.get(self._normalize_query(query or ''))
+        if not species or not attr:
+            return species
         else:
-            return row[key]
+            return getattr(species, attr)
 
     @property
     @lru_cache()
@@ -115,7 +116,7 @@ class species:
     @cache_to_file_forever(f'{metadata_dir}/cache/_df_lookup')  # Avoid ~12s (on a MBP)
     def _df_lookup(self) -> dict:
         out = dict([
-            (self._normalize_query(query), dict(row))
+            (self._normalize_query(query), Species(**row))
             for col in reversed([
                 # High -> low prio (shorthand, species_code, ...)
                 #   - e.g. SOSP -> Song Sparrow (banding_codes), not Socotra Sparrow or Somali Sparrow (com_name)
@@ -138,8 +139,8 @@ class species:
             )
             for query in ([row[col]] if not isinstance(row[col], list) else row[col])
         ])
-        assert out[self._normalize_query('SOSP')]['com_name'] == 'Song Sparrow'
-        assert out[self._normalize_query('WIWA')]['com_name'] == "Wilson's Warbler"
+        assert out[self._normalize_query('SOSP')].com_name == 'Song Sparrow'
+        assert out[self._normalize_query('WIWA')].com_name == "Wilson's Warbler"
         return out
 
     def _normalize_query(self, query: str) -> str:

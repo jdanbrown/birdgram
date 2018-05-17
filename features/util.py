@@ -1,3 +1,8 @@
+## misc
+
+from more_itertools import *
+
+
 ## matplotlib
 
 import matplotlib.pyplot as plt
@@ -37,6 +42,10 @@ from dask.diagnostics import ProgressBar
 import dask.multiprocessing
 import pandas as pd
 from potoo.util import get_cols
+
+
+def df_rows(df):
+    return [row for i, row in df.iterrows()]
 
 
 def df_flatmap_list_col(df, col_name, col_f=lambda s: s):
@@ -124,7 +133,7 @@ def ls(dir):
 
 ## util
 
-from functools import wraps
+from functools import partial, wraps
 import os
 import pickle
 import random
@@ -137,12 +146,15 @@ def shuffled(xs: iter, random=random) -> list:
     return xs
 
 
-def flatten(xss: iter) -> iter:
-    return (x for xs in xss for x in xs)
+# XXX Use more_itertools.flatten
+# def flatten(xss: iter) -> iter:
+#     return (x for xs in xss for x in xs)
 
 
-def round_sig(x, n):
-    return type(x)(f'%.{n}g' % x)
+# XXX Use more_itertools.one
+# def only(xs):
+#     [x] = list(xs)
+#     return x
 
 
 def generator_to(agg):
@@ -200,8 +212,3 @@ def cache_to_file_forever(path):
                 return x
         return g
     return decorator
-
-
-def only(xs):
-    [x] = list(xs)
-    return x

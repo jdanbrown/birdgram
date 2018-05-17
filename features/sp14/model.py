@@ -1,10 +1,11 @@
 import copy
 from datetime import datetime
-from typing import Union
+import json
+from typing import Iterator, Union
 
+from attrdict import AttrDict
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
-from skm import SKM
 import yaml
 
 from cache import cache, cache_lambda, cache_pure_method
@@ -12,12 +13,13 @@ from datasets import *
 from features import *
 from load import *
 import metadata
+from sp14.skm import SKM
 from util import *
 
 
 class Model:
     """
-    Params
+    Config
         |                             | defaults      | [SP14]         | [SBF16]       |
         |-----------------------------|---------------|----------------|---------------|
         | rec_sample_rate             | 22050         | 44100          | 22050
@@ -61,13 +63,14 @@ class Model:
         patch_length=4,
         proj_skm_variance_explained=.99,
         proj_skm_k=500,
+        proj_skm_config={},
         agg_funs=['mean', 'std', 'max'],
         class_knn_n_neighbors=3,
-        verbose_params=True,
+        verbose_config=True,
     ):
-        self.params = dict(
-            patch_params=dict(
-                spectro_params=dict(
+        self.config = AttrDict(
+            patch_config=dict(
+                spectro_config=dict(
                     sample_rate=rec_sample_rate,
                     f_min=spectro_f_min,
                     f_bins=spectro_f_bins,
@@ -77,47 +80,50 @@ class Model:
                 ),
                 patch_length=patch_length,
             ),
-            proj_skm_params=dict(
-                variance_explained=proj_skm_variance_explained,
-                k=proj_skm_k,
-            ),
-            agg_params=dict(
+            proj_skm_config={
+                'variance_explained': proj_skm_variance_explained,
+                'k': proj_skm_k,
+                **proj_skm_config,
+            },
+            agg_config=dict(
                 funs=agg_funs,
             ),
-            class_knn_params=dict(
+            class_knn_config=dict(
                 n_neighbors=class_knn_n_neighbors,
             ),
-            verbose_params=verbose_params,
+            verbose_config=verbose_config,
         )
-        self._print_params(self.params)
+        self._print_config(self.config)
 
-    def fit_proj(self, recs):
+    def fit_proj(self, recs: pd.DataFrame):
         """rec (samples,) -> spectro (f,t) -> patch (f*p,t) -> [skm.fit]"""
-        self.proj_recs_ = recs
-        self.proj_patches_ = self._patches(self.proj_recs_, **self.params['patch_params'])
-        self.proj_skm_ = SKM(**self.params['proj_skm_params'])
+        self.proj_recs_ = self.to_X(recs)
+        self.proj_patches_ = self._patches(self.proj_recs_, **self.config.patch_config)
+        self.proj_skm_ = SKM(**self.config.proj_skm_config)
         skm_X = np.concatenate(self.proj_patches_, axis=1)  # (Entirely an skm.fit concern)
         self._log('fit_proj:skm_X', **{
             'skm_X.shape': skm_X.shape,
         })
         self.proj_skm_ = self._skm_fit(self.proj_skm_, skm_X)
+        if not self.config.proj_skm_config.get('do_pca', True):
+            self.proj_skm_.pca.components_ = np.eye(self.proj_skm_.D.shape[0])
         self._log('fit_proj:skm.fit', **{
             'skm.pca.components_.shape': self.proj_skm_.pca.components_.shape,
             'skm.D.shape': self.proj_skm_.D.shape,
         })
         return self
 
-    def fit_class(self, recs, classes):
+    def fit_class(self, recs: pd.DataFrame):
         """patch (f*p,t) -> [skm.transform] -> proj (k,t) -> agg (k,a) -> feat (k*a,) -> [knn.fit]"""
-        self.class_recs_ = recs
-        self.class_classes_ = classes
-        self.class_patches_ = self._patches(self.class_recs_, **self.params['patch_params'])
-        self.class_feats_ = self._feats(self.class_patches_, self.proj_skm_, self.params['agg_params'])  # (skm.transform)
+        self.class_recs_ = self.to_X(recs)
+        self.class_classes_ = self.to_y(recs)
+        self.class_patches_ = self._patches(self.class_recs_, **self.config.patch_config)
+        self.class_feats_ = self._feats(self.class_patches_, self.proj_skm_, self.config.agg_config)  # (skm.transform)
         self._log('fit_class:knn_Xy', **{
             '(f*p, t)': [p.shape for p in self.class_patches_],
         })
         self.class_knn_ = (
-            KNeighborsClassifier(**self.params['class_knn_params'])
+            KNeighborsClassifier(**self.config.class_knn_config)
             .fit(self.class_feats_, self.class_classes_)
         )
         self._log('fit_class:knn', **{
@@ -126,57 +132,72 @@ class Model:
         })
         return self
 
-    def predict(self, recs, type: Union['classes', 'kneighbors']) -> pd.DataFrame:
+    def predict(self, recs: pd.DataFrame, type: Union['classes', 'kneighbors']) -> pd.DataFrame:
         """
         rec (samples,) -> spectro (f,t) -> patch (f*p,t) -> [skm.transform]
             -> proj (k,t) -> agg (k,a) -> feat (k*a,) -> [knn.predict]
         """
         return self._predict(
-            recs,
+            self.to_X(recs),
             type,
             self.proj_skm_,
             self.class_knn_,
             self.class_recs_,
             self.class_classes_,
-            self.params['patch_params'],
-            self.params['agg_params'],
+            self.config.patch_config,
+            self.config.agg_config,
         )
+
+    def test(self, recs: pd.DataFrame, type: Union['classes', 'kneighbors']) -> pd.DataFrame:
+        """Predict, and then add test labels back to the predictions"""
+        return pd.concat(axis=1, objs=[
+            pd.DataFrame({'y': self.to_y(recs)}),
+            self.predict(recs, type),
+        ]).T
 
     #
     # Class methods (not stateful)
     #
 
     @classmethod
-    def _print_params(cls, params):
-        if params['verbose_params']:
+    def to_X(cls, recs: pd.DataFrame) -> List[Recording]:
+        return df_to_recs(recs)
+
+    @classmethod
+    def to_y(cls, recs: pd.DataFrame) -> np.ndarray:
+        return np.array(recs.species)
+
+    @classmethod
+    def _print_config(cls, config):
+        if config.verbose_config:
             _g = lambda x: '%.3g' % x
-            _samples_s = params['patch_params']['spectro_params']['sample_rate']
-            _f = params['patch_params']['spectro_params']['f_bins']
-            _hop = params['patch_params']['spectro_params']['hop_length']
-            _frame = params['patch_params']['spectro_params']['frame_length']
+            _samples_s = config.patch_config.spectro_config.sample_rate
+            _f = config.patch_config.spectro_config.f_bins
+            _hop = config.patch_config.spectro_config.hop_length
+            _frame = config.patch_config.spectro_config.frame_length
             _t_s = _samples_s / _hop
-            _p = params['patch_params']['patch_length']
-            _k = params['proj_skm_params']['k']
-            _a = len(params['agg_params']['funs'])
+            _p = config.patch_config.patch_length
+            _k = config.proj_skm_config.k
+            _a = len(config.agg_config.funs)
             _ka = _k * _a
-            cls._log('init:params', **{
+            cls._log('init:config', **{
                 'rec_sample_rate': '%s Hz' % _samples_s,
-                'spectro_f_min': '%s Hz' % params['patch_params']['spectro_params']['f_min'],
+                'spectro_f_min': '%s Hz' % config.patch_config.spectro_config.f_min,
                 '  f_max': '%s Hz' % (_samples_s // 2),
                 'spectro_f_bins (f)': '%s freq bins' % _f,
                 'spectro_hop_length': '%s samples (%s ms)' % (_hop, _g(1 / _samples_s * _hop * 1000)),
                 'spectro_frame_length': '%s samples (%s ms)' % (_frame, _g(1 / _samples_s * _frame * 1000)),
                 '  frame_overlap': '%s%% overlap (%s samples)' % (_g(100 * (1 - _hop / _frame)), _frame // 2),
                 '  frames/s (t/s)': '%s samples/s' % _g(_t_s),
-                'spectro_frame_window': repr(params['patch_params']['spectro_params']['frame_window']),
+                'spectro_frame_window': repr(config.patch_config.spectro_config.frame_window),
                 'norm': '[TODO]',  # TODO
                 'patch_length (p)': '%s frames (%s ms)' % (_p, _g(_p * 1 / _samples_s * _hop * 1000)),
-                'proj_skm_variance_explained': '%s%% variance' % _g(100 * params['proj_skm_params']['variance_explained']),
+                'proj_skm_variance_explained': '%s%% variance' % _g(100 * config.proj_skm_config.variance_explained),
                 'proj_skm_k': '%s clusters' % _k,
-                'agg_funs': repr(params['agg_params']['funs']),
+                'agg_funs': repr(config.agg_config.funs),
                 '  a': '%s aggs' % _a,
                 '  features': '%s features' % _ka,
-                'class_knn_n_neighbors': params['class_knn_params']['n_neighbors'],
+                'class_knn_n_neighbors': config.class_knn_config.n_neighbors,
             })
             cls._log('init:pipeline', **{
                 # (Gross spacing hacks to make stuff align)
@@ -188,8 +209,7 @@ class Model:
             })
 
     @classmethod
-    @cache.cache
-    def _patches(cls, recs, spectro_params, patch_length):
+    def _patches(cls, recs, spectro_config, patch_length):
         """rec (samples,) -> spectro (f,t) -> patch (f*p,t)"""
         cls._log('patches:recs', **{
             'len(recs)': len(recs),
@@ -198,22 +218,31 @@ class Model:
             '(samples,)': [int(r.audio.frame_count()) for r in recs],
             'sum(samples)': sum(int(r.audio.frame_count()) for r in recs),
         })
-        spectros = cls._spectros(recs, **spectro_params)
-        cls._log('patches:spectros', **{
-            '(f, t)': [x.S.shape for x in spectros],
-            '(f, sum(t))': (only({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
-        })
-        patches = cls._patches_from_spectros(spectros, patch_length)
+        patches = cls._patches_from_recs(recs, spectro_config, patch_length)
         cls._log('patches:patches', **{
             '(f*p, t)': [p.shape for p in patches],
-            '(f*p, sum(t))': (only({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
+            '(f*p, sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
         return patches
 
     @classmethod
-    @cache.cache
+    @cache
+    def _patches_from_recs(cls, recs, spectro_config, patch_length):
+        """rec (samples,) -> spectro (f,t) -> patch (f*p,t)"""
+        spectros = cls._spectros(recs, **spectro_config)
+        cls._log('patches:spectros', **{
+            '(f, t)': [x.S.shape for x in spectros],
+            '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
+        })
+        patches = cls._patches_from_spectros(spectros, patch_length)
+        return patches
+
+    @classmethod
+    @cache
     @generator_to(list)
-    def _spectros(cls, recs, sample_rate, f_min, frame_length, hop_length, frame_window, f_bins):
+    def _spectros(
+        cls, recs, sample_rate, f_min, frame_length, hop_length, frame_window, f_bins,
+    ) -> Iterator[Melspectro]:
         """
         rec (samples,) -> spectro (f,t)
           - f: freq indexes (Hz), mel-scaled
@@ -234,6 +263,7 @@ class Model:
             )
 
     @classmethod
+    @cache
     @generator_to(list)
     def _patches_from_spectros(cls, spectros, patch_length):
         """spectro (f,t) -> patch (f*p,t)"""
@@ -246,7 +276,7 @@ class Model:
             yield patch
 
     @classmethod
-    @cache.cache
+    @cache
     def _skm_fit(cls, skm, X):
         """Pure wrapper around skm.fit for caching"""
         skm = copy.copy(skm)
@@ -254,14 +284,14 @@ class Model:
         return skm
 
     @classmethod
-    def _predict(cls, recs, type, proj_skm, class_knn, class_recs, class_classes, patch_params, agg_params) -> pd.DataFrame:
+    def _predict(cls, recs, type, proj_skm, class_knn, class_recs, class_classes, patch_config, agg_config) -> pd.DataFrame:
         """
         rec (samples,) -> spectro (f,t) -> patch (f*p,t) -> [skm.transform]
             -> proj (k,t) -> agg (k,a) -> feat (k*a,) -> [knn.predict]
         """
         # _transform_proj: recs -> aggs
-        patches = cls._patches(recs, **patch_params)
-        feats = cls._feats(patches, proj_skm, agg_params)  # (skm.transform)
+        patches = cls._patches(recs, **patch_config)
+        feats = cls._feats(patches, proj_skm, agg_config)  # (skm.transform)
         # _predict_class_*: feats -> classes/kneighbors
         return cls._predict_class(feats, type, class_knn, class_recs, class_classes)
 
@@ -277,10 +307,10 @@ class Model:
     @classmethod
     def _predict_class_classes(cls, feats, class_knn) -> pd.DataFrame:
         """agg (k,a) -> class (test_n, class_n)"""
-        proba = class_knn.predict_proba(feats)
         classes = class_knn.classes_
+        proba = class_knn.predict_proba(feats)
         classes_df = pd.DataFrame([
-            {i: [k, v] for i, (k, v) in enumerate(sorted(dict(row).items(), key=lambda x: (-x[1], x[0])))}
+            {i: [p, c] for i, (c, p) in enumerate(sorted(dict(row).items(), key=lambda x: (-x[1], x[0])))}
             for i, row in pd.DataFrame(proba, columns=classes).iterrows()
         ])
         cls._log('predict:classes', **{
@@ -307,18 +337,27 @@ class Model:
         return kneighbors_df
 
     @classmethod
-    def _feats(cls, patches, proj_skm, agg_params):
+    def _feats(cls, patches, proj_skm, agg_config):
         """patch (f*p,t) -> [skm.transform] -> agg (k,a) -> feat (k*a,)"""
         projs = cls._transform_proj(proj_skm, patches)  # (skm.transform)
-        aggs = cls._aggs(projs, **agg_params)
+        aggs = cls._aggs(projs, **agg_config)
         feats = cls._feats_from_aggs(aggs)
         return feats
 
     @classmethod
+    @generator_to(list)
     def _transform_proj(cls, proj_skm, patches):
         """patch (f*p,t) -> proj (k,t)"""
-        projs = [proj_skm.transform(p) for p in patches]
-        return projs
+        # Concat patches (along t) so we can skm.transform them all at once
+        concat_patches = np.concatenate(patches, axis=1)
+        concat_projs = proj_skm.transform(concat_patches)
+        # Unconcat projs (along t) to match patches
+        t_shapes = [p.shape[1] for p in patches]
+        t_starts = [0] + list(np.cumsum(t_shapes)[:-1])
+        for patch, t_shape, t_start in zip(patches, t_shapes, t_starts):
+            # Each proj should have the same t_shape and t_start as its patch
+            proj = concat_projs[:, t_start:t_start + t_shape]
+            yield proj
 
     @classmethod
     @generator_to(list)
@@ -366,7 +405,7 @@ class Model:
             print('[%s] %s' % (t, event))
             # Display each (k,v) pair on its own line, indented
             for k, v in kwargs.items():
-                v_yaml = yaml.safe_dump(v, default_flow_style=True, width=1e9)
+                v_yaml = yaml.safe_dump(json.loads(json.dumps(v)), default_flow_style=True, width=1e9)
                 v_yaml = v_yaml.split('\n')[0]  # Handle documents ([1] -> '[1]\n') and scalars (1 -> '1\n...\n')
                 print('  %s: %s' % (k, v_yaml))
 

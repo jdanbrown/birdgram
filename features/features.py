@@ -1,56 +1,12 @@
-import logging
-
-log = logging.getLogger(__name__)
-
-
-## features.sp14
-
-import matplotlib as mpl
-from skm import SKM
-
-
-def cart_to_polar(x, y):
-    z = x + y * 1j
-    return (np.abs(z), np.angle(z))
-
-
-def polar_to_cart(r, theta):
-    z = r * np.exp(1j * theta)
-    return (z.real, z.imag)
-
-
-# A more plt friendly version of skm.display.visualize_clusters
-def skm_visualize_clusters(skm: SKM, X, cmap=mpl.cm.Set1):
-    """Visualize the input data X and cluster assignments from SKM model skm"""
-    assert skm.assignment is not None
-    if skm.do_pca:
-        X = skm.pca.transform(X.T).T  # Whiten data to match centroids
-    plt.axhline(0, color='lightgray')
-    plt.axvline(0, color='lightgray')
-    color_i = mpl.cm.ScalarMappable(
-        cmap=cmap,
-        norm=mpl.colors.Normalize(vmin=0, vmax=skm.k - 1),
-    ).to_rgba
-    for n, sample in enumerate(X.T):
-        plt.plot(sample[0], sample[1], '.', color=color_i(skm.assignment[n]))
-    for n, centroid in enumerate(skm.D.T):
-        plt.plot(centroid[0], centroid[1], 'o', color=color_i(n), markersize=8, markeredgewidth=2, markeredgecolor='k')
-    # Set square lims (because polar)
-    max_lim = max([*plt.gca().get_xlim(), *plt.gca().get_ylim()])
-    plt.xlim(-abs(max_lim), abs(max_lim))
-    plt.ylim(-abs(max_lim), abs(max_lim))
-
-
-## features
-
 from collections import OrderedDict
 from functools import lru_cache
+import logging
 import os.path
 import re
 from typing import Any, NewType, Optional, Tuple, Union
 
-import attr
 import audiosegment
+import dataclasses
 from functools import partial
 import librosa
 import matplotlib as mpl
@@ -59,20 +15,23 @@ import pandas as pd
 import pydub
 import scipy
 
-from constants import cache_dir, data_dir, standard_sample_rate_hz
-from datatypes import Recording
+from constants import cache_dir, data_dir, default_log_ylim_min_hz, standard_sample_rate_hz
+from datatypes import Recording, RecOrAudioOrSignal
 import metadata
 from util import *
 
-default_log_ylim_min_hz = 512  # Most/all birds are above 512Hz (but make sure to clip noise below 512Hz)
+log = logging.getLogger(__name__)
 
-RecOrAudioOrSignal = Union[
-    Recording,  # rec as Recording/attrs
-    dict,  # rec as dict
-    audiosegment.AudioSegment,  # audio
-    Tuple[np.array, int],  # (x, sample_rate)
-    np.array,  # x where sample_rate=standard_sample_rate_hz
-]
+
+def df_to_recs(df: pd.DataFrame) -> List[Recording]:
+    return [
+        Recording(**{
+            k: v
+            for k, v in dict(row).items()
+            if k in [x.name for x in dataclasses.fields(Recording)]
+        })
+        for row in df_rows(df)
+    ]
 
 
 def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
@@ -90,7 +49,7 @@ def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
 
     # rec as Recording/attrs
     if not isinstance(v, (dict, audiosegment.AudioSegment, np.ndarray, tuple)):
-        v = {a.name: getattr(v, a.name) for a in attr.fields(Recording)}
+        v = {x.name: getattr(v, x.name) for x in dataclasses.fields(Recording)}
 
     # rec as dict
     if isinstance(v, dict):
@@ -153,7 +112,7 @@ class HasPlotAudioTF:
             gs = mpl.gridspec.GridSpec(nrows=2, ncols=2, width_ratios=[30, 1], height_ratios=[1, 8], wspace=0, hspace=0)
         else:
             # Don't interfere with the existing figure/axis
-            fig = None
+            fig = plt.gcf()
             gs = None
 
         # Setup plot for time-freq spectro (big central plot)
@@ -222,10 +181,13 @@ class HasPlotAudioTF:
             ax_t.set_ylim(ax_t_f_lim)
             ax_f.set_xlim(ax_t_f_lim)
 
-        if fancy and show_title and rec:
-            # Put title at the bottom (as ax_tf xlabel) because fig.suptitle messes up vspacing with different figsizes
-            ax_tf.set_xlabel(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)
-            # fig.suptitle(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)  # XXX Poop on this
+        if show_title and rec:
+            if fancy:
+                # Put title at the bottom (as ax_tf xlabel) because fig.suptitle messes up vspacing with different figsizes
+                ax_tf.set_xlabel(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)
+                # fig.suptitle(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)  # XXX Poop on this
+            else:
+                ax_tf.set_xlabel(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)
 
         if xformat: ax_tf.xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda x, pos=None: xformat(x)))
         if yformat: ax_tf.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda y, pos=None: yformat(y)))
