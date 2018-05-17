@@ -1,5 +1,8 @@
 import matplotlib as mpl
-from skm import SKM
+import matplotlib.pyplot as plt
+import numpy as np
+
+from sp14.skm import SKM
 
 
 def cart_to_polar(x, y):
