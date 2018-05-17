@@ -137,7 +137,8 @@ class HasPlotAudioTF:
         ax_tf.pcolormesh(
             # Extend (t,f) by one element each to avoid dropping the last row and col from S (fence-post problem)
             #   - https://matplotlib.org/api/_as_gen/matplotlib.pyplot.pcolor.html
-            list(t) + [t[-1] + (t[-1] - t[-2])], list(f) + [f[-1] + (f[-1] - f[-2])],
+            list(t) + [t[-1] + (t[-1] - t[-2])],
+            list(f) + [f[-1] + (f[-1] - f[-2])],
             S,
             cmap=cmap,
         )

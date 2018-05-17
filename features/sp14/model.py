@@ -1,5 +1,6 @@
 import copy
 from datetime import datetime
+import itertools
 import json
 from typing import Iterator, Union
 
@@ -156,6 +157,16 @@ class Model:
         ]).T
 
     #
+    # User-friendly instance methods that we don't rely on internally
+    #
+
+    def spectros(self, recs: pd.DataFrame) -> Iterator[Melspectro]:
+        return self._spectros(self.to_X(recs), **self.config.patch_config.spectro_config)
+
+    def patches(self, recs: pd.DataFrame) -> Iterator[Melspectro]:
+        return self._patches(self.to_X(recs), **self.config.patch_config)
+
+    #
     # Class methods (not stateful)
     #
 
@@ -238,17 +249,31 @@ class Model:
         return patches
 
     @classmethod
-    @cache
-    @generator_to(list)
-    def _spectros(
-        cls, recs, sample_rate, f_min, frame_length, hop_length, frame_window, f_bins,
-    ) -> Iterator[Melspectro]:
+    def _spectros(cls, recs, **spectro_config) -> List[Melspectro]:
         """
         rec (samples,) -> spectro (f,t)
           - f: freq indexes (Hz), mel-scaled
           - t: time indexes (s)
           - S: log power (f x t): log(X**2) where X is the (energy) unit of the audio signal
         """
+        # Cache per dataset group:
+        #   - Sort by (dataset, name) -> apply _spectros_cache_block per group -> unsort back to original order
+        i_recs_sorted = sorted(enumerate(recs), key=lambda i_rec: (i_rec[1].dataset, i_rec[1].name))
+        recs_sorted = [rec for i, rec in i_recs_sorted]
+        unsort = {i_orig: i_sorted for i_sorted, (i_orig, rec) in enumerate(i_recs_sorted)}
+        spectros_sorted = list(flatten(
+            cls._spectros_cache_block(list(recs_sorted_for_dataset), **spectro_config)
+            for dataset, recs_sorted_for_dataset in itertools.groupby(recs_sorted, lambda rec: rec.dataset)
+        ))
+        spectros = [spectros_sorted[unsort[i_orig]] for i_orig, rec in enumerate(recs)]
+        return spectros
+
+    @classmethod
+    @cache
+    @generator_to(list)
+    def _spectros_cache_block(
+        cls, recs, sample_rate, f_min, frame_length, hop_length, frame_window, f_bins,
+    ) -> Iterator[Melspectro]:
         for rec in recs:
             (rec, _audio, _x, _sample_rate) = unpack_rec(rec)
             assert rec.audio.frame_rate == sample_rate, \
