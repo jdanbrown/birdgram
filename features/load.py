@@ -9,8 +9,9 @@ import dataclasses
 import pandas as pd
 
 from constants import cache_dir, data_dir, standard_sample_rate_hz
-from datatypes import Recording
 from datasets import datasets, metadata_from_audio
+from datatypes import Recording
+import metadata
 from util import df_apply_with_progress, ensure_parent_dir
 
 
@@ -36,6 +37,12 @@ def load_recs_data(recs_paths: pd.DataFrame, dask_opts={}, **kwargs) -> pd.DataF
                 **kwargs,
             ))
         )))
+        .astype({
+            # Map str -> category for cols that have category dtypes available
+            'species': metadata.species.df.shorthand.dtype,
+        })
+        # Default sort is taxo
+        .sort_values('species')
     )
 
 

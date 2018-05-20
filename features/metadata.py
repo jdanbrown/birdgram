@@ -1,9 +1,11 @@
 from collections import OrderedDict
 from functools import lru_cache
 import re
-from typing import Optional
+from typing import List, Optional
 
 import pandas as pd
+# from pandas.api.types import CategoricalDtype
+from potoo.pandas import as_ordered_cat
 
 from constants import data_dir
 from datatypes import Species
@@ -62,6 +64,13 @@ class species:
                 'BANDING_CODES': 'banding_codes',
             })
             .pipe(self.add_shorthand_col)
+            .assign(
+                sci_name=lambda df: as_ordered_cat(df.sci_name),
+                com_name=lambda df: as_ordered_cat(df.com_name),
+                taxon_id=lambda df: as_ordered_cat(df.taxon_id),
+                species_code=lambda df: as_ordered_cat(df.species_code),
+                shorthand=lambda df: as_ordered_cat(df.shorthand),
+            )
         )
 
     @property
@@ -73,6 +82,7 @@ class species:
         """Compute the unique 'shorthand' column and add it to the input df"""
 
         # Don't mutate the input
+        input_df = df
         df = df.copy()
 
         # Fix the order of the loop below where we assign shorthands, so that:
@@ -85,6 +95,7 @@ class species:
             .reset_index(drop=True)  # Else .at[i, ...] will still follow the old ordering
         )
 
+        # Compute shorthand_col
         shorthand_col = []
         used_shorthands = set()
         ifnull = lambda x, y: x if not pd.isnull(x) else y
@@ -103,6 +114,16 @@ class species:
             shorthand_col.append(shorthand)
         df['shorthand'] = shorthand_col
 
+        # Restore the order of the input df (e.g. taxo order from _raw_ebird_df)
+        shorthand_df = df
+        df = pd.merge(
+            input_df,
+            shorthand_df[['species_code', 'shorthand']],
+            how='left',
+            on='species_code',
+        )
+
+        # Integrity checks
         assert df.shorthand.nunique() == len(df), "shorthand isn't unique"
         assert (df
             [lambda df: pd.notnull(df.banding_codes)]
@@ -129,7 +150,11 @@ class species:
                 'sci_name',
             ])
             for i, row in (self.df
-                .fillna('')
+                .fillna(dict(
+                    banding_codes='',
+                    com_name_codes='',
+                    sci_name_codes='',
+                ))
                 .assign(
                     banding_codes=lambda df: df.banding_codes.str.split(),
                     com_name_codes=lambda df: df.com_name_codes.str.split(),
@@ -145,3 +170,8 @@ class species:
 
     def _normalize_query(self, query: str) -> str:
         return query.lower().replace("'", '')
+
+
+def sorted_species(species_queries: List[str], **kwargs) -> List[str]:
+    """Sort a list of species query strings in taxo order"""
+    return sorted(species_queries, **kwargs, key=lambda x: species[x].taxon_id)

@@ -5,12 +5,13 @@ dataclasses==0.5
 flake8==3.5.0
 flake8-commas==2.0.0
 flake8-import-order==0.17.1
-git+https://github.com/has2k1/plotnine.git@7b129e2
+git+https://github.com/has2k1/plotnine.git@9e52a25
 -e ~/hack/potoo
 -e ~/hack/joblib
 joypy==0.1.8
 jupyter==1.0.0
 librosa==0.6.0
+line-profiler==2.1.2
 more-itertools==4.1.0
 pdbpp==0.9.2
 pp-ez==0.2.0

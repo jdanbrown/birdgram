@@ -171,7 +171,7 @@ def ensure_parent_dir(path):
     return path
 
 
-def ensure_empty_file(path):
+def touch_file(path):
     ensure_parent_dir(path)
     open(path, 'w').close()
     return path
