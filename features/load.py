@@ -40,6 +40,8 @@ def load_recs_data(recs_paths: pd.DataFrame, dask_opts={}, **kwargs) -> pd.DataF
         .astype({
             # Map str -> category for cols that have category dtypes available
             'species': metadata.species.df.shorthand.dtype,
+            'species_longhand': metadata.species.df.longhand.dtype,
+            'species_com_name': metadata.species.df.com_name.dtype,
         })
         # Default sort is taxo
         .sort_values('species')

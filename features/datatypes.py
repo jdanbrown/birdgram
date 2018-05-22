@@ -9,6 +9,8 @@ import numpy as np
 class Recording:
     dataset: str
     species: str
+    species_longhand: str
+    species_com_name: str
     species_query: str
     basename: str
     name: str
@@ -30,12 +32,13 @@ RecOrAudioOrSignal = Union[
 
 @dataclass
 class Species:
-    banding_codes: List[str]
-    com_name: str
-    com_name_codes: List[str]
     sci_name: str
-    sci_name_codes: List[str]
-    shorthand: str
-    species_code: str
+    com_name: str
     taxon_id: str
-    taxon_order: any  # TODO Is this a float or a str?
+    species_code: str
+    taxon_order: str
+    com_name_codes: List[str]
+    sci_name_codes: List[str]
+    banding_codes: List[str]
+    shorthand: str
+    longhand: str

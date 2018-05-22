@@ -7,7 +7,11 @@ import pandas as pd
 # from pandas.api.types import CategoricalDtype
 from potoo.pandas import as_ordered_cat
 
-from constants import data_dir
+from constants import (
+    data_dir,
+    no_species, no_species_com_name, no_species_species_code, no_species_taxon_id,
+    unk_species, unk_species_com_name, unk_species_species_code, unk_species_taxon_id,
+)
 from datatypes import Species
 from util import cache_to_file_forever, singleton
 
@@ -49,6 +53,18 @@ class species:
     @cache_to_file_forever(f'{metadata_dir}/cache/_taxa')  # Avoid ~250ms (on a MBP)
     def df(self):
         """The full species df (based on http://ebird.org/ws1.1/ref/taxa/ebird?cat=species&fmt=csv)"""
+
+        synthetic_row = lambda species, com_name, species_code, taxon_id: dict(
+            sci_name=com_name,
+            com_name=com_name,
+            taxon_id=taxon_id,
+            species_code=species_code,
+            taxon_order=species,
+            com_name_codes=species,
+            sci_name_codes=species,
+            banding_codes=species,
+        )
+
         assert (self._raw_ebird_df.CATEGORY == 'species').all()
         return (self._raw_ebird_df
             .drop(columns=['CATEGORY'])
@@ -63,14 +79,26 @@ class species:
                 'SCI_NAME_CODES': 'sci_name_codes',
                 'BANDING_CODES': 'banding_codes',
             })
+            # Add synthetic species
+            .append(pd.DataFrame([
+                # Unknown species (species present but not labeled)
+                synthetic_row(unk_species, unk_species_com_name, unk_species_species_code, unk_species_taxon_id),
+                # No species (no species present)
+                synthetic_row(no_species, no_species_com_name, no_species_species_code, no_species_taxon_id),
+            ]))
             .pipe(self.add_shorthand_col)
+            .assign(
+                longhand=lambda df: df.apply(axis=1, func=lambda row: f'{row.com_name} - {row.shorthand}'),
+            )
             .assign(
                 sci_name=lambda df: as_ordered_cat(df.sci_name),
                 com_name=lambda df: as_ordered_cat(df.com_name),
                 taxon_id=lambda df: as_ordered_cat(df.taxon_id),
                 species_code=lambda df: as_ordered_cat(df.species_code),
                 shorthand=lambda df: as_ordered_cat(df.shorthand),
+                longhand=lambda df: as_ordered_cat(df.longhand),
             )
+            .reset_index(drop=True)
         )
 
     @property

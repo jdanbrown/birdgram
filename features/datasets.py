@@ -4,13 +4,12 @@ import re
 
 import pandas as pd
 
-from constants import data_dir, unk_species
+from constants import data_dir, no_species, unk_species
 import metadata
 from util import df_reorder_cols, singleton
 
 datasets = {
     'recordings': 'recordings/*',
-    'recordings-new': 'recordings-new/*',
     'peterson-field-guide': 'peterson-field-guide/*/audio/*',
     'birdclef-2015': 'birdclef-2015/organized/wav/*',
     'warblrb10k': 'dcase-2018/warblrb10k_public_wav/*',
@@ -24,25 +23,29 @@ def metadata_from_audio(dataset, audio) -> dict:
     name = audio.name
     name_parts = name.split('/')
     basename = name_parts[-1]
-    species = None
     species_query = None
     if dataset == 'peterson-field-guide':
         species_query = name.split('/')[1]
-    elif dataset == 'recordings-new':
+    elif dataset == 'recordings':
         m = re.match(r'^([A-Z]{4}) ', basename)
-        if m: species_query = m.groups()[0]
+        species_query = m.groups()[0] if m else unk_species
     elif dataset == 'mlsp-2013':
-        # TODO Generalize species[species_query] to work on multi-label species (e.g. 'SOSP,WIWA')
-        #   - Works fine for now because it passes through queries it doesn't understand, and these are already codes
         train_labels = mlsp2013.train_labels_for_filename.get(
             basename,
             [unk_species],  # If missing it's an unlabeled test rec
         )
-        species = 'none' if train_labels == [] else ','.join(sorted(train_labels))
-        # TODO What did 'XXXX' vs. 'none' mean here? [see inspect_dataset_mlsp-2013.ipynb]
+        species_query = ','.join(sorted(train_labels)) if train_labels else no_species
+        # TODO Generalize species[species_query] to work on multi-label species (e.g. 'SOSP,WIWA')
+        #   - Works fine for now because it passes through queries it doesn't understand, and these are already codes
+        # species = ','.join(sorted(train_labels)) if train_labels else no_species
+        # species_longhand = species
+        # species_com_name = species
+    species = metadata.species[species_query] or metadata.species[unk_species]
     return OrderedDict(
         dataset=dataset,
-        species=species or metadata.species[species_query, 'shorthand'] or unk_species,
+        species=species.shorthand,
+        species_longhand=species.longhand,
+        species_com_name=species.com_name,
         species_query=species_query,
         basename=basename,
         name=audio.name,

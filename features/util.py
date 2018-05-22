@@ -1,6 +1,7 @@
 ## misc
 
-from more_itertools import *
+from addict import Dict  # For export
+from more_itertools import *  # For export
 
 
 ## matplotlib
