@@ -64,7 +64,7 @@ def plot_many_spectros(
             )
 
 
-def plot_patches(patches, f_bins, patch_length, raw=False, rows=None):
+def plot_patches(patches, f_bins, patch_length, raw=False, rows=None, sort={}):
     """Viz a set of patches (f*p, n) as a grid that matches figsize"""
 
     # Dimensions
@@ -83,6 +83,10 @@ def plot_patches(patches, f_bins, patch_length, raw=False, rows=None):
 
     # Unstack each patch: (f*p, n) -> (n,f,p)
     patches = np.moveaxis(patches.reshape(f, p, n), 2, 0)
+
+    # Sort (optional)
+    if sort:
+        patches = np.array(sorted(patches, **sort))
 
     # Extend patches to complete the grid: n -> rows*cols
     patches = np.append(
