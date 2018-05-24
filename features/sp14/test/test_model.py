@@ -1,3 +1,4 @@
+from addict import Dict
 import numpy as np
 import pytest
 import sklearn.utils
@@ -109,7 +110,7 @@ def test__patches():
 
 
 def test__transform_proj():
-    proj_skm = AttrDict(transform=lambda X: -X)
+    proj_skm = Dict(transform=lambda X: -X)
     patches = [
         # f*p = 3, t variable per patch
         np.array([

@@ -38,7 +38,6 @@ from contextlib import contextmanager
 from functools import partial, wraps
 
 import attr
-from attrdict import AttrDict
 from joblib import Memory
 
 from constants import cache_dir
@@ -79,16 +78,24 @@ def _cache_control_gen(orig, **kwargs):
         cache_control_state = orig
 
 
-def cache(*args, **kwargs):
-    f = memory.cache(*args, **kwargs)
-    @wraps(f)
-    def g(*args, **kwargs):
-        if cache_control_state.enabled:
-            return f(*args, **kwargs)
-        else:
-            return f.func(*args, **kwargs)
-        return
-    return g
+# TODO Support @cache in addition to @cache() / @cache(...), like Memory.cache does
+def cache(version=None, **kwargs):
+    def decorator(func):
+        @wraps(func)
+        def func_with_version(*args, **kwargs):
+            kwargs.pop('__cache_version', None)
+            return func(*args, **kwargs)
+        cache_func = memory.cache(func_with_version, **kwargs)
+        @wraps(cache_func)
+        def g(*args, **kwargs):
+            kwargs.setdefault('__cache_version', version)
+            if cache_control_state.enabled:
+                return cache_func(*args, **kwargs)
+            else:
+                return cache_func.func(*args, **kwargs)
+            return
+        return g
+    return decorator
 
 
 def cache_lambda(func_name, f, *args, **kwargs):

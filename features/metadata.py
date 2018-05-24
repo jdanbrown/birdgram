@@ -4,8 +4,7 @@ import re
 from typing import List, Optional
 
 import pandas as pd
-# from pandas.api.types import CategoricalDtype
-from potoo.pandas import as_ordered_cat
+from potoo.pandas import as_ordered_cat, df_transform_column_names
 
 from constants import (
     data_dir,
@@ -13,7 +12,7 @@ from constants import (
     unk_species, unk_species_com_name, unk_species_species_code, unk_species_taxon_id,
 )
 from datatypes import Species
-from util import cache_to_file_forever, singleton
+from util import cache_to_file_forever, df_reorder_cols, singleton
 
 metadata_dir = f'{data_dir}/metadata'
 ebird_taxa_path = f'{metadata_dir}/ebird-ws1.1-taxa-species.csv'
@@ -67,13 +66,14 @@ class species:
 
         assert (self._raw_ebird_df.CATEGORY == 'species').all()
         return (self._raw_ebird_df
-            .drop(columns=['CATEGORY'])
+            .drop(columns=[
+                'CATEGORY',
+            ])
             .rename(columns={
                 'SCIENTIFIC_NAME': 'sci_name',
                 'COMMON_NAME': 'com_name',
                 'TAXON_ID': 'taxon_id',
                 'SPECIES_CODE': 'species_code',
-                'CATEGORY': 'category',
                 'TAXON_ORDER': 'taxon_order',
                 'COM_NAME_CODES': 'com_name_codes',
                 'SCI_NAME_CODES': 'sci_name_codes',
@@ -98,13 +98,30 @@ class species:
                 shorthand=lambda df: as_ordered_cat(df.shorthand),
                 longhand=lambda df: as_ordered_cat(df.longhand),
             )
+            .pipe(df_reorder_cols, first=[
+                'shorthand',
+                'longhand',
+                'sci_name',
+                'com_name',
+                'taxon_id',
+                'species_code',
+                'taxon_order',
+                'com_name_codes',
+                'sci_name_codes',
+                'banding_codes',
+            ])
             .reset_index(drop=True)
         )
 
     @property
     def _raw_ebird_df(self):
         """The raw ebird species df (from http://ebird.org/ws1.1/ref/taxa/ebird?cat=species&fmt=csv)"""
-        return pd.read_csv(ebird_taxa_path)
+        return pd.read_csv(
+            ebird_taxa_path,
+            dtype={
+                'TAXON_ORDER': 'str',  # Not float
+            },
+        )
 
     def add_shorthand_col(self, df) -> pd.DataFrame:
         """Compute the unique 'shorthand' column and add it to the input df"""
@@ -203,3 +220,58 @@ class species:
 def sorted_species(species_queries: List[str], **kwargs) -> List[str]:
     """Sort a list of species query strings in taxo order"""
     return sorted(species_queries, **kwargs, key=lambda x: species[x].taxon_id)
+
+
+@singleton
+class xc_counts:
+    """
+    xeno-canto recordings counts
+    - From https://docs.google.com/spreadsheets/d/1DNBi3jQ3NdFmexTfOOh_VmwqqHyBhEmh9kfVVbeRGK8/
+    """
+
+    @property
+    def with_species(self):
+        return pd.merge(
+            species.df,
+            self.df,
+            how='left',
+            on='species_code',
+        )
+
+    # FIXME Join on com_name after sci_name, to catch sci_names that don't match, e.g.
+    #   - xc_counts: com_name='Orange-crowned Warbler', sci_name='Leiothlypis celata'
+    #   - species:   com_name='Orange-crowned Warbler', sci_name='Oreothlypis celata'
+    @property
+    @lru_cache()
+    def df(self):
+        return (
+            pd.merge(
+                species.df,
+                self._raw_df.drop(columns=['com_name']),
+                how='left',
+                on='sci_name',
+            )
+            [['species_code', 'n_recs', 'n_bg_recs']]
+            .rename(columns={
+                'n_recs': 'n_xc_recs',
+                'n_bg_recs': 'n_xc_bg_recs',
+            })
+        )
+
+    @property
+    def _raw_df(self):
+        return (pd.read_csv(f'{metadata_dir}/xeno-canto-rec-count-per-species.csv')
+            # Lowercase col names so we don't break when we e.g. twiddle casing in the spreadsheet
+            .pipe(df_transform_column_names, lambda c: c.lower())
+            .drop(columns=[
+                'unnamed: 5',
+            ])
+            .rename(columns={
+                'common name': 'com_name',
+                'scientific name': 'sci_name',
+                'extinct?': 'extinct',
+                '# recs': 'n_recs',
+                '# bg recs': 'n_bg_recs',
+                'species index': 'species_index',
+            })
+        )

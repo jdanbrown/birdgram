@@ -2,9 +2,9 @@ import copy
 from datetime import datetime
 import itertools
 import json
-from typing import Iterator, Union
+from typing import Iterable, Union
 
-from attrdict import AttrDict
+from addict import Dict
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 import yaml
@@ -16,6 +16,7 @@ from load import *
 import metadata
 from sp14.skm import SKM
 from util import *
+from viz import *
 
 
 class Model:
@@ -69,7 +70,7 @@ class Model:
         class_knn_n_neighbors=3,
         verbose_config=True,
     ):
-        self.config = AttrDict(
+        self.config = Dict(
             patch_config=dict(
                 spectro_config=dict(
                     sample_rate=rec_sample_rate,
@@ -160,10 +161,10 @@ class Model:
     # User-friendly instance methods that we don't rely on internally
     #
 
-    def spectros(self, recs: pd.DataFrame) -> Iterator[Melspectro]:
+    def spectros(self, recs: pd.DataFrame) -> Iterable[Melspectro]:
         return self._spectros(self.to_X(recs), **self.config.patch_config.spectro_config)
 
-    def patches(self, recs: pd.DataFrame) -> Iterator[Melspectro]:
+    def patches(self, recs: pd.DataFrame) -> Iterable[np.ndarray]:
         return self._patches(self.to_X(recs), **self.config.patch_config)
 
     #
@@ -237,7 +238,7 @@ class Model:
         return patches
 
     @classmethod
-    @cache
+    @cache(version=0)
     def _patches_from_recs(cls, recs, spectro_config, patch_length):
         """rec (samples,) -> spectro (f,t) -> patch (f*p,t)"""
         spectros = cls._spectros(recs, **spectro_config)
@@ -269,26 +270,36 @@ class Model:
         return spectros
 
     @classmethod
-    @cache
-    @generator_to(list)
-    def _spectros_cache_block(
-        cls, recs, sample_rate, f_min, frame_length, hop_length, frame_window, f_bins,
-    ) -> Iterator[Melspectro]:
-        for rec in recs:
-            (rec, _audio, _x, _sample_rate) = unpack_rec(rec)
-            assert rec.audio.frame_rate == sample_rate, \
-                'Expected %s, got %s' % (sample_rate, rec)
-            # TODO Filter by f_min
-            yield Melspectro(
-                rec,
-                nperseg=frame_length,
-                overlap=1 - hop_length / frame_length,
-                window=frame_window,
-                n_mels=f_bins,
-            )
+    @cache(version=0)
+    def _spectros_cache_block(cls, recs, **spectro_config) -> Iterable[Melspectro]:
+        return [cls._spectro(rec, **spectro_config) for rec in recs]
 
     @classmethod
-    @cache
+    def _spectro(cls, rec, sample_rate, f_min, frame_length, hop_length, frame_window, f_bins) -> Melspectro:
+        (rec, _audio, _x, _sample_rate) = unpack_rec(rec)
+        assert rec.audio.frame_rate == sample_rate, 'Expected %s, got %s' % (sample_rate, rec)
+        # TODO Filter by f_min
+        #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
+        spectro = Melspectro(
+            rec,
+            nperseg=frame_length,
+            overlap=1 - hop_length / frame_length,
+            window=frame_window,
+            n_mels=f_bins,
+        )
+        spectro = cls._spectro_denoise(spectro)
+        return spectro
+
+    # TODO Recompute audio after filtering spectro (e.g. playing audio should sound denoised)
+    @classmethod
+    def _spectro_denoise(cls, spectro: Melspectro) -> Melspectro:
+        # Like [SP14]
+        spectro = spectro.norm_rms()
+        spectro = spectro.clip_below_median_per_freq()
+        return spectro
+
+    @classmethod
+    @cache(version=0)
     @generator_to(list)
     def _patches_from_spectros(cls, spectros, patch_length):
         """spectro (f,t) -> patch (f*p,t)"""
@@ -301,11 +312,11 @@ class Model:
             yield patch
 
     @classmethod
-    @cache
-    def _skm_fit(cls, skm, X):
+    @cache(version=0)
+    def _skm_fit(cls, skm, X, **kwargs):
         """Pure wrapper around skm.fit for caching"""
         skm = copy.copy(skm)
-        skm.fit(X)
+        skm.fit(X, **kwargs)
         return skm
 
     @classmethod
@@ -412,6 +423,25 @@ class Model:
         """agg (k,a) -> feat (k*a,)"""
         for agg in aggs:
             yield agg.T.values.flatten()
+
+    #
+    # Plotting
+    #
+
+    def plot_proj_centroids(self, **kwargs):
+        """Viz the projection patch centroids (pca -> skm)"""
+        skm = self.proj_skm_
+        proj = (skm.D.T @ skm.pca.components_).T  # The total projection: pca -> skm.D
+        self.plot_patches(proj, **kwargs)
+
+    def plot_patches(self, patches, **kwargs):
+        """Viz a set of patches (f*p, n) as a grid that matches figsize"""
+        plot_patches(
+            patches,
+            self.config.patch_config.spectro_config.f_bins,
+            self.config.patch_config.patch_length,
+            **kwargs,
+        )
 
     #
     # Logging

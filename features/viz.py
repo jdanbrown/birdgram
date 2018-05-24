@@ -2,8 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from potoo.plot import *
 
-from sp14.model import Model
-
 
 def plot_many_spectros(
     recs,
@@ -49,7 +47,7 @@ def plot_many_spectros(
 
     if raw:
         # Output image resolution is 1-1 with input array shape, but we can't add axis labels and figure titles
-        plot_img_raw(cat_Ss, origin='lower', file_prefix=query_and_title or 'image')
+        show_img(cat_Ss, origin='lower', file_prefix=query_and_title or 'image')
     else:
         # (imshow is faster than pcolormesh by ~4x)
         plt.imshow(cat_Ss, origin='lower')
@@ -66,58 +64,72 @@ def plot_many_spectros(
             )
 
 
-def plot_centroids(model: Model):
-    """Viz a model's projection patch centroids (pca -> skm)"""
-
-    # Unpack input
-    skm = model.proj_skm_
-    p = model.config.patch_config.patch_length
-
-    # Compute total projection: pca -> skm.D
-    proj = (skm.D.T @ skm.pca.components_).T
+def plot_patches(patches, f_bins, patch_length, raw=False, rows=None):
+    """Viz a set of patches (f*p, n) as a grid that matches figsize"""
 
     # Dimensions
-    (fp, k) = proj.shape
-    f = fp // p
+    f = f_bins
+    p = patch_length
+    (fp, n) = patches.shape
+    assert fp == f * p, f'fp[{fp}] != f[{f}] * p[{p}], for patches.shape[{patches.shape}]'
 
-    width = get_figsize()['width']
-    height = get_figsize()['height']
-    rows = np.sqrt(k / ((f+1)/height / ((p+1)/width)))
-    rows = int(np.floor(rows))  # Arbitrary choice: floor (taller) vs. ceil (wider)
-    cols = int(np.ceil(k / rows))
-    # display(((rows, cols), rows * cols))
+    # Compute (rows, cols) for patch layout, based on figsize (w,h) and patch size (f,p)
+    if not rows:
+        width = get_figsize()['width']
+        height = get_figsize()['height']
+        rows = np.sqrt(n / ((f+1)/height / ((p+1)/width)))
+        rows = max(1, int(np.floor(rows)))  # Arbitrary choice: floor (taller) vs. ceil (wider)
+    cols = int(np.ceil(n / rows))
 
-    centroids = np.array([
-        np.array([
-            proj[i*f:(i+1)*f, j]
-            for i in range(p)  # Inner loop: p patch strides
-        ]).T
-        for j in range(k)  # Outer loop: k centroids
-    ])
-    # display(centroids.shape)
+    # Unstack each patch: (f*p, n) -> (n,f,p)
+    patches = np.moveaxis(patches.reshape(f, p, n), 2, 0)
 
-    centroids_extend = np.append(
-        centroids,
-        np.full((rows * cols - k, f, p), np.nan),
+    # Extend patches to complete the grid: n -> rows*cols
+    patches = np.append(
+        patches,
+        np.full((rows * cols - n, f, p), np.nan),
         axis=0,
     )
-    # display(centroids_extend.shape)
+    assert patches.shape == (rows * cols, f, p)
 
-    centroids_pad = np.array([np.pad(
-        x,
-        np.array([[0, 1], [0, 1]]),  # [top, bottom], [left, right]
-        'constant',
-        constant_values=np.nan,
-    ) for x in centroids_extend])
-    # display(centroids_pad.shape)
+    # Wrap into a grid: (rows*cols, ...) -> (rows, cols, ...)
+    patches = patches.reshape(rows, cols, f, p)
+    assert patches.shape == (rows, cols, f, p)
 
-    centroids_table = centroids_pad.reshape(rows, cols, f+1, p+1)
-    # display(centroids_table.shape)
+    # Pad each patch with a 1px bottom/right border: (f,p) -> (f+1, p+1)
+    patches = np.array([
+        np.array([
+            np.pad(
+                patch,
+                np.array([[0, 1], [0, 1]]),  # [top, bottom], [left, right]
+                'constant',
+                constant_values=np.nan,  # nan renders as white
+            ) for patch in row
+        ])
+        for row in patches
+    ])
+    assert patches.shape == (rows, cols, f+1, p+1)
 
-    centroids_layout = np.pad(
-        np.concatenate(np.concatenate(centroids_table, axis=1), axis=1),
+    # Paste everything into a 2D image
+    image = np.pad(
+        np.concatenate(
+            np.concatenate(
+                # Flip row axis for origin='lower' (below) so that patches read left->right, top->bottom
+                np.flip(patches, axis=0),
+                axis=1,
+            ),
+            axis=1,
+        ),
+        # Pad with a top/left border
         np.array([[1, 0], [1, 0]]),  # [top, bottom], [left, right]
         'constant',
         constant_values=np.nan,
     )
-    plt_show_img(centroids_layout)
+    assert image.shape == (1 + rows*(f+1), 1 + cols*(p+1))
+
+    # Plot
+    #   - origin='lower' so that y axis runs upward 0->f, not downward f->0
+    if raw:
+        show_img(image, origin='lower')
+    else:
+        plt.imshow(image, origin='lower')

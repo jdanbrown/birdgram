@@ -29,6 +29,7 @@ class SKM(object):
         'pca_whiten',
         'do_pca',
         'verbose',
+        'dask',
     ]
 
     _PARAMS = _ARGS + [
@@ -87,6 +88,7 @@ class SKM(object):
         pca_whiten=True,
         do_pca=True,
         verbose=True,
+        dask=False,
     ):
         # Args
         self.k = k
@@ -98,6 +100,7 @@ class SKM(object):
         self.pca_whiten = pca_whiten
         self.do_pca = do_pca
         self.verbose = verbose
+        self.dask = dask
 
         # Params
         self.epoch = 0
@@ -176,6 +179,38 @@ class SKM(object):
         S = np.zeros([self.k, self.nsamples])
         S[centroid_index, np.arange(self.nsamples)] = s_ij
         self.D += np.dot(X, S.T)
+        self.prev_assignment = self.assignment
+        self.assignment = centroid_index
+
+    # TODO When should we dig into this?
+    def _update_centroids_dask(self, X):
+        '''Update centroids based on provided sample data X. Use dask.array for mem safety (threads, not procs).'''
+
+        import dask.array as da
+
+        # TODO Scratch
+        #   model.proj_skm_.D.shape
+        #   x = da.from_array(model.proj_skm_.D, chunks=50)
+        #   x.shape
+        #   x.dot(x.T).compute()
+        #   da.dot(x.T, x).compute().shape
+
+        _X = X
+        X = da.from_array(X, (-1, 100000))
+
+        # TODO np seems to be ~4x faster
+        _S = np.dot(self.D.T, _X)
+        S = da.dot(self.D.T, X).compute()
+
+        centroid_index = S.argmax(0)
+        s_ij = S[centroid_index, np.arange(self.nsamples)]
+        S = np.zeros([self.k, self.nsamples])
+        S[centroid_index, np.arange(self.nsamples)] = s_ij
+
+        # TODO np seems to be ~4x faster
+        self.D += np.dot(_X, _S.T)
+        self.D += da.dot(X, S.T).compute()
+
         self.prev_assignment = self.assignment
         self.assignment = centroid_index
 
@@ -283,7 +318,7 @@ class SKM(object):
         '''Compute the fraction of assignments changed by the latest centroid update (value between 0 to 1)'''
         self.assignment_change = np.mean(self.assignment != self.prev_assignment)
 
-    def fit(self, X, memsafe=False, cuda=False):
+    def fit(self, X, memsafe=False, cuda=False, dask=None):
         '''Fit k centroids to input data X until convergence or max number of epochs reached.'''
         self._log('fit')
 
@@ -324,6 +359,8 @@ class SKM(object):
                 self._update_centroids_memsafe_fast(X)
             elif cuda:
                 self._update_centroids_cuda(X)
+            elif (not (dask is not None) or dask) and (not (dask is None) or self.dask):
+                self._update_centroids_dask(X)
             else:
                 self._update_centroids(X)
             self._normalize_centroids()

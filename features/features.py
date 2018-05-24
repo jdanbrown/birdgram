@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import copy
 from functools import lru_cache
 import logging
 import os.path
@@ -198,7 +199,34 @@ class HasPlotAudioTF:
             display(audio)
 
 
-class Spectro(HasPlotAudioTF):
+class SpectroLike:
+
+    def copy(self, **kwargs) -> 'SpectroLike':
+        other = copy.copy(self)
+        other.__dict__.update(kwargs)
+        return other
+
+    def __iter__(self):
+        """For unpacking, e.g. (f, t, S) = FooSpectro(...)"""
+        return iter([self.f, self.t, self.S])
+
+    # TODO Recompute audio after filtering spectro (e.g. playing audio should sound denoised)
+    def norm_rms(self) -> 'SpectroLike':
+        """Normalize by RMS (like "normalize a spectro by its RMS energy" from [SP14])"""
+        S = self.S
+        S = S / np.sqrt((S ** 2).mean())
+        return self.copy(S=S)
+
+    # TODO Recompute audio after filtering spectro (e.g. playing audio should sound denoised)
+    def clip_below_median_per_freq(self) -> 'SpectroLike':
+        """For each freq bin, substract the median and then zero out negative values"""
+        S = self.S
+        S = (S.T - np.median(S, axis=1)).T
+        S = np.clip(S, 0, None)
+        return self.copy(S=S)
+
+
+class Spectro(HasPlotAudioTF, SpectroLike):
 
     def __init__(
         self,
@@ -236,10 +264,6 @@ class Spectro(HasPlotAudioTF):
         # Capture env (e.g. self.S, self.audio, self.nperseg)
         self.__dict__.update(locals())
 
-    def __iter__(self):
-        """For unpacking, e.g. (f, t, S) = Spectro(...)"""
-        return iter([self.f, self.t, self.S])
-
     def plot(self, **kwargs):
         self._plot_audio_tf(**{
             'powscale': np.log1p,  # Spectrogram (S) is defined as linear scale, but plot it as log scale by default
@@ -247,7 +271,7 @@ class Spectro(HasPlotAudioTF):
         })
 
 
-class Melspectro(HasPlotAudioTF):
+class Melspectro(HasPlotAudioTF, SpectroLike):
 
     def __init__(
         self,
@@ -318,10 +342,6 @@ class Melspectro(HasPlotAudioTF):
 
         # Capture env (e.g. self.S, self.audio, self.nperseg)
         self.__dict__.update(locals())
-
-    def __iter__(self):
-        """For unpacking, e.g. (f, t, S) = Melspectro(...)"""
-        return iter([self.f, self.t, self.S])
 
     def plot(self, **kwargs):
         self._plot_audio_tf(**{
