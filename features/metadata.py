@@ -8,6 +8,7 @@ from potoo.pandas import as_ordered_cat, df_transform_column_names
 
 from constants import (
     data_dir,
+    mul_species, mul_species_com_name, mul_species_species_code, mul_species_taxon_id,
     no_species, no_species_com_name, no_species_species_code, no_species_taxon_id,
     unk_species, unk_species_com_name, unk_species_species_code, unk_species_taxon_id,
 )
@@ -41,7 +42,12 @@ class species:
             (query, attr) = x
         except:
             (query, attr) = (x, None)
-        species = self._df_lookup.get(self._normalize_query(query or ''))
+        if ',' in query:
+            # Map queries containing ',' to "Muliple species"
+            #   - TODO Figure out a way to handle multi-labeled data
+            query = '_MUL'
+        query = self._normalize_query(query or '')
+        species = self._df_lookup.get(query)
         if not species or not attr:
             return species
         else:
@@ -83,6 +89,8 @@ class species:
             .append(pd.DataFrame([
                 # Unknown species (species present but not labeled)
                 synthetic_row(unk_species, unk_species_com_name, unk_species_species_code, unk_species_taxon_id),
+                # Multiple species [TODO Figure out a way to handle multi-labeled data]
+                synthetic_row(mul_species, mul_species_com_name, mul_species_species_code, mul_species_taxon_id),
                 # No species (no species present)
                 synthetic_row(no_species, no_species_com_name, no_species_species_code, no_species_taxon_id),
             ]))

@@ -4,7 +4,7 @@ import re
 
 import pandas as pd
 
-from constants import data_dir, no_species, unk_species
+from constants import data_dir, mul_species, no_species, unk_species
 import metadata
 from util import df_reorder_cols, singleton
 

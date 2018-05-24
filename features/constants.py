@@ -9,6 +9,11 @@ unk_species_com_name = 'Unknown'
 unk_species_taxon_id = 'TC___UNK'
 unk_species_species_code = '___unk'
 
+mul_species = '_MUL'
+mul_species_com_name = 'Multiple species'
+mul_species_taxon_id = 'TC___MUL'
+mul_species_species_code = '___mul'
+
 no_species = '_NON'
 no_species_com_name = 'No species'
 no_species_taxon_id = 'TC___NON'
