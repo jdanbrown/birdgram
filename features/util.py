@@ -1,6 +1,7 @@
 ## For export
 
-from addict import Dict
+from addict import Dict  # TODO Switch back to AttrDict since Dict().x doesn't fail, and PR an AttrDict.to_dict()
+from attrdict import AttrDict
 import dask
 import dask.array as da
 import dask.dataframe as dd

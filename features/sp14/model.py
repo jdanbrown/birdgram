@@ -4,7 +4,7 @@ import itertools
 import json
 from typing import Iterable, Union
 
-from addict import Dict
+from addict import Dict  # TODO Switch back to AttrDict since Dict().x doesn't fail, and PR an AttrDict.to_dict()
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 import yaml

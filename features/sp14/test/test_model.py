@@ -1,4 +1,4 @@
-from addict import Dict
+from addict import Dict  # TODO Switch back to AttrDict since Dict().x doesn't fail, and PR an AttrDict.to_dict()
 import numpy as np
 import pytest
 import sklearn.utils
