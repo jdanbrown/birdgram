@@ -24,14 +24,12 @@ def test_model():
     train_n, test_n = 5, 5
     recs_shuf = sklearn.utils.shuffle(recs, random_state=0)
     recs_train, recs_test = recs_shuf[:train_n], recs_shuf[train_n : train_n + test_n]
-    recs_train_X, recs_test_X = recs_to_X(recs_train), recs_to_X(recs_test)
-    recs_train_y, recs_test_y = recs_to_y(recs_train), recs_to_y(recs_test)
 
     model = make_model()
-    model.fit_proj(recs_train_X);
-    model.fit_class(recs_train_X, recs_train_y);
-    model.predict(recs_test_X, 'classes')
-    model.predict(recs_test_X, 'kneighbors')
+    model.fit_proj(recs_train)
+    model.fit_class(recs_train)
+    model.predict(recs_test, 'classes')
+    model.predict(recs_test, 'kneighbors')
 
 
 def test__patches():

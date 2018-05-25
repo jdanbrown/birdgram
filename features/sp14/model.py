@@ -68,7 +68,7 @@ class Model:
         proj_skm_config={},
         agg_funs=['mean', 'std', 'max'],
         class_knn_n_neighbors=3,
-        verbose_config=True,
+        verbose_config=False,
     ):
         self.config = Dict(
             patch_config=dict(
@@ -257,13 +257,17 @@ class Model:
           - t: time indexes (s)
           - S: log power (f x t): log(X**2) where X is the (energy) unit of the audio signal
         """
-        # Cache per dataset group:
+        # Cache per dataset group
         #   - Sort by (dataset, name) -> apply _spectros_cache_block per group -> unsort back to original order
         i_recs_sorted = sorted(enumerate(recs), key=lambda i_rec: (i_rec[1].dataset, i_rec[1].name))
         recs_sorted = [rec for i, rec in i_recs_sorted]
         unsort = {i_orig: i_sorted for i_sorted, (i_orig, rec) in enumerate(i_recs_sorted)}
         spectros_sorted = list(flatten(
-            cls._spectros_cache_block(list(recs_sorted_for_dataset), **spectro_config)
+            cls._spectros_cache_block(
+                # Strip recs to audios, to eliminate spurious information in cache keys (e.g. species_query)
+                [rec.audio for rec in recs_sorted_for_dataset],
+                **spectro_config,
+            )
             for dataset, recs_sorted_for_dataset in itertools.groupby(recs_sorted, lambda rec: rec.dataset)
         ))
         spectros = [spectros_sorted[unsort[i_orig]] for i_orig, rec in enumerate(recs)]
@@ -271,17 +275,17 @@ class Model:
 
     @classmethod
     @cache(version=0)
-    def _spectros_cache_block(cls, recs, **spectro_config) -> Iterable[Melspectro]:
-        return [cls._spectro(rec, **spectro_config) for rec in recs]
+    def _spectros_cache_block(cls, audios, **spectro_config) -> Iterable[Melspectro]:
+        return [cls._spectro(audio, **spectro_config) for audio in audios]
 
     @classmethod
-    def _spectro(cls, rec, sample_rate, f_min, frame_length, hop_length, frame_window, f_bins) -> Melspectro:
-        (rec, _audio, _x, _sample_rate) = unpack_rec(rec)
-        assert rec.audio.frame_rate == sample_rate, 'Expected %s, got %s' % (sample_rate, rec)
+    def _spectro(cls, audio, sample_rate, f_min, frame_length, hop_length, frame_window, f_bins) -> Melspectro:
+        (_rec, audio, _x, _sample_rate) = unpack_rec(audio)
+        assert audio.frame_rate == sample_rate, 'Expected %s, got %s' % (sample_rate, audio)
         # TODO Filter by f_min
         #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
         spectro = Melspectro(
-            rec,
+            audio,
             nperseg=frame_length,
             overlap=1 - hop_length / frame_length,
             window=frame_window,

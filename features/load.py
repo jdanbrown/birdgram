@@ -62,7 +62,6 @@ def load_rec(
         duration_s=audio.duration_seconds,
         samples_mb=len(samples) * audio.sample_width / 1024**2,
         samples_n=len(samples),
-        samples=samples if not metadata_only else None,
         audio=audio if audio and not metadata_only else None,
     )
 

@@ -17,7 +17,6 @@ class Recording:
     duration_s: float
     samples_mb: float
     samples_n: int
-    samples: int
     audio: audiosegment.AudioSegment
 
 
