@@ -368,6 +368,8 @@ class SKM(object):
             self.epoch += 1
             self._report_status()
 
+        return self
+
     def fit_minibatch(self, X):
         '''
         Fit k centroids to input data X until convergence or max number of epochs reached. Assumes X is a mini-batch
@@ -422,6 +424,8 @@ class SKM(object):
             self._compute_assignment_change()
             self.epoch += 1
             self._report_status()
+
+        return self
 
     def _report_status(self):
         self._log(f'epoch[{self.epoch}] assignment_change[{self.assignment_change}]')

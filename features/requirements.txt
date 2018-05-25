@@ -1,5 +1,3 @@
-# TODO Switch back from addict to to attrdict since addict.Dict().x doesn't fail, and PR an AttrDict.to_dict()
-addict==2.1.3
 attrdict==2.0.0
 attrs==17.4.0
 dask[complete]==0.17.4
@@ -27,6 +25,7 @@ scikit-misc==0.1.1
 git+https://github.com/scikit-signal/pytftb@ac2b6a2
 statsmodels==0.8.0
 structlog==18.1.0
+toolz==0.9.0
 
 # pydub
 pydub==0.21.0
