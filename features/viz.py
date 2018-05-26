@@ -1,3 +1,6 @@
+import itertools
+from typing import Iterable
+
 import matplotlib.pyplot as plt
 import numpy as np
 from potoo.plot import *
@@ -64,7 +67,7 @@ def plot_many_spectros(
             )
 
 
-def plot_patches(patches, f_bins, patch_length, raw=False, rows=None, sort={}):
+def plot_patches(patches, f_bins, patch_length, raw=False, rows=None, sort={}, **kwargs):
     """Viz a set of patches (f*p, n) as a grid that matches figsize"""
 
     # Dimensions
@@ -132,8 +135,46 @@ def plot_patches(patches, f_bins, patch_length, raw=False, rows=None, sort={}):
     assert image.shape == (1 + rows*(f+1), 1 + cols*(p+1))
 
     # Plot
-    #   - origin='lower' so that y axis runs upward 0->f, not downward f->0
+    kwargs.setdefault('origin', 'lower')  # Run y-axis upward 0->f, not downward f->0
     if raw:
-        show_img(image, origin='lower')
+        show_img(image, **kwargs)
     else:
-        plt.imshow(image, origin='lower')
+        plt.imshow(image, **kwargs)
+
+
+def plot_confusion_matrix(
+    confusion_matrix: np.ndarray,
+    labels: Iterable[str],
+    normalize=False,
+    raw=False,
+    **kwargs,
+):
+    """From http://scikit-learn.org/stable/auto_examples/model_selection/plot_confusion_matrix.html"""
+
+    # Data
+    M = confusion_matrix
+    if normalize:
+        M = M.astype('float') / M.sum(axis=1)[:, np.newaxis]
+
+    # Plot
+    kwargs.setdefault('origin', 'upper')
+    if raw:
+        show_img(M, **kwargs)
+    else:
+        plt.imshow(M, interpolation='nearest', **kwargs)
+        plt.gca().xaxis.tick_top()
+        plt.gca().xaxis.set_label_position('top')
+        plt.xticks(range(len(labels)), labels, rotation=90)
+        plt.yticks(range(len(labels)), labels)
+        plt.ylabel('True')
+        plt.xlabel('Pred')
+        plt.tight_layout()
+        thresh = M.max() / 2.
+        for i, j in itertools.product(range(M.shape[0]), range(M.shape[1])):
+            plt.text(
+                j,
+                i,
+                ('%.2f' if normalize else '%d') % M[i,j],
+                horizontalalignment="center",
+                color="white" if M[i,j] > thresh else "black",
+            )

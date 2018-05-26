@@ -5,6 +5,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 from more_itertools import *
+import PIL
 
 
 ## matplotlib

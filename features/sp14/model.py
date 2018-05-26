@@ -8,6 +8,9 @@ from attrdict import AttrDict
 import dataclasses
 from dataclasses import dataclass, field
 import numpy as np
+from potoo.util import round_sig
+import sklearn
+from sklearn.base import BaseEstimator
 from sklearn.neighbors import KNeighborsClassifier
 import yaml
 
@@ -16,6 +19,7 @@ from datasets import *
 from features import *
 from load import *
 import metadata
+from metadata import sorted_species
 from sp14.skm import SKM
 from util import *
 from viz import *
@@ -97,7 +101,7 @@ class Features(_Base):
         ]})
 
     #
-    # Instance methods (stateful)
+    # Instance methods (stateful, unsafe to cache)
     #
 
     def spectros(self, recs: pd.DataFrame) -> Iterable[Melspectro]:
@@ -109,7 +113,7 @@ class Features(_Base):
         return self._patches(to_X(recs), **self.patch_config)
 
     #
-    # Class methods (not stateful)
+    # Class methods (pure, safe to cache)
     #
 
     @classmethod
@@ -172,14 +176,12 @@ class Features(_Base):
         assert all('spectro' in rec for rec in recs)
         log('Features.patches:recs', **{
             'len(recs)': len(recs),
-            'duration_s': [r.duration_s for r in recs],
-            'sum(duration_s)': sum(r.duration_s for r in recs),
-            '(samples,)': [int(r.audio.frame_count()) for r in recs],
-            'sum(samples)': sum(int(r.audio.frame_count()) for r in recs),
+            'sum(duration_h)': round_sig(sum(rec.duration_s for rec in recs) / 3600, 3),
+            'sum(samples_mb)': round_sig(sum(rec.samples_mb for rec in recs), 3),
+            'sum(samples_n)': sum(rec.samples_n for rec in recs),
         })
         patches = cls._patches_from_spectros([rec.spectro for rec in recs], patch_length)
         log('Features.patches:patches', **{
-            '(f*p, t)': [p.shape for p in patches],
             '(f*p, sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
         return patches
@@ -190,7 +192,6 @@ class Features(_Base):
     def _patches_from_spectros(cls, spectros: List[Melspectro], patch_length):
         """spectro (f,t) -> patch (f*p,t)"""
         log('Features.patches:spectros', **{
-            '(f, t)': [x.S.shape for x in spectros],
             '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
         })
         for spectro in spectros:
@@ -205,13 +206,26 @@ class Features(_Base):
 @dataclass
 class Projection(_Base):
 
-    skm_config: AttrDict = field(default_factory=lambda: AttrDict(
-        variance_explained=.99,
-        k=500,
-    ))
+    k: int = 500
+    variance_explained: float = .99  # (SKM default: .99)
+    do_pca: bool = True              # (SKM default: True)
+    pca_whiten: bool = True          # (SKM default: True)
+    standardize: bool = False        # (SKM default: False)
+    normalize: bool = False          # (SKM default: False)
     agg_funs: List[str] = field(default_factory=lambda: [
         'mean', 'std', 'max',
     ])
+
+    @property
+    def skm_config(self) -> AttrDict:
+        return AttrDict({k: v for k, v in self.config.items() if k in [
+            'normalize',
+            'standardize',
+            'pca_whiten',
+            'do_pca',
+            'variance_explained',
+            'k',
+        ]})
 
     @property
     def agg_config(self) -> AttrDict:
@@ -220,10 +234,10 @@ class Projection(_Base):
         ]})
 
     #
-    # Instance methods (stateful)
+    # Instance methods (stateful, unsafe to cache)
     #
 
-    def fit(self, recs: pd.DataFrame):
+    def fit(self, recs: pd.DataFrame) -> 'Projection':
         """patch (f*p,t) -> ()"""
         assert 'patches' in recs
         patches = list(recs.patches)
@@ -250,19 +264,19 @@ class Projection(_Base):
         return self._projs(patches, self.skm_)
 
     #
-    # Class methods (not stateful)
+    # Class methods (pure, safe to cache)
     #
 
     @classmethod
     @cache(version=0)
-    def _fit(cls, patches, **skm_config):
+    def _fit(cls, patches, **skm_config) -> BaseEstimator:
         """patch (f*p,t) -> ()"""
         skm = SKM(**skm_config)
         skm_X = np.concatenate(patches, axis=1)  # (Entirely an skm.fit concern)
         log('Projection._fit:skm_X', **{
             'skm_X.shape': skm_X.shape,
         })
-        skm.fit(skm_X)
+        skm.fit(skm_X)  # TODO Get sklearn to show verbose progress during .fit
         if not skm.do_pca:
             skm.pca.components_ = np.eye(skm.D.shape[0])
         return skm
@@ -346,98 +360,167 @@ class Search(_Base):
     ))
 
     #
-    # Instance methods (stateful)
+    # Instance methods (stateful, unsafe to cache)
     #
 
-    # TODO Straighten out feats (feature vectors to fit, i.e. X) vs. to_X(recs) (instances to recall)
+    # TODO Clean up naming: feats (feature vectors to fit, i.e. X) vs. to_X(recs) (instances to recall in similar_recs)
 
-    def fit(self, recs: pd.DataFrame):
+    def fit(self, recs: pd.DataFrame) -> 'Search':
         """feat (k*a,) -> ()"""
         assert 'feat' in recs
         self.feats_ = np.array(list(recs.feat))  # Feature vectors to fit
-        self.recs_ = to_X(recs)  # Instances to recall (in predict)
-        self.classes_ = to_y(recs)
+        assert self.feats_.shape[0] == len(recs)  # knn.fit(X) wants X.shape == (n_samples, n_features)
+        self.fit_recs_ = to_X(recs)  # Instances to recall (in predict)
+        self.fit_classes_ = to_y(recs)
         log('Search.fit:feats', **{
-            '(f*p, t)': [f.shape for f in self.feats_],
+            'recs': len(recs),
+            '(n, f*p)': self.feats_.shape,
         })
-        self.knn_ = self._fit(self.feats_, self.classes_, **self.knn_config)
+        self.knn_ = self._fit(self.feats_, self.fit_classes_, **self.knn_config)
         log('Search.fit:knn', **{
             'knn.get_params': self.knn_.get_params(),
-            'knn.classes_': self.knn_.classes_.tolist(),
+            'knn.classes_': sorted_species(self.knn_.classes_.tolist()),
+            'knn.classes_.len': len(self.knn_.classes_),
         })
         return self
 
-    def predict(self, recs: pd.DataFrame, type: Union['classes', 'kneighbors']) -> pd.DataFrame:
-        """feat (k*a,) -> preds"""
+    def species(self, recs: pd.DataFrame) -> List['species']:
+        """feat (k*a,) -> species (1,)"""
         assert 'feat' in recs
-        return self._predict(
-            np.array(list(recs.feat)),
-            type,
-            self.knn_,
-            self.recs_,
-            self.classes_,
-        )
 
-    def test(self, recs: pd.DataFrame, type: Union['classes', 'kneighbors']) -> pd.DataFrame:
-        """Predict, and then add test labels back to the predictions"""
-        assert 'feat' in recs
-        return pd.concat(axis=1, objs=[
-            pd.DataFrame({'y': to_y(recs)}),
-            self.predict(recs, type),
-        ]).T
+        # Unpack inputs (i.e. split here if we need caching)
+        feats = np.array(list(recs.feat))
 
-    #
-    # Class methods (not stateful)
-    #
-
-    @classmethod
-    @cache(version=0)
-    def _fit(cls, feats, classes, **knn_config):
-        """feat (k*a,) -> ()"""
-        knn = KNeighborsClassifier(**knn_config)
-        return knn.fit(feats, classes)
-
-    @classmethod
-    def _predict(cls, feats, type, knn, knn_recs, knn_classes) -> pd.DataFrame:
-        """feat (k*a,) -> class | neighbor"""
-        if type == 'classes':
-            return cls._predict_class_classes(feats, knn)  # (knn.predict_proba)
-        elif type == 'kneighbors':
-            return cls._predict_class_kneighbors(feats, knn, knn_recs, knn_classes)  # (knn.kneighbors)
-        else:
-            raise ValueError(f"type[{type}] must be one of: 'classes', 'kneighbors'")
-
-    @classmethod
-    def _predict_class_classes(cls, feats, knn) -> pd.DataFrame:
-        """feat (k*a,) -> class (test_n, class_n)"""
-        classes = knn.classes_
-        proba = knn.predict_proba(feats)
-        classes_df = pd.DataFrame([
-            {i: [p, c] for i, (c, p) in enumerate(sorted(dict(row).items(), key=lambda x: (-x[1], x[0])))}
-            for i, row in pd.DataFrame(proba, columns=classes).iterrows()
-        ])
-        log('Search.predict:classes', **{
-            # TODO Put something useful here that isn't too big
+        # Predict: .predict
+        #   - Preserve recs.index in output's index, for easy joins
+        species = pd.DataFrame(index=recs.index, data={
+            'species_pred': self.knn_.predict(feats),
         })
-        return classes_df
+        log('Search.species', **{
+            'recs': len(recs),
+            '(n, k*a)': feats.shape,
+            'species': len(species),
+        })
 
-    @classmethod
-    def _predict_class_kneighbors(cls, feats, knn, knn_recs, knn_classes) -> pd.DataFrame:
-        """feat (k*a,) -> neighbor (test_n, train_n)"""
-        knn_recs = knn_recs
-        knn_classes = knn_classes
-        (dists, fit_is) = knn.kneighbors(feats, n_neighbors=len(knn_recs))
-        kneighbors_df = pd.DataFrame([
+        # Join test labels back onto the predictions, if given
+        if 'species' in recs:
+            species.insert(0, 'species_true', to_y(recs))
+
+        return species
+
+    def species_probs(self, recs: pd.DataFrame) -> pd.DataFrame:
+        """feat (k*a,) -> species (len(fit_classes_),)"""
+        assert 'feat' in recs
+
+        # Unpack inputs (i.e. split here if we need caching)
+        feats = np.array(list(recs.feat))
+        knn = self.knn_
+
+        # Predict: .predict_proba
+        #   - Preserve recs.index in output's index, for easy joins
+        proba = knn.predict_proba(feats)
+        species_probs = pd.DataFrame(index=recs.index, data=[
+            {i: [p, c] for i, (c, p) in enumerate(sorted(dict(row).items(), key=lambda x: (-x[1], x[0])))}
+            for i, row in pd.DataFrame(proba, columns=knn.classes_).iterrows()
+        ])
+        log('Search.species_probs', **{
+            'recs': len(recs),
+            '(n, k*a)': feats.shape,
+            'knn.n_neighbors': self.knn_.n_neighbors,
+            'species_probs': species_probs.shape,
+        })
+
+        # Join test labels back onto the predictions, if given
+        if 'species' in recs:
+            species_probs.insert(0, 'species_true', to_y(recs))
+
+        return species_probs
+
+    def similar_recs(self, recs: pd.DataFrame, similar_n) -> pd.DataFrame:
+        """feat (k*a,) -> rec (similar_n,)"""
+        assert 'feat' in recs
+
+        # Unpack inputs (i.e. split here if we need caching)
+        feats = np.array(list(recs.feat))
+        knn = self.knn_
+        fit_recs = self.fit_recs_
+        fit_classes = self.fit_classes_
+
+        # Search: .kneighbors
+        #   - Preserve recs.index in output's index, for easy joins
+        (dists, fit_is) = knn.kneighbors(feats, n_neighbors=similar_n)
+        similar_recs = pd.DataFrame(index=recs.index, data=[
             [
-                [fit_i, dist, knn_classes[fit_i]]
+                [fit_i, dist, fit_classes[fit_i]]
                 for fit_i, dist in zip(fit_is[i], dists[i])
             ]
             for i in range(len(fit_is))
         ])
-        log('Search.predict:kneighbors', **{
-            # TODO Put something useful here that isn't too big
+        log('Search.similar_recs', **{
+            'recs': len(recs),
+            '(n, k*a)': feats.shape,
+            'similar_recs': similar_recs.shape,
         })
-        return kneighbors_df
+
+        # Join test labels back onto the predictions, if given
+        if 'species' in recs:
+            similar_recs.insert(0, 'species_true', to_y(recs))
+
+        return similar_recs
+
+    def confusion_matrix(self, recs: pd.DataFrame) -> 'pd.DataFrame[count @ (n_species, n_species)]':
+        assert 'species' in recs
+        species = self.species(recs)
+        y_true = species.species_true
+        y_pred = species.species_pred
+        labels = sorted_species(set(y_true) | set(y_pred))
+        M = pd.DataFrame(
+            data=sklearn.metrics.confusion_matrix(y_true, y_pred, labels),
+            index=pd.Series(labels, name='true'),
+            columns=pd.Series(labels, name='pred'),
+        )
+        log('Search.confusion_matrix', **{
+            'M': M.shape,
+        })
+        return M
+
+    def coverage_error(self, recs: pd.DataFrame, by: str) -> List[Tuple['species', float]]:
+        if recs[by].dtype.name == 'category':
+            recs[by] = recs[by].cat.remove_unused_categories()  # Else groupby includes all categories
+        return recs.groupby(by).apply(lambda g: self._coverage_error(g))
+
+    def _coverage_error(self, recs: pd.DataFrame) -> float:
+        assert 'species' in recs
+        y_true = np.array([
+            (self.knn_.classes_ == rec.species).astype('int')
+            for i, rec in recs.iterrows()
+        ])
+        y_score = self.knn_.predict_proba(list(recs.feat))
+        return sklearn.metrics.coverage_error(y_true, y_score)
+
+    #
+    # Class methods (pure, safe to cache)
+    #
+
+    @classmethod
+    @cache(version=0)
+    def _fit(cls, feats, classes, **knn_config) -> BaseEstimator:
+        """feat (k*a,) -> ()"""
+        knn = KNeighborsClassifier(**knn_config)
+        return knn.fit(feats, classes)
+
+    #
+    # Plotting
+    #
+
+    def plot_confusion_matrix(self, recs: pd.DataFrame, **kwargs):
+        assert 'species' in recs
+        confusion_matrix = self.confusion_matrix(recs)
+        plot_confusion_matrix(
+            confusion_matrix.as_matrix(),
+            labels=list(confusion_matrix.index),
+            **kwargs,
+        )
 
 
 # TODO Update for refactor: figure out how to split this up
