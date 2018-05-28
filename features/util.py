@@ -6,6 +6,7 @@ import dask.array as da
 import dask.dataframe as dd
 from more_itertools import *
 import PIL
+from potoo.pandas import df_ensure, df_summary
 
 
 ## matplotlib
@@ -72,11 +73,6 @@ def df_flatmap(df, f):
     )
 
 
-def df_reorder_cols(df: pd.DataFrame, first: List[str] = [], last: List[str] = []) -> pd.DataFrame:
-    first_last = set(first) | set(last)
-    return df.reindex(columns=first + [c for c in df.columns if c not in first_last] + last)
-
-
 def df_apply_with_progress(
     df,
     f,
@@ -122,6 +118,20 @@ def dask_get_for_scheduler_name(scheduler):
     else:
         get = scheduler
     return get
+
+
+## dataclasses
+
+from collections import OrderedDict
+
+import dataclasses
+
+
+class DataclassConversions:
+
+    def asdict(self) -> dict:
+        """Convert to dict preserving field order, e.g. for df rows"""
+        return OrderedDict(dataclasses.asdict(self))
 
 
 ## unix

@@ -3,10 +3,11 @@ from functools import lru_cache
 import re
 
 import pandas as pd
+from potoo.pandas import df_reorder_cols
 
 from constants import data_dir, mul_species, no_species, unk_species
 import metadata
-from util import df_reorder_cols, singleton
+from util import singleton
 
 datasets = {
     'recordings': 'recordings/*',
@@ -19,13 +20,12 @@ datasets = {
 }
 
 
-def metadata_from_audio(dataset, audio) -> dict:
-    name = audio.name
-    name_parts = name.split('/')
-    basename = name_parts[-1]
+def metadata_from_audio(id: str, dataset: str) -> dict:
+    id_parts = id.split('/')
+    basename = id_parts[-1]
     species_query = None
     if dataset == 'peterson-field-guide':
-        species_query = name.split('/')[1]
+        species_query = id.split('/')[1]
     elif dataset == 'recordings':
         m = re.match(r'^([A-Z]{4}) ', basename)
         species_query = m.groups()[0] if m else unk_species
@@ -42,13 +42,11 @@ def metadata_from_audio(dataset, audio) -> dict:
         # species_com_name = species
     species = metadata.species[species_query] or metadata.species[unk_species]
     return OrderedDict(
-        dataset=dataset,
         species=species.shorthand,
         species_longhand=species.longhand,
         species_com_name=species.com_name,
         species_query=species_query,
         basename=basename,
-        name=audio.name,
     )
 
 

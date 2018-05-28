@@ -29,7 +29,7 @@ def df_to_recs(df: pd.DataFrame) -> List[Recording]:
         Recording(**{
             k: v
             for k, v in dict(row).items()
-            if k in [x.name for x in dataclasses.fields(Recording)]
+            if k in [x.id for x in dataclasses.fields(Recording)]
         })
         for row in df_rows(df)
     ]
@@ -50,7 +50,7 @@ def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
 
     # rec as Recording/attrs
     if not isinstance(v, (dict, audiosegment.AudioSegment, np.ndarray, tuple)):
-        v = {x.name: getattr(v, x.name) for x in dataclasses.fields(Recording)}
+        v = {x.id: getattr(v, x.id) for x in dataclasses.fields(Recording)}
 
     # rec as dict
     if isinstance(v, dict):

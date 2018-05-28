@@ -78,23 +78,37 @@ def _cache_control_gen(orig, **kwargs):
         cache_control_state = orig
 
 
+# TODO This is becoming really hacky; consider making a separate api that reuses joblib storage but not joblib.Memory
 # TODO Support @cache in addition to @cache() / @cache(...), like Memory.cache does
-def cache(version=None, **kwargs):
+def cache(
+    version=None,
+    key=lambda *args, **kwargs: (args, kwargs),
+    **kwargs,
+):
+    """
+    Wrap Memory.cache to support version=... and key=..., and remove ignore=...
+    """
+
+    assert 'ignore' not in kwargs, 'Use key=... instead of ignore=...'
+
     def decorator(func):
+
         @wraps(func)
-        def func_with_version(*args, **kwargs):
-            kwargs.pop('__cache_version', None)
+        def func_cached(args, kwargs, cache_key):
             return func(*args, **kwargs)
-        cache_func = memory.cache(func_with_version, **kwargs)
-        @wraps(cache_func)
+        func_cached = memory.cache(func_cached, **kwargs, ignore=['args', 'kwargs'])
+
+        @wraps(func_cached)
         def g(*args, **kwargs):
-            kwargs.setdefault('__cache_version', version)
-            if cache_control_state.enabled:
-                return cache_func(*args, **kwargs)
+            if not cache_control_state.enabled:
+                return func_cached.func(args, kwargs, None)
             else:
-                return cache_func.func(*args, **kwargs)
-            return
+                return func_cached(args, kwargs, dict(
+                    version=version,
+                    key=key(*args, **kwargs),
+                ))
         return g
+
     return decorator
 
 

@@ -32,12 +32,13 @@ def test_model():
     search.fit(recs_train)
 
     # Predict
-    search.predict(recs_test, 'classes')
-    search.predict(recs_test, 'kneighbors')
+    search.species(recs_test)
+    search.species_probs(recs_test)
+    search.similar_recs(recs_test, 3)
 
-    # TODO Eval search
-    # search.confusion_matrix(recs_test)
-    # search.coverage_errors(recs_test)
+    # Eval
+    search.confusion_matrix(recs_test)
+    # search.coverage_error(recs_test, by='species')  # FIXME sklearn coverage_error fails if y_true only has one class
 
 
 def test__patches():

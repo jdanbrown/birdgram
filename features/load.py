@@ -5,22 +5,24 @@ import re
 from typing import List
 
 import audiosegment
-import dataclasses
 import pandas as pd
+from potoo.pandas import consumes_cols, df_cats_to_str
 
+from cache import cache
 from constants import cache_dir, data_dir, standard_sample_rate_hz
 from datasets import datasets, metadata_from_audio
-from datatypes import Recording
+from datatypes import Recording, RecordingDF
 import metadata
 from util import df_apply_with_progress, ensure_parent_dir
 
 
-def load_recs_paths(dataset_ids: List[str] = None) -> pd.DataFrame:
-    return pd.DataFrame([
-        dict(
+def load_recs(dataset_ids: List[str] = None) -> RecordingDF:
+    return RecordingDF([
+        Recording(
+            id=os.path.splitext(os.path.relpath(path, data_dir))[0],
             dataset=dataset,
             path=os.path.relpath(path, data_dir),
-        )
+        ).asdict()
         for dataset, pattern in datasets.items()
         if not dataset_ids or dataset in dataset_ids
         for path in glob.glob(f'{data_dir}/{pattern}')
@@ -28,42 +30,67 @@ def load_recs_paths(dataset_ids: List[str] = None) -> pd.DataFrame:
     ])
 
 
-def load_recs_data(recs_paths: pd.DataFrame, dask_opts={}, **kwargs) -> pd.DataFrame:
-    return (recs_paths
-        .pipe(df_apply_with_progress, **dask_opts, f=lambda row: pd.Series(OrderedDict(
-            dataclasses.asdict(load_rec(
-                row.dataset,
-                row.path,
-                **kwargs,
-            ))
-        )))
-        .astype({
-            # Map str -> category for cols that have category dtypes available
-            'species': metadata.species.df.shorthand.dtype,
-            'species_longhand': metadata.species.df.longhand.dtype,
-            'species_com_name': metadata.species.df.com_name.dtype,
-        })
-        # Default sort is taxo
-        .sort_values('species')
+@consumes_cols('id', 'dataset', 'path')
+def recs_load_metadata(recs: RecordingDF, **kwargs) -> RecordingDF:
+    if 'species' not in recs:
+        recs = recs_load_data(recs, rec_load=rec_load_cached, include_metadata=True, include_audio=False, **kwargs)
+    return recs
+
+
+@consumes_cols('id', 'dataset', 'path')
+def recs_load_audio(recs: RecordingDF, **kwargs) -> RecordingDF:
+    if 'audio' not in recs:
+        recs = recs_load_data(recs, rec_load=rec_load, include_metadata=False, include_audio=True, **kwargs)
+    return recs
+
+
+@consumes_cols('id', 'dataset', 'path')
+def recs_load_metadata_and_audio(recs: RecordingDF, **kwargs) -> RecordingDF:
+    if 'species' not in recs or 'audio' not in recs:
+        recs = recs_load_data(recs, rec_load=rec_load, include_metadata=True, include_audio=True, **kwargs)
+    return recs
+
+
+@consumes_cols('id', 'dataset', 'path')
+def recs_load_data(recs: RecordingDF, rec_load, dask_opts={}, **kwargs) -> RecordingDF:
+    return (recs
+        .pipe(df_apply_with_progress, **dask_opts, f=lambda row: pd.Series({
+            **row,
+            **rec_load(Recording(**row), **kwargs).asdict(),
+        }))
+        .pipe(RecordingDF)
+        .pipe(lambda df:
+            df.sort_values('species') if 'species' in df else df
+        )
+        .pipe(RecordingDF)
     )
 
 
-def load_rec(
-    dataset: str,
-    path: str,
-    metadata_only=False,
-    audio=False,
-    **kwargs,
-) -> Recording:
-    audio = load_audio(path, **kwargs)
+@cache(version=1, verbose=0)
+def rec_load_cached(rec: Recording, *args, **kwargs) -> Recording:
+    """Like rec_load, except drop audio and cache (to skip .wav file read on cache hit)"""
+    rec_out = rec_load(rec, *args, **kwargs)
+    rec_out.audio = rec.audio or None  # Drop new .audio / preserve existing .audio
+    return rec_out
+
+
+# Caching doesn't help here, since our bottleneck is file read (.wav), which is also cache hit's bottleneck
+def rec_load(rec: Recording, include_audio=True, include_metadata=True, **kwargs) -> Recording:
+    """Load metadata and audio onto an existing rec"""
+    audio = load_audio(rec.path, **kwargs)
     samples = audio.to_numpy_array()
-    return Recording(
-        **metadata_from_audio(dataset, audio),
-        duration_s=audio.duration_seconds,
-        samples_mb=len(samples) * audio.sample_width / 1024**2,
-        samples_n=len(samples),
-        audio=audio if audio and not metadata_only else None,
-    )
+    return Recording(**{
+        **rec.asdict(),
+        **(dict() if not include_metadata else dict(
+            **metadata_from_audio(rec.id, rec.dataset),
+            duration_s=audio.duration_seconds,
+            samples_mb=len(samples) * audio.sample_width / 1024**2,
+            samples_n=len(samples),
+        )),
+        **(dict() if not include_audio else dict(
+            audio=audio,
+        )),
+    })
 
 
 def load_audio(

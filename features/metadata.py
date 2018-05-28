@@ -4,7 +4,7 @@ import re
 from typing import List, Optional
 
 import pandas as pd
-from potoo.pandas import as_ordered_cat, df_transform_column_names
+from potoo.pandas import as_ordered_cat, df_reorder_cols, df_transform_column_names
 
 from constants import (
     data_dir,
@@ -13,7 +13,7 @@ from constants import (
     unk_species, unk_species_com_name, unk_species_species_code, unk_species_taxon_id,
 )
 from datatypes import Species
-from util import cache_to_file_forever, df_reorder_cols, singleton
+from util import cache_to_file_forever, singleton
 
 metadata_dir = f'{data_dir}/metadata'
 ebird_taxa_path = f'{metadata_dir}/ebird-ws1.1-taxa-species.csv'

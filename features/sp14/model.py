@@ -16,6 +16,7 @@ import yaml
 
 from cache import cache, cache_lambda, cache_pure_method
 from datasets import *
+from datatypes import RecordingDF
 from features import *
 from load import *
 import metadata
@@ -57,11 +58,11 @@ Pipeline
 """
 
 
-def to_X(recs: pd.DataFrame) -> List[AttrDict]:
+def to_X(recs: RecordingDF) -> List[AttrDict]:
     return [AttrDict(row) for i, row in recs.iterrows()]
 
 
-def to_y(recs: pd.DataFrame) -> np.ndarray:
+def to_y(recs: RecordingDF) -> np.ndarray:
     return np.array(list(recs.species))
 
 
@@ -104,13 +105,37 @@ class Features(_Base):
     # Instance methods (stateful, unsafe to cache)
     #
 
-    def spectros(self, recs: pd.DataFrame) -> Iterable[Melspectro]:
-        assert 'audio' in recs
+    @consumes_cols('audio')
+    def spectro(self, recs: RecordingDF) -> Iterable[Melspectro]:
         return self._spectros(to_X(recs), **self.spectro_config)
 
-    def patches(self, recs: pd.DataFrame) -> Iterable[np.ndarray]:
-        assert 'spectro' in recs
+    @consumes_cols('spectro')
+    def patches(self, recs: RecordingDF) -> Iterable[np.ndarray]:
         return self._patches(to_X(recs), **self.patch_config)
+
+    # TODO
+
+    # def transform(self, recs: RecordingDF) -> RecordingDF:
+    #     if 'patches' not in recs:
+    #         if 'spectro' not in recs:
+    #             recs = recs.assign(spectro=self.spectro)
+    #         recs = recs.assign(patches=self.patches)
+    #     return RecordingDF(recs)
+
+    # def recs_spectro(self, recs: RecordingDF) -> RecordingDF:
+    #     if 'spectro' not in recs:
+    #         recs = recs.assign(spectro=self.spectro)
+    #     return RecordingDF(recs)
+
+    # def recs_patches(self, recs: RecordingDF) -> RecordingDF:
+    #     if 'patches' not in recs:
+    #         recs = recs.assign(
+    #             patches=lambda recs: recs.apply(axis=1, func=lambda rec: (
+    #                 # cache(key=lambda rec: rec.id)(lambda rec: compute_patches(rec.spectro))(rec)  # Cached
+    #                 compute_patches(rec.spectro)  # Not cached
+    #             ))
+    #         )
+    #     return RecordingDF(recs)
 
     #
     # Class methods (pure, safe to cache)
@@ -126,8 +151,8 @@ class Features(_Base):
         """
         assert all('audio' in rec for rec in recs)
         # Cache per dataset group
-        #   - Sort by (dataset, name) -> apply _spectros_cache_block per group -> unsort back to original order
-        i_recs_sorted = sorted(enumerate(recs), key=lambda i_rec: (i_rec[1].dataset, i_rec[1].name))
+        #   - Sort by (dataset, id) -> apply _spectros_cache_block per group -> unsort back to original order
+        i_recs_sorted = sorted(enumerate(recs), key=lambda i_rec: (i_rec[1].dataset, i_rec[1].id))
         recs_sorted = [rec for i, rec in i_recs_sorted]
         unsort = {i_orig: i_sorted for i_sorted, (i_orig, rec) in enumerate(i_recs_sorted)}
         spectros_sorted = list(flatten(
@@ -171,7 +196,7 @@ class Features(_Base):
         return spectro
 
     @classmethod
-    def _patches(cls, recs, patch_length):
+    def _patches(cls, recs, **patch_config) -> Iterable[np.ndarray]:
         """rec (samples,) -> spectro (f,t) -> patch (f*p,t)"""
         assert all('spectro' in rec for rec in recs)
         log('Features.patches:recs', **{
@@ -180,27 +205,34 @@ class Features(_Base):
             'sum(samples_mb)': round_sig(sum(rec.samples_mb for rec in recs), 3),
             'sum(samples_n)': sum(rec.samples_n for rec in recs),
         })
-        patches = cls._patches_from_spectros([rec.spectro for rec in recs], patch_length)
+        # patches = cls._patches_from_spectros([rec.spectro for rec in recs], **patch_config)  # XXX
+        patches = cls._patches_from_spectros(recs, **patch_config)  # TODO
         log('Features.patches:patches', **{
             '(f*p, sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
         return patches
 
     @classmethod
-    @cache(version=0)
-    @generator_to(list)
-    def _patches_from_spectros(cls, spectros: List[Melspectro], patch_length):
+    @cache(version=3, key=lambda cls, recs, *args, **kwargs: [rec.id for rec in recs])
+    def _patches_from_spectros(cls, recs: Iterable[Recording], **patch_config) -> Iterable[np.ndarray]:
         """spectro (f,t) -> patch (f*p,t)"""
         log('Features.patches:spectros', **{
-            '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
+            '(f, sum(t))': (
+                one({rec.spectro.S.shape[0] for rec in recs}),
+                sum(rec.spectro.S.shape[1] for rec in recs),
+            ),
         })
-        for spectro in spectros:
-            (f, t, S) = spectro
-            patch = np.array([
-                S[:, i:i + patch_length].flatten()
-                for i in range(S.shape[1] - (patch_length - 1))
-            ]).T
-            yield patch
+        return [cls._patches_from_spectro(rec, **patch_config) for rec in recs]
+
+    @classmethod
+    # @cache(version=4, verbose=0, key=lambda cls, rec, *args, **kwargs: rec.id)  # TODO
+    def _patches_from_spectro(cls, rec, patch_length) -> np.ndarray:
+        """spectro (f,t) -> patch (f*p,t)"""
+        (f, t, S) = rec.spectro
+        return np.array([
+            S[:, i:i + patch_length].flatten()
+            for i in range(S.shape[1] - (patch_length - 1))
+        ]).T
 
 
 @dataclass
@@ -237,9 +269,9 @@ class Projection(_Base):
     # Instance methods (stateful, unsafe to cache)
     #
 
-    def fit(self, recs: pd.DataFrame) -> 'Projection':
+    @consumes_cols('patches')
+    def fit(self, recs: RecordingDF) -> 'Projection':
         """patch (f*p,t) -> ()"""
-        assert 'patches' in recs
         patches = list(recs.patches)
         log('Projection.fit:patches', **{
             'patches dims': (len(patches), one(set(p.shape[0] for p in patches)), sum(p.shape[1] for p in patches)),
@@ -251,15 +283,20 @@ class Projection(_Base):
         })
         return self
 
-    def transform(self, recs: pd.DataFrame) -> np.ndarray:
+    @consumes_cols('patches')
+    def transform(self, recs: RecordingDF) -> np.ndarray:
         """patch (f*p,t) -> proj (k,t) -> agg (k,a) -> feat (k*a,)"""
-        assert 'patches' in recs
+        return self.feat(recs)
+
+    @consumes_cols('patches')
+    def feat(self, recs: RecordingDF) -> np.ndarray:
+        """patch (f*p,t) -> proj (k,t) -> agg (k,a) -> feat (k*a,)"""
         patches = list(recs.patches)
         return self._transform(patches, self.skm_, self.agg_config)
 
-    def projs(self, recs: pd.DataFrame) -> np.ndarray:
+    @consumes_cols('patches')
+    def projs(self, recs: RecordingDF) -> np.ndarray:
         """patch (f*p,t) -> proj (k,t)"""
-        assert 'patches' in recs
         patches = list(recs.patches)
         return self._projs(patches, self.skm_)
 
@@ -355,9 +392,13 @@ class Projection(_Base):
 @dataclass
 class Search(_Base):
 
-    knn_config: AttrDict = field(default_factory=lambda: AttrDict(
-        n_neighbors=3,
-    ))
+    n_neighbors: int = 3
+
+    @property
+    def knn_config(self) -> AttrDict:
+        return AttrDict({k: v for k, v in self.config.items() if k in [
+            'n_neighbors',
+        ]})
 
     #
     # Instance methods (stateful, unsafe to cache)
@@ -365,7 +406,7 @@ class Search(_Base):
 
     # TODO Clean up naming: feats (feature vectors to fit, i.e. X) vs. to_X(recs) (instances to recall in similar_recs)
 
-    def fit(self, recs: pd.DataFrame) -> 'Search':
+    def fit(self, recs: RecordingDF) -> 'Search':
         """feat (k*a,) -> ()"""
         assert 'feat' in recs
         self.feats_ = np.array(list(recs.feat))  # Feature vectors to fit
@@ -384,7 +425,7 @@ class Search(_Base):
         })
         return self
 
-    def species(self, recs: pd.DataFrame) -> List['species']:
+    def species(self, recs: RecordingDF) -> List['species']:
         """feat (k*a,) -> species (1,)"""
         assert 'feat' in recs
 
@@ -408,7 +449,7 @@ class Search(_Base):
 
         return species
 
-    def species_probs(self, recs: pd.DataFrame) -> pd.DataFrame:
+    def species_probs(self, recs: RecordingDF) -> pd.DataFrame:
         """feat (k*a,) -> species (len(fit_classes_),)"""
         assert 'feat' in recs
 
@@ -436,7 +477,7 @@ class Search(_Base):
 
         return species_probs
 
-    def similar_recs(self, recs: pd.DataFrame, similar_n) -> pd.DataFrame:
+    def similar_recs(self, recs: RecordingDF, similar_n) -> pd.DataFrame:
         """feat (k*a,) -> rec (similar_n,)"""
         assert 'feat' in recs
 
@@ -468,7 +509,7 @@ class Search(_Base):
 
         return similar_recs
 
-    def confusion_matrix(self, recs: pd.DataFrame) -> 'pd.DataFrame[count @ (n_species, n_species)]':
+    def confusion_matrix(self, recs: RecordingDF) -> 'pd.DataFrame[count @ (n_species, n_species)]':
         assert 'species' in recs
         species = self.species(recs)
         y_true = species.species_true
@@ -484,12 +525,17 @@ class Search(_Base):
         })
         return M
 
-    def coverage_error(self, recs: pd.DataFrame, by: str) -> List[Tuple['species', float]]:
+    def coverage_error(self, recs: RecordingDF, by: str) -> 'pd.DataFrame[by, coverage_error]':
         if recs[by].dtype.name == 'category':
             recs[by] = recs[by].cat.remove_unused_categories()  # Else groupby includes all categories
-        return recs.groupby(by).apply(lambda g: self._coverage_error(g))
+        return (recs
+            .groupby(by)
+            .apply(lambda g: self._coverage_error(g))
+            .reset_index()
+            .rename(columns={0: 'coverage_error'})
+        )
 
-    def _coverage_error(self, recs: pd.DataFrame) -> float:
+    def _coverage_error(self, recs: RecordingDF) -> float:
         assert 'species' in recs
         y_true = np.array([
             (self.knn_.classes_ == rec.species).astype('int')
@@ -513,7 +559,7 @@ class Search(_Base):
     # Plotting
     #
 
-    def plot_confusion_matrix(self, recs: pd.DataFrame, **kwargs):
+    def plot_confusion_matrix(self, recs: RecordingDF, **kwargs):
         assert 'species' in recs
         confusion_matrix = self.confusion_matrix(recs)
         plot_confusion_matrix(
