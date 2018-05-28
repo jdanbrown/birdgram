@@ -1,3 +1,33 @@
+"""
+Config
+    |                             | defaults      | [SP14]         | [SBF16]       |
+    |-----------------------------|---------------|----------------|---------------|
+    | rec_sample_rate             | 22050         | 44100          | 22050         |
+    | spectro_f_min               | 1000          | 500            | 2000          |
+    |   f_max                     | 11025         | 22050          | 11025         |
+    | spectro_f_bins (f)          | 40            | 40             | 40            |
+    | spectro_hop_length          | 256 (12ms)    | 1024 (23ms)    | 32 (1.5ms)    |
+    | spectro_frame_length        | 512 (23ms)    | 1024 (23ms)    | 256 (12ms)    |
+    |   frame_overlap             | .5            | 0              | .875          |
+    |   frames/s (t/s)            | 86            | 43             | 689           |
+    | spectro_frame_window        | hann          | hamming        | hann          |
+    | norm                        | [TODO]        | RMS+median     | [TODO]        |
+    | patch_length (p)            | 4 (46ms)      | ~4 (~93ms)     | ~16 (~22ms)   |
+    | proj_skm_variance_explained | .99           | —              | .99           |
+    | proj_skm_k (k)              | 500           | 500            | ~512          |
+    | agg_funs                    | μ,σ,max       | μ,σ            | ~μ,σ,max      |
+    |   a                         | 3             | 2              | ~3            |
+    |   features                  | 1500          | 1000           | ~1536         |
+
+Pipeline
+    | rec     | (samples,) | (22050/s,)   | (44100/s)     | (22050/s,)
+    | spectro | (f, t)     | (40, 86/s)   | (40, 43/s)    | (40, 689/s)
+    | patch   | (f*p, t)   | (40*4, 86/s) | (40*~4, 43/s) | (40*~16, 689/s)
+    | proj    | (k, t)     | (500, 86/s)  | (500, 43/s)   | (~512, 689/s)
+    | agg     | (k, a)     | (500, 3)     | (500, 2)      | (~512, ~3)
+    | feat    | (k*a,)     | (1500,)      | (1000,)       | (~1536,)
+"""
+
 import copy
 from datetime import datetime
 import itertools
@@ -7,6 +37,7 @@ from typing import Iterable, Union
 from attrdict import AttrDict
 import dataclasses
 from dataclasses import dataclass, field
+import joblib
 import numpy as np
 from potoo.util import round_sig
 import sklearn
@@ -15,6 +46,7 @@ from sklearn.neighbors import KNeighborsClassifier
 import yaml
 
 from cache import cache, cache_lambda, cache_pure_method
+from constants import data_dir
 from datasets import *
 from datatypes import RecordingDF
 from features import *
@@ -26,39 +58,7 @@ from util import *
 from viz import *
 
 
-# TODO Re-home this docstring
-"""
-Config
-    |                             | defaults      | [SP14]         | [SBF16]       |
-    |-----------------------------|---------------|----------------|---------------|
-    | rec_sample_rate             | 22050         | 44100          | 22050
-    | spectro_f_min               | 1000          | 500            | 2000
-    |   f_max                     | 11025         | 22050          | 11025
-    | spectro_f_bins (f)          | 40            | 40             | 40
-    | spectro_hop_length          | 256 (12ms)    | 1024 (23ms)    | 32 (1.5ms)
-    | spectro_frame_length        | 512 (23ms)    | 1024 (23ms)    | 256 (12ms)
-    |   frame_overlap             | .5            | 0              | .875
-    |   frames/s (t/s)            | 86            | 43             | 689
-    | spectro_frame_window        | hann          | hamming        | hann
-    | norm                        | [TODO]        | RMS+median     | [TODO]
-    | patch_length (p)            | 4 (46ms)      | ~4 (~93ms)     | ~16 (~22ms)
-    | proj_skm_variance_explained | .99           | —              | .99
-    | proj_skm_k (k)              | 500           | 500            | ~512
-    | agg_funs                    | μ,σ,max       | μ,σ            | ~μ,σ,max
-    |   a                         | 3             | 2              | ~3
-    |   features                  | 1500          | 1000           | ~1536
-
-Pipeline
-    | rec     | (samples,) | (22050/s,)   | (44100/s)     | (22050/s,)
-    | spectro | (f, t)     | (40, 86/s)   | (40, 43/s)    | (40, 689/s)
-    | patch   | (f*p, t)   | (40*4, 86/s) | (40*~4, 43/s) | (40*~16, 689/s)
-    | proj    | (k, t)     | (500, 86/s)  | (500, 43/s)   | (~512, 689/s)
-    | agg     | (k, a)     | (500, 3)     | (500, 2)      | (~512, ~3)
-    | feat    | (k*a,)     | (1500,)      | (1000,)       | (~1536,)
-"""
-
-
-def to_X(recs: RecordingDF) -> List[AttrDict]:
+def to_X(recs: RecordingDF) -> Iterable[AttrDict]:
     return [AttrDict(row) for i, row in recs.iterrows()]
 
 
@@ -101,137 +101,99 @@ class Features(_Base):
             'patch_length',
         ]})
 
-    #
-    # Instance methods (stateful, unsafe to cache)
-    #
+    # .audio -> .spectro -> .patches
+    #   - TODO TODO transform vs. patches?
+    def transform(self, recs: RecordingDF) -> RecordingDF:
+        """.patches <- .spectro <- .audio"""
+        # TODO TODO Don't load .spectro/.audio when .patches missing but all are cached
+        if 'patches' not in recs:
+            recs = recs.copy()
+            if 'spectro' not in recs:
+                if 'audio' not in recs:
+                    recs = recs_load_audio(recs)
+                recs['spectro'] = self.spectro(recs)
+            recs['patches'] = self.patches(recs)
+            recs = RecordingDF(recs)
+        return recs
 
-    @consumes_cols('audio')
+    # Consumes .audio on cache miss
     def spectro(self, recs: RecordingDF) -> Iterable[Melspectro]:
-        return self._spectros(to_X(recs), **self.spectro_config)
+        """.spectro <- .audio"""
+        return recs.spectro if 'spectro' in recs else self._spectros(recs)
 
-    @consumes_cols('spectro')
+    # Consumes .spectro on cache miss
     def patches(self, recs: RecordingDF) -> Iterable[np.ndarray]:
-        return self._patches(to_X(recs), **self.patch_config)
+        """.patches <- .spectro"""
+        return recs.patches if 'patches' in recs else self._patches(recs)
 
-    # TODO
-
-    # def transform(self, recs: RecordingDF) -> RecordingDF:
-    #     if 'patches' not in recs:
-    #         if 'spectro' not in recs:
-    #             recs = recs.assign(spectro=self.spectro)
-    #         recs = recs.assign(patches=self.patches)
-    #     return RecordingDF(recs)
-
-    # def recs_spectro(self, recs: RecordingDF) -> RecordingDF:
-    #     if 'spectro' not in recs:
-    #         recs = recs.assign(spectro=self.spectro)
-    #     return RecordingDF(recs)
-
-    # def recs_patches(self, recs: RecordingDF) -> RecordingDF:
-    #     if 'patches' not in recs:
-    #         recs = recs.assign(
-    #             patches=lambda recs: recs.apply(axis=1, func=lambda rec: (
-    #                 # cache(key=lambda rec: rec.id)(lambda rec: compute_patches(rec.spectro))(rec)  # Cached
-    #                 compute_patches(rec.spectro)  # Not cached
-    #             ))
-    #         )
-    #     return RecordingDF(recs)
-
-    #
-    # Class methods (pure, safe to cache)
-    #
-
-    @classmethod
-    def _spectros(cls, recs, **spectro_config) -> List[Melspectro]:
+    # Consumes .audio on cache miss
+    def _spectros(self, recs: RecordingDF) -> Iterable[Melspectro]:
         """
         rec (samples,) -> spectro (f,t)
           - f: freq indexes (Hz), mel-scaled
           - t: time indexes (s)
           - S: log power (f x t): log(X**2) where X is the (energy) unit of the audio signal
         """
-        assert all('audio' in rec for rec in recs)
-        # Cache per dataset group
-        #   - Sort by (dataset, id) -> apply _spectros_cache_block per group -> unsort back to original order
-        i_recs_sorted = sorted(enumerate(recs), key=lambda i_rec: (i_rec[1].dataset, i_rec[1].id))
-        recs_sorted = [rec for i, rec in i_recs_sorted]
-        unsort = {i_orig: i_sorted for i_sorted, (i_orig, rec) in enumerate(i_recs_sorted)}
-        spectros_sorted = list(flatten(
-            cls._spectros_cache_block(
-                # Strip recs to audios, to eliminate spurious information in cache keys (e.g. species_query)
-                [rec.audio for rec in recs_sorted_for_dataset],
-                **spectro_config,
-            )
-            for dataset, recs_sorted_for_dataset in itertools.groupby(recs_sorted, lambda rec: rec.dataset)
-        ))
-        spectros = [spectros_sorted[unsort[i_orig]] for i_orig, rec in enumerate(recs)]
+        log('Features.spectros:recs', **{
+            'len(recs)': len(recs),
+            'sum(duration_h)': round_sig(recs.duration_s.sum() / 3600, 3),
+            'sum(samples_mb)': round_sig(recs.samples_mb.sum(), 3),
+            'sum(samples_n)': int(recs.samples_n.sum()),
+        })
+        spectros = [self._spectro(rec) for i, rec in recs.iterrows()]
+        log('Features.spectros:spectros', **{
+            '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
+        })
         return spectros
 
-    @classmethod
-    @cache(version=0)
-    def _spectros_cache_block(cls, audios, **spectro_config) -> Iterable[Melspectro]:
-        return [cls._spectro(audio, **spectro_config) for audio in audios]
-
-    @classmethod
-    def _spectro(cls, audio, sample_rate, f_min, frame_length, hop_length, frame_window, f_bins) -> Melspectro:
-        (_rec, audio, _x, _sample_rate) = unpack_rec(audio)
-        assert audio.frame_rate == sample_rate, 'Expected %s, got %s' % (sample_rate, audio)
-        # TODO Filter by f_min
+    @cache(version=0, verbose=0, key=lambda self, rec: (rec.id, self.spectro_config))
+    def _spectro(self, rec: Recording) -> Melspectro:
+        config = self.spectro_config
+        (_rec, audio, _x, _sample_rate) = unpack_rec(rec.audio)
+        assert audio.frame_rate == config.sample_rate, 'Expected %s, got %s' % (config.sample_rate, audio)
+        # TODO Filter by config.f_min
         #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
         spectro = Melspectro(
             audio,
-            nperseg=frame_length,
-            overlap=1 - hop_length / frame_length,
-            window=frame_window,
-            n_mels=f_bins,
+            nperseg=config.frame_length,
+            overlap=1 - config.hop_length / config.frame_length,
+            window=config.frame_window,
+            n_mels=config.f_bins,
         )
-        spectro = cls._spectro_denoise(spectro)
+        spectro = self._spectro_denoise(spectro)
         return spectro
 
     # TODO Recompute denoised audio to match denoised spectro
-    @classmethod
-    def _spectro_denoise(cls, spectro: Melspectro) -> Melspectro:
+    def _spectro_denoise(self, spectro: Melspectro) -> Melspectro:
         # Like [SP14]
         spectro = spectro.norm_rms()
         spectro = spectro.clip_below_median_per_freq()
         return spectro
 
-    @classmethod
-    def _patches(cls, recs, **patch_config) -> Iterable[np.ndarray]:
+    # Consumes .spectro on cache miss
+    def _patches(self, recs: RecordingDF) -> Iterable[np.ndarray]:
         """rec (samples,) -> spectro (f,t) -> patch (f*p,t)"""
-        assert all('spectro' in rec for rec in recs)
         log('Features.patches:recs', **{
             'len(recs)': len(recs),
-            'sum(duration_h)': round_sig(sum(rec.duration_s for rec in recs) / 3600, 3),
-            'sum(samples_mb)': round_sig(sum(rec.samples_mb for rec in recs), 3),
-            'sum(samples_n)': sum(rec.samples_n for rec in recs),
+            'sum(duration_h)': round_sig(recs.duration_s.sum() / 3600, 3),
+            'sum(samples_mb)': round_sig(recs.samples_mb.sum(), 3),
+            'sum(samples_n)': int(recs.samples_n.sum()),
+            '(f, sum(t))': (one({x.S.shape[0] for x in recs.spectro}), sum(x.S.shape[1] for x in recs.spectro)),
         })
-        # patches = cls._patches_from_spectros([rec.spectro for rec in recs], **patch_config)  # XXX
-        patches = cls._patches_from_spectros(recs, **patch_config)  # TODO
+        patches = [self._patches_from_spectro(rec) for i, rec in recs.iterrows()]
         log('Features.patches:patches', **{
             '(f*p, sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
         return patches
 
-    @classmethod
-    @cache(version=3, key=lambda cls, recs, *args, **kwargs: [rec.id for rec in recs])
-    def _patches_from_spectros(cls, recs: Iterable[Recording], **patch_config) -> Iterable[np.ndarray]:
+    @cache(version=0, verbose=0, key=lambda self, rec: (rec.id, self.patch_config))
+    def _patches_from_spectro(self, rec: Recording) -> np.ndarray:
         """spectro (f,t) -> patch (f*p,t)"""
-        log('Features.patches:spectros', **{
-            '(f, sum(t))': (
-                one({rec.spectro.S.shape[0] for rec in recs}),
-                sum(rec.spectro.S.shape[1] for rec in recs),
-            ),
-        })
-        return [cls._patches_from_spectro(rec, **patch_config) for rec in recs]
-
-    @classmethod
-    # @cache(version=4, verbose=0, key=lambda cls, rec, *args, **kwargs: rec.id)  # TODO
-    def _patches_from_spectro(cls, rec, patch_length) -> np.ndarray:
-        """spectro (f,t) -> patch (f*p,t)"""
+        config = self.patch_config
         (f, t, S) = rec.spectro
         return np.array([
-            S[:, i:i + patch_length].flatten()
-            for i in range(S.shape[1] - (patch_length - 1))
+            S[:, i:i + config.patch_length].flatten()
+            for i in range(S.shape[1] - (config.patch_length - 1))
         ]).T
 
 
@@ -244,7 +206,7 @@ class Projection(_Base):
     pca_whiten: bool = True          # (SKM default: True)
     standardize: bool = False        # (SKM default: False)
     normalize: bool = False          # (SKM default: False)
-    agg_funs: List[str] = field(default_factory=lambda: [
+    agg_funs: Iterable[str] = field(default_factory=lambda: [
         'mean', 'std', 'max',
     ])
 
@@ -264,6 +226,19 @@ class Projection(_Base):
         return AttrDict({k: v for k, v in self.config.items() if k in [
             'agg_funs',
         ]})
+
+    @classmethod
+    def load(cls, id: str) -> 'Projection':
+        log('Projection.load', path=self._save_path(id))
+        return joblib.load(self._save_path(id))
+
+    def save(self, id: str):
+        log('Projection.save', path=self._save_path(id))
+        joblib.dump(self, self._save_path(id))
+
+    @classmethod
+    def _save_path(cls, id: str):
+        return f'{data_dir}/models/projection/{id}.pkl'
 
     #
     # Instance methods (stateful, unsafe to cache)
@@ -406,9 +381,9 @@ class Search(_Base):
 
     # TODO Clean up naming: feats (feature vectors to fit, i.e. X) vs. to_X(recs) (instances to recall in similar_recs)
 
+    @consumes_cols('feat')
     def fit(self, recs: RecordingDF) -> 'Search':
         """feat (k*a,) -> ()"""
-        assert 'feat' in recs
         self.feats_ = np.array(list(recs.feat))  # Feature vectors to fit
         assert self.feats_.shape[0] == len(recs)  # knn.fit(X) wants X.shape == (n_samples, n_features)
         self.fit_recs_ = to_X(recs)  # Instances to recall (in predict)
@@ -425,9 +400,9 @@ class Search(_Base):
         })
         return self
 
-    def species(self, recs: RecordingDF) -> List['species']:
+    @consumes_cols('feat')
+    def species(self, recs: RecordingDF) -> Iterable['species']:
         """feat (k*a,) -> species (1,)"""
-        assert 'feat' in recs
 
         # Unpack inputs (i.e. split here if we need caching)
         feats = np.array(list(recs.feat))
@@ -449,9 +424,9 @@ class Search(_Base):
 
         return species
 
+    @consumes_cols('feat')
     def species_probs(self, recs: RecordingDF) -> pd.DataFrame:
         """feat (k*a,) -> species (len(fit_classes_),)"""
-        assert 'feat' in recs
 
         # Unpack inputs (i.e. split here if we need caching)
         feats = np.array(list(recs.feat))
@@ -477,9 +452,9 @@ class Search(_Base):
 
         return species_probs
 
+    @consumes_cols('feat')
     def similar_recs(self, recs: RecordingDF, similar_n) -> pd.DataFrame:
         """feat (k*a,) -> rec (similar_n,)"""
-        assert 'feat' in recs
 
         # Unpack inputs (i.e. split here if we need caching)
         feats = np.array(list(recs.feat))
@@ -509,8 +484,8 @@ class Search(_Base):
 
         return similar_recs
 
+    @consumes_cols('species')
     def confusion_matrix(self, recs: RecordingDF) -> 'pd.DataFrame[count @ (n_species, n_species)]':
-        assert 'species' in recs
         species = self.species(recs)
         y_true = species.species_true
         y_pred = species.species_pred
@@ -535,8 +510,8 @@ class Search(_Base):
             .rename(columns={0: 'coverage_error'})
         )
 
+    @consumes_cols('species')
     def _coverage_error(self, recs: RecordingDF) -> float:
-        assert 'species' in recs
         y_true = np.array([
             (self.knn_.classes_ == rec.species).astype('int')
             for i, rec in recs.iterrows()
@@ -559,8 +534,8 @@ class Search(_Base):
     # Plotting
     #
 
+    @consumes_cols('species')
     def plot_confusion_matrix(self, recs: RecordingDF, **kwargs):
-        assert 'species' in recs
         confusion_matrix = self.confusion_matrix(recs)
         plot_confusion_matrix(
             confusion_matrix.as_matrix(),

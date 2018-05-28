@@ -10,21 +10,21 @@ from potoo.pandas import consumes_cols, df_cats_to_str
 
 from cache import cache
 from constants import cache_dir, data_dir, standard_sample_rate_hz
-from datasets import datasets, metadata_from_audio
+from datasets import DATASETS, metadata_from_audio
 from datatypes import Recording, RecordingDF
 import metadata
 from util import df_apply_with_progress, ensure_parent_dir
 
 
-def load_recs(dataset_ids: List[str] = None) -> RecordingDF:
+def load_recs(datasets: List[str] = None) -> RecordingDF:
     return RecordingDF([
         Recording(
             id=os.path.splitext(os.path.relpath(path, data_dir))[0],
             dataset=dataset,
             path=os.path.relpath(path, data_dir),
         ).asdict()
-        for dataset, pattern in datasets.items()
-        if not dataset_ids or dataset in dataset_ids
+        for dataset, pattern in DATASETS.items()
+        if not datasets or dataset in datasets
         for path in glob.glob(f'{data_dir}/{pattern}')
         if not os.path.isdir(path)
     ])

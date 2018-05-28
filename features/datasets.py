@@ -9,7 +9,7 @@ from constants import data_dir, mul_species, no_species, unk_species
 import metadata
 from util import singleton
 
-datasets = {
+DATASETS = {
     'recordings': 'recordings/*',
     'peterson-field-guide': 'peterson-field-guide/*/audio/*',
     'birdclef-2015': 'birdclef-2015/organized/wav/*',
