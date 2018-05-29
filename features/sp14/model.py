@@ -30,9 +30,11 @@ Pipeline
 
 import copy
 from datetime import datetime
+import hashlib
 import itertools
 import json
-from typing import Iterable, Union
+from typing import Iterable, Mapping, Union
+import uuid
 
 from attrdict import AttrDict
 import dataclasses
@@ -48,7 +50,7 @@ import yaml
 from cache import cache, cache_lambda, cache_pure_method
 from constants import data_dir
 from datasets import *
-from datatypes import RecordingDF
+from datatypes import Audio, RecordingDF
 from features import *
 from load import *
 import metadata
@@ -58,24 +60,13 @@ from util import *
 from viz import *
 
 
-def to_X(recs: RecordingDF) -> Iterable[AttrDict]:
-    return [AttrDict(row) for i, row in recs.iterrows()]
-
-
-def to_y(recs: RecordingDF) -> np.ndarray:
-    return np.array(list(recs.species))
-
-
-class _Base:
-
-    @property
-    def config(self) -> AttrDict:
-        return dataclasses.asdict(self)
-
-
 @dataclass
-class Features(_Base):
+class Features(DataclassConfig):
 
+    # Dependencies
+    load: Load = Load()
+
+    # Config
     sample_rate: int = 22050
     f_min: int = 1000
     f_bins: int = 40
@@ -83,6 +74,12 @@ class Features(_Base):
     frame_length: int = 512
     frame_window: str = 'hann'
     patch_length: int = 4
+
+    @property
+    def deps(self) -> AttrDict:
+        return AttrDict({k: getattr(self, k) for k in [
+            'load',
+        ]})
 
     @property
     def spectro_config(self) -> AttrDict:
@@ -101,105 +98,101 @@ class Features(_Base):
             'patch_length',
         ]})
 
-    # .audio -> .spectro -> .patches
-    #   - TODO TODO transform vs. patches?
+    @short_circuit(lambda self, recs: recs if 'patches' in recs else None)
     def transform(self, recs: RecordingDF) -> RecordingDF:
-        """.patches <- .spectro <- .audio"""
-        # TODO TODO Don't load .spectro/.audio when .patches missing but all are cached
-        if 'patches' not in recs:
-            recs = recs.copy()
-            if 'spectro' not in recs:
-                if 'audio' not in recs:
-                    recs = recs_load_audio(recs)
-                recs['spectro'] = self.spectro(recs)
-            recs['patches'] = self.patches(recs)
-            recs = RecordingDF(recs)
-        return recs
-
-    # Consumes .audio on cache miss
-    def spectro(self, recs: RecordingDF) -> Iterable[Melspectro]:
-        """.spectro <- .audio"""
-        return recs.spectro if 'spectro' in recs else self._spectros(recs)
-
-    # Consumes .spectro on cache miss
-    def patches(self, recs: RecordingDF) -> Iterable[np.ndarray]:
-        """.patches <- .spectro"""
-        return recs.patches if 'patches' in recs else self._patches(recs)
-
-    # Consumes .audio on cache miss
-    def _spectros(self, recs: RecordingDF) -> Iterable[Melspectro]:
-        """
-        rec (samples,) -> spectro (f,t)
-          - f: freq indexes (Hz), mel-scaled
-          - t: time indexes (s)
-          - S: log power (f x t): log(X**2) where X is the (energy) unit of the audio signal
-        """
-        log('Features.spectros:recs', **{
-            'len(recs)': len(recs),
-            'sum(duration_h)': round_sig(recs.duration_s.sum() / 3600, 3),
-            'sum(samples_mb)': round_sig(recs.samples_mb.sum(), 3),
-            'sum(samples_n)': int(recs.samples_n.sum()),
-        })
-        spectros = [self._spectro(rec) for i, rec in recs.iterrows()]
-        log('Features.spectros:spectros', **{
-            '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
-        })
-        return spectros
-
-    @cache(version=0, verbose=0, key=lambda self, rec: (rec.id, self.spectro_config))
-    def _spectro(self, rec: Recording) -> Melspectro:
-        config = self.spectro_config
-        (_rec, audio, _x, _sample_rate) = unpack_rec(rec.audio)
-        assert audio.frame_rate == config.sample_rate, 'Expected %s, got %s' % (config.sample_rate, audio)
-        # TODO Filter by config.f_min
-        #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
-        spectro = Melspectro(
-            audio,
-            nperseg=config.frame_length,
-            overlap=1 - config.hop_length / config.frame_length,
-            window=config.frame_window,
-            n_mels=config.f_bins,
+        """Adds .patches (f*p,t)"""
+        return RecordingDF(recs
+            .assign(patches=self.patches)
         )
-        spectro = self._spectro_denoise(spectro)
-        return spectro
 
-    # TODO Recompute denoised audio to match denoised spectro
-    def _spectro_denoise(self, spectro: Melspectro) -> Melspectro:
-        # Like [SP14]
-        spectro = spectro.norm_rms()
-        spectro = spectro.clip_below_median_per_freq()
-        return spectro
-
-    # Consumes .spectro on cache miss
-    def _patches(self, recs: RecordingDF) -> Iterable[np.ndarray]:
-        """rec (samples,) -> spectro (f,t) -> patch (f*p,t)"""
-        log('Features.patches:recs', **{
+    @short_circuit(lambda self, recs: recs.get('patches'))
+    def patches(self, recs: RecordingDF) -> Column['np.ndarray[(f*p,t)]']:
+        """.patches (f*p,t) <- .spectro (f,t)"""
+        log('Features.patches:in', **{
             'len(recs)': len(recs),
-            'sum(duration_h)': round_sig(recs.duration_s.sum() / 3600, 3),
-            'sum(samples_mb)': round_sig(recs.samples_mb.sum(), 3),
-            'sum(samples_n)': int(recs.samples_n.sum()),
-            '(f, sum(t))': (one({x.S.shape[0] for x in recs.spectro}), sum(x.S.shape[1] for x in recs.spectro)),
+            'len(recs) per dataset': recs.get('dataset', pd.Series()).value_counts().to_dict(),
+            'sum(duration_h)': round_sig(sum(recs.get('duration_s', [])) / 3600, 3),
+            'sum(samples_mb)': round_sig(sum(recs.get('samples_mb', [])), 3),
+            'sum(samples_n)': int(sum(recs.get('samples_n', []))),
+            '(f, sum(t))': recs.get('spectro', pd.Series()).pipe(lambda xs: (
+                list({x.S.shape[0] for x in xs}),
+                sum(x.S.shape[1] for x in xs),
+            ))
         })
-        patches = [self._patches_from_spectro(rec) for i, rec in recs.iterrows()]
-        log('Features.patches:patches', **{
+        patches = map_with_progress(self._patches, df_rows(recs), scheduler='threads')
+        log('Features.patches:out', **{
             '(f*p, sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
         return patches
 
-    @cache(version=0, verbose=0, key=lambda self, rec: (rec.id, self.patch_config))
-    def _patches_from_spectro(self, rec: Recording) -> np.ndarray:
+    @short_circuit(lambda self, recs: recs.get('spectro'))
+    def spectro(self, recs: RecordingDF) -> Column[Melspectro]:
+        """.spectro (f,t) <- .audio (samples,)"""
+        log('Features.spectros:in', **{
+            'len(recs)': len(recs),
+            'len(recs) per dataset': recs.get('dataset', pd.Series()).value_counts().to_dict(),
+            'sum(duration_h)': round_sig(sum(recs.get('duration_s', [])) / 3600, 3),
+            'sum(samples_mb)': round_sig(sum(recs.get('samples_mb', [])), 3),
+            'sum(samples_n)': int(sum(recs.get('samples_n', []))),
+        })
+        spectros = map_with_progress(self._spectro, df_rows(recs), scheduler='threads')
+        log('Features.spectros:out', **{
+            '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
+        })
+        return spectros
+
+    @short_circuit(lambda self, rec: rec.get('patches'))
+    @cache(version=0, key=lambda self, rec: (rec.id, self.patch_config, self.spectro_config, self.deps))
+    def _patches(self, rec: Row) -> 'np.ndarray[(f*p, t)]':
         """spectro (f,t) -> patch (f*p,t)"""
-        config = self.patch_config
-        (f, t, S) = rec.spectro
+        (f, t, S) = self._spectro(rec)  # Cached
+        p = self.patch_config.patch_length
         return np.array([
-            S[:, i:i + config.patch_length].flatten()
-            for i in range(S.shape[1] - (config.patch_length - 1))
+            S[:, i:i+p].flatten()
+            for i in range(S.shape[1] - (p - 1))
         ]).T
+
+    @short_circuit(lambda self, rec: rec.get('spectro'))
+    @cache(version=0, key=lambda self, rec: (rec.id, self.spectro_config, self.deps))
+    def _spectro(self, rec: Row) -> Melspectro:
+        """
+        .spectro (f,t) <- .audio (samples,)
+          - f: freq indexes (Hz), mel-scaled
+          - t: time indexes (s)
+          - S: log power (f x t): log(X**2) where X is the (energy) unit of the audio signal
+        """
+        audio = self.load._audio(rec)  # Pull
+        c = self.spectro_config
+        (_rec, audio, _x, _sample_rate) = unpack_rec(audio)
+        assert audio.frame_rate == c.sample_rate, 'Expected %s, got %s' % (c.sample_rate, audio)
+        # TODO Filter by c.f_min
+        #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
+        spectro = Melspectro(
+            audio,
+            nperseg=c.frame_length,
+            overlap=1 - c.hop_length / c.frame_length,
+            window=c.frame_window,
+            n_mels=c.f_bins,
+        )
+        spectro = self._spectro_denoise(spectro)
+        return spectro
+
+    # TODO Add .audio_denoised so we can hear what the denoised spectro sounds like
+    def _spectro_denoise(self, spectro: Melspectro) -> Melspectro:
+        """Denoise like [SP14]"""
+        spectro = spectro.norm_rms()
+        spectro = spectro.clip_below_median_per_freq()
+        return spectro
 
 
 @dataclass
-class Projection(_Base):
+class Projection(DataclassConfig):
 
+    # Dependencies
+    features: Features = Features()
+
+    # Config
+    skm_fit_max_t: int = 600_000
     k: int = 500
     variance_explained: float = .99  # (SKM default: .99)
     do_pca: bool = True              # (SKM default: True)
@@ -211,14 +204,26 @@ class Projection(_Base):
     ])
 
     @property
+    def deps(self) -> AttrDict:
+        return AttrDict({k: getattr(self, k) for k in [
+            'features',
+        ]})
+
+    @property
+    def safety_config(self) -> AttrDict:
+        return AttrDict({k: v for k, v in self.config.items() if k in [
+            'skm_fit_max_t',
+        ]})
+
+    @property
     def skm_config(self) -> AttrDict:
         return AttrDict({k: v for k, v in self.config.items() if k in [
-            'normalize',
-            'standardize',
-            'pca_whiten',
-            'do_pca',
-            'variance_explained',
             'k',
+            'variance_explained',
+            'do_pca',
+            'pca_whiten',
+            'standardize',
+            'normalize',
         ]})
 
     @property
@@ -228,125 +233,144 @@ class Projection(_Base):
         ]})
 
     @classmethod
-    def load(cls, id: str) -> 'Projection':
-        log('Projection.load', path=self._save_path(id))
-        return joblib.load(self._save_path(id))
+    def load(cls, id: str, **override_attrs) -> 'cls':
+        log('Projection.load', path=cls._save_path(id))
+        # Save/load the attrs, not the instance, so we don't preserve class objects with outdated code
+        saved_attrs = joblib.load(cls._save_path(id))
+        projection = Projection()
+        projection.__dict__.update(saved_attrs)
+        projection.__dict__.update(override_attrs)
+        return projection
 
-    def save(self, id: str):
+    def save(self, basename: str):
+        nonce = hashlib.sha1(str(uuid.uuid4()).encode()).hexdigest()[:7]
+        model_id = f'{basename}-{nonce}'
+        self._save(model_id)
+        return model_id
+
+    def _save(self, id: str):
         log('Projection.save', path=self._save_path(id))
-        joblib.dump(self, self._save_path(id))
+        # Save/load the attrs, not the instance, so we don't preserve class objects with outdated code
+        joblib.dump(self.__dict__, self._save_path(id))
 
     @classmethod
     def _save_path(cls, id: str):
-        return f'{data_dir}/models/projection/{id}.pkl'
+        return ensure_parent_dir(f'{data_dir}/models/projection/{id}.pkl')
 
-    #
-    # Instance methods (stateful, unsafe to cache)
-    #
-
-    @consumes_cols('patches')
-    def fit(self, recs: RecordingDF) -> 'Projection':
-        """patch (f*p,t) -> ()"""
-        patches = list(recs.patches)
-        log('Projection.fit:patches', **{
-            'patches dims': (len(patches), one(set(p.shape[0] for p in patches)), sum(p.shape[1] for p in patches)),
+    def fit(self, recs: RecordingDF) -> 'self':
+        """skm_ <- .patch (f*p,t)"""
+        recs = self.features.transform(recs)  # Pull
+        log('Projection.fit:in', **{
+            'patches': (
+                len(recs.patches),
+                one(set(p.shape[0] for p in recs.patches)),
+                sum(p.shape[1] for p in recs.patches),
+            ),
         })
-        self.skm_ = self._fit(patches, **self.skm_config)
-        log('Projection.fit:skm.fit', **{
-            'skm.pca.components_.shape': self.skm_.pca.components_.shape,
-            'skm.D.shape': self.skm_.D.shape,
+        self.skm_ = self._fit(recs)
+        log('Projection.fit:out', **{
+            'skm.pca.components_': self.skm_.pca.components_.shape,
+            'skm.D': self.skm_.D.shape,
         })
         return self
 
-    @consumes_cols('patches')
-    def transform(self, recs: RecordingDF) -> np.ndarray:
-        """patch (f*p,t) -> proj (k,t) -> agg (k,a) -> feat (k*a,)"""
-        return self.feat(recs)
-
-    @consumes_cols('patches')
-    def feat(self, recs: RecordingDF) -> np.ndarray:
-        """patch (f*p,t) -> proj (k,t) -> agg (k,a) -> feat (k*a,)"""
-        patches = list(recs.patches)
-        return self._transform(patches, self.skm_, self.agg_config)
-
-    @consumes_cols('patches')
-    def projs(self, recs: RecordingDF) -> np.ndarray:
-        """patch (f*p,t) -> proj (k,t)"""
-        patches = list(recs.patches)
-        return self._projs(patches, self.skm_)
-
-    #
-    # Class methods (pure, safe to cache)
-    #
-
-    @classmethod
-    @cache(version=0)
-    def _fit(cls, patches, **skm_config) -> BaseEstimator:
-        """patch (f*p,t) -> ()"""
-        skm = SKM(**skm_config)
-        skm_X = np.concatenate(patches, axis=1)  # (Entirely an skm.fit concern)
-        log('Projection._fit:skm_X', **{
+    @cache(version=0, verbose=100, key=lambda self, recs: (recs.id, self.skm_config, self.deps))
+    def _fit(self, recs: RecordingDF) -> SKM:
+        """skm <- .patch (f*p,t)"""
+        skm = SKM(**self.skm_config)
+        skm_X = np.concatenate(list(recs.patches), axis=1)  # (Entirely an skm.fit concern)
+        log('Projection._fit:in', **{
             'skm_X.shape': skm_X.shape,
         })
+        if skm_X.shape[1] > self.safety_config.skm_fit_max_t:
+            raise ValueError('Maybe not memory safe: skm_X t[%s] > skm_fit_max_t[%s]' % (
+                skm_X.shape[1], self.safety_config.skm_fit_max_t,
+            ))
         skm.fit(skm_X)  # TODO Get sklearn to show verbose progress during .fit
         if not skm.do_pca:
             skm.pca.components_ = np.eye(skm.D.shape[0])
         return skm
 
-    @classmethod
-    def _transform(cls, patches, skm, agg_config):
-        """patch (f*p,t) -> proj (k,t) -> agg (k,a) -> feat (k*a,)"""
-        projs = cls._projs(patches, skm)
-        aggs = cls._aggs(projs, **agg_config)
-        return cls._feats_from_aggs(aggs)
+    @short_circuit(lambda self, recs: recs if 'feat' in recs else None)
+    def transform(self, recs: RecordingDF) -> RecordingDF:
+        """Adds .feat (k*a,)"""
+        return RecordingDF(recs
+            .assign(feat=self.feat)
+        )
 
-    @classmethod
+    @short_circuit(lambda self, recs: recs.get('feat'))
+    def feat(self, recs: RecordingDF) -> Column['np.ndarray[(k*a,)]']:
+        """feat (k*a,) <- .agg (k,a)"""
+        feat = map_with_progress(self._feat, df_rows(recs), scheduler='threads')
+        return feat
+
+    @short_circuit(lambda self, recs: recs.get('agg'))
+    def agg(self, recs: RecordingDF) -> Column['np.ndarray[(k,a)]']:
+        """agg (k,a) <- .proj (k,t)"""
+        agg = map_with_progress(self._agg, df_rows(recs), scheduler='threads')
+        return agg
+
+    @short_circuit(lambda self, recs: recs.get('proj'))
+    def proj(self, recs: RecordingDF) -> Column['np.ndarray[(k,t)]']:
+        """proj (k,t) <- .patch (f*p,t)"""
+        proj = map_with_progress(self._proj, df_rows(recs), scheduler='threads')
+        return proj
+
+    @short_circuit(lambda self, rec: rec.get('feat'))
+    @cache(version=0, key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
+    def _feat(self, rec: Row) -> 'np.ndarray[(k*a,)]':
+        """feat (k*a,) <- .agg (k,a)"""
+        agg = self._agg(rec)
+        return agg.T.values.flatten()
+
+    # TODO Return type probably shouldn't be a full df, since some (uncommon) usage will try to stuff it into recs.agg
+    @short_circuit(lambda self, rec: rec.get('agg'))
+    @cache(version=0, key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
+    def _agg(self, rec: Row) -> 'pd.DataFrame[(k,a)]':
+        """agg (k,a) <- .proj (k,t)"""
+        proj = self._proj(rec)
+        return pd.DataFrame({
+            agg_fun: {
+                'mean':     lambda X: np.mean(X, axis=1),
+                'std':      lambda X: np.std(X, axis=1),
+                'min':      lambda X: np.min(X, axis=1),
+                'max':      lambda X: np.max(X, axis=1),
+                'median':   lambda X: np.median(X, axis=1),
+                'skewness': lambda X: scipy.stats.skew(X, axis=1),
+                'kurtosis': lambda X: scipy.stats.kurtosis(X, axis=1),
+                'dmean':    lambda X: np.mean(np.diff(X, axis=1), axis=1),
+                'dstd':     lambda X: np.std(np.diff(X, axis=1), axis=1),
+                'dmean2':   lambda X: np.mean(np.diff(np.diff(X, axis=1), axis=1), axis=1),
+                'dstd2':    lambda X: np.std(np.diff(np.diff(X, axis=1), axis=1), axis=1),
+            }[agg_fun](proj)
+            for agg_fun in self.agg_config.agg_funs
+        })
+
+    @short_circuit(lambda self, rec: rec.get('proj'))
+    @cache(version=0, key=lambda self, rec: (rec.id, self.skm_config, self.deps))
+    def _proj(self, rec: Row) -> 'np.ndarray[(k,t)]':
+        """proj (k,t) <- .patch (f*p,t)"""
+        patches = self.features._patches(rec)  # Pull
+        # patches = rec.patches  # TODO TODO XXX
+        return self.skm_.transform(patches)
+
+    # This is faster than row-at-a-time _proj by ~2x, but isn't (currently) mem safe
+    #   - TODO Consider how to allow bulk col-at-a-time operations
     @generator_to(list)
-    def _projs(cls, patches, skm):
-        """patch (f*p,t) -> proj (k,t)"""
-        # Concat patches (along t) so we can skm.transform them all at once
-        concat_patches = np.concatenate(patches, axis=1)
-        concat_projs = skm.transform(concat_patches)
-        # Unconcat projs (along t) to match patches
-        t_shapes = [p.shape[1] for p in patches]
-        t_starts = [0] + list(np.cumsum(t_shapes)[:-1])
-        for patch, t_shape, t_start in zip(patches, t_shapes, t_starts):
-            # Each proj should have the same t_shape and t_start as its patch
-            proj = concat_projs[:, t_start:t_start + t_shape]
-            yield proj
-
-    @classmethod
-    @generator_to(list)
-    def _aggs(cls, projs, agg_funs):
-        """proj (k,t) -> agg (k,a)"""
-        for proj in projs:
-            yield pd.DataFrame(OrderedDict({
-                agg_fun: {
-                    'mean':     lambda X: np.mean(X, axis=1),
-                    'std':      lambda X: np.std(X, axis=1),
-                    'min':      lambda X: np.min(X, axis=1),
-                    'max':      lambda X: np.max(X, axis=1),
-                    'median':   lambda X: np.median(X, axis=1),
-                    'skewness': lambda X: scipy.stats.skew(X, axis=1),
-                    'kurtosis': lambda X: scipy.stats.kurtosis(X, axis=1),
-                    'dmean':    lambda X: np.mean(np.diff(X, axis=1), axis=1),
-                    'dstd':     lambda X: np.std(np.diff(X, axis=1), axis=1),
-                    'dmean2':   lambda X: np.mean(np.diff(np.diff(X, axis=1), axis=1), axis=1),
-                    'dstd2':    lambda X: np.std(np.diff(np.diff(X, axis=1), axis=1), axis=1),
-                }[agg_fun](proj)
-                for agg_fun in agg_funs
-            }))
-
-    @classmethod
-    @generator_to(list)
-    def _feats_from_aggs(cls, aggs):
-        """agg (k,a) -> feat (k*a,)"""
-        for agg in aggs:
-            yield agg.T.values.flatten()
-
-    #
-    # Plotting
-    #
+    def _proj_bulk(self, recs: RecordingDF) -> Column['np.ndarray[(k,t)]']:
+        """proj (k,t) <- .patch (f*p,t)"""
+        for recs in [recs]:  # TODO Chunk up recs to make this mem safe
+            patches = self.features.patches(recs)  # Pull
+            # Concat patches (along t) so we can skm.transform them all at once
+            concat_patches = np.concatenate(list(patches), axis=1)
+            concat_projs = self.skm_.transform(concat_patches)
+            # Unconcat proj (along t) to match patches
+            t_shapes = [p.shape[1] for p in patches]
+            t_starts = [0] + list(np.cumsum(t_shapes)[:-1])
+            for patch, t_shape, t_start in zip(patches, t_shapes, t_starts):
+                # Each proj should have the same t_shape and t_start as its patch
+                proj = concat_projs[:, t_start:t_start + t_shape]
+                yield proj
 
     def plot_proj_centroids(self, **kwargs):
         """Viz the projection patch centroids (pca -> skm)"""
@@ -358,16 +382,26 @@ class Projection(_Base):
         """Viz a set of patches (f*p, n) as a grid that matches figsize"""
         plot_patches(
             patches,
-            self.config.patch_config.spectro_config.f_bins,
-            self.config.patch_config.patch_length,
+            self.features.spectro_config.f_bins,
+            self.features.patch_config.patch_length,
             **kwargs,
         )
 
 
 @dataclass
-class Search(_Base):
+class Search(DataclassConfig):
 
+    # Dependencies
+    projection: Projection = Projection()
+
+    # Config
     n_neighbors: int = 3
+
+    @property
+    def deps(self) -> AttrDict:
+        return AttrDict({k: getattr(self, k) for k in [
+            'projection',
+        ]})
 
     @property
     def knn_config(self) -> AttrDict:
@@ -375,33 +409,36 @@ class Search(_Base):
             'n_neighbors',
         ]})
 
-    #
-    # Instance methods (stateful, unsafe to cache)
-    #
-
-    # TODO Clean up naming: feats (feature vectors to fit, i.e. X) vs. to_X(recs) (instances to recall in similar_recs)
-
-    @consumes_cols('feat')
-    def fit(self, recs: RecordingDF) -> 'Search':
+    def fit(self, recs: RecordingDF) -> 'self':
         """feat (k*a,) -> ()"""
-        self.feats_ = np.array(list(recs.feat))  # Feature vectors to fit
-        assert self.feats_.shape[0] == len(recs)  # knn.fit(X) wants X.shape == (n_samples, n_features)
-        self.fit_recs_ = to_X(recs)  # Instances to recall (in predict)
-        self.fit_classes_ = to_y(recs)
-        log('Search.fit:feats', **{
+        recs = self.projection.transform(recs)  # Pull
+        self.feats_ = np.array(list(recs.feat))  # Feature vectors to fit to
+        self.fit_classes_ = to_y(recs)  # The training class for each instance, to recall in similar_recs
+        log('Search.fit:in', **{
             'recs': len(recs),
             '(n, f*p)': self.feats_.shape,
         })
-        self.knn_ = self._fit(self.feats_, self.fit_classes_, **self.knn_config)
-        log('Search.fit:knn', **{
+        assert self.feats_.shape[0] == len(recs)  # knn.fit(X) wants X.shape == (n_instances, n_features)
+        self.knn_ = self._fit(recs, self.feats_, self.fit_classes_)
+        log('Search.fit:out', **{
             'knn.get_params': self.knn_.get_params(),
             'knn.classes_': sorted_species(self.knn_.classes_.tolist()),
             'knn.classes_.len': len(self.knn_.classes_),
         })
         return self
 
-    @consumes_cols('feat')
-    def species(self, recs: RecordingDF) -> Iterable['species']:
+    @cache(version=1, verbose=100, key=lambda self, recs, feats, classes: (recs.id, self.knn_config, self.deps))
+    def _fit(self, recs: RecordingDF, feats: Column, classes: Column) -> BaseEstimator:
+        """knn <- .feat (k*a,)"""
+        knn = KNeighborsClassifier(**self.knn_config)
+        return knn.fit(feats, classes)
+
+    #
+    # Predict
+    #
+
+    @requires_cols('feat')
+    def species(self, recs: RecordingDF) -> Column['species']:
         """feat (k*a,) -> species (1,)"""
 
         # Unpack inputs (i.e. split here if we need caching)
@@ -424,7 +461,7 @@ class Search(_Base):
 
         return species
 
-    @consumes_cols('feat')
+    @requires_cols('feat')
     def species_probs(self, recs: RecordingDF) -> pd.DataFrame:
         """feat (k*a,) -> species (len(fit_classes_),)"""
 
@@ -452,15 +489,14 @@ class Search(_Base):
 
         return species_probs
 
-    @consumes_cols('feat')
+    @requires_cols('feat')
     def similar_recs(self, recs: RecordingDF, similar_n) -> pd.DataFrame:
         """feat (k*a,) -> rec (similar_n,)"""
 
         # Unpack inputs (i.e. split here if we need caching)
         feats = np.array(list(recs.feat))
         knn = self.knn_
-        fit_recs = self.fit_recs_
-        fit_classes = self.fit_classes_
+        fit_classes = self.fit_classes_  # TODO Can we get rid of this, and instead rely entirely on knn attrs?
 
         # Search: .kneighbors
         #   - Preserve recs.index in output's index, for easy joins
@@ -484,7 +520,7 @@ class Search(_Base):
 
         return similar_recs
 
-    @consumes_cols('species')
+    @requires_cols('species', 'feat')
     def confusion_matrix(self, recs: RecordingDF) -> 'pd.DataFrame[count @ (n_species, n_species)]':
         species = self.species(recs)
         y_true = species.species_true
@@ -500,17 +536,18 @@ class Search(_Base):
         })
         return M
 
+    @requires_cols('species', 'feat')
     def coverage_error(self, recs: RecordingDF, by: str) -> 'pd.DataFrame[by, coverage_error]':
         if recs[by].dtype.name == 'category':
             recs[by] = recs[by].cat.remove_unused_categories()  # Else groupby includes all categories
         return (recs
             .groupby(by)
-            .apply(lambda g: self._coverage_error(g))
+            .apply(lambda g: self._coverage_error(g.assign(**{by: g.name})))
             .reset_index()
             .rename(columns={0: 'coverage_error'})
         )
 
-    @consumes_cols('species')
+    @requires_cols('species', 'feat')
     def _coverage_error(self, recs: RecordingDF) -> float:
         y_true = np.array([
             (self.knn_.classes_ == rec.species).astype('int')
@@ -519,22 +556,7 @@ class Search(_Base):
         y_score = self.knn_.predict_proba(list(recs.feat))
         return sklearn.metrics.coverage_error(y_true, y_score)
 
-    #
-    # Class methods (pure, safe to cache)
-    #
-
-    @classmethod
-    @cache(version=0)
-    def _fit(cls, feats, classes, **knn_config) -> BaseEstimator:
-        """feat (k*a,) -> ()"""
-        knn = KNeighborsClassifier(**knn_config)
-        return knn.fit(feats, classes)
-
-    #
-    # Plotting
-    #
-
-    @consumes_cols('species')
+    @requires_cols('species')
     def plot_confusion_matrix(self, recs: RecordingDF, **kwargs):
         confusion_matrix = self.confusion_matrix(recs)
         plot_confusion_matrix(
@@ -542,6 +564,14 @@ class Search(_Base):
             labels=list(confusion_matrix.index),
             **kwargs,
         )
+
+
+def to_X(recs: RecordingDF) -> Iterable[AttrDict]:
+    return [AttrDict(row) for i, row in recs.iterrows()]
+
+
+def to_y(recs: RecordingDF) -> np.ndarray:
+    return np.array(list(recs.species))
 
 
 # TODO Update for refactor: figure out how to split this up
@@ -584,26 +614,3 @@ def _print_config(config):
             'agg    ': f'(k, a)   ({_k}, {_a})',
             'feat   ': f'(k*a,)   ({_ka},)',
         })
-
-
-@singleton
-@dataclass
-class log:
-
-    verbose: bool = True
-
-    def __call__(self, event, **kwargs):
-        """
-        Simple, ad-hoc logging specialized for interactive usage
-        """
-        if self.verbose:
-            t = datetime.utcnow().isoformat()
-            t = t[:23]  # Trim micros, keep millis
-            t = t.split('T')[-1]  # Trim date for now, since we're primarily interactive usage
-            # Display timestamp + event on first line
-            print('[%s] %s' % (t, event))
-            # Display each (k,v) pair on its own line, indented
-            for k, v in kwargs.items():
-                v_yaml = yaml.safe_dump(json.loads(json.dumps(v)), default_flow_style=True, width=1e9)
-                v_yaml = v_yaml.split('\n')[0]  # Handle documents ([1] -> '[1]\n') and scalars (1 -> '1\n...\n')
-                print('  %s: %s' % (k, v_yaml))

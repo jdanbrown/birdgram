@@ -2,6 +2,7 @@ from collections import OrderedDict
 from functools import lru_cache
 import re
 
+from attrdict import AttrDict
 import pandas as pd
 from potoo.pandas import df_reorder_cols
 
@@ -20,7 +21,7 @@ DATASETS = {
 }
 
 
-def metadata_from_audio(id: str, dataset: str) -> dict:
+def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
     id_parts = id.split('/')
     basename = id_parts[-1]
     species_query = None
@@ -41,7 +42,8 @@ def metadata_from_audio(id: str, dataset: str) -> dict:
         # species_longhand = species
         # species_com_name = species
     species = metadata.species[species_query] or metadata.species[unk_species]
-    return OrderedDict(
+    return AttrDict(
+        # TODO De-dupe these with Load.METADATA
         species=species.shorthand,
         species_longhand=species.longhand,
         species_com_name=species.com_name,

@@ -15,13 +15,14 @@ import numpy as np
 import pandas as pd
 import pydub
 import scipy
+from typing import List
 
 from constants import cache_dir, data_dir, default_log_ylim_min_hz, standard_sample_rate_hz
-from datatypes import Recording, RecOrAudioOrSignal
+from datatypes import Audio, Recording, RecOrAudioOrSignal
 import metadata
 from util import *
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def df_to_recs(df: pd.DataFrame) -> List[Recording]:
@@ -37,7 +38,7 @@ def df_to_recs(df: pd.DataFrame) -> List[Recording]:
 
 def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
     Optional[Recording],  # rec if input was rec else None
-    audiosegment.AudioSegment,  # audio
+    Audio,  # audio
     np.array,  # x
     int,  # sample_rate
 ):
@@ -49,14 +50,14 @@ def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
     rec = audio = x = sample_rate = None
 
     # rec as Recording/attrs
-    if not isinstance(v, (dict, audiosegment.AudioSegment, np.ndarray, tuple)):
+    if not isinstance(v, (dict, Audio, np.ndarray, tuple)):
         v = {x.id: getattr(v, x.id) for x in dataclasses.fields(Recording)}
 
     # rec as dict
     if isinstance(v, dict):
         rec = Recording(**v)
     # audio
-    elif isinstance(v, audiosegment.AudioSegment):
+    elif isinstance(v, Audio):
         audio = v
     # (x, sample_rate)
     elif isinstance(v, tuple):
@@ -67,19 +68,19 @@ def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
 
     audio = (
         rec.audio if rec else
-        audio if audio is not None else  # Careful: bool(audiosegment.AudioSegment) isn't reliable for ~0s audios
+        audio if audio is not None else  # Careful: bool(Audio) isn't reliable for ~0s audios
         audiosegment.from_numpy_array(x, framerate=sample_rate)
     )
     x = audio.to_numpy_array()
     sample_rate = audio.frame_rate
 
     if sample_rate != standard_sample_rate_hz:
-        log.warn(f'Nonstandard sample_rate[{sample_rate}] != standard[{standard_sample_rate_hz}] for audio[{audio}]')
+        logger.warn(f'Nonstandard sample_rate[{sample_rate}] != standard[{standard_sample_rate_hz}] for audio[{audio}]')
 
     return (rec, audio, x, sample_rate)
 
 
-def plt_audio_signal(audio: audiosegment.AudioSegment, **kwargs):
+def plt_audio_signal(audio: Audio, **kwargs):
     plt_signal(audio.to_numpy_array(), audio.frame_rate, **kwargs)
     plt.gca().xaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%ds'))
 
@@ -312,7 +313,7 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
 
         # TODO Why do we match librosa.feature.melspectrogram when overlap>=.5 but not <.5?
         if overlap < .5:
-            log.warn(f"Melspectro gives questionable output when overlap[{overlap}] < .5 (i.e. doesn't match librosa)")
+            logger.warn(f"Melspectro gives questionable output when overlap[{overlap}] < .5 (doesn't match librosa)")
 
         # Normal spectro
         (f, t, S) = Spectro(audio, **{

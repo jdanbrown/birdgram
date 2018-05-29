@@ -36,9 +36,11 @@ Example usage:
 
 from contextlib import contextmanager
 from functools import partial, wraps
+import uuid
 
 import attr
 from joblib import Memory
+from joblib.memory import MemorizedFunc
 
 from constants import cache_dir
 from util import singleton
@@ -46,10 +48,10 @@ from util import singleton
 memory = Memory(
     cachedir=cache_dir,  # It adds its own joblib/ subdir
     invalidate_on_code_change=False,
-    # verbose=0,  # Log nothing
+    verbose=0,  # Log nothing
     # verbose=1,  # Log cache miss
     # verbose=10,  # Log cache miss, cache hit [need >10 to log "Function has changed" before "Clearing cache"]
-    verbose=100,  # Log cache miss, cache hit, plus extra
+    # verbose=100,  # Log cache miss, cache hit, plus extra
 )
 
 
@@ -57,6 +59,7 @@ memory = Memory(
 @attr.s(slots=True)
 class _CacheControl:
     enabled = attr.ib(True)
+    refresh = attr.ib(False)
 
 
 cache_control_state = _CacheControl()
@@ -93,23 +96,31 @@ def cache(
 
     def decorator(func):
 
-        @wraps(func)
-        def func_cached(args, kwargs, cache_key):
-            return func(*args, **kwargs)
-        func_cached = memory.cache(func_cached, **kwargs, ignore=['args', 'kwargs'])
+        @wraps_workaround(func)
+        def func_cached(cache_key, ignore):
+            return func(*ignore['args'], **ignore['kwargs'])
+        func_cached = memory.cache(func_cached, **kwargs, ignore=['ignore'])
 
-        @wraps(func_cached)
+        @wraps_workaround(func_cached)
         def g(*args, **kwargs):
+            ignore = dict(args=args, kwargs=kwargs)
             if not cache_control_state.enabled:
-                return func_cached.func(args, kwargs, None)
+                cache_key = None
+                return func_cached.func(cache_key, ignore)
             else:
-                return func_cached(args, kwargs, dict(
-                    version=version,
-                    key=key(*args, **kwargs),
-                ))
+                cache_key = dict(version=version, key=key(*args, **kwargs))
+                if cache_control_state.refresh:
+                    _clear_result(func_cached, cache_key, ignore)
+                return func_cached(cache_key, ignore)
         return g
 
     return decorator
+
+
+def _clear_result(f: MemorizedFunc, *args, **kwargs):
+    """Clear an individual MemorizedResult for a MemorizedFunc"""
+    func_id, args_id = f._get_output_identifiers(*args, **kwargs)
+    f.store_backend.clear_item([func_id, args_id])
 
 
 def cache_lambda(func_name, f, *args, **kwargs):
@@ -122,7 +133,7 @@ def cache_lambda(func_name, f, *args, **kwargs):
 
 def cache_pure_method(m, *cache_args, **cache_kwargs):
     """See big caveats at https://pythonhosted.org/joblib/memory.html#gotchas"""
-    @wraps(m)
+    @wraps_workaround(m)
     def g(self, *args, **kwargs):
         # lambda instead of partial to avoid "JobLibCollisionWarning: Cannot detect name collisions for function"
         f = lambda self, *args, **kwargs: m(self, *args, **kwargs)
@@ -131,3 +142,31 @@ def cache_pure_method(m, *cache_args, **cache_kwargs):
         f.__module__ = m.__module__
         return cache(f, *cache_args, **cache_kwargs)(self, *args, **kwargs)
     return g
+
+
+def wraps_workaround(f):
+    """
+    Workaround a cloudpickle bug that causes joblib.Memory to lose the cached func __name__ inside dask processes
+    - https://github.com/cloudpipe/cloudpickle/issues/177
+
+    This workaround can be deleted when these asserts pass:
+
+        import dask
+        from joblib.func_inspect import *
+
+        load = Load()
+
+        # Works regardless of bug, since threads don't invoke cloudpickle
+        assert dask.delayed(format_signature)(load._metadata).compute(get=dask_get_for_scheduler_name('threads')) == \
+            ('load._metadata', '_metadata()')
+
+        # Requires bugfix to work, since processes marshal using cloudpickle
+        assert dask.delayed(format_signature)(load._metadata).compute(get=dask_get_for_scheduler_name('processes')) == \
+            ('load._metadata', '_metadata()')
+
+    """
+    def decorator(g):
+        g = wraps(f)(g)
+        g.func_name = f.__name__
+        return g
+    return decorator

@@ -11,6 +11,8 @@ from potoo.pandas import df_remove_unused_categories, df_reorder_cols
 
 from util import DataclassConversions
 
+Audio = audiosegment.AudioSegment
+
 
 @dataclass
 class Recording(DataclassConversions):
@@ -37,7 +39,7 @@ class Recording(DataclassConversions):
 
     # Data
     #   - Optional, for partial load
-    audio: audiosegment.AudioSegment = None
+    audio: Audio = None
 
     # Features
     #   - Optional, for partial load
@@ -75,7 +77,7 @@ def RecordingDF(*args, **kwargs) -> pd.DataFrame:
 RecOrAudioOrSignal = Union[
     Recording,  # rec as Recording
     dict,  # rec as AttrDict
-    audiosegment.AudioSegment,  # audio
+    Audio,  # audio
     Tuple[np.array, int],  # (x, sample_rate)
     np.array,  # x where sample_rate=standard_sample_rate_hz
 ]

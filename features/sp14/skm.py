@@ -87,7 +87,7 @@ class SKM(object):
         normalize=False,
         pca_whiten=True,
         do_pca=True,
-        verbose=True,
+        verbose=False,
         dask=False,
     ):
         # Args
