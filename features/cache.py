@@ -69,11 +69,11 @@ def cache_control(**kwargs):
     global cache_control_state
     orig = cache_control_state
     cache_control_state = _CacheControl(**kwargs)
-    return _cache_control_gen(orig, **kwargs)
+    return _cache_control_ctx(orig, **kwargs)
 
 
 @contextmanager
-def _cache_control_gen(orig, **kwargs):
+def _cache_control_ctx(orig, **kwargs):
     global cache_control_state
     try:
         yield

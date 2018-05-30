@@ -84,6 +84,9 @@ class Load(DataclassConfig):
             'len(recs)': len(recs),
             'len(recs) per dataset': recs.dataset.value_counts().to_dict(),
         })
+        # Performance (600 peterson recs):
+        #   - Scheduler: [TODO Measure -- 'threads' is like the outcome, like n-1 of the rest]
+        #   - Bottlenecks (no_dask): [TODO Measure]
         metadata = RecordingDF(map_with_progress(self._metadata, df_rows(recs), scheduler='threads'))
         log('Load.metadata:out', **{
             'sum(duration_h)': round_sig(metadata.duration_s.sum() / 3600, 3),
@@ -100,6 +103,7 @@ class Load(DataclassConfig):
     def _metadata(self, rec: Row) -> AttrDict:
         """metadata <- .audio"""
         audio = self._audio(rec)
+        audio = audio.unbox
         samples = audio.to_numpy_array()
         return AttrDict(
             **metadata_from_dataset(rec.id, rec.dataset),
@@ -110,13 +114,22 @@ class Load(DataclassConfig):
         )
 
     @short_circuit(lambda self, recs: recs.get('audio'))
-    def audio(self, recs: RecordingDF) -> Column[Audio]:
+    def audio(self, recs: RecordingDF) -> Column['Box[Audio]']:
         """.audio <- .path"""
         log('Load.audio:in', **{
             'len(recs)': len(recs),
             'len(recs) per dataset': recs.dataset.value_counts().to_dict(),
         })
-        audio = map_with_progress(self._audio, df_rows(recs), scheduler='processes')
+        # Performance (600 peterson recs):
+        #   - Scheduler: no_dask[.85s], synchronous[.93s], threads[.74s], processes[25s]
+        #   - Bottlenecks (no_dask):
+        #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        #             600    0.303    0.001    0.312    0.001 audio_segment.py:108(read_wav_audio)
+        #             600    0.170    0.000    0.170    0.000 {method 'read' of '_io.BufferedReader' objects}
+        #               1    0.060    0.060    0.845    0.845 <string>:1(<module>)
+        #           61176    0.018    0.000    0.039    0.000 {built-in method builtins.isinstance}
+        #             600    0.015    0.000    0.015    0.000 {built-in method io.open}
+        audio = map_with_progress(self._audio, df_rows(recs), scheduler='threads')
         log('Load.audio:out', **{
             'len(audio)': len(audio),
         })
@@ -124,7 +137,7 @@ class Load(DataclassConfig):
 
     @short_circuit(lambda self, rec: rec.get('audio'))
     # Caching doesn't help here, since our bottleneck is file read (.wav), which is also cache hit's bottleneck
-    def _audio(self, rec: Row) -> Audio:
+    def _audio(self, rec: Row) -> 'Box[Audio]':
         """audio <- .path, and (optionally) cache a standardized .wav for faster subsequent loads"""
 
         path = rec.path
@@ -155,6 +168,9 @@ class Load(DataclassConfig):
 
         # Make audiosegment.AudioSegment attrs more ergonomic
         audio = self._ergonomic_audio(audio)
+
+        # Box to avoid downstream pd.Series errors, since AudioSegment is iterable and np.array tries to flatten it
+        audio = box(audio)
 
         return audio
 

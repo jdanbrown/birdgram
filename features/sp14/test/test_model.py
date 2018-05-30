@@ -7,6 +7,7 @@ import sklearn.utils
 from cache import cache_control
 from load import Load
 from sp14.model import Features, Projection, Search
+from util import *
 
 
 @pytest.fixture(autouse=True, scope='module')
@@ -14,41 +15,83 @@ def disable_cache():
     cache_control(enabled=False)
 
 
-def test_model():
+def test_model_pipeline():
 
-    load = Load()
-    recs = load.recs(['peterson-field-guide'])[:10]
+    # Estimators
+    search = Search()
+    projection = search.projection
+    features = projection.features
+    load = features.load
 
-    # Basic features
-    features = Features()
+    # The high-level pipeline, skipping the low-level steps
+    recs = load.recs(['peterson-field-guide'])[:3]
     recs = features.transform(recs)
-
-    # Fit projection, add learned features
-    train_projection_n = 10
-    _shuf = sklearn.utils.shuffle(recs, random_state=0)
-    recs_train_projection = _shuf[:train_projection_n]
-    projection = Projection()
-    projection.fit(recs_train_projection)
+    projection.fit(recs)
     recs = projection.transform(recs)
-
-    # Fit search
-    train_n, test_n = 5, 5
-    _shuf = sklearn.utils.shuffle(recs, random_state=0)
-    recs_train, recs_test = _shuf[:train_n], _shuf[train_n : train_n + test_n]
-    search = Search(projection=projection)
-    search.fit(recs_train)
+    search.fit(recs)
 
     # Predict
-    search.species(recs_test)
-    search.species_probs(recs_test)
-    search.similar_recs(recs_test, 3)
+    search.species(recs)
+    search.species_probs(recs)
+    search.similar_recs(recs, 3)
 
     # Eval
-    search.confusion_matrix(recs_test)
-    # search.coverage_error(recs_test, by='species')  # FIXME sklearn coverage_error fails if y_true only has one class
+    search.confusion_matrix(recs)
+    # search.coverage_error(recs, by='species')  # FIXME sklearn coverage_error fails if y_true only has one class
 
 
-def test__patches():
+def test_model_pipeline_steps():
+
+    # Estimators
+    search = Search()
+    projection = search.projection
+    features = projection.features
+    load = features.load
+
+    # All the load steps
+    recs = load.recs(['peterson-field-guide'])[:3]
+    _ = recs.assign(
+        audio=load.audio,
+    )
+
+    # All the features steps
+    recs = features.transform(recs)
+    _ = recs.assign(
+        spectro=features.spectro,
+        patches=features.patches,
+    )
+
+    # All the projection steps
+    projection.fit(recs)
+    recs = projection.transform(recs)
+    _ = recs.assign(
+        proj=projection.proj,
+        agg=projection.agg,
+        feat=projection.feat,
+    )
+
+    # All the search steps
+    search.fit(recs)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize('cache_enabled,cache_refresh', [
+    (False, False),
+    (True,  False),
+    (True,  True),
+])
+@pytest.mark.parametrize('override_scheduler', [
+    'processes',
+    'threads',
+    'synchronous',
+])
+def test_model_pipeline_steps_with_cache_and_dask(override_scheduler, cache_enabled, cache_refresh):
+    with dask_get_for_scheduler_name.context(override_scheduler=override_scheduler):
+        with cache_control(enabled=cache_enabled, refresh=cache_refresh):
+            test_model_pipeline_steps()
+
+
+def test_features_patches():
 
     S = np.array([
         # f=3, t=5
@@ -128,7 +171,7 @@ def test__patches():
     ]))
 
 
-def test__transform_proj():
+def test_projection_proj():
 
     skm = AttrDict(transform=lambda X: -X)
     patches = [

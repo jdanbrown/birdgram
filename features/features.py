@@ -30,7 +30,7 @@ def df_to_recs(df: pd.DataFrame) -> List[Recording]:
         Recording(**{
             k: v
             for k, v in dict(row).items()
-            if k in [x.id for x in dataclasses.fields(Recording)]
+            if k in [x.name for x in dataclasses.fields(Recording)]
         })
         for row in df_rows(df)
     ]
@@ -38,6 +38,7 @@ def df_to_recs(df: pd.DataFrame) -> List[Recording]:
 
 def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
     Optional[Recording],  # rec if input was rec else None
+    'Box[Audio]',  # box(audio)
     Audio,  # audio
     np.array,  # x
     int,  # sample_rate
@@ -49,9 +50,13 @@ def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
     v = rec_or_audio_or_signal
     rec = audio = x = sample_rate = None
 
+    # audio as boxed audio
+    if isinstance(v, box):
+        v = v.unbox
+
     # rec as Recording/attrs
     if not isinstance(v, (dict, Audio, np.ndarray, tuple)):
-        v = {x.id: getattr(v, x.id) for x in dataclasses.fields(Recording)}
+        v = v.asdict()
 
     # rec as dict
     if isinstance(v, dict):

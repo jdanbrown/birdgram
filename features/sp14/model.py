@@ -22,7 +22,7 @@ Config
 Pipeline
     | rec     | (samples,) | (22050/s,)   | (44100/s)     | (22050/s,)
     | spectro | (f, t)     | (40, 86/s)   | (40, 43/s)    | (40, 689/s)
-    | patch   | (f*p, t)   | (40*4, 86/s) | (40*~4, 43/s) | (40*~16, 689/s)
+    | patches | (f*p, t)   | (40*4, 86/s) | (40*~4, 43/s) | (40*~16, 689/s)
     | proj    | (k, t)     | (500, 86/s)  | (500, 43/s)   | (~512, 689/s)
     | agg     | (k, a)     | (500, 3)     | (500, 2)      | (~512, ~3)
     | feat    | (k*a,)     | (1500,)      | (1000,)       | (~1536,)
@@ -98,11 +98,29 @@ class Features(DataclassConfig):
             'patch_length',
         ]})
 
+    # Optimal performance varies with cache hit/miss rate:
+    #   - 100% cache miss: row-major-synchronous[7.9s], row-major-threads[8.3s], col-major-defaults[5.2s]
+    #   - 100% cache hit:  row-major-synchronous[.61s], row-major-threads[.39s], col-major-defaults[1.2s]
+    #   - By default we choose col-major-defaults
+    #   - When the user wants to assume near-100% cache hits, they can manually `dask_opts`/`features.patches`
     @short_circuit(lambda self, recs: recs if 'patches' in recs else None)
     def transform(self, recs: RecordingDF) -> RecordingDF:
         """Adds .patches (f*p,t)"""
+        # Performance (100 peterson recs):
+        #   - Row-major: defaults[5.5s], no_dask[5.6s], synchronous[5.8s], threads[6.5s], processes[?]
+        #   - Col-major: defaults[3.1s], no_dask[5.4s], synchronous[5.9s], threads[6.0s], processes[?]
+        #   - Bottlenecks (col-major no_dask):
+        #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        #             100    1.068    0.011    2.707    0.027 spectral.py:1681(_fft_helper)
+        #             100    1.022    0.010    1.022    0.010 {built-in method numpy.fft.fftpack_lite.rfftf}
+        #            4496    0.590    0.000    0.590    0.000 {built-in method numpy.core.multiarray.array}
+        #          237664    0.349    0.000    0.349    0.000 {method 'flatten' of 'numpy.ndarray' objects}
+        #             100    0.286    0.003    3.318    0.033 spectral.py:563(spectrogram)
         return RecordingDF(recs
-            .assign(patches=self.patches)
+            # Compute col-major instead of row-major, since they each perform best with different schedulers
+            .assign(spectro=self.spectro)  # Fastest with 'threads'
+            .assign(patches=self.patches)  # Fastest with 'synchronous'
+            .drop(columns=['spectro'])  # Drop to minimize mem usage (the rows are now in cache if anyone wants them)
         )
 
     @short_circuit(lambda self, recs: recs.get('patches'))
@@ -119,7 +137,16 @@ class Features(DataclassConfig):
                 sum(x.S.shape[1] for x in xs),
             ))
         })
-        patches = map_with_progress(self._patches, df_rows(recs), scheduler='threads')
+        # Performance (100 peterson recs):
+        #   - Scheduler: no_dask[.94s], synchronous[.97s], threads[4.2s], processes[~100s]
+        #   - Bottlenecks (no_dask):
+        #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        #          237664    0.397    0.000    0.397    0.000 {method 'flatten' of 'numpy.ndarray' objects}
+        #         546/542    0.219    0.000    0.219    0.000 {built-in method numpy.core.multiarray.array}
+        #             100    0.153    0.002    0.550    0.005 model.py:170(<listcomp>)
+        #             100    0.069    0.001    0.862    0.009 model.py:163(_patches)
+        #               1    0.042    0.042    0.944    0.944 <string>:1(<module>)
+        patches = map_with_progress(self._patches, df_rows(recs), scheduler='synchronous')
         log('Features.patches:out', **{
             '(f*p, sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
@@ -135,6 +162,15 @@ class Features(DataclassConfig):
             'sum(samples_mb)': round_sig(sum(recs.get('samples_mb', [])), 3),
             'sum(samples_n)': int(sum(recs.get('samples_n', []))),
         })
+        # Performance (100 peterson recs):
+        #   - Scheduler: no_dask[4.4s], synchronous[4.7s], threads[2.2s], processes[~130s]
+        #   - Bottlenecks (no_dask):
+        #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        #             100    1.031    0.010    2.633    0.026 spectral.py:1681(_fft_helper)
+        #             100    0.996    0.010    0.996    0.010 {built-in method numpy.fft.fftpack_lite.rfftf}
+        #       3843/3839    0.333    0.000    0.334    0.000 {built-in method numpy.core.multiarray.array}
+        #             100    0.285    0.003    3.228    0.032 spectral.py:563(spectrogram)
+        #             100    0.284    0.003    0.381    0.004 signaltools.py:2464(detrend)
         spectros = map_with_progress(self._spectro, df_rows(recs), scheduler='threads')
         log('Features.spectros:out', **{
             '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
@@ -294,25 +330,64 @@ class Projection(DataclassConfig):
     @short_circuit(lambda self, recs: recs if 'feat' in recs else None)
     def transform(self, recs: RecordingDF) -> RecordingDF:
         """Adds .feat (k*a,)"""
-        return RecordingDF(recs
-            .assign(feat=self.feat)
-        )
+        # Performance (300 peterson recs):
+        #   - Row-major: no_dask[4.1s], synchronous[4.4s], threads[3.5s], processes[?]
+        #   - Col-major: no_dask[4.8s], synchronous[5.4s], threads[3.9s], processes[?]
+        #   - Bottlenecks (row-major no_dask):
+        #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        #             600    1.340    0.002    1.340    0.002 {built-in method numpy.core.multiarray.dot}
+        #            1508    0.805    0.001    0.805    0.001 {method 'reduce' of 'numpy.ufunc' objects}
+        #             300    0.777    0.003    1.039    0.003 _methods.py:86(_var)
+        #             300    0.292    0.001    0.699    0.002 base.py:99(transform)
+        #         900/300    0.235    0.000    4.004    0.013 cache.py:99(func_cached)
+        with dask_opts.context(override_scheduler='threads'):
+            return RecordingDF(recs
+                # Compute row-major with the 'threads' scheduler, since all cols perform best with 'threads'
+                .assign(feat=self.feat)
+            )
 
     @short_circuit(lambda self, recs: recs.get('feat'))
     def feat(self, recs: RecordingDF) -> Column['np.ndarray[(k*a,)]']:
         """feat (k*a,) <- .agg (k,a)"""
+        # Performance (600 peterson recs):
+        #   - Scheduler: no_dask[.37s], synchronous[.72s], threads[.60s], processes[>200s]
+        #   - Bottlenecks (no_dask):
+        #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        #       3030/3027    0.067    0.000    0.068    0.000 {built-in method numpy.core.multiarray.array}
+        #             600    0.046    0.000    0.046    0.000 model.py:376(<listcomp>)
+        #       15000/600    0.026    0.000    0.076    0.000 dataclasses.py:1014(_asdict_inner)
+        #           79220    0.020    0.000    0.037    0.000 {built-in method builtins.isinstance}
+        #           12600    0.012    0.000    0.018    0.000 copy.py:132(deepcopy)
         feat = map_with_progress(self._feat, df_rows(recs), scheduler='threads')
         return feat
 
     @short_circuit(lambda self, recs: recs.get('agg'))
     def agg(self, recs: RecordingDF) -> Column['np.ndarray[(k,a)]']:
         """agg (k,a) <- .proj (k,t)"""
+        # Performance (600 peterson recs):
+        #   - Scheduler: no_dask[7.5s], synchronous[4.7s], threads[2.2s], processes[serdes-error...]
+        #   - Bottlenecks (no_dask):
+        #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        #            2410    1.994    0.001    1.994    0.001 {method 'reduce' of 'numpy.ufunc' objects}
+        #             600    1.744    0.003    2.425    0.004 _methods.py:86(_var)
+        #             600    0.424    0.001    2.849    0.005 _methods.py:133(_std)
+        #       15000/600    0.032    0.000    0.088    0.000 dataclasses.py:1014(_asdict_inner)
+        #           82820    0.023    0.000    0.042    0.000 {built-in method builtins.isinstance}
         agg = map_with_progress(self._agg, df_rows(recs), scheduler='threads')
         return agg
 
     @short_circuit(lambda self, recs: recs.get('proj'))
     def proj(self, recs: RecordingDF) -> Column['np.ndarray[(k,t)]']:
         """proj (k,t) <- .patch (f*p,t)"""
+        # Performance (100 peterson recs):
+        #   - Scheduler: no_dask[2.3s], synchronous[1.6s], threads[1.2s], processes[>1000s]
+        #   - Bottlenecks (no_dask):
+        #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        #             200    1.236    0.006    1.236    0.006 {built-in method numpy.core.multiarray.dot}
+        #             110    0.591    0.005    0.591    0.005 {method 'reduce' of 'numpy.ufunc' objects}
+        #             100    0.185    0.002    1.052    0.011 base.py:99(transform)
+        #               1    0.163    0.163    2.260    2.260 <string>:1(<module>)
+        #             100    0.018    0.000    2.056    0.021 skm.py:433(transform)
         proj = map_with_progress(self._proj, df_rows(recs), scheduler='threads')
         return proj
 
@@ -321,15 +396,20 @@ class Projection(DataclassConfig):
     def _feat(self, rec: Row) -> 'np.ndarray[(k*a,)]':
         """feat (k*a,) <- .agg (k,a)"""
         agg = self._agg(rec)
-        return agg.T.values.flatten()
+        # Deterministic and unsurprising order for feature vectors: follow the order of agg_config.agg_funs
+        feat = np.array([
+            x
+            for agg_fun in self.agg_config.agg_funs
+            for x in agg[agg_fun]
+        ])
+        return feat
 
-    # TODO Return type probably shouldn't be a full df, since some (uncommon) usage will try to stuff it into recs.agg
     @short_circuit(lambda self, rec: rec.get('agg'))
     @cache(version=0, key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
-    def _agg(self, rec: Row) -> 'pd.DataFrame[(k,a)]':
+    def _agg(self, rec: Row) -> Mapping['a', 'np.ndarray[(k,)]']:
         """agg (k,a) <- .proj (k,t)"""
         proj = self._proj(rec)
-        return pd.DataFrame({
+        return {
             agg_fun: {
                 'mean':     lambda X: np.mean(X, axis=1),
                 'std':      lambda X: np.std(X, axis=1),
@@ -344,22 +424,22 @@ class Projection(DataclassConfig):
                 'dstd2':    lambda X: np.std(np.diff(np.diff(X, axis=1), axis=1), axis=1),
             }[agg_fun](proj)
             for agg_fun in self.agg_config.agg_funs
-        })
+        }
 
     @short_circuit(lambda self, rec: rec.get('proj'))
     @cache(version=0, key=lambda self, rec: (rec.id, self.skm_config, self.deps))
     def _proj(self, rec: Row) -> 'np.ndarray[(k,t)]':
         """proj (k,t) <- .patch (f*p,t)"""
         patches = self.features._patches(rec)  # Pull
-        # patches = rec.patches  # TODO TODO XXX
         return self.skm_.transform(patches)
 
-    # This is faster than row-at-a-time _proj by ~2x, but isn't (currently) mem safe
+    # This is faster than row-at-a-time _proj by ~2x, but isn't mem safe (but would be easy to make mem safe)
     #   - TODO Consider how to allow bulk col-at-a-time operations
     @generator_to(list)
     def _proj_bulk(self, recs: RecordingDF) -> Column['np.ndarray[(k,t)]']:
         """proj (k,t) <- .patch (f*p,t)"""
-        for recs in [recs]:  # TODO Chunk up recs to make this mem safe
+        # TODO Chunk up recs to make this mem safe
+        for recs in [recs]:
             patches = self.features.patches(recs)  # Pull
             # Concat patches (along t) so we can skm.transform them all at once
             concat_patches = np.concatenate(list(patches), axis=1)
