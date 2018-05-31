@@ -15,6 +15,20 @@ Audio = audiosegment.AudioSegment
 
 
 @dataclass
+class Species(DataclassConversions):
+    sci_name: str
+    com_name: str
+    taxon_id: str
+    species_code: str
+    taxon_order: str
+    com_name_codes: Iterable[str]
+    sci_name_codes: Iterable[str]
+    banding_codes: Iterable[str]
+    shorthand: str
+    longhand: str
+
+
+@dataclass
 class Recording(DataclassConversions):
 
     # Required (1/2)
@@ -36,6 +50,7 @@ class Recording(DataclassConversions):
     #   - Defaulted to None because dataclass non-default args can't come after default args
     id: str = None
     path: str = None
+    filesize_b: int = None
 
     # Data
     #   - Optional, for partial load
@@ -60,9 +75,9 @@ def RecordingDF(*args, **kwargs) -> pd.DataFrame:
         # Map str -> category for cols that have category dtypes available
         .pipe(lambda df: (df
             .assign(**{
-                k1: df[k1].astype('str').astype(metadata.species.df[k2].dtype)
-                for k1, k2 in cat_cols.items()
-                if k1 in df
+                rec_k: df[rec_k].astype('str').astype(metadata.species.df[species_k].dtype)
+                for rec_k, species_k in cat_cols.items()
+                if rec_k in df
             })
         ))
         # Order cols like Recording fields
@@ -81,17 +96,3 @@ RecOrAudioOrSignal = Union[
     Tuple[np.array, int],  # (x, sample_rate)
     np.array,  # x where sample_rate=standard_sample_rate_hz
 ]
-
-
-@dataclass
-class Species(DataclassConversions):
-    sci_name: str
-    com_name: str
-    taxon_id: str
-    species_code: str
-    taxon_order: str
-    com_name_codes: Iterable[str]
-    sci_name_codes: Iterable[str]
-    banding_codes: Iterable[str]
-    shorthand: str
-    longhand: str

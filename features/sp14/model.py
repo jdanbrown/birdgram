@@ -178,7 +178,7 @@ class Features(DataclassConfig):
         return spectros
 
     @short_circuit(lambda self, rec: rec.get('patches'))
-    @cache(version=0, key=lambda self, rec: (rec.id, self.patch_config, self.spectro_config, self.deps))
+    # @cache(version=0, key=lambda self, rec: (rec.id, self.patch_config, self.spectro_config, self.deps))  # TODO TODO After birdclef
     def _patches(self, rec: Row) -> 'np.ndarray[(f*p, t)]':
         """spectro (f,t) -> patch (f*p,t)"""
         (f, t, S) = self._spectro(rec)  # Cached
@@ -189,7 +189,7 @@ class Features(DataclassConfig):
         ]).T
 
     @short_circuit(lambda self, rec: rec.get('spectro'))
-    @cache(version=0, key=lambda self, rec: (rec.id, self.spectro_config, self.deps))
+    # @cache(version=0, key=lambda self, rec: (rec.id, self.spectro_config, self.deps))  # TODO TODO After birdclef
     def _spectro(self, rec: Row) -> Melspectro:
         """
         .spectro (f,t) <- .audio (samples,)
@@ -200,7 +200,9 @@ class Features(DataclassConfig):
         audio = self.load._audio(rec)  # Pull
         c = self.spectro_config
         (_rec, audio, _x, _sample_rate) = unpack_rec(audio)
-        assert audio.frame_rate == c.sample_rate, 'Expected %s, got %s' % (c.sample_rate, audio)
+        assert audio.frame_rate == c.sample_rate, 'Unsupported sample_rate[%s != %s] for audio[%s]' % (
+            audio.frame_rate, c.sample_rate, audio,
+        )
         # TODO Filter by c.f_min
         #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
         spectro = Melspectro(
@@ -427,7 +429,7 @@ class Projection(DataclassConfig):
         }
 
     @short_circuit(lambda self, rec: rec.get('proj'))
-    @cache(version=0, key=lambda self, rec: (rec.id, self.skm_config, self.deps))
+    # @cache(version=0, key=lambda self, rec: (rec.id, self.skm_config, self.deps))  # TODO TODO After birdclef
     def _proj(self, rec: Row) -> 'np.ndarray[(k,t)]':
         """proj (k,t) <- .patch (f*p,t)"""
         patches = self.features._patches(rec)  # Pull

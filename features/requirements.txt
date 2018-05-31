@@ -9,6 +9,7 @@ attrdict==2.0.0
 attrs==18.1.0
 dask[complete]==0.17.5
 dataclasses==0.6
+dateparser==0.7.0
 flake8==3.5.0
 flake8-commas==2.0.0
 flake8-import-order==0.17.1
@@ -29,6 +30,7 @@ rpy2==2.9.2 # >=2.9.2 so we have the fix for fractional -w/-h args to %R
 scikit-misc==0.1.1
 git+https://github.com/scikit-signal/pytftb@ac2b6a2
 statsmodels==0.9.0
+stringcase==1.2.0
 structlog==18.1.0
 toolz==0.9.0
 

@@ -3,7 +3,7 @@ from functools import partial
 import glob
 import os.path
 import re
-from typing import List
+from typing import Iterable, Tuple
 
 from attrdict import AttrDict
 import audiosegment
@@ -41,27 +41,50 @@ class Load(DataclassConfig):
             'cache_audio',
         ]})
 
-    def recs(self, datasets: List[str] = None, limit: int = None) -> RecordingDF:
-        """Load recs with metadata from fs"""
+    @cache(version=0)
+    def recs(
+        self,
+        datasets: Iterable[str] = None,
+        paths: Iterable[Tuple[str, str]] = None,
+        limit: int = None,
+        drop_invalid: bool = True,
+    ) -> RecordingDF:
+        """Load recs.{**metadata} from fs"""
         return RecordingDF(
-            self.recs_paths(datasets)
+            self.recs_paths(datasets, paths)
             [:limit]
             .pipe(lambda df: pd.concat(axis=1, objs=[df, self.metadata(df)]))
             .sort_values('species')
+            [lambda df: ~np.array(drop_invalid) | (df.samples_n != 0)]  # Filter out invalid/empty audios
         )
 
-    def recs_paths(self, datasets: List[str] = None) -> RecordingDF:
-        """Load recs.{id,dataset,path} <- fs"""
+    def recs_paths(
+        self,
+        datasets: Iterable[str] = None,
+        paths: Iterable[Tuple[str, str]] = None,
+    ) -> RecordingDF:
+        """Load recs.{id,dataset,path,filesize_b} <- fs"""
+        return self._recs_paths((paths or []) + [
+            (dataset, path)
+            for dataset, pattern in DATASETS.items()
+            if dataset in (datasets or [])
+            for path in glob.glob(f'{data_dir}/{pattern}')
+            if not os.path.isdir(path)
+        ])
+
+    def _recs_paths(self, paths: Iterable[Tuple[str, str]]) -> RecordingDF:
+        """Load recs.{id,dataset,path,filesize_b} <- paths"""
+        # Helpful error msg for common mistake (because 'paths' is a helpfully short but unhelpfully unclear name)
+        if paths and not isinstance(paths[0], tuple):
+            raise ValueError(f'Expected paths=[(dataset, path), ...], got paths=[{paths[0]!r}, ...]')
         return RecordingDF([
             Recording(
                 id=os.path.splitext(os.path.relpath(path, data_dir))[0],
                 dataset=dataset,
                 path=os.path.relpath(path, data_dir),
+                filesize_b=os.path.getsize(path),
             ).asdict()
-            for dataset, pattern in DATASETS.items()
-            if not datasets or dataset in datasets
-            for path in glob.glob(f'{data_dir}/{pattern}')
-            if not os.path.isdir(path)
+            for dataset, path in paths
         ])
 
     METADATA = [
@@ -87,7 +110,11 @@ class Load(DataclassConfig):
         # Performance (600 peterson recs):
         #   - Scheduler: [TODO Measure -- 'threads' is like the outcome, like n-1 of the rest]
         #   - Bottlenecks (no_dask): [TODO Measure]
-        metadata = RecordingDF(map_with_progress(self._metadata, df_rows(recs), scheduler='threads'))
+        metadata = map_with_progress(self._metadata, df_rows(recs), scheduler='threads')
+        # Filter out dropped rows (e.g. junky audio file)
+        metadata = [x for x in metadata if x is not None]
+        # Convert to df
+        metadata = RecordingDF(metadata)
         log('Load.metadata:out', **{
             'sum(duration_h)': round_sig(metadata.duration_s.sum() / 3600, 3),
             'sum(samples_mb)': round_sig(metadata.samples_mb.sum(), 3),
@@ -163,8 +190,23 @@ class Load(DataclassConfig):
                 std_audio.export(ensure_parent_dir(cache_path), 'wav')
             path = cache_path
 
-        # Caching aside, always load from disk for consistency
-        audio = audiosegment.from_file(path)
+        try:
+            # Caching aside, always load from disk for consistency
+            audio = audiosegment.from_file(path)
+        except Exception as e:
+            # "Drop" invalid audio files by replacing them with a 0s audio, so we can detect and filter out downstream
+            log('Load._audio: WARNING: Dropping invalid audio file', **dict(
+                error=str(e),
+                dataset=rec.dataset,
+                id=rec.id,
+                path=rec.path,
+                filesize_b=rec.filesize_b,
+                cache_path=path,
+                cache_filesize_b=os.path.getsize(path),
+            ))
+            audio = audiosegment.empty()
+            audio.name = path
+            audio.seg.frame_rate = c.sample_rate
 
         # Make audiosegment.AudioSegment attrs more ergonomic
         audio = self._ergonomic_audio(audio)

@@ -42,16 +42,33 @@ class species:
             (query, attr) = x
         except:
             (query, attr) = (x, None)
+        query = query or ''
         if ',' in query:
             # Map queries containing ',' to "Muliple species"
             #   - TODO Figure out a way to handle multi-labeled data
             query = '_MUL'
-        query = self._normalize_query(query or '')
+        query = self._normalize_query(query)
         species = self._df_lookup.get(query)
         if not species or not attr:
             return species
         else:
             return getattr(species, attr)
+
+    def search(self, query: str) -> pd.DataFrame:
+        tokens = query.lower().split()
+        return (self.df
+            [lambda df: (df
+                .apply(axis=1, func=lambda row: (
+                    all(
+                        any(
+                            t in x
+                            for x in row.astype('str').str.lower()
+                        )
+                        for t in tokens
+                    )
+                ))
+            )]
+        )
 
     @property
     @lru_cache()
