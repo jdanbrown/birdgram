@@ -92,18 +92,6 @@ def short_circuit(short_f):
     return decorator
 
 
-class AttrContextManager:
-
-    @contextmanager
-    def context(self, **kwargs):
-        saved = {k: v for k, v in self.__dict__.items() if k in kwargs}
-        self.__dict__.update(kwargs)
-        try:
-            yield
-        finally:
-            self.__dict__.update(saved)
-
-
 # TODO Add some sort of automatic invalidation. To manually invalidate, just go delete the file you specified.
 def cache_to_file_forever(path):
     def decorator(f):
@@ -141,6 +129,7 @@ import dataclasses
 
 
 class DataclassConfig:
+    """Expose dataclass fields via .config"""
 
     @property
     def _fields(self) -> AttrDict:
@@ -211,6 +200,76 @@ class box:
         return [box(x) for x in xs]
 
 
+## matplotlib
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+def plt_signal(y: np.array, x_scale: float = 1, show_ydtype=False, show_yticks=False):
+    # Performance on ~1.1M samples:
+    #   - ggplot+geom_line / qplot is _really_ slow (~30s)
+    #   - df.plot is decent (~800ms)
+    #   - plt.plot is fastest (~550ms)
+    plt.plot(
+        np.arange(len(y)) / x_scale,
+        y,
+    )
+    if not show_yticks:
+        # Think in terms of densities and ignore the scale of the y-axis
+        plt.yticks([])
+    if show_ydtype:
+        # But show the representation dtype so the user can stay aware of overflow and space efficiency
+        plt.ylabel(y.dtype.type.__name__)
+        if np.issubdtype(y.dtype, np.integer):
+            plt.ylim(np.iinfo(y.dtype).min, np.iinfo(y.dtype).max)
+
+
+## sklearn
+
+import re
+
+from potoo.pandas import df_reorder_cols
+import sklearn as sk
+
+
+def cv_results_dfs(cv_results: Mapping[str, list]) -> (pd.DataFrame, pd.DataFrame):
+    """Tidy dfs from a cv_results_ (e.g. from GridSearchCV)"""
+    return (
+        cv_results_summary_df(cv_results),
+        cv_results_splits_df(cv_results),
+    )
+
+
+def cv_results_summary_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
+    """Tidy the per-params facts from a cv_results_ (e.g. from GridSearchCV)"""
+    return (pd.DataFrame(cv_results)
+        [lambda df: [c for c in df.columns if not re.match(r'^split|^params$', c)]]
+        [lambda df: list(flatten([
+            [c for c in df if c.startswith('param_')],
+            [c for c in df if not c.startswith('param_') and '_train_' in c],
+            [c for c in df if not c.startswith('param_') and '_test_' in c],
+            [c for c in df if not c.startswith('param_') and c.endswith('_fit_time')],
+            [c for c in df if not c.startswith('param_') and c.endswith('_score_time')],
+        ]))]
+    )
+
+
+def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
+    """Tidy the per-split facts from a cv_results_ (e.g. from GridSearchCV)"""
+    return (pd.DataFrame(cv_results)
+        [lambda df: [c for c in df if re.match(r'^split|^param_', c)]]
+        .pipe(lambda df: pd.melt(df, value_name='score', id_vars=[c for c in df if c.startswith('param_')]))
+        .pipe(lambda df: pd.concat(axis=1, objs=[
+            df,
+            df.variable.str.extract(r'^split(?P<fold>\d+)_(?P<split>[^_]+)_[^_]+$'),
+        ]))
+        .drop(columns='variable')
+        .pipe(df_reorder_cols, last=['fold', 'split', 'score'])
+        .pipe(lambda df: df.sort_values(list(df.columns)).reset_index(drop=True))
+    )
+
+
 ## dask
 
 import multiprocessing
@@ -224,14 +283,14 @@ from dask.diagnostics import ProgressBar
 import dask.multiprocessing
 from dataclasses import dataclass
 import pandas as pd
-from potoo.util import get_cols
+from potoo.util import AttrContext, get_cols
 
 X = TypeVar('X')
 
 
 @singleton
 @dataclass
-class dask_opts(AttrContextManager):
+class dask_opts(AttrContext):
     override_dask: bool = None
     override_scheduler: bool = None
 
@@ -318,38 +377,13 @@ def dask_get_for_scheduler_name(scheduler):
     return get
 
 
-## matplotlib
-
-import matplotlib.pyplot as plt
-import numpy as np
-
-
-def plt_signal(y: np.array, x_scale: float = 1, show_ydtype=False, show_yticks=False):
-    # Performance on ~1.1M samples:
-    #   - ggplot+geom_line / qplot is _really_ slow (~30s)
-    #   - df.plot is decent (~800ms)
-    #   - plt.plot is fastest (~550ms)
-    plt.plot(
-        np.arange(len(y)) / x_scale,
-        y,
-    )
-    if not show_yticks:
-        # Think in terms of densities and ignore the scale of the y-axis
-        plt.yticks([])
-    if show_ydtype:
-        # But show the representation dtype so the user can stay aware of overflow and space efficiency
-        plt.ylabel(y.dtype.type.__name__)
-        if np.issubdtype(y.dtype, np.integer):
-            plt.ylim(np.iinfo(y.dtype).min, np.iinfo(y.dtype).max)
-
-
 ## bubo-features
 
 from datetime import datetime
 import json
 
 from dataclasses import dataclass
-from potoo.util import singleton
+from potoo.util import AttrContext, singleton
 import yaml
 
 
@@ -369,7 +403,7 @@ import yaml
 #
 # @singleton
 @dataclass
-class Log:
+class Log(AttrContext):
 
     verbose: bool = True
 

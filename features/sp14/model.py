@@ -42,9 +42,7 @@ from dataclasses import dataclass, field
 import joblib
 import numpy as np
 from potoo.util import round_sig
-import sklearn
-from sklearn.base import BaseEstimator
-from sklearn.neighbors import KNeighborsClassifier
+import sklearn as sk
 import yaml
 
 from cache import cache, cache_lambda, cache_pure_method
@@ -342,7 +340,7 @@ class Projection(DataclassConfig):
         #             300    0.777    0.003    1.039    0.003 _methods.py:86(_var)
         #             300    0.292    0.001    0.699    0.002 base.py:99(transform)
         #         900/300    0.235    0.000    4.004    0.013 cache.py:99(func_cached)
-        with dask_opts.context(override_scheduler='threads'):
+        with dask_opts(override_scheduler='threads'):
             return RecordingDF(recs
                 # Compute row-major with the 'threads' scheduler, since all cols perform best with 'threads'
                 .assign(feat=self.feat)
@@ -471,13 +469,54 @@ class Projection(DataclassConfig):
 
 
 @dataclass
-class Search(DataclassConfig):
+class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
+
+    #
+    # sklearn boilerplate [TODO Move into mixin]
+    #   - http://scikit-learn.org/dev/developers/contributing.html#rolling-your-own-estimator
+    #
+
+    def get_params(self, deep=True):
+        return self.config
+
+    def set_params(self, **params):
+        self.__dict__.update(params)
+        return self
+
+    # TODO Make this a passing test
+    #   - Fix: `projection: Projection` isn't a model param (detected because it's not a primitive type)
+    # sk.utils.estimator_checks.check_estimator(Search)
+
+    def df(self, X: Iterable, y: Iterable) -> pd.DataFrame:
+        return pd.DataFrame({
+            self._X_col: [np.array(x) for x in X],  # HACK Avoid error "Data must be 1-dimensional"
+            self._y_col: y,
+        })
+
+    def X(self, df: pd.DataFrame) -> np.ndarray:
+        return np.array(list(df[self._X_col]))
+
+    def y(self, df: pd.DataFrame) -> np.ndarray:
+        return np.array(list(df[self._y_col]))
+
+    def Xy(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+        return (self.X(df), self.y(df))
+
+    #
+    # Config
+    #
+
+    # sk
+    _X_col = 'feat'
+    _y_col = 'species'
 
     # Dependencies
     projection: Projection = Projection()
 
-    # Config
+    # Params
+    #   - TODO Pull up agg_funs from Projection (and add a self.transform to populate .feat)
     n_neighbors: int = 3
+    # verbose: bool = True  # Like GridSearchCV [TODO Hook this up to log / TODO Think through caching implications]
 
     @property
     def deps(self) -> AttrDict:
@@ -491,28 +530,49 @@ class Search(DataclassConfig):
             'n_neighbors',
         ]})
 
-    def fit(self, recs: RecordingDF) -> 'self':
+    #
+    # Fit
+    #
+
+    def fit(self, X, y) -> 'self':
+        return self.fit_recs(self.df(X, y))
+
+    def fit_recs(self, recs: RecordingDF) -> 'self':
         """feat (k*a,) -> ()"""
-        recs = self.projection.transform(recs)  # Pull
-        self.feats_ = np.array(list(recs.feat))  # Feature vectors to fit to
-        self.fit_classes_ = to_y(recs)  # The training class for each instance, to recall in similar_recs
+
+        # Pull
+        recs = self.projection.transform(recs)
+
+        # Unpack inputs
+        self.X_ = X = self.X(recs)
+        self.y_ = y = self.y(recs)
+
+        # Check inputs
+        sk.utils.validation.check_X_y(X, y)
+        self.classes_ = sk.utils.multiclass.unique_labels(y)
+
+        # Fit
         log('Search.fit:in', **{
             'recs': len(recs),
-            '(n, f*p)': self.feats_.shape,
+            '(n, f*p)': self.X_.shape,
         })
-        assert self.feats_.shape[0] == len(recs)  # knn.fit(X) wants X.shape == (n_instances, n_features)
-        self.knn_ = self._fit(recs, self.feats_, self.fit_classes_)
+        self.knn_ = self._fit_pure(recs, X, y)
         log('Search.fit:out', **{
             'knn.get_params': self.knn_.get_params(),
             'knn.classes_': sorted_species(self.knn_.classes_.tolist()),
             'knn.classes_.len': len(self.knn_.classes_),
         })
+
         return self
 
-    @cache(version=1, verbose=100, key=lambda self, recs, feats, classes: (recs.id, self.knn_config, self.deps))
-    def _fit(self, recs: RecordingDF, feats: Column, classes: Column) -> BaseEstimator:
+    # TODO Is cache helping or hurting? For knn.fit, it's slower: no_cache[1.3s], hits[1.4s], misses[1.8s]
+    # @cache(version=1, verbose=100, key=lambda self, recs, feats, classes: (
+    #     self.Xy(recs),  # Cache on bare (X, y) instead of recs.id, to accommodate sk fit(X,y)
+    #     self.knn_config, self.deps,
+    # ))
+    def _fit_pure(self, recs: RecordingDF, feats: Column, classes: Column) -> sk.base.BaseEstimator:
         """knn <- .feat (k*a,)"""
-        knn = KNeighborsClassifier(**self.knn_config)
+        knn = sk.neighbors.KNeighborsClassifier(**self.knn_config)
         return knn.fit(feats, classes)
 
     #
@@ -524,92 +584,132 @@ class Search(DataclassConfig):
         """feat (k*a,) -> species (1,)"""
 
         # Unpack inputs (i.e. split here if we need caching)
-        feats = np.array(list(recs.feat))
+        X = self.X(recs)
+        y = self.y(recs)
+        knn_ = self.knn_
 
         # Predict: .predict
         #   - Preserve recs.index in output's index, for easy joins
         species = pd.DataFrame(index=recs.index, data={
-            'species_pred': self.knn_.predict(feats),
+            'species_pred': knn_.predict(X),
         })
         log('Search.species', **{
             'recs': len(recs),
-            '(n, k*a)': feats.shape,
+            '(n, k*a)': X.shape,
             'species': len(species),
         })
 
         # Join test labels back onto the predictions, if given
         if 'species' in recs:
-            species.insert(0, 'species_true', to_y(recs))
+            species.insert(0, 'species_true', y)
 
         return species
 
     @requires_cols('feat')
     def species_probs(self, recs: RecordingDF) -> pd.DataFrame:
-        """feat (k*a,) -> species (len(fit_classes_),)"""
+        """feat (k*a,) -> species (len(y_),)"""
 
         # Unpack inputs (i.e. split here if we need caching)
-        feats = np.array(list(recs.feat))
-        knn = self.knn_
+        X = self.X(recs)
+        y = self.y(recs)
+        knn_ = self.knn_
 
         # Predict: .predict_proba
         #   - Preserve recs.index in output's index, for easy joins
-        proba = knn.predict_proba(feats)
+        proba = knn_.predict_proba(X)
         species_probs = pd.DataFrame(index=recs.index, data=[
             {i: [p, c] for i, (c, p) in enumerate(sorted(dict(row).items(), key=lambda x: (-x[1], x[0])))}
-            for i, row in pd.DataFrame(proba, columns=knn.classes_).iterrows()
+            for i, row in pd.DataFrame(proba, columns=knn_.classes_).iterrows()
         ])
         log('Search.species_probs', **{
             'recs': len(recs),
-            '(n, k*a)': feats.shape,
-            'knn.n_neighbors': self.knn_.n_neighbors,
+            '(n, k*a)': X.shape,
+            'knn.n_neighbors': knn_.n_neighbors,
             'species_probs': species_probs.shape,
         })
 
         # Join test labels back onto the predictions, if given
         if 'species' in recs:
-            species_probs.insert(0, 'species_true', to_y(recs))
+            species_probs.insert(0, 'species_true', y)
 
         return species_probs
 
+    # TODO Rethink this for non-knn classifiers
     @requires_cols('feat')
     def similar_recs(self, recs: RecordingDF, similar_n) -> pd.DataFrame:
         """feat (k*a,) -> rec (similar_n,)"""
 
         # Unpack inputs (i.e. split here if we need caching)
-        feats = np.array(list(recs.feat))
-        knn = self.knn_
-        fit_classes = self.fit_classes_  # TODO Can we get rid of this, and instead rely entirely on knn attrs?
+        X = self.X(recs)
+        y = self.y(recs)
+        y_ = self.y_
+        knn_ = self.knn_
 
         # Search: .kneighbors
         #   - Preserve recs.index in output's index, for easy joins
-        (dists, fit_is) = knn.kneighbors(feats, n_neighbors=similar_n)
+        (dists, fit_is) = knn_.kneighbors(X, n_neighbors=similar_n)
         similar_recs = pd.DataFrame(index=recs.index, data=[
             [
-                [fit_i, dist, fit_classes[fit_i]]
+                [fit_i, dist, y_[fit_i]]
                 for fit_i, dist in zip(fit_is[i], dists[i])
             ]
             for i in range(len(fit_is))
         ])
         log('Search.similar_recs', **{
             'recs': len(recs),
-            '(n, k*a)': feats.shape,
+            '(n, k*a)': X.shape,
             'similar_recs': similar_recs.shape,
         })
 
         # Join test labels back onto the predictions, if given
         if 'species' in recs:
-            similar_recs.insert(0, 'species_true', to_y(recs))
+            similar_recs.insert(0, 'species_true', y)
 
         return similar_recs
 
+    #
+    # Evaluate
+    #
+
+    def score(self, X, y) -> float:
+        """Goodness-of-fit measure (higher is better)"""
+        return self.score_recs(self.df(X, y))
+
+    def score_recs(self, recs: RecordingDF) -> float:
+        """Goodness-of-fit measure (higher is better)"""
+        return -self.coverage_error(recs)
+
+    @requires_cols('species', 'feat')
+    def coverage_error(self, recs: RecordingDF) -> float:
+        """Predict and measure coverage error"""
+        y_score = self.knn_.predict_proba(self.X(recs))
+        y_true = np.array([
+            (self.knn_.classes_ == rec.species).astype('int')
+            for i, rec in recs.iterrows()
+        ])
+        return sk.metrics.coverage_error(y_true, y_score)
+
+    @requires_cols('species', 'feat')
+    def coverage_error_by(self, recs: RecordingDF, by: str) -> "pd.DataFrame[by, 'coverage_error']":
+        """Predict and measure coverage error"""
+        if recs[by].dtype.name == 'category':
+            recs = recs.assign(**{by: recs[by].cat.remove_unused_categories()})  # Else groupby includes all categories
+        return (recs
+            .groupby(by)
+            .apply(lambda g: self.coverage_error(g.assign(**{by: g.name})))
+            .reset_index()
+            .rename(columns={0: 'coverage_error'})
+        )
+
     @requires_cols('species', 'feat')
     def confusion_matrix(self, recs: RecordingDF) -> 'pd.DataFrame[count @ (n_species, n_species)]':
+        """Predict and compute confusion matrix"""
         species = self.species(recs)
         y_true = species.species_true
         y_pred = species.species_pred
         labels = sorted_species(set(y_true) | set(y_pred))
         M = pd.DataFrame(
-            data=sklearn.metrics.confusion_matrix(y_true, y_pred, labels),
+            data=sk.metrics.confusion_matrix(y_true, y_pred, labels),
             index=pd.Series(labels, name='true'),
             columns=pd.Series(labels, name='pred'),
         )
@@ -619,27 +719,8 @@ class Search(DataclassConfig):
         return M
 
     @requires_cols('species', 'feat')
-    def coverage_error(self, recs: RecordingDF, by: str) -> 'pd.DataFrame[by, coverage_error]':
-        if recs[by].dtype.name == 'category':
-            recs[by] = recs[by].cat.remove_unused_categories()  # Else groupby includes all categories
-        return (recs
-            .groupby(by)
-            .apply(lambda g: self._coverage_error(g.assign(**{by: g.name})))
-            .reset_index()
-            .rename(columns={0: 'coverage_error'})
-        )
-
-    @requires_cols('species', 'feat')
-    def _coverage_error(self, recs: RecordingDF) -> float:
-        y_true = np.array([
-            (self.knn_.classes_ == rec.species).astype('int')
-            for i, rec in recs.iterrows()
-        ])
-        y_score = self.knn_.predict_proba(list(recs.feat))
-        return sklearn.metrics.coverage_error(y_true, y_score)
-
-    @requires_cols('species')
     def plot_confusion_matrix(self, recs: RecordingDF, **kwargs):
+        """Predict and plot confusion matrix"""
         confusion_matrix = self.confusion_matrix(recs)
         plot_confusion_matrix(
             confusion_matrix.as_matrix(),

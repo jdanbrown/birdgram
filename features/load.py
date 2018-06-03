@@ -9,7 +9,7 @@ from attrdict import AttrDict
 import audiosegment
 from dataclasses import dataclass
 import pandas as pd
-from potoo.pandas import requires_cols, df_cats_to_str
+from potoo.pandas import requires_cols
 from potoo.util import round_sig
 
 from cache import cache

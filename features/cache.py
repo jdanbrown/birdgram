@@ -39,8 +39,10 @@ from functools import partial, wraps
 import uuid
 
 import attr
+from dataclasses import dataclass
 from joblib import Memory
 from joblib.memory import MemorizedFunc
+from potoo.util import AttrContext
 
 from constants import cache_dir
 from util import singleton
@@ -55,30 +57,11 @@ memory = Memory(
 )
 
 
-# Use slots so that we fail loudly on unknown fields in `with cache_control(...)`
-@attr.s(slots=True)
-class _CacheControl:
-    enabled = attr.ib(True)
-    refresh = attr.ib(False)
-
-
-cache_control_state = _CacheControl()
-
-
-def cache_control(**kwargs):
-    global cache_control_state
-    orig = cache_control_state
-    cache_control_state = _CacheControl(**kwargs)
-    return _cache_control_ctx(orig, **kwargs)
-
-
-@contextmanager
-def _cache_control_ctx(orig, **kwargs):
-    global cache_control_state
-    try:
-        yield
-    finally:
-        cache_control_state = orig
+@singleton
+@dataclass
+class cache_control(AttrContext):
+    enabled: bool = True
+    refresh: bool = False
 
 
 # TODO This is becoming really hacky; consider making a separate api that reuses joblib storage but not joblib.Memory
@@ -104,12 +87,12 @@ def cache(
         @wraps_workaround(func_cached)
         def g(*args, **kwargs):
             ignore = dict(args=args, kwargs=kwargs)
-            if not cache_control_state.enabled:
+            if not cache_control.enabled:
                 cache_key = None
                 return func_cached.func(cache_key, ignore)
             else:
                 cache_key = dict(version=version, key=key(*args, **kwargs))
-                if cache_control_state.refresh:
+                if cache_control.refresh:
                     _clear_result(func_cached, cache_key, ignore)
                 return func_cached(cache_key, ignore)
         return g

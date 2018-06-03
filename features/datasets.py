@@ -221,6 +221,8 @@ def XCDF(*args, **kwargs) -> pd.DataFrame:
 @singleton
 class birdclef2015:
 
+    # TODO TODO Finish fleshing this out (20180530_dataset_birdclef.ipynb + 20180524_eval_birdclef.ipynb)
+
     def xml_data(self, recs: RecordingDF) -> pd.DataFrame:
         return pd.DataFrame([self.xml_dict_for_rec(rec) for rec in df_rows(recs)])
 
