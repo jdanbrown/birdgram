@@ -56,6 +56,7 @@ class Load(DataclassConfig):
             .pipe(lambda df: pd.concat(axis=1, objs=[df, self.metadata(df)]))
             .sort_values('species')
             [lambda df: ~np.array(drop_invalid) | (df.samples_n != 0)]  # Filter out invalid/empty audios
+            .reset_index(drop=True)
         )
 
     def recs_paths(

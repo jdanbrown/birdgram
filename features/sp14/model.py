@@ -30,6 +30,7 @@ Pipeline
 
 import copy
 from datetime import datetime
+from frozendict import frozendict
 import hashlib
 import itertools
 import json
@@ -487,20 +488,24 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     #   - Fix: `projection: Projection` isn't a model param (detected because it's not a primitive type)
     # sk.utils.estimator_checks.check_estimator(Search)
 
-    def df(self, X: Iterable, y: Iterable) -> pd.DataFrame:
+    @classmethod
+    def df(cls, X: Iterable, y: Iterable) -> pd.DataFrame:
         return pd.DataFrame({
-            self._X_col: [np.array(x) for x in X],  # HACK Avoid error "Data must be 1-dimensional"
-            self._y_col: y,
+            cls._X_col: [np.array(x) for x in X],  # HACK Avoid error "Data must be 1-dimensional"
+            cls._y_col: y,
         })
 
-    def X(self, df: pd.DataFrame) -> np.ndarray:
-        return np.array(list(df[self._X_col]))
+    @classmethod
+    def X(cls, df: pd.DataFrame) -> np.ndarray:
+        return np.array(list(df[cls._X_col]))
 
-    def y(self, df: pd.DataFrame) -> np.ndarray:
-        return np.array(list(df[self._y_col]))
+    @classmethod
+    def y(cls, df: pd.DataFrame) -> np.ndarray:
+        return np.array(list(df[cls._y_col]))
 
-    def Xy(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-        return (self.X(df), self.y(df))
+    @classmethod
+    def Xy(cls, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
+        return (cls.X(df), cls.y(df))
 
     #
     # Config
@@ -515,7 +520,9 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
 
     # Params
     #   - TODO Pull up agg_funs from Projection (and add a self.transform to populate .feat)
-    n_neighbors: int = 3
+    classifier: str = 'cls: knn, n_neighbors: 3'
+    # classifier: str = 'cls: svm, random_state: 0, probability: true, kernel: rbf, C: 10'  # Like [SBF16]
+    # classifier: str = 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 200'  # Like [SP14]
     # verbose: bool = True  # Like GridSearchCV [TODO Hook this up to log / TODO Think through caching implications]
 
     @property
@@ -525,55 +532,49 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         ]})
 
     @property
-    def knn_config(self) -> AttrDict:
-        return AttrDict({k: v for k, v in self.config.items() if k in [
-            'n_neighbors',
-        ]})
+    def classifier_config(self) -> AttrDict:
+        return AttrDict(yaml.safe_load('{%s}' % self.classifier))
 
     #
     # Fit
     #
 
-    def fit(self, X, y) -> 'self':
-        return self.fit_recs(self.df(X, y))
-
     def fit_recs(self, recs: RecordingDF) -> 'self':
         """feat (k*a,) -> ()"""
+        recs = self.projection.transform(recs)  # Pull
+        return self.fit(*self.Xy(recs))
 
-        # Pull
-        recs = self.projection.transform(recs)
-
-        # Unpack inputs
-        self.X_ = X = self.X(recs)
-        self.y_ = y = self.y(recs)
-
-        # Check inputs
+    def fit(self, X, y) -> 'self':
+        """feat (k*a,) -> ()"""
         sk.utils.validation.check_X_y(X, y)
+        self.X_ = X
+        self.y_ = y
         self.classes_ = sk.utils.multiclass.unique_labels(y)
-
-        # Fit
         log('Search.fit:in', **{
-            'recs': len(recs),
-            '(n, f*p)': self.X_.shape,
+            'recs': len(X),
+            '(n, f*p)': X.shape,
         })
-        self.knn_ = self._fit_pure(recs, X, y)
+        self.classifier_ = self._fit_pure(X, y)
         log('Search.fit:out', **{
-            'knn.get_params': self.knn_.get_params(),
-            'knn.classes_': sorted_species(self.knn_.classes_.tolist()),
-            'knn.classes_.len': len(self.knn_.classes_),
+            'classifier.get_params': self.classifier_.get_params(),
+            'classifier.classes_': sorted_species(self.classifier_.classes_.tolist()),
+            'classifier.classes_.len': len(self.classifier_.classes_),
         })
-
         return self
 
-    # TODO Is cache helping or hurting? For knn.fit, it's slower: no_cache[1.3s], hits[1.4s], misses[1.8s]
-    # @cache(version=1, verbose=100, key=lambda self, recs, feats, classes: (
-    #     self.Xy(recs),  # Cache on bare (X, y) instead of recs.id, to accommodate sk fit(X,y)
-    #     self.knn_config, self.deps,
-    # ))
-    def _fit_pure(self, recs: RecordingDF, feats: Column, classes: Column) -> sk.base.BaseEstimator:
-        """knn <- .feat (k*a,)"""
-        knn = sk.neighbors.KNeighborsClassifier(**self.knn_config)
-        return knn.fit(feats, classes)
+    @cache(version=3, verbose=0, key=lambda self, X, y: (self.classifier_config, X, y))
+    def _fit_pure(self, X: np.ndarray, y: np.ndarray) -> sk.base.BaseEstimator:
+        """classifier <- .feat (k*a,)"""
+        classifier = self._make_classifier(**self.classifier_config)
+        return classifier.fit(X, y)
+
+    def _make_classifier(self, cls, **kwargs) -> sk.base.BaseEstimator:
+        cls = {
+            'knn': 'sk.neighbors.KNeighborsClassifier',
+            'svm': 'sk.svm.SVC',
+            'rf': 'sk.ensemble.RandomForestClassifier',
+        }.get(cls, cls)
+        return eval(cls)(**kwargs)
 
     #
     # Predict
@@ -586,18 +587,18 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         # Unpack inputs (i.e. split here if we need caching)
         X = self.X(recs)
         y = self.y(recs)
-        knn_ = self.knn_
+        classifier_ = self.classifier_
 
         # Predict: .predict
         #   - Preserve recs.index in output's index, for easy joins
         species = pd.DataFrame(index=recs.index, data={
-            'species_pred': knn_.predict(X),
+            'species_pred': classifier_.predict(X),
         })
-        log('Search.species', **{
-            'recs': len(recs),
-            '(n, k*a)': X.shape,
-            'species': len(species),
-        })
+        # log('Search.species', **{
+        #     'recs': len(recs),
+        #     '(n, k*a)': X.shape,
+        #     'species': len(species),
+        # })
 
         # Join test labels back onto the predictions, if given
         if 'species' in recs:
@@ -612,21 +613,21 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         # Unpack inputs (i.e. split here if we need caching)
         X = self.X(recs)
         y = self.y(recs)
-        knn_ = self.knn_
+        classifier_ = self.classifier_
 
         # Predict: .predict_proba
         #   - Preserve recs.index in output's index, for easy joins
-        proba = knn_.predict_proba(X)
+        proba = classifier_.predict_proba(X)
         species_probs = pd.DataFrame(index=recs.index, data=[
             {i: [p, c] for i, (c, p) in enumerate(sorted(dict(row).items(), key=lambda x: (-x[1], x[0])))}
-            for i, row in pd.DataFrame(proba, columns=knn_.classes_).iterrows()
+            for i, row in pd.DataFrame(proba, columns=classifier_.classes_).iterrows()
         ])
-        log('Search.species_probs', **{
-            'recs': len(recs),
-            '(n, k*a)': X.shape,
-            'knn.n_neighbors': knn_.n_neighbors,
-            'species_probs': species_probs.shape,
-        })
+        # log('Search.species_probs', **{
+        #     'recs': len(recs),
+        #     '(n, k*a)': X.shape,
+        #     # 'knn.n_neighbors': knn_.n_neighbors,
+        #     'species_probs': species_probs.shape,
+        # })
 
         # Join test labels back onto the predictions, if given
         if 'species' in recs:
@@ -655,11 +656,11 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
             ]
             for i in range(len(fit_is))
         ])
-        log('Search.similar_recs', **{
-            'recs': len(recs),
-            '(n, k*a)': X.shape,
-            'similar_recs': similar_recs.shape,
-        })
+        # log('Search.similar_recs', **{
+        #     'recs': len(recs),
+        #     '(n, k*a)': X.shape,
+        #     'similar_recs': similar_recs.shape,
+        # })
 
         # Join test labels back onto the predictions, if given
         if 'species' in recs:
@@ -673,35 +674,49 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
 
     def score(self, X, y) -> float:
         """Goodness-of-fit measure (higher is better)"""
-        return self.score_recs(self.df(X, y))
+        return -self.coverage_error(X, y)
 
+    def coverage_error(self, X, y, agg=np.median) -> float:
+        """Predict and measure aggregate coverage error"""
+        return agg(self.coverage_errors(X, y))
+
+    def coverage_errors(self, X, y) -> 'np.ndarray[int @ len(X)]':
+        """Predict and measure each instance's coverage error (avoid sk's internal np.mean so we can do our own agg)"""
+        y_scores = self.classifier_.predict_proba(X)
+        y_trues = self.classifier_.classes_ == y[:, None]
+        return np.array([
+            sk.metrics.coverage_error([y_true], [y_score])
+            for y_true, y_score in zip(y_trues, y_scores)
+        ])
+
+    @requires_cols('feat', 'species')
     def score_recs(self, recs: RecordingDF) -> float:
         """Goodness-of-fit measure (higher is better)"""
-        return -self.coverage_error(recs)
+        return self.score(*self.Xy(recs))
 
-    @requires_cols('species', 'feat')
-    def coverage_error(self, recs: RecordingDF) -> float:
+    @requires_cols('feat', 'species')
+    def coverage_error_recs(self, recs: RecordingDF, **kwargs) -> float:
         """Predict and measure coverage error"""
-        y_score = self.knn_.predict_proba(self.X(recs))
-        y_true = np.array([
-            (self.knn_.classes_ == rec.species).astype('int')
-            for i, rec in recs.iterrows()
-        ])
-        return sk.metrics.coverage_error(y_true, y_score)
+        return self.coverage_error(*self.Xy(recs), **kwargs)
 
-    @requires_cols('species', 'feat')
-    def coverage_error_by(self, recs: RecordingDF, by: str) -> "pd.DataFrame[by, 'coverage_error']":
-        """Predict and measure coverage error"""
+    @requires_cols('feat', 'species')
+    def coverage_errors_recs(self, recs: RecordingDF) -> RecordingDF:
+        """Predict and measure each instance's coverage error (avoid sk's internal np.mean so we can do our own agg)"""
+        return recs.assign(coverage_error=self.coverage_errors(*self.Xy(recs)))
+
+    @requires_cols('feat', 'species')
+    def coverage_errors_recs_by(self, recs: RecordingDF, by: str, **kwargs) -> "pd.DataFrame[by, 'coverage_error']":
+        """Predict and measure coverage error, grouped by recs[by]"""
         if recs[by].dtype.name == 'category':
             recs = recs.assign(**{by: recs[by].cat.remove_unused_categories()})  # Else groupby includes all categories
         return (recs
             .groupby(by)
-            .apply(lambda g: self.coverage_error(g.assign(**{by: g.name})))
+            .apply(lambda g: self.coverage_error_recs(g.assign(**{by: g.name}), **kwargs))
             .reset_index()
             .rename(columns={0: 'coverage_error'})
         )
 
-    @requires_cols('species', 'feat')
+    @requires_cols('feat', 'species')
     def confusion_matrix(self, recs: RecordingDF) -> 'pd.DataFrame[count @ (n_species, n_species)]':
         """Predict and compute confusion matrix"""
         species = self.species(recs)
@@ -718,7 +733,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         })
         return M
 
-    @requires_cols('species', 'feat')
+    @requires_cols('feat', 'species')
     def plot_confusion_matrix(self, recs: RecordingDF, **kwargs):
         """Predict and plot confusion matrix"""
         confusion_matrix = self.confusion_matrix(recs)

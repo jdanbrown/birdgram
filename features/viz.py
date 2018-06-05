@@ -145,6 +145,8 @@ def plot_patches(patches, f_bins, patch_length, raw=False, rows=None, sort={}, *
 def plot_confusion_matrix(
     confusion_matrix: np.ndarray,
     labels: Iterable[str],
+    title: str = None,
+    title_y: float = 1.05,  # Fussy
     normalize=False,
     raw=False,
     **kwargs,
@@ -168,6 +170,8 @@ def plot_confusion_matrix(
         plt.yticks(range(len(labels)), labels)
         plt.ylabel('True')
         plt.xlabel('Pred')
+        if title:
+            plt.title(title, y=title_y)
         plt.tight_layout()
         thresh = M.max() / 2.
         for i, j in itertools.product(range(M.shape[0]), range(M.shape[1])):

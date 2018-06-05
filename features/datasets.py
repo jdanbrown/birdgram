@@ -68,6 +68,7 @@ class xc:
     # TODO Scrape more (non-audio) metadata from .url (e.g. https://www.xeno-canto.org/417638):
     #   - remarks
     #   - background species
+    #   - duration
 
     dir: str = f'{data_dir}/xc'
     metadata_dir: str = f'{dir}/metadata'

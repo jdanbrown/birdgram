@@ -1,4 +1,5 @@
 from collections import *
+import contextlib
 import glob
 import os.path
 from typing import *
@@ -20,6 +21,7 @@ from potoo.plot import *
 from potoo.util import *
 import requests
 import sklearn as sk
+from tqdm import tqdm
 
 from cache import *
 from constants import *

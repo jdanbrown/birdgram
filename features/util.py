@@ -156,19 +156,20 @@ class DataclassConversions:
 from collections import OrderedDict
 import tempfile
 import time
-from typing import Iterable
+from typing import Iterable, Iterator
 import uuid
 
 from dataclasses import dataclass
 import pandas as pd
+from potoo.pandas import df_flatmap
 
 
 Column = Iterable
 Row = pd.Series
 
 
-def df_rows(df):
-    return [row for i, row in df.iterrows()]
+def df_rows(df) -> Iterator[Row]:
+    return (row for i, row in df.iterrows())
 
 
 def df_flatmap_list_col(df, col_name, col_f=lambda s: s):
@@ -178,15 +179,6 @@ def df_flatmap_list_col(df, col_name, col_f=lambda s: s):
             OrderedDict({**row, col_name: x})
             for x in row[col_name]
         ])
-    )
-
-
-# Based on https://github.com/pandas-dev/pandas/issues/8517#issuecomment-247785821
-def df_flatmap(df, f):
-    return pd.DataFrame(
-        row_out
-        for _, row_in in df.iterrows()
-        for row_out in f(row_in)
     )
 
 
@@ -228,9 +220,13 @@ def plt_signal(y: np.array, x_scale: float = 1, show_ydtype=False, show_yticks=F
 ## sklearn
 
 import re
+from typing import Callable, Iterable, TypeVar
 
 from potoo.pandas import df_reorder_cols
 import sklearn as sk
+import sklearn.ensemble  # So that sk.ensemble.RandomForestClassifier is available, for export
+
+X = TypeVar('X')
 
 
 def cv_results_dfs(cv_results: Mapping[str, list]) -> (pd.DataFrame, pd.DataFrame):
@@ -270,13 +266,42 @@ def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
     )
 
 
+def _df_apply_progress_joblib(
+    df: pd.DataFrame,
+    f: Callable[['Row'], 'Row'],
+    use_joblib=True,
+    **kwargs,
+):
+    return pd.DataFrame(_map_progress_joblib(
+        f=lambda row: f(row),
+        xs=[row for i, row in df.iterrows()],
+        **kwargs,
+    ))
+
+
+def _map_progress_joblib(
+    f: Callable[[X], X],
+    xs: Iterable[X],
+    use_joblib=True,
+    backend='threading',  # 'threading' | 'multiprocessing' [FIXME 'multiprocessing' is slow/dead with timeout errors]
+    **kwargs,
+) -> Iterable[X]:
+    if not use_joblib:
+        return list(map(f, xs))
+    else:
+        return joblib.Parallel(
+            backend=backend,
+            **kwargs,
+        )(joblib.delayed(f)(x) for x in xs)
+
+
 ## dask
 
 import multiprocessing
 from typing import Callable, Iterable, TypeVar
 
 from attrdict import AttrDict
-import dask as _dask
+import dask
 import dask.bag
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
@@ -291,53 +316,35 @@ X = TypeVar('X')
 @singleton
 @dataclass
 class dask_opts(AttrContext):
-    override_dask: bool = None
+    override_use_dask: bool = None
     override_scheduler: bool = None
 
 
-def df_apply_with_progress(
+def _df_apply_progress_dask(
     df: pd.DataFrame,
     f: Callable[['Row'], 'Row'],
-    dask=True,
-    scheduler='threads',  # 'processes' | 'threads' | 'synchronous'
-    npartitions=None,
-    chunksize=None,
     **kwargs,
 ):
-    """
-    Example usage:
-        df.pipe(df_apply_with_progress, lambda row:
-            ...  # Transform row
-        ))
-    """
-    dask = coalesce(dask_opts.override_dask, dask)
-    scheduler = coalesce(dask_opts.override_scheduler, scheduler)
-    if not dask:
-        return df.apply(axis=1, func=f)
-    else:
-        with ProgressBar(width=get_cols() - 30):
-            if not npartitions and not chunksize:
-                (unit_sec, meta) = timed(lambda: df[:1].apply(axis=1, func=f))
-                npartitions = _npartitions_for_unit_sec(len(df), unit_sec, **kwargs)
-            return (dd
-                .from_pandas(df, npartitions=npartitions, chunksize=chunksize)
-                .apply(axis=1, func=f, meta=meta)
-                .compute(get=dask_get_for_scheduler_name(scheduler))
-            )
+    return pd.DataFrame(_map_progress_dask(
+        f=lambda row: f(row),
+        xs=[row for i, row in df.iterrows()],
+        **kwargs,
+    ))
 
 
-def map_with_progress(
+def _map_progress_dask(
     f: Callable[[X], X],
     xs: Iterable[X],
-    dask=True,
-    scheduler='threads',  # 'processes' | 'threads' | 'synchronous'
+    use_dask=True,
+    scheduler='threads',  # 'processes' | 'threads' | 'synchronous' [FIXME 'processes' hangs before forking]
     partition_size=None,
     npartitions=None,
+    get_kwargs=None,  # TODO Sane default for num_workers (i.e. num procs) when scheduler='processes'
     **kwargs,
 ) -> Iterable[X]:
-    dask = coalesce(dask_opts.override_dask, dask)
+    use_dask = coalesce(dask_opts.override_use_dask, use_dask)
     scheduler = coalesce(dask_opts.override_scheduler, scheduler)
-    if not dask:
+    if not use_dask:
         return list(map(f, xs))
     else:
         # HACK dask.bag.from_sequence([pd.Series(...), ...]) barfs -- workaround by boxing it
@@ -346,13 +353,14 @@ def map_with_progress(
         wrap, unwrap = (lambda x: box(x)), (lambda x: x.unbox)
         with ProgressBar(width=get_cols() - 30):
             if not partition_size and not npartitions:
+                xs = list(xs)
                 (unit_sec, _) = timed(lambda: list(map(f, xs[:1])))
                 npartitions = _npartitions_for_unit_sec(len(xs), unit_sec, **kwargs)
-            return (_dask.bag
+            return (dask.bag
                 .from_sequence(map(wrap, xs), partition_size=partition_size, npartitions=npartitions)
                 .map(unwrap)
                 .map(f)
-                .compute(get=dask_get_for_scheduler_name(scheduler))
+                .compute(get=dask_get_for_scheduler_name(scheduler, **(get_kwargs or {})))
             )
 
 
@@ -365,7 +373,7 @@ def _npartitions_for_unit_sec(n: int, unit_sec: float, target_sec_per_partition=
 
 
 # Mimic http://dask.pydata.org/en/latest/scheduling.html
-def dask_get_for_scheduler_name(scheduler):
+def dask_get_for_scheduler_name(scheduler, **kwargs):
     if isinstance(scheduler, str):
         get = {
             'synchronous': dask.get,
@@ -374,7 +382,73 @@ def dask_get_for_scheduler_name(scheduler):
         }[scheduler]
     else:
         get = scheduler
-    return get
+    return partial(get, **kwargs)
+
+
+## sklearn / dask
+
+import types
+from typing import Callable, Iterable, TypeVar, Union
+
+import joblib
+from tqdm import tqdm
+
+X = TypeVar('X')
+
+
+def df_apply_progress(
+    *args,
+    use='sync',  # 'sync' | 'dask' | 'joblib'
+    **kwargs,
+) -> pd.DataFrame:
+    return ({
+        'sync': _df_apply_progress_sync,
+        'dask': _df_apply_progress_dask,
+        'joblib': _df_apply_progress_joblib,
+    }[use])(*args, **kwargs)
+
+
+def map_progress(
+    *args,
+    use='sync',  # 'sync' | 'dask' | 'joblib'
+    **kwargs,
+) -> Iterable[X]:
+    return ({
+        'sync': _map_progress_sync,
+        'dask': _map_progress_dask,
+        'joblib': _map_progress_joblib,
+    }[use])(*args, **kwargs)
+
+
+def _df_apply_progress_sync(
+    df: pd.DataFrame,
+    f: Callable[['Row'], 'Row'],
+    **kwargs,
+) -> pd.DataFrame:
+    return pd.DataFrame(_map_progress_sync(
+        f=lambda row: f(row),
+        xs=[row for i, row in df.iterrows()],
+        **kwargs,
+    ))
+
+
+def _map_progress_sync(
+    f: Callable[[X], X],
+    xs: Iterable[X],
+    **kwargs,
+) -> Iterable[X]:
+    return list(iter_progress(map(f, xs)))
+
+
+def iter_progress(
+    xs: Iterator[X],
+    n: int = None,
+    use_tqdm=True,
+) -> Iterator[X]:
+    if use_tqdm:
+        return tqdm(xs, total=n)
+    else:
+        return xs
 
 
 ## bubo-features
