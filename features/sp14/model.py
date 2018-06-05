@@ -145,7 +145,7 @@ class Features(DataclassConfig):
         #             100    0.153    0.002    0.550    0.005 model.py:170(<listcomp>)
         #             100    0.069    0.001    0.862    0.009 model.py:163(_patches)
         #               1    0.042    0.042    0.944    0.944 <string>:1(<module>)
-        patches = map_with_progress(self._patches, df_rows(recs), scheduler='synchronous')
+        patches = map_progress(self._patches, df_rows(recs), use='dask', scheduler='synchronous')
         log('Features.patches:out', **{
             '(f*p, sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
@@ -170,7 +170,7 @@ class Features(DataclassConfig):
         #       3843/3839    0.333    0.000    0.334    0.000 {built-in method numpy.core.multiarray.array}
         #             100    0.285    0.003    3.228    0.032 spectral.py:563(spectrogram)
         #             100    0.284    0.003    0.381    0.004 signaltools.py:2464(detrend)
-        spectros = map_with_progress(self._spectro, df_rows(recs), scheduler='threads')
+        spectros = map_progress(self._spectro, df_rows(recs), use='dask', scheduler='threads')
         log('Features.spectros:out', **{
             '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
         })
@@ -359,7 +359,7 @@ class Projection(DataclassConfig):
         #       15000/600    0.026    0.000    0.076    0.000 dataclasses.py:1014(_asdict_inner)
         #           79220    0.020    0.000    0.037    0.000 {built-in method builtins.isinstance}
         #           12600    0.012    0.000    0.018    0.000 copy.py:132(deepcopy)
-        feat = map_with_progress(self._feat, df_rows(recs), scheduler='threads')
+        feat = map_progress(self._feat, df_rows(recs), use='dask', scheduler='threads')
         return feat
 
     @short_circuit(lambda self, recs: recs.get('agg'))
@@ -374,7 +374,7 @@ class Projection(DataclassConfig):
         #             600    0.424    0.001    2.849    0.005 _methods.py:133(_std)
         #       15000/600    0.032    0.000    0.088    0.000 dataclasses.py:1014(_asdict_inner)
         #           82820    0.023    0.000    0.042    0.000 {built-in method builtins.isinstance}
-        agg = map_with_progress(self._agg, df_rows(recs), scheduler='threads')
+        agg = map_progress(self._agg, df_rows(recs), use='dask', scheduler='threads')
         return agg
 
     @short_circuit(lambda self, recs: recs.get('proj'))
@@ -389,7 +389,7 @@ class Projection(DataclassConfig):
         #             100    0.185    0.002    1.052    0.011 base.py:99(transform)
         #               1    0.163    0.163    2.260    2.260 <string>:1(<module>)
         #             100    0.018    0.000    2.056    0.021 skm.py:433(transform)
-        proj = map_with_progress(self._proj, df_rows(recs), scheduler='threads')
+        proj = map_progress(self._proj, df_rows(recs), use='dask', scheduler='threads')
         return proj
 
     @short_circuit(lambda self, rec: rec.get('feat'))
@@ -562,7 +562,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         })
         return self
 
-    @cache(version=3, verbose=0, key=lambda self, X, y: (self.classifier_config, X, y))
+    @cache(version=3, key=lambda self, X, y: (self.classifier_config, X, y))
     def _fit_pure(self, X: np.ndarray, y: np.ndarray) -> sk.base.BaseEstimator:
         """classifier <- .feat (k*a,)"""
         classifier = self._make_classifier(**self.classifier_config)
@@ -680,6 +680,8 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         """Predict and measure aggregate coverage error"""
         return agg(self.coverage_errors(X, y))
 
+    # TODO TODO Spending a lot of CV time in scoring, but it's because we do it ~10K times, and cached read is ~10x slower...
+    # @cache(version=0, key=lambda self, X, y: (self.classifier_, X, y))
     def coverage_errors(self, X, y) -> 'np.ndarray[int @ len(X)]':
         """Predict and measure each instance's coverage error (avoid sk's internal np.mean so we can do our own agg)"""
         y_scores = self.classifier_.predict_proba(X)

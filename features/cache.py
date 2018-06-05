@@ -50,7 +50,8 @@ from util import singleton
 memory = Memory(
     cachedir=cache_dir,  # It adds its own joblib/ subdir
     invalidate_on_code_change=False,
-    verbose=0,  # Log nothing
+    verbose=-1,  # Log '.'/'!' on hit/miss [HACK HACK HACK]
+    # verbose=0,  # Log nothing
     # verbose=1,  # Log cache miss
     # verbose=10,  # Log cache miss, cache hit [need >10 to log "Function has changed" before "Clearing cache"]
     # verbose=100,  # Log cache miss, cache hit, plus extra
