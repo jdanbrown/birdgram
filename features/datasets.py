@@ -129,7 +129,7 @@ class xc:
 
 
 @dataclass
-class XCMetadata(DataclassConversions):
+class XCMetadata(DataclassUtil):
     """xeno-canto recording, lightly adapted from the XC api [https://www.xeno-canto.org/article/153]"""
     species_code: str  # Synthetic FK to metadata.species
     id: str
@@ -259,7 +259,7 @@ class birdclef2015:
 
 
 @dataclass
-class Birdclef2015Rec(DataclassConversions):
+class Birdclef2015Rec(DataclassUtil):
     """birdclef2015 recording"""
     media_id: int
     class_id: str

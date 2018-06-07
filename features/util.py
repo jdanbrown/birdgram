@@ -123,32 +123,40 @@ def ls(dir):
 ## dataclasses
 
 from collections import OrderedDict
+import sys
 
 from attrdict import AttrDict
 import dataclasses
 
 
-class DataclassConfig:
-    """Expose dataclass fields via .config"""
+class DataclassUtil:
+    """Things I wish all dataclasses had"""
 
-    @property
-    def _fields(self) -> AttrDict:
-        return AttrDict(dataclasses.asdict(self))
+    def asdict(self) -> dict:
+        """Convert to dict preserving field order, e.g. for df rows"""
+        return OrderedDict(dataclasses.asdict(self))
+
+    def asattr(self) -> AttrDict:
+        return AttrDict(self.asdict())
+
+    def __sizeof__(self):
+        try:
+            from dask.sizeof import sizeof
+        except:
+            sizeof = sys.getsizeof
+        return sizeof(list(self.asdict().items()))
+
+
+class DataclassConfig(DataclassUtil):
+    """Expose dataclass fields via .config"""
 
     @property
     def config(self) -> AttrDict:
         return {
             k: v
-            for k, v in self._fields.items()
+            for k, v in self.asattr().items()
             if k not in (self.deps or {})
         }
-
-
-class DataclassConversions:
-
-    def asdict(self) -> dict:
-        """Convert to dict preserving field order, e.g. for df rows"""
-        return OrderedDict(dataclasses.asdict(self))
 
 
 ## pandas
@@ -229,17 +237,69 @@ import sklearn.ensemble  # So that sk.ensemble.RandomForestClassifier is availab
 X = TypeVar('X')
 
 
-def cv_results_dfs(cv_results: Mapping[str, list]) -> (pd.DataFrame, pd.DataFrame):
-    """Tidy dfs from a cv_results_ (e.g. from GridSearchCV)"""
+def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
+    """Tidy the per-split facts from a cv_results_ (e.g. GridSearchCV.cv_results_)"""
     return (
-        cv_results_summary_df(cv_results),
-        cv_results_splits_df(cv_results),
+        # box/unbox to allow np.array/list values inside the columns [how to avoid?]
+        pd.DataFrame({k: list(map(box, v)) for k, v in cv_results.items()}).applymap(lambda x: x.unbox)
+        [lambda df: [c for c in df if re.match(r'^split|^param_', c)]]
+        .pipe(df_flatmap, lambda row: ([
+            (row
+                .filter(regex=r'^param_|^split%s_' % fold)
+                .rename(lambda c: c.split('split%s_' % fold, 1)[-1])
+                .set_value('fold', fold)
+            )
+            for fold in {
+                int(m.group('fold'))
+                for c in row.index
+                for m in [re.match('^split(?P<fold>\d+)_', c)]
+                if m
+            }
+        ]))
+        .reset_index(drop=True)
+        .assign(model_id=lambda df: df.apply(axis=1, func=lambda row: '; '.join(flatten([
+            [row[k] for k in row.index if k.startswith('param_')],
+            ['fold: %s' % row.fold],
+        ]))))
+        .pipe(lambda df: df_reorder_cols(df, first=list(flatten([
+            ['model_id'],
+            [c for c in df if re.match(r'^param_', c)],
+            ['fold', 'train_score', 'test_score'],
+        ]))))
     )
 
 
+# TODO Sync with updated cv_results_splits_df. Here's the plot I used to use with this:
+#
+#   with warnings.catch_warnings():
+#       # TODO How to avoid the 'color' legend warning since geom_col has no color mapping?
+#       warnings.simplefilter(action='ignore', category=UserWarning)
+#       repr(cv_results_summary_df(cv.cv_results_)
+#           .filter(regex='^(param_.*|.*_time$)')
+#           .pipe(df_flatmap, lambda row: [
+#               row.set_value('stage', 'fit').rename({'mean_fit_time': 'mean_time', 'std_fit_time': 'std_time'}),
+#               row.set_value('stage', 'score').rename({'mean_score_time': 'mean_time', 'std_score_time': 'std_time'}),
+#           ])
+#           .filter(regex='^(param.*|stage|mean_time|std_time)$')
+#           .pipe(df_ordered_cat, 'param_classifier', transform=reversed)
+#           .pipe(ggplot, aes(x='param_classifier'))
+#           + geom_col(aes(y='mean_time', fill='stage'), position=position_dodge())
+#           + geom_linerange(
+#               aes(group='stage', y='mean_time', ymin='mean_time - 1.96 * std_time', ymax='mean_time + 1.96 * std_time'),
+#               position=position_dodge(width=.9),
+#           )
+#           + coord_flip()
+#           + scale_color_cmap_d(mpl.cm.Set1)
+#           # + theme(legend_position='bottom')
+#           + theme_figsize(width=4, aspect_ratio=2/1)
+#           + ggtitle('Train/test runtimes (WARNING: mix of cached and uncached)')
+#       )
+#
 def cv_results_summary_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
-    """Tidy the per-params facts from a cv_results_ (e.g. from GridSearchCV)"""
-    return (pd.DataFrame(cv_results)
+    """Tidy the per-params facts from a cv_results_ (e.g. GridSearchCV.cv_results_)"""
+    return (
+        # box/unbox to allow np.array/list values inside the columns
+        pd.DataFrame({k: list(map(box, v)) for k, v in cv_results.items()}).applymap(lambda x: x.unbox)
         [lambda df: [c for c in df.columns if not re.match(r'^split|^params$', c)]]
         [lambda df: list(flatten([
             [c for c in df if c.startswith('param_')],
@@ -251,18 +311,12 @@ def cv_results_summary_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
     )
 
 
-def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
-    """Tidy the per-split facts from a cv_results_ (e.g. from GridSearchCV)"""
-    return (pd.DataFrame(cv_results)
-        [lambda df: [c for c in df if re.match(r'^split|^param_', c)]]
-        .pipe(lambda df: pd.melt(df, value_name='score', id_vars=[c for c in df if c.startswith('param_')]))
-        .pipe(lambda df: pd.concat(axis=1, objs=[
-            df,
-            df.variable.str.extract(r'^split(?P<fold>\d+)_(?P<split>[^_]+)_[^_]+$'),
-        ]))
-        .drop(columns='variable')
-        .pipe(df_reorder_cols, last=['fold', 'split', 'score'])
-        .pipe(lambda df: df.sort_values(list(df.columns)).reset_index(drop=True))
+# TODO Useful? I usually just want the splits_df, rarely the summary_df...
+def cv_results_dfs(cv_results: Mapping[str, list]) -> (pd.DataFrame, pd.DataFrame):
+    """Tidy dfs from a cv_results_ (e.g. GridSearchCV.cv_results_)"""
+    return (
+        cv_results_summary_df(cv_results),
+        cv_results_splits_df(cv_results),
     )
 
 

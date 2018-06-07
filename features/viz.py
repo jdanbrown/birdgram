@@ -1,9 +1,12 @@
 import itertools
-from typing import Iterable
+from typing import Callable, Iterable, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from potoo.pandas import df_transform_index
 from potoo.plot import *
+
+import metadata
 
 
 def plot_many_spectros(
@@ -142,21 +145,58 @@ def plot_patches(patches, f_bins, patch_length, raw=False, rows=None, sort={}, *
         plt.imshow(image, **kwargs)
 
 
-def plot_confusion_matrix(
-    confusion_matrix: np.ndarray,
-    labels: Iterable[str],
+def sort_species_confusion_matrix(
+    df: pd.DataFrame,
+    dtype=metadata.species.df.shorthand.dtype,
+) -> pd.DataFrame:
+    return (df
+        .pipe(df_transform_index, lambda c: c.astype(dtype)).sort_index()
+        .T.pipe(df_transform_index, lambda c: c.astype(dtype)).sort_index().T
+    )
+
+
+def plot_confusion_matrix(M: np.ndarray, classes: Iterable[str], **kwargs):
+    plot_confusion_matrix_df(
+        pd.DataFrame(M, columns=classes, index=classes),
+        **kwargs,
+    )
+
+
+def plot_confusion_matrix_df(
+    df: pd.DataFrame,
     title: str = None,
-    title_y: float = 1.05,  # Fussy
+    title_y: float = 1.08,  # Fussy
+    format: Union[str, Callable] = lambda x: ('%.2g' % x).lstrip('0') or '0',
+    ylabel='y_true',
+    xlabel='y_pred',
+    marginals=True,
     normalize=False,
     raw=False,
+    sort_df = sort_species_confusion_matrix,  # TODO Not our concern? Sure is convenient...
     **kwargs,
 ):
     """From http://scikit-learn.org/stable/auto_examples/model_selection/plot_confusion_matrix.html"""
 
+    if isinstance(format, str):
+        format = lambda x: str % x
+
+    # Sort indexes and columns of matrix
+    if sort_df:
+        df = sort_df(df)
+
     # Data
-    M = confusion_matrix
+    M = df.as_matrix()
+    classes = list(df.index)
     if normalize:
         M = M.astype('float') / M.sum(axis=1)[:, np.newaxis]
+
+    # Add marginals to labels
+    #   - Don't add them to grid, else their magnitude will drown out everything else
+    xticks = classes
+    yticks = classes
+    if marginals:
+        xticks = [' '.join([tick, '(%s)' % format(x)]) for tick, x in zip(xticks, M.sum(axis=0))]
+        yticks = [' '.join(reversed([tick, '(%s)' % format(x)])) for tick, x in zip(yticks, M.sum(axis=1))]
 
     # Plot
     kwargs.setdefault('origin', 'upper')
@@ -166,10 +206,10 @@ def plot_confusion_matrix(
         plt.imshow(M, interpolation='nearest', **kwargs)
         plt.gca().xaxis.tick_top()
         plt.gca().xaxis.set_label_position('top')
-        plt.xticks(range(len(labels)), labels, rotation=90)
-        plt.yticks(range(len(labels)), labels)
-        plt.ylabel('True')
-        plt.xlabel('Pred')
+        plt.xticks(range(len(xticks)), xticks, rotation=90)
+        plt.yticks(range(len(yticks)), yticks)
+        plt.ylabel(ylabel)
+        plt.xlabel(xlabel)
         if title:
             plt.title(title, y=title_y)
         plt.tight_layout()
@@ -178,7 +218,9 @@ def plot_confusion_matrix(
             plt.text(
                 j,
                 i,
-                ('%.2f' if normalize else '%d') % M[i,j],
-                horizontalalignment="center",
-                color="white" if M[i,j] > thresh else "black",
+                format(M[i,j]),
+                horizontalalignment='center',
+                color='white' if M[i,j] > thresh else 'black',
+                # color='lightgray' if M[i,j] > thresh else 'darkgray',
+                # color='gray',
             )

@@ -38,7 +38,7 @@ from typing import Iterable, Mapping, Union
 import uuid
 
 from attrdict import AttrDict
-import dataclasses
+import dask
 from dataclasses import dataclass, field
 import joblib
 import numpy as np
@@ -54,6 +54,7 @@ from features import *
 from load import *
 import metadata
 from metadata import sorted_species
+from sk_util import *
 from sp14.skm import SKM
 from util import *
 from viz import *
@@ -62,7 +63,7 @@ from viz import *
 @dataclass
 class Features(DataclassConfig):
 
-    # Dependencies
+    # Dependencies [TODO Simplify with dataclasses.InitVar?]
     load: Load = Load()
 
     # Config
@@ -225,7 +226,7 @@ class Features(DataclassConfig):
 @dataclass
 class Projection(DataclassConfig):
 
-    # Dependencies
+    # Dependencies [TODO Simplify with dataclasses.InitVar?]
     features: Features = Features()
 
     # Config
@@ -488,6 +489,9 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     #   - Fix: `projection: Projection` isn't a model param (detected because it's not a primitive type)
     # sk.utils.estimator_checks.check_estimator(Search)
 
+    _X_col = 'feat'
+    _y_col = 'species'
+
     @classmethod
     def df(cls, X: Iterable, y: Iterable) -> pd.DataFrame:
         return pd.DataFrame({
@@ -496,14 +500,17 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         })
 
     @classmethod
+    @requires_cols(_X_col)
     def X(cls, df: pd.DataFrame) -> np.ndarray:
         return np.array(list(df[cls._X_col]))
 
     @classmethod
+    @requires_cols(_y_col)
     def y(cls, df: pd.DataFrame) -> np.ndarray:
         return np.array(list(df[cls._y_col]))
 
     @classmethod
+    @requires_cols(_X_col, _y_col)
     def Xy(cls, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         return (cls.X(df), cls.y(df))
 
@@ -511,11 +518,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     # Config
     #
 
-    # sk
-    _X_col = 'feat'
-    _y_col = 'species'
-
-    # Dependencies
+    # Dependencies [TODO Simplify with dataclasses.InitVar?]
     projection: Projection = Projection()
 
     # Params
@@ -669,81 +672,110 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         return similar_recs
 
     #
-    # Evaluate
+    # Score
     #
 
+    # For sk: score(X, y)
     def score(self, X, y) -> float:
         """Goodness-of-fit measure (higher is better)"""
-        return -self.coverage_error(X, y)
+        return SearchEvals(search=self, X=X, y=y).score()
 
-    def coverage_error(self, X, y, agg=np.median) -> float:
-        """Predict and measure aggregate coverage error"""
-        return agg(self.coverage_errors(X, y))
 
-    # TODO TODO Spending a lot of CV time in scoring, but it's because we do it ~10K times, and cached read is ~10x slower...
-    # @cache(version=0, key=lambda self, X, y: (self.classifier_, X, y))
-    def coverage_errors(self, X, y) -> 'np.ndarray[int @ len(X)]':
-        """Predict and measure each instance's coverage error (avoid sk's internal np.mean so we can do our own agg)"""
-        y_scores = self.classifier_.predict_proba(X)
-        y_trues = self.classifier_.classes_ == y[:, None]
-        return np.array([
-            sk.metrics.coverage_error([y_true], [y_score])
-            for y_true, y_score in zip(y_trues, y_scores)
+@dataclass(init=False, repr=False)
+class SearchEvals(DataclassUtil):
+    """
+    One of:
+    - SearchEvals(search=..., recs=...)                     # Does search.predict_proba
+    - SearchEvals(search=..., i=..., X=..., y=...)          # Does search.predict_proba
+    - SearchEvals(i=..., y=..., classes=..., y_scores=...)  # Doesn't predict
+    """
+
+    # The minimal data we need for evals
+    i: np.ndarray = None
+    y: np.ndarray
+    classes: np.ndarray
+    y_scores: np.ndarray
+
+    def __init__(
+        self,
+        search=None,
+        recs=None,
+        i=None,
+        X=None,
+        y=None,
+        classes=None,
+        y_scores=None,
+    ):
+
+        # Check inputs
+        defined = lambda *args: all(x is not None for x in args)
+        assert 1 == sum([
+            defined(search, recs),
+            defined(search, X, y),
+            defined(y, classes, y_scores),
         ])
 
-    @requires_cols('feat', 'species')
-    def score_recs(self, recs: RecordingDF) -> float:
+        # Percolate
+        if defined(search, recs):
+            i = np.arange(len(recs))
+            X, y = search.Xy(recs)
+        if defined(search, X, y):
+            y_scores = search.classifier_.predict_proba(X)  # Predict!
+            classes = search.classifier_.classes_
+        assert defined(y, classes, y_scores)
+
+        # Store
+        self.i = i
+        self.y = y
+        self.classes = classes
+        self.y_scores = y_scores
+
+    def __repr__(self):
+        return '%s(%s)' % (type(self).__name__, ', '.join([
+            f'{k}[{v.shape}]'
+            for k, v in self.asdict().items()
+        ]))
+
+    def score(self) -> float:
         """Goodness-of-fit measure (higher is better)"""
-        return self.score(*self.Xy(recs))
+        return -self.coverage_error()
 
-    @requires_cols('feat', 'species')
-    def coverage_error_recs(self, recs: RecordingDF, **kwargs) -> float:
-        """Predict and measure coverage error"""
-        return self.coverage_error(*self.Xy(recs), **kwargs)
+    def coverage_error(self, agg=np.median) -> float:
+        """Predict and measure aggregate coverage error"""
+        return agg(self.coverage_errors())
 
-    @requires_cols('feat', 'species')
-    def coverage_errors_recs(self, recs: RecordingDF) -> RecordingDF:
+    def coverage_errors(self) -> 'np.ndarray[int @ len(X)]':
         """Predict and measure each instance's coverage error (avoid sk's internal np.mean so we can do our own agg)"""
-        return recs.assign(coverage_error=self.coverage_errors(*self.Xy(recs)))
+        y_trues = (self.classes == self.y[:, None])
+        return np.array([
+            sk.metrics.coverage_error([y_true], [y_score])
+            for y_true, y_score in zip(y_trues, self.y_scores)
+        ])
 
+    @classmethod
     @requires_cols('feat', 'species')
-    def coverage_errors_recs_by(self, recs: RecordingDF, by: str, **kwargs) -> "pd.DataFrame[by, 'coverage_error']":
+    def coverage_errors_recs(cls, search, recs: RecordingDF) -> RecordingDF:
+        """.coverage_errors + assign to a col in recs"""
+        return recs.assign(coverage_error=cls(search=search, recs=recs).coverage_errors())
+
+    @classmethod
+    @requires_cols('feat', 'species')
+    def coverage_error_by(cls, search, recs: RecordingDF, by: str, **kwargs) -> "pd.DataFrame[by, 'coverage_error']":
         """Predict and measure coverage error, grouped by recs[by]"""
         if recs[by].dtype.name == 'category':
             recs = recs.assign(**{by: recs[by].cat.remove_unused_categories()})  # Else groupby includes all categories
         return (recs
             .groupby(by)
-            .apply(lambda g: self.coverage_error_recs(g.assign(**{by: g.name}), **kwargs))
+            .apply(lambda g: cls(search=search, recs=g.assign(**{by: g.name})).coverage_error(**kwargs))
             .reset_index()
             .rename(columns={0: 'coverage_error'})
         )
 
-    @requires_cols('feat', 'species')
-    def confusion_matrix(self, recs: RecordingDF) -> 'pd.DataFrame[count @ (n_species, n_species)]':
-        """Predict and compute confusion matrix"""
-        species = self.species(recs)
-        y_true = species.species_true
-        y_pred = species.species_pred
-        labels = sorted_species(set(y_true) | set(y_pred))
-        M = pd.DataFrame(
-            data=sk.metrics.confusion_matrix(y_true, y_pred, labels),
-            index=pd.Series(labels, name='true'),
-            columns=pd.Series(labels, name='pred'),
-        )
-        log('Search.confusion_matrix', **{
-            'M': M.shape,
-        })
-        return M
+    def confusion_matrix_prob_df(self) -> 'pd.DataFrame[prob @ (n_species, n_species)]':
+        return confusion_matrix_prob_df(self.y, self.y_scores, self.classes)
 
-    @requires_cols('feat', 'species')
-    def plot_confusion_matrix(self, recs: RecordingDF, **kwargs):
-        """Predict and plot confusion matrix"""
-        confusion_matrix = self.confusion_matrix(recs)
-        plot_confusion_matrix(
-            confusion_matrix.as_matrix(),
-            labels=list(confusion_matrix.index),
-            **kwargs,
-        )
+    def confusion_matrix_prob(self) -> 'np.ndarray[prob @ (c, c)]':
+        return confusion_matrix_prob(self.y, self.y_scores, self.classes)
 
 
 def to_X(recs: RecordingDF) -> Iterable[AttrDict]:

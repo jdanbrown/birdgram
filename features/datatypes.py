@@ -9,13 +9,13 @@ import numpy as np
 import pandas as pd
 from potoo.pandas import df_remove_unused_categories, df_reorder_cols
 
-from util import DataclassConversions
+from util import DataclassUtil
 
 Audio = audiosegment.AudioSegment
 
 
 @dataclass
-class Species(DataclassConversions):
+class Species(DataclassUtil):
     sci_name: str
     com_name: str
     taxon_id: str
@@ -29,7 +29,7 @@ class Species(DataclassConversions):
 
 
 @dataclass
-class Recording(DataclassConversions):
+class Recording(DataclassUtil):
 
     # Required (1/2)
     dataset: str
