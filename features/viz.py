@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from potoo.pandas import df_transform_index
 from potoo.plot import *
+from potoo.util import round_sig
 
 import metadata
 
@@ -166,11 +167,11 @@ def plot_confusion_matrix_df(
     df: pd.DataFrame,
     title: str = None,
     title_y: float = 1.08,  # Fussy
-    format: Union[str, Callable] = lambda x: ('%.2g' % x).lstrip('0') or '0',
+    format: Union[str, Callable] = lambda x: (('%s' % round_sig(x, 2)) if x < 1 else '%.1f' % x).lstrip('0') or '0',
     ylabel='y_true',
     xlabel='y_pred',
     marginals=True,
-    normalize=False,
+    normalize=True,
     raw=False,
     sort_df = sort_species_confusion_matrix,  # TODO Not our concern? Sure is convenient...
     **kwargs,
@@ -189,6 +190,7 @@ def plot_confusion_matrix_df(
     classes = list(df.index)
     if normalize:
         M = M.astype('float') / M.sum(axis=1)[:, np.newaxis]
+        M = np.nan_to_num(M)
 
     # Add marginals to labels
     #   - Don't add them to grid, else their magnitude will drown out everything else
