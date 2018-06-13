@@ -1,5 +1,5 @@
-# XXX For dev
--e /Users/danb/bubo/features
+# XXX This worked with `pip install`, but doesn't work with `conda env`. Have to manually `pip install -e .` instead.
+# -e /Users/danb/bubo/features
 
 # TODO Switch these back to github urls
 -e /Users/danb/hack/potoo
@@ -14,23 +14,28 @@ flake8==3.5.0
 flake8-commas==2.0.0
 flake8-import-order==0.17.1
 frozendict==1.2
-git+https://github.com/has2k1/plotnine.git@9e52a25
+git+https://github.com/has2k1/plotnine.git@049c197#egg=plotnine
 joypy==0.1.8
 jupyter==1.0.0
 librosa==0.6.1
 line-profiler==2.1.2
 more-itertools==4.2.0
 nose==1.3.7  # For sklearn.utils.estimator_checks
+pandas==0.23.0  # Duped above in conda deps; included here else something else downgrades to 0.22.0
 pdbpp==0.9.2
 pp-ez==0.2.0
 pprintpp==0.3.0
+# TODO Switch back to a versioned release after https://github.com/tommikaikkonen/prettyprinter/pull/19
+# - prettyprinter==0.13.2
+git+https://github.com/jdanbrown/prettyprinter.git@patch-1#egg=prettyprinter
 pytest==3.6.0
 python_speech_features==0.6
 pyyaml==3.12
 requests-html==0.9.0
+retry==0.9.2
 rpy2==2.9.2 # >=2.9.2 so we have the fix for fractional -w/-h args to %R
 scikit-misc==0.1.1
-git+https://github.com/scikit-signal/pytftb@ac2b6a2
+git+https://github.com/scikit-signal/pytftb@ac2b6a2#egg=pytftb
 statsmodels==0.9.0
 stringcase==1.2.0
 structlog==18.1.0
@@ -40,5 +45,5 @@ tqdm==4.23.4
 # pydub
 pydub==0.22.0
 # TODO Switch back to MaxStrange repo after https://github.com/MaxStrange/AudioSegment/pull/2
-# git+https://github.com/MaxStrange/AudioSegment.git@86a1214
-git+https://github.com/jdanbrown/AudioSegment.git@c8dc862
+# git+https://github.com/MaxStrange/AudioSegment.git@86a1214#egg=AudioSegment
+git+https://github.com/jdanbrown/AudioSegment.git@c8dc862#egg=AudioSegment
