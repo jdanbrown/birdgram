@@ -123,14 +123,26 @@ def ls(dir):
 ## dataclasses
 
 from collections import OrderedDict
+import json
 import sys
+from typing import Iterable
 
 from attrdict import AttrDict
 import dataclasses
+from potoo.util import get_cols
+import yaml
 
 
 class DataclassUtil:
     """Things I wish all dataclasses had"""
+
+    @classmethod
+    def field_names(cls, **filters) -> Iterable[str]:
+        return [
+            x.name
+            for x in dataclasses.fields(cls)
+            if all(getattr(x, k) == v for k, v in filters.items())
+        ]
 
     def asdict(self) -> dict:
         """Convert to dict preserving field order, e.g. for df rows"""
