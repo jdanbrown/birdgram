@@ -1,0 +1,7 @@
+#!/bin/bash -eu
+
+# TODO TODO WIP Untested (see "WIP" in Dockerfile)
+
+bin="`dirname "$0"`"
+
+exec "$bin"/docker-run python "$@"

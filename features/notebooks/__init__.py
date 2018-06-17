@@ -23,6 +23,7 @@ from potoo.pandas import *
 from potoo.plot import *
 from potoo.util import *
 import requests
+import rpy2.robjects as robjects
 import sklearn as sk
 from tqdm import tqdm
 

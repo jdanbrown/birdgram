@@ -41,7 +41,11 @@ class Load(DataclassConfig):
             'cache_audio',
         ]})
 
-    @cache(version=0)
+    @cache(version=1, key=lambda self, datasets, *args, **kwargs: (
+        {k: DATASETS[k] for k in datasets},
+        args,
+        kwargs,
+    ))
     def recs(
         self,
         datasets: Iterable[str] = None,
@@ -50,13 +54,15 @@ class Load(DataclassConfig):
         drop_invalid: bool = True,
     ) -> RecordingDF:
         """Load recs.{**metadata} from fs"""
-        return RecordingDF(
+        return (
             self.recs_paths(datasets, paths)
+            # .sample(n=limit, random_state=0)  # TODO TODO Why does this return empty? More useful than [:limit]
             [:limit]
             .pipe(lambda df: pd.concat(axis=1, objs=[df, self.metadata(df)]))
             .sort_values('species')
             [lambda df: ~np.array(drop_invalid) | (df.samples_n != 0)]  # Filter out invalid/empty audios
             .reset_index(drop=True)
+            .pipe(RecordingDF)
         )
 
     def recs_paths(
@@ -111,7 +117,7 @@ class Load(DataclassConfig):
         # Performance (600 peterson recs):
         #   - Scheduler: [TODO Measure -- 'threads' is like the outcome, like n-1 of the rest]
         #   - Bottlenecks (no_dask): [TODO Measure]
-        metadata = map_with_progress(self._metadata, df_rows(recs), scheduler='threads')
+        metadata = map_progress(self._metadata, df_rows(recs), use='dask', scheduler='threads')
         # Filter out dropped rows (e.g. junky audio file)
         metadata = [x for x in metadata if x is not None]
         # Convert to df
@@ -157,7 +163,7 @@ class Load(DataclassConfig):
         #               1    0.060    0.060    0.845    0.845 <string>:1(<module>)
         #           61176    0.018    0.000    0.039    0.000 {built-in method builtins.isinstance}
         #             600    0.015    0.000    0.015    0.000 {built-in method io.open}
-        audio = map_with_progress(self._audio, df_rows(recs), scheduler='threads')
+        audio = map_progress(self._audio, df_rows(recs), use='dask', scheduler='threads')
         log('Load.audio:out', **{
             'len(audio)': len(audio),
         })
@@ -175,25 +181,29 @@ class Load(DataclassConfig):
         if not os.path.isabs(path):
             path = os.path.join(data_dir, path)
 
-        # Cache transcribed audio, if requested
-        if c.cache_audio:
-            rel_path_noext, _ext = os.path.splitext(os.path.relpath(path, data_dir))
-            params_id = f'{c.sample_rate}hz-{c.channels}ch-{c.sample_width_bit}bit'
-            cache_path = f'{cache_dir}/{params_id}/{rel_path_noext}.wav'
-            if not os.path.exists(cache_path):
-                log(f'Caching: {cache_path}')
-                in_audio = audiosegment.from_file(path)
-                std_audio = in_audio.resample(
-                    channels=c.channels,
-                    sample_rate_Hz=c.sample_rate,
-                    sample_width=c.sample_width_bit // 8,
-                )
-                std_audio.export(ensure_parent_dir(cache_path), 'wav')
-            path = cache_path
-
+        # "Drop" audio files that fail during either transcription or normal load
+        #   - TODO Find a way to minimize the surface area of exceptions that we swallow here. Currently huge and bad.
         try:
+
+            # Cache transcribed audio, if requested
+            if c.cache_audio:
+                rel_path_noext, _ext = os.path.splitext(os.path.relpath(path, data_dir))
+                params_id = f'{c.sample_rate}hz-{c.channels}ch-{c.sample_width_bit}bit'
+                cache_path = f'{cache_dir}/{params_id}/{rel_path_noext}.wav'
+                if not os.path.exists(cache_path):
+                    log(f'Caching: {cache_path}')
+                    in_audio = audiosegment.from_file(path)
+                    std_audio = in_audio.resample(
+                        channels=c.channels,
+                        sample_rate_Hz=c.sample_rate,
+                        sample_width=c.sample_width_bit // 8,
+                    )
+                    std_audio.export(ensure_parent_dir(cache_path), 'wav')
+                path = cache_path
+
             # Caching aside, always load from disk for consistency
             audio = audiosegment.from_file(path)
+
         except Exception as e:
             # "Drop" invalid audio files by replacing them with a 0s audio, so we can detect and filter out downstream
             log('Load._audio: WARNING: Dropping invalid audio file', **dict(

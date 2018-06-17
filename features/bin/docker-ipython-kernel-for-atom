@@ -1,0 +1,23 @@
+#!/bin/bash -eux
+
+# TODO TODO WIP Untested (see "WIP" in Dockerfile)
+
+bin="`dirname "$0"`"
+
+# TODO Does hydrogen/connection.json prevent us from running multiple concurrent kernels in atom?
+
+# Else `ipython kernel -f ... --ip 0.0.0.0 ...` will reuse params from the existing file and ignore cli args
+rm -fv hydrogen/connection.json
+
+# `--net=host` doesn't work in Docker for Mac, have to explicitly map all ports we use:
+# - https://forums.docker.com/t/should-docker-run-net-host-work/14215
+RUN_ARGS='-p 53000-53004:53000-53004' \
+exec "$bin"/docker-run \
+  ipython kernel \
+  -f hydrogen/connection.json \
+  --ip 0.0.0.0 \
+  --control=53000 \
+  --shell=53001 \
+  --iopub=53002 \
+  --hb=53003 \
+  --stdin=53004

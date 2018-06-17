@@ -1,5 +1,5 @@
 import itertools
-from typing import Callable, Iterable, Union
+from typing import Callable, Iterable, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -167,7 +167,7 @@ def plot_confusion_matrix_df(
     df: pd.DataFrame,
     title: str = None,
     title_y: float = 1.08,  # Fussy
-    format: Union[str, Callable] = lambda x: (('%s' % round_sig(x, 2)) if x < 1 else '%.1f' % x).lstrip('0') or '0',
+    format: Optional[Union[str, Callable]] = lambda x: (('%s' % round_sig(x, 2)) if x < 1 else '%.1f' % x).lstrip('0') or '0',
     ylabel='y_true',
     xlabel='y_pred',
     marginals=True,
@@ -178,6 +178,9 @@ def plot_confusion_matrix_df(
 ):
     """From http://scikit-learn.org/stable/auto_examples/model_selection/plot_confusion_matrix.html"""
 
+    # Coerce format
+    #   - TODO Skip the `for i, j` below if no format [have to default xticks/yticks to a sane default format]
+    format = format or (lambda x: '')
     if isinstance(format, str):
         format = lambda x: str % x
 

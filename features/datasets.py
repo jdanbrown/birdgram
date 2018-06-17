@@ -21,6 +21,7 @@ from util import *
 DATASETS = {
     'recordings': 'recordings/*',
     'peterson-field-guide': 'peterson-field-guide/*/audio/*',
+    'xc': 'xc/data/*/*/*.mp3',
     'birdclef-2015': 'birdclef-2015/organized/wav/*',
     'warblrb10k': 'dcase-2018/warblrb10k_public_wav/*',
     'ff1010bird': 'dcase-2018/ff1010bird_wav/*',
@@ -38,6 +39,9 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
     elif dataset == 'recordings':
         m = re.match(r'^([A-Z]{4}) ', basename)
         species_query = m.groups()[0] if m else unk_species
+    elif dataset == 'xc':
+        [_lit_xc, _lit_data, species_query, _id, _lit_audio] = id_parts
+        assert (_lit_xc, _lit_data, _lit_audio) == ('xc', 'data', 'audio')
     elif dataset == 'mlsp-2013':
         train_labels = mlsp2013.train_labels_for_filename.get(
             basename,
@@ -87,7 +91,7 @@ class XC(DataclassUtil):
 
     @property
     @lru_cache()
-    @cache(version=1, key=lambda self: (
+    @cache(version=2, key=lambda self: (
         self,
         # TODO Re-enable after we stop downloading all the time, since cache miss is slow (~45s)
         #   - In the meantime, manually bump version after big jumps in downloads
@@ -104,7 +108,7 @@ class XC(DataclassUtil):
         )
 
     @property
-    @cache(version=2, key=lambda self: self)
+    @cache(version=3, key=lambda self: self)
     def _metadata(self) -> "pd.DataFrame['id': int, ...]":
         """Load all saved metadata from fs, keeping the latest observed metadata record per XC id"""
         metadata_paths_best_last = sorted(glob.glob(f'{self.metadata_dir}/*.pkl'))

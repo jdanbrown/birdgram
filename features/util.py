@@ -519,48 +519,4 @@ def iter_progress(
 
 ## bubo-features
 
-from datetime import datetime
-import json
-
-from dataclasses import dataclass
-from potoo.util import AttrContext, singleton
-import yaml
-
-
-# WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
-#
-#   @singleton
-#   class foo: pass
-#   cloudpickle.dump(foo)  # Fails with "can't pickle _thread._local objects"
-#
-#   class foo: pass
-#   foo = foo()
-#   cloudpickle.dump(foo)  # Fails with "can't pickle _thread._local objects"
-#
-#   class Foo: pass
-#   foo = Foo()
-#   cloudpickle.dump(foo)  # Ok! Use this as a workaround.
-#
-# @singleton
-@dataclass
-class Log(AttrContext):
-
-    verbose: bool = True
-
-    def __call__(self, event, **kwargs):
-        """Simple, ad-hoc logging specialized for interactive usage"""
-        if self.verbose:
-            t = datetime.utcnow().isoformat()
-            t = t[:23]  # Trim micros, keep millis
-            t = t.split('T')[-1]  # Trim date for now, since we're primarily interactive usage
-            # Display timestamp + event on first line
-            print('[%s] %s' % (t, event))
-            # Display each (k,v) pair on its own line, indented
-            for k, v in kwargs.items():
-                v_yaml = yaml.safe_dump(json.loads(json.dumps(v)), default_flow_style=True, width=1e9)
-                v_yaml = v_yaml.split('\n')[0]  # Handle documents ([1] -> '[1]\n') and scalars (1 -> '1\n...\n')
-                print('  %s: %s' % (k, v_yaml))
-
-
-# Workaround for @singleton (above)
-log = Log()
+from log import log  # For export [TODO Update callers]

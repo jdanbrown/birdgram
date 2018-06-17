@@ -3,6 +3,7 @@
 $ conda env create -f environment.yml
 $ source activate bubo-features
 $ pip install -e .
+$ Rscript --vanilla Rdepends.R
 ```
 
 ## Update python env after changing `environment.yml` or `requirements.txt`

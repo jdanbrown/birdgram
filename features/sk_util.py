@@ -1,12 +1,16 @@
 from collections import defaultdict
 from functools import partial
+import hashlib
 import inspect
+import io
 from itertools import product
 import warnings
 
+import joblib
 from more_itertools import flatten, unique_everseen
 import numpy as np
 import pandas as pd
+from potoo.util import timed
 from scipy.stats import rankdata
 
 from sklearn.base import is_classifier, clone
@@ -23,7 +27,18 @@ from sklearn.utils.deprecation import DeprecationDict
 from sklearn.metrics.scorer import _check_multimetric_scoring
 
 from cache import cache
+from log import log
 from util import box
+
+
+def joblib_dumps(x: any, *args, **kwargs) -> bytes:
+    f = io.BytesIO()
+    joblib.dump(x, f, *args, **kwargs)
+    return f.getvalue()
+
+
+def joblib_loads(b: bytes, *args, **kwargs) -> any:
+    return joblib.load(io.BytesIO(b), *args, **kwargs)
 
 
 def confusion_matrix_prob_df(y_true, y_prob, classes) -> 'pd.DataFrame[prob @ (n_species, n_species)]':
@@ -60,10 +75,12 @@ def _fit_and_score_cached(*args, **kwargs):
     Like _fit_and_score except:
     - Cached
     - Returns estimator if return_estimator=True (default: False, like the other _fit_and_score args)
+    - Logs
     """
 
     extra_metrics = kwargs.pop('extra_metrics', None)
     return_estimator = kwargs.pop('return_estimator', False)
+    split_i = kwargs.pop('split_i')
 
     a = inspect.signature(_fit_and_score).bind(*args, **kwargs).arguments
     estimator = a['estimator']
@@ -71,14 +88,20 @@ def _fit_and_score_cached(*args, **kwargs):
     y = a['y']
     train = a['train']
     test = a['test']
+    parameters = a['parameters']
 
-    ret = _fit_and_score(*args, **kwargs)
+    log_estimator = clone(estimator).set_params(**parameters)  # Like _fit_and_score
+    log_details = f'split_i[{split_i}], estimator[{log_estimator}]'
+    log.info('_fit_and_score... %s' % (log_details))
+    _, ret = timed(_fit_and_score, *args, **kwargs, finally_=lambda elapsed_s, _: (
+        log.info('_fit_and_score[%.3fs]: %s' % (elapsed_s, log_details))
+    ))
 
     if extra_metrics:
         X_train, y_train = _safe_split(estimator, X, y, train)  # Copied from _fit_and_score
         X_test, y_test = _safe_split(estimator, X, y, test, train)  # Copied from _fit_and_score
         ret.append({
-            # eval instead of lambda because lambda's (and def's) will surprise you when they don't bust cache on change
+            # eval instead of lambda because lambda's (and def's) surprisingly don't bust cache when they change
             metric_name: eval(metric_expr, None, dict(
                 estimator=estimator,
                 i_train=train,
@@ -206,22 +229,29 @@ class GridSearchCVCached(GridSearchCV):
         base_estimator = clone(self.estimator)
         pre_dispatch = self.pre_dispatch
 
-        # HACK(db): Changed _fit_and_score -> _fit_and_score_cached
+        # HACK(db): Reformatted
         out = Parallel(
             n_jobs=self.n_jobs, verbose=self.verbose,
-            pre_dispatch=pre_dispatch
-        )(delayed(_fit_and_score_cached)(
-                                  clone(base_estimator), X, y, scorers, train,
-                                  test, self.verbose, parameters,
-                                  fit_params=fit_params,
-                                  return_train_score=self.return_train_score,
-                                  return_n_test_samples=True,
-                                  return_times=True, return_parameters=False,
-                                  extra_metrics=self.extra_metrics,  # HACK(db): Added
-                                  return_estimator=self.return_estimator,  # HACK(db): Added
-                                  error_score=self.error_score)
-          for parameters, (train, test) in product(candidate_params,
-                                                   cv.split(X, y, groups)))
+            pre_dispatch=pre_dispatch,
+        )(
+            # HACK(db): Changed _fit_and_score -> _fit_and_score_cached
+            delayed(_fit_and_score_cached)(
+                clone(base_estimator), X, y, scorers, train,
+                test, self.verbose, parameters,
+                fit_params=fit_params,
+                return_train_score=self.return_train_score,
+                return_n_test_samples=True,
+                return_times=True, return_parameters=False,
+                extra_metrics=self.extra_metrics,  # HACK(db): Added
+                return_estimator=self.return_estimator,  # HACK(db): Added
+                error_score=self.error_score,
+                split_i=split_i,  # HACK(db): Added
+            )
+            for parameters, (split_i, (train, test)) in product(  # HACK(db): Added split_i
+                candidate_params,
+                enumerate(cv.split(X, y, groups)),  # HACK(db): Added enumerate for split_i
+            )
+        )
 
         # HACK(db): Added extra_metrics + return_estimator , and refactored `outs` deconstruction to be more modular
         outs = list(zip(*out))

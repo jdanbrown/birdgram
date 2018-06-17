@@ -126,7 +126,7 @@ class Features(DataclassConfig):
     @short_circuit(lambda self, recs: recs.get('patches'))
     def patches(self, recs: RecordingDF) -> Column['np.ndarray[(f*p,t)]']:
         """.patches (f*p,t) <- .spectro (f,t)"""
-        log('Features.patches:in', **{
+        log.debug('Features.patches:in', **{
             'len(recs)': len(recs),
             'len(recs) per dataset': recs.get('dataset', pd.Series()).value_counts().to_dict(),
             'sum(duration_h)': round_sig(sum(recs.get('duration_s', [])) / 3600, 3),
@@ -147,7 +147,7 @@ class Features(DataclassConfig):
         #             100    0.069    0.001    0.862    0.009 model.py:163(_patches)
         #               1    0.042    0.042    0.944    0.944 <string>:1(<module>)
         patches = map_progress(self._patches, df_rows(recs), use='dask', scheduler='synchronous')
-        log('Features.patches:out', **{
+        log.debug('Features.patches:out', **{
             '(f*p, sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
         return patches
@@ -155,7 +155,7 @@ class Features(DataclassConfig):
     @short_circuit(lambda self, recs: recs.get('spectro'))
     def spectro(self, recs: RecordingDF) -> Column[Melspectro]:
         """.spectro (f,t) <- .audio (samples,)"""
-        log('Features.spectros:in', **{
+        log.debug('Features.spectros:in', **{
             'len(recs)': len(recs),
             'len(recs) per dataset': recs.get('dataset', pd.Series()).value_counts().to_dict(),
             'sum(duration_h)': round_sig(sum(recs.get('duration_s', [])) / 3600, 3),
@@ -172,7 +172,7 @@ class Features(DataclassConfig):
         #             100    0.285    0.003    3.228    0.032 spectral.py:563(spectrogram)
         #             100    0.284    0.003    0.381    0.004 signaltools.py:2464(detrend)
         spectros = map_progress(self._spectro, df_rows(recs), use='dask', scheduler='threads')
-        log('Features.spectros:out', **{
+        log.debug('Features.spectros:out', **{
             '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
         })
         return spectros
@@ -272,7 +272,7 @@ class Projection(DataclassConfig):
 
     @classmethod
     def load(cls, id: str, **override_attrs) -> 'cls':
-        log('Projection.load', path=cls._save_path(id))
+        log.debug('Projection.load', path=cls._save_path(id))
         # Save/load the attrs, not the instance, so we don't preserve class objects with outdated code
         saved_attrs = joblib.load(cls._save_path(id))
         projection = Projection()
@@ -287,7 +287,7 @@ class Projection(DataclassConfig):
         return model_id
 
     def _save(self, id: str):
-        log('Projection.save', path=self._save_path(id))
+        log.debug('Projection.save', path=self._save_path(id))
         # Save/load the attrs, not the instance, so we don't preserve class objects with outdated code
         joblib.dump(self.__dict__, self._save_path(id))
 
@@ -298,7 +298,7 @@ class Projection(DataclassConfig):
     def fit(self, recs: RecordingDF) -> 'self':
         """skm_ <- .patch (f*p,t)"""
         recs = self.features.transform(recs)  # Pull
-        log('Projection.fit:in', **{
+        log.debug('Projection.fit:in', **{
             'patches': (
                 len(recs.patches),
                 one(set(p.shape[0] for p in recs.patches)),
@@ -306,7 +306,7 @@ class Projection(DataclassConfig):
             ),
         })
         self.skm_ = self._fit(recs)
-        log('Projection.fit:out', **{
+        log.debug('Projection.fit:out', **{
             'skm.pca.components_': self.skm_.pca.components_.shape,
             'skm.D': self.skm_.D.shape,
         })
@@ -317,7 +317,7 @@ class Projection(DataclassConfig):
         """skm <- .patch (f*p,t)"""
         skm = SKM(**self.skm_config)
         skm_X = np.concatenate(list(recs.patches), axis=1)  # (Entirely an skm.fit concern)
-        log('Projection._fit:in', **{
+        log.debug('Projection._fit:in', **{
             'skm_X.shape': skm_X.shape,
         })
         if skm_X.shape[1] > self.safety_config.skm_fit_max_t:
@@ -342,13 +342,20 @@ class Projection(DataclassConfig):
         #             300    0.777    0.003    1.039    0.003 _methods.py:86(_var)
         #             300    0.292    0.001    0.699    0.002 base.py:99(transform)
         #         900/300    0.235    0.000    4.004    0.013 cache.py:99(func_cached)
-        with dask_opts(override_scheduler='threads'):
+        with dask_opts(
+            # TODO TODO Threading causes hangs during heavy (xc 13k) cache hits
+            # override_scheduler='threads',
+            override_scheduler='synchronous',
+        ):
             return RecordingDF(recs
                 # Compute row-major with the 'threads' scheduler, since all cols perform best with 'threads'
                 .assign(feat=self.feat)
             )
 
+    # Cache to speed up the dev loop in e.g. compare_classifiers_xc
+    #   - Low cost to reset the cache since _feat cache hits are fast (~10s for ~13k recs)
     @short_circuit(lambda self, recs: recs.get('feat'))
+    @cache(version=0, key=lambda self, recs: (recs.id, self.agg_config, self.skm_config, self.deps))
     def feat(self, recs: RecordingDF) -> Column['np.ndarray[(k*a,)]']:
         """feat (k*a,) <- .agg (k,a)"""
         # Performance (600 peterson recs):
@@ -518,15 +525,16 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     # Config
     #
 
-    # Dependencies [TODO Simplify with dataclasses.InitVar?]
-    projection: Projection = Projection()
-
     # Params
     #   - TODO Pull up agg_funs from Projection (and add a self.transform to populate .feat)
-    classifier: str = 'cls: knn, n_neighbors: 3'
+    classifier: str
+    # classifier: str = 'cls: knn, n_neighbors: 3'
     # classifier: str = 'cls: svm, random_state: 0, probability: true, kernel: rbf, C: 10'  # Like [SBF16]
     # classifier: str = 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 200'  # Like [SP14]
     # verbose: bool = True  # Like GridSearchCV [TODO Hook this up to log / TODO Think through caching implications]
+
+    # Dependencies [TODO Simplify with dataclasses.InitVar?]
+    projection: Projection = field(default=Projection(), repr=False)  # repr=False? Convenient for watching cv go by...
 
     @property
     def deps(self) -> AttrDict:
@@ -549,20 +557,22 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
 
     def fit(self, X, y) -> 'self':
         """feat (k*a,) -> ()"""
+        # log.info(f'Search.fit... classifier[{self.classifier}]')
         sk.utils.validation.check_X_y(X, y)
         self.X_ = X
         self.y_ = y
         self.classes_ = sk.utils.multiclass.unique_labels(y)
-        log('Search.fit:in', **{
+        log.debug('Search.fit:in', **{
             'recs': len(X),
             '(n, f*p)': X.shape,
         })
         self.classifier_ = self._fit_pure(X, y)
-        log('Search.fit:out', **{
+        log.debug('Search.fit:out', **{
             'classifier.get_params': self.classifier_.get_params(),
             'classifier.classes_': sorted_species(self.classifier_.classes_.tolist()),
             'classifier.classes_.len': len(self.classifier_.classes_),
         })
+        # log.info(f'Search.fit. classifier[{self.classifier}]')
         return self
 
     @cache(version=3, key=lambda self, X, y: (self.classifier_config, X, y))
@@ -597,7 +607,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         species = pd.DataFrame(index=recs.index, data={
             'species_pred': classifier_.predict(X),
         })
-        # log('Search.species', **{
+        # log.debug('Search.species', **{
         #     'recs': len(recs),
         #     '(n, k*a)': X.shape,
         #     'species': len(species),
@@ -625,7 +635,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
             {i: [p, c] for i, (c, p) in enumerate(sorted(dict(row).items(), key=lambda x: (-x[1], x[0])))}
             for i, row in pd.DataFrame(proba, columns=classifier_.classes_).iterrows()
         ])
-        # log('Search.species_probs', **{
+        # log.debug('Search.species_probs', **{
         #     'recs': len(recs),
         #     '(n, k*a)': X.shape,
         #     # 'knn.n_neighbors': knn_.n_neighbors,
@@ -659,7 +669,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
             ]
             for i in range(len(fit_is))
         ])
-        # log('Search.similar_recs', **{
+        # log.debug('Search.similar_recs', **{
         #     'recs': len(recs),
         #     '(n, k*a)': X.shape,
         #     'similar_recs': similar_recs.shape,
@@ -678,7 +688,10 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     # For sk: score(X, y)
     def score(self, X, y) -> float:
         """Goodness-of-fit measure (higher is better)"""
-        return SearchEvals(search=self, X=X, y=y).score()
+        # log.info(f'Search.score... classifier[{self.classifier}]')
+        score = SearchEvals(search=self, X=X, y=y).score()
+        # log.info(f'Search.score. classifier[{self.classifier}]')
+        return score
 
 
 @dataclass(init=False, repr=False)
@@ -799,7 +812,7 @@ def _print_config(config):
         _k = config.proj_skm_config.k
         _a = len(config.agg_config.funs)
         _ka = _k * _a
-        log('init:config', **{
+        log.debug('init:config', **{
             'rec_sample_rate': '%s Hz' % _samples_s,
             'spectro_f_min': '%s Hz' % config.patch_config.spectro_config.f_min,
             '  f_max': '%s Hz' % (_samples_s // 2),
@@ -818,7 +831,7 @@ def _print_config(config):
             '  features': '%s features' % _ka,
             'class_knn_n_neighbors': config.class_knn_config.n_neighbors,
         })
-        log('init:pipeline', **{
+        log.debug('init:pipeline', **{
             # (Gross spacing hacks to make stuff align)
             'spectro': f'(f, t)   ({_f}, {_g(_t_s)}/s)',
             'patch  ': f'(f*p, t) ({_f}*{_p}, {_g(_t_s)}/s)',
