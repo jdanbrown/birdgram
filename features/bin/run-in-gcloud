@@ -26,39 +26,46 @@ _click_option = click.option
 click.option = lambda *args, **kwargs: _click_option(*args, **{'show_default': True, **kwargs})
 
 
-@click.command(context_settings=dict(help_option_names=['-h', '--help']))
+@click.command(context_settings=dict(
+    help_option_names=['-h', '--help'],
+    max_content_width=click.get_terminal_size()[0],
+))
 @click.option('--project', default='bubo-1')
 @click.option('--zone', default='us-west1-b')
 @click.option('--machine-type', default='n1-standard-4', help='https://cloud.google.com/compute/pricing')
-@click.option('--container-image', default='ubuntu')
-@click.option('--instance-name', default=None)
-@click.option('--container', default=None)
+@click.option('--instance-name', default=None, help='Defaults to: "<instance-name-prefix>-<timestamp>"')
+@click.option('--instance-name-prefix', default='run-in-gcloud')
 @click.option('--create-instance/--no-create-instance', default=True)
 @click.option('--delete-instance/--no-delete-instance', default=True)
-@click.option('--preemptible/--no-preemptible', default=False)
-@click.option('--boot-disk-size', default='200GB')
-@click.option('--boot-disk-type', default='pd-standard')
 @click.option('--image-project', default='cos-cloud')
 @click.option('--image', default='cos-stable-67-10575-55-0')
+@click.option('--boot-disk-size', default='200GB')
+@click.option('--boot-disk-type', default='pd-standard')
+@click.option('--preemptible/--no-preemptible', default=False)
 @click.option('--await-ready/--no-await-ready', default=True)
-@click.option('--username', default=None)
-@click.argument('command', nargs=-1)
+@click.option('--username', default=None, help='Defaults to your os-login username')
+@click.option('--container-image', default=None, help='Run command in container if given, else run in the instance')
+@click.option('--container-name', default=None, help='Defaults to instance_name')
+@click.option('--docker-run', default='sudo docker run -it --privileged --restart=no --rm')
+@click.argument('command', nargs=1, required=False)  # One cmd string, e.g. quoted by the user
 def main(
     project,
     zone,
     machine_type,
-    container_image,
     instance_name,
-    container,
+    instance_name_prefix,
     create_instance,
     delete_instance,
-    preemptible,
-    boot_disk_size,
-    boot_disk_type,
     image_project,
     image,
+    boot_disk_size,
+    boot_disk_type,
+    preemptible,
     await_ready,
     username,
+    container_image,
+    container_name,
+    docker_run,
     command,
 ):
 
@@ -67,7 +74,10 @@ def main(
     )
 
     # Args
-    instance_name = instance_name or 'junk-%s' % re.sub('[^0-9T]', '-', datetime.utcnow().isoformat()).lower()
+    instance_name = instance_name or '%s-%s' % (
+        instance_name_prefix,
+        re.sub('[^0-9T]', '-', datetime.utcnow().isoformat()).lower(),
+    )
 
     # Delete instance on exit
     #   - Use atexit so we can exec
@@ -79,22 +89,17 @@ def main(
             )
         atexit.register(_atexit)
 
-    # Create instance (with container)
+    # Create instance
     if create_instance:
         print(color('blue', 'Creating instance...'))
-        [res] = gcloud('beta', 'compute', 'instances', 'create-with-container', instance_name,
+        [res] = gcloud('beta', 'compute', 'instances', 'create', instance_name,
             zone=zone,
             image_project=image_project,
             image=image,
             boot_disk_type=boot_disk_type,
-            container_restart_policy='always',
-            container_privileged=True,
-            container_stdin=True,
-            container_tty=True,
             # tags='http-server,https-server',  # For ports 80/443
             boot_disk_size=boot_disk_size,
             machine_type=machine_type,
-            container_image=container_image,
             preemptible=preemptible,
         )
         assert res['name'] == instance_name
@@ -105,47 +110,53 @@ def main(
         print(color('blue', '  external_ip: %s' % external_ip))
 
     if await_ready or command:
-        container = container or instance_name  # Container name defaults to instance_name (convenient!)
         username = username or (
             gcloud('compute', 'os-login', 'describe-profile')['posixAccounts'][0]['username']
         )
 
-    # Wait until ssh'ing into the container succeeds
-    #   - gce create -- slow for some instance types
-    #   - docker pull -- slow for big images
+    # Wait until ssh'ing into the instance succeeds
     if await_ready:
-        print(color('blue', 'Awaiting container ready...'))
+        print(color('blue', 'Awaiting instance ready...'))
         retry(times=60, delay_s=1, f=lambda: (
             gcloud('compute', 'ssh', f'{username}@{instance_name}',
                 zone=zone,
-                # container=container, command='true',  # XXX
-                _end_args=['--', '-t', 'sudo', 'docker', 'exec', '-it', container, 'true'],
+                _end_args=['--', 'true'],
             )
         ))
-        print(color('blue', 'Container ready'))
+        print(color('blue', 'Instance ready'))
         print(color('blue', '  zone: %s' % zone))
         print(color('blue', '  instance_name: %s' % instance_name))
         if create_instance:
             print(color('blue', '  external_ip: %s' % external_ip))
-        print(color('blue', '  container: %s' % container))
 
-    # Run command in the container via ssh
+    # Run command via ssh
     #   - WARNING Careful with retry here: need to distinguish transient (network) vs. non-transient (command) errors
     if command:
-        print(color('blue', 'Connecting to container...'))
-        gcloud('compute', 'ssh', f'{username}@{instance_name}',
-            zone=zone,
-            # Allow command to be either:
-            #   - A single arg for `bash -c`, which means we shouldn't attempt to shlex.quote its tokens
-            #   - Multiple args, in which case we join by ' ' and treat like a single arg (no quoting), for uniformity
-            #   - WARNING --command always runs in the vm, even if you give --container; `docker run` manually instead
-            _end_args=[
-                '--',
-                '-t',
-                'sudo docker exec -it %s bash -c %s' % (shlex.quote(container), shlex.quote(' '.join(command))),
-            ],
-            _mode='exec',
-        )
+        command = 'bash -c %s' % shlex.quote(command)
+        if not container_image:
+            print(color('blue', f'Running command on instance[{instance_name}]...'))
+            gcloud('compute', 'ssh', f'{username}@{instance_name}',
+                zone=zone,
+                _mode='exec',
+                _end_args=['--', '-t', command],
+            )
+        else:
+            container_name = container_name or instance_name
+            print(color('blue', 'Running command on %s...' % ' / '.join([
+                f'instance[{instance_name}]',
+                f'image[{container_image}]',
+                f'container[{container_name}]',
+            ])))
+            gcloud('compute', 'ssh', f'{username}@{instance_name}',
+                zone=zone,
+                _mode='exec',
+                _end_args=['--', '-t', ' '.join([
+                    docker_run,
+                    '--name=%s' % shlex.quote(container_name),
+                    shlex.quote(container_image),
+                    command,
+                ])],
+            )
 
 
 @dataclass
@@ -163,29 +174,16 @@ class GCloud:
     def config(self) -> dict:
         return dataclasses.asdict(self)
 
-    def __call__(self, *args, _end_args=None, _mode='response', **kwargs):
+    def __call__(self, *args, _mode='response', **kwargs):
 
-        # Prepare args
+        # Build cmd
         kwargs = {**self.config, **kwargs}  # Silently overwrite duplicate keys with user keys
         if _mode == 'response':
             # So we can parse gcloud result as json (below)
             kwargs = dict(**kwargs, format='json')  # Loudly fail if user passed a 'format' key
-        gcloud_cmd = ' '.join([
-            'gcloud',
-            *map(shlex.quote, args),
-            *[
-                (
-                    '--%s' % shlex.quote(k) if v == True else
-                    '--%s=%s' % (shlex.quote(k), shlex.quote(v))
-                )
-                for k, v in kwargs.items()
-                for k in [k.replace('_', '-')]
-                if v
-            ],
-            *map(shlex.quote, (_end_args or [])),
-        ])
+        gcloud_cmd = shell_cmd('gcloud', *args, **kwargs)
 
-        # Build cmd
+        # Handle mode
         if _mode == 'exec':
             repro_cmd = gcloud_cmd
             real_cmd = ['bash', '-c', 'exec %s' % repro_cmd]
@@ -223,6 +221,22 @@ class GCloud:
                 if proc.stderr:
                     print(color(None, proc.stderr.decode()), end='', file=sys.stderr)
                 return json.loads(proc.stdout)
+
+
+def shell_cmd(*args, _end_args=None, **kwargs) -> str:
+    return ' '.join([
+        *map(shlex.quote, args),
+        *[
+            (
+                '--%s' % shlex.quote(k) if v == True else
+                '--%s=%s' % (shlex.quote(k), shlex.quote(v))
+            )
+            for k, v in kwargs.items()
+            for k in [k.replace('_', '-')]
+            if v
+        ],
+        *map(shlex.quote, (_end_args or [])),
+    ])
 
 
 def retry(f, times: int, delay_s: float):
