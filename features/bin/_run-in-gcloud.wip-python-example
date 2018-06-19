@@ -1,0 +1,36 @@
+#!/usr/bin/env python
+#
+# Assumes env:
+#   - GOOGLE_APPLICATION_CREDENTIALS -> .json key file for a service account
+
+import os
+
+import google.cloud as gcloud
+import google.cloud.storage
+
+# Env vars we rely on
+print('Using: GOOGLE_APPLICATION_CREDENTIALS=%s' % os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', ''))
+
+project = 'bubo-1'
+zone = 'us-west1-b'
+service_account_email = 'xxxxxxx@developer.gserviceaccount.com'
+
+client = gcloud.storage.Client(project=project)
+bucket = client.get_bucket('bubo-data')
+blob = bucket.blob('date')
+blob.upload_from_string('foo!')
+
+%%
+import googleapiclient.discovery
+import google.cloud as gcloud
+import google.cloud.storage
+
+storage = gcloud.storage.Client()
+list(storage.list_buckets())
+
+dirs(storage, _=True)
+type(storage._credentials)
+
+compute = googleapiclient.discovery.build('compute', 'v1', http=storage._http)
+
+help(compute.instances().insert)

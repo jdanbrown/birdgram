@@ -1,0 +1,250 @@
+#!/usr/bin/env python
+#
+# Example auth, e.g. for deploys:
+#   GOOGLE_APPLICATION_CREDENTIALS=~/.gcloud/gcloud-service-account-bubo.json bin/run-in-gcloud ...
+
+import atexit
+from datetime import datetime, timedelta
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+
+from attrdict import AttrDict
+import click
+import crayons
+import dataclasses
+from dataclasses import dataclass
+from potoo.pretty import pp
+
+
+# click: Default option(show_default=True)
+_click_option = click.option
+click.option = lambda *args, **kwargs: _click_option(*args, **{'show_default': True, **kwargs})
+
+
+@click.command(context_settings=dict(help_option_names=['-h', '--help']))
+@click.option('--project', default='bubo-1')
+@click.option('--zone', default='us-west1-b')
+@click.option('--machine-type', default='n1-standard-4', help='https://cloud.google.com/compute/pricing')
+@click.option('--container-image', default='ubuntu')
+@click.option('--instance-name', default=None)
+@click.option('--container', default=None)
+@click.option('--create-instance/--no-create-instance', default=True)
+@click.option('--delete-instance/--no-delete-instance', default=True)
+@click.option('--preemptible/--no-preemptible', default=False)
+@click.option('--boot-disk-size', default='200GB')
+@click.option('--boot-disk-type', default='pd-standard')
+@click.option('--image-project', default='cos-cloud')
+@click.option('--image', default='cos-stable-67-10575-55-0')
+@click.option('--await-ready/--no-await-ready', default=True)
+@click.option('--username', default=None)
+@click.argument('command', nargs=-1)
+def main(
+    project,
+    zone,
+    machine_type,
+    container_image,
+    instance_name,
+    container,
+    create_instance,
+    delete_instance,
+    preemptible,
+    boot_disk_size,
+    boot_disk_type,
+    image_project,
+    image,
+    await_ready,
+    username,
+    command,
+):
+
+    gcloud = GCloud(
+        project=project,
+    )
+
+    # Args
+    instance_name = instance_name or 'junk-%s' % re.sub('[^0-9T]', '-', datetime.utcnow().isoformat()).lower()
+
+    # Delete instance on exit
+    #   - Use atexit so we can exec
+    if delete_instance:
+        def _atexit():
+            gcloud('compute', 'instances', 'delete', instance_name,
+                zone=zone,
+                _mode='async',
+            )
+        atexit.register(_atexit)
+
+    # Create instance (with container)
+    if create_instance:
+        print(color('blue', 'Creating instance...'))
+        [res] = gcloud('beta', 'compute', 'instances', 'create-with-container', instance_name,
+            zone=zone,
+            image_project=image_project,
+            image=image,
+            boot_disk_type=boot_disk_type,
+            container_restart_policy='always',
+            container_privileged=True,
+            container_stdin=True,
+            container_tty=True,
+            # tags='http-server,https-server',  # For ports 80/443
+            boot_disk_size=boot_disk_size,
+            machine_type=machine_type,
+            container_image=container_image,
+            preemptible=preemptible,
+        )
+        assert res['name'] == instance_name
+        external_ip = res['networkInterfaces'][0]['accessConfigs'][0]['natIP']
+        print(color('blue', 'Created instance:'))
+        print(color('blue', '  zone: %s' % zone))
+        print(color('blue', '  instance_name: %s' % instance_name))
+        print(color('blue', '  external_ip: %s' % external_ip))
+
+    if await_ready or command:
+        container = container or instance_name  # Container name defaults to instance_name (convenient!)
+        username = username or (
+            gcloud('compute', 'os-login', 'describe-profile')['posixAccounts'][0]['username']
+        )
+
+    # Wait until ssh'ing into the container succeeds
+    #   - gce create -- slow for some instance types
+    #   - docker pull -- slow for big images
+    if await_ready:
+        print(color('blue', 'Awaiting container ready...'))
+        retry(times=60, delay_s=1, f=lambda: (
+            gcloud('compute', 'ssh', f'{username}@{instance_name}',
+                zone=zone,
+                # container=container, command='true',  # XXX
+                _end_args=['--', '-t', 'sudo', 'docker', 'exec', '-it', container, 'true'],
+            )
+        ))
+        print(color('blue', 'Container ready'))
+        print(color('blue', '  zone: %s' % zone))
+        print(color('blue', '  instance_name: %s' % instance_name))
+        if create_instance:
+            print(color('blue', '  external_ip: %s' % external_ip))
+        print(color('blue', '  container: %s' % container))
+
+    # Run command in the container via ssh
+    #   - WARNING Careful with retry here: need to distinguish transient (network) vs. non-transient (command) errors
+    if command:
+        print(color('blue', 'Connecting to container...'))
+        gcloud('compute', 'ssh', f'{username}@{instance_name}',
+            zone=zone,
+            # Allow command to be either:
+            #   - A single arg for `bash -c`, which means we shouldn't attempt to shlex.quote its tokens
+            #   - Multiple args, in which case we join by ' ' and treat like a single arg (no quoting), for uniformity
+            #   - WARNING --command always runs in the vm, even if you give --container; `docker run` manually instead
+            _end_args=[
+                '--',
+                '-t',
+                'sudo docker exec -it %s bash -c %s' % (shlex.quote(container), shlex.quote(' '.join(command))),
+            ],
+            _mode='exec',
+        )
+
+
+@dataclass
+class GCloud:
+    """
+    A thin wrapper around the gcloud cli, because it's better documented and easier to figure out than the actual
+    google-cloud python libs
+    """
+
+    # Defaults
+    project: str
+    quiet: bool = True  # No prompts, accept defaults
+
+    @property
+    def config(self) -> dict:
+        return dataclasses.asdict(self)
+
+    def __call__(self, *args, _end_args=None, _mode='response', **kwargs):
+
+        # Prepare args
+        kwargs = {**self.config, **kwargs}  # Silently overwrite duplicate keys with user keys
+        if _mode == 'response':
+            # So we can parse gcloud result as json (below)
+            kwargs = dict(**kwargs, format='json')  # Loudly fail if user passed a 'format' key
+        gcloud_cmd = ' '.join([
+            'gcloud',
+            *map(shlex.quote, args),
+            *[
+                (
+                    '--%s' % shlex.quote(k) if v == True else
+                    '--%s=%s' % (shlex.quote(k), shlex.quote(v))
+                )
+                for k, v in kwargs.items()
+                for k in [k.replace('_', '-')]
+                if v
+            ],
+            *map(shlex.quote, (_end_args or [])),
+        ])
+
+        # Build cmd
+        if _mode == 'exec':
+            repro_cmd = gcloud_cmd
+            real_cmd = ['bash', '-c', 'exec %s' % repro_cmd]
+        elif _mode == 'async':
+            repro_cmd = '%s >/dev/null 2>/dev/null &' % gcloud_cmd  # TODO Use nohup? [How to prevent nohup.out file?]
+            real_cmd = ['bash', '-c', repro_cmd]
+        else:
+            repro_cmd = gcloud_cmd
+            real_cmd = ['bash', '-c', repro_cmd]
+        print(color('black', f'$ {repro_cmd}'))
+        # print(color('red', f'$ {real_cmd}'))  # Debug
+
+        # Run cmd
+        if _mode == 'exec':
+            # Run, wait for completion, and exit with cmd's exit status
+            #   - Passthru fd's (e.g. stdin/stdout/stderr)
+            #   - Don't actually exec here since it wouldn't run our atexit handlers (delete instance)
+            proc = subprocess.run(real_cmd)
+            sys.exit(proc.returncode)
+        elif _mode == 'async':
+            # Run, ignore result
+            #   - Assume cmd is already async via something like bash's '&', from above
+            subprocess.run(real_cmd)
+        else:
+            # Run, wait for completion, parse output (assumes '--format=json', above)
+            proc = subprocess.run(real_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # Handle result
+            if proc.returncode != 0:
+                msg = 'Exit %s: %s' % (proc.returncode, re.sub('\n+\s*', ' ', proc.stderr.decode().strip()))
+                if proc.stdout:
+                    msg += f', stdout[{stdout.decode()}]'
+                raise Exception(msg)
+            else:
+                if proc.stderr:
+                    print(color(None, proc.stderr.decode()), end='', file=sys.stderr)
+                return json.loads(proc.stdout)
+
+
+def retry(f, times: int, delay_s: float):
+    attempt = 1
+    while True:
+        try:
+            return f()
+        except Exception as e:
+            print(color('yellow', f'Retrying[{attempt}/{times}] in {delay_s}s after error: {e}'))
+            time.sleep(delay_s)
+            attempt += 1
+            if attempt > times:
+                break
+
+
+def color(name: str, s: str, **kwargs) -> str:
+    kwargs.setdefault('bold', True)  # Bold is great
+    return s if not name else getattr(crayons, name)(s, **kwargs)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (KeyboardInterrupt, EOFError):
+        pass

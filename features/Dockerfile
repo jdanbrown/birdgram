@@ -79,8 +79,10 @@ RUN cd /tmp \
 WORKDIR /app
 
 # conda/pip/R reqs
-COPY environment.yml requirements.txt ./
+COPY environment.yml ./
 RUN conda env update -f environment.yml
+COPY requirements.txt ./
+RUN pip install -U -r requirements.txt
 COPY Rdepends.R ./
 RUN Rscript --vanilla Rdepends.R
 
@@ -96,4 +98,5 @@ ENV MATPLOTLIBRC "/root/.matplotlib"
 # Run all cmds within tini, else e.g. `juypter notebook` dies
 # - http://jupyter-notebook.readthedocs.io/en/stable/public_server.html#docker-cmd
 # - https://blog.phusion.nl/2015/01/20/docker-and-the-pid-1-zombie-reaping-problem/
-ENTRYPOINT ["tini", "-g", "--"]
+# - TODO Do this manually when running anything `jupyter ...`
+# ENTRYPOINT ["tini", "-g", "--"]
