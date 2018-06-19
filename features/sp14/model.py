@@ -34,7 +34,7 @@ from frozendict import frozendict
 import hashlib
 import itertools
 import json
-from typing import Iterable, Mapping, Union
+from typing import Iterable, Mapping, Optional, Union
 import uuid
 
 from attrdict import AttrDict
@@ -42,6 +42,7 @@ import dask
 from dataclasses import dataclass, field
 import joblib
 import numpy as np
+from potoo.numpy import np_sample_stratified
 from potoo.util import round_sig
 import sklearn as sk
 import yaml
@@ -523,14 +524,22 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
 
     #
     # Config
+    #   - TODO Pull up agg_funs from Projection (and add a self.transform to populate .feat)
     #
 
-    # Params
-    #   - TODO Pull up agg_funs from Projection (and add a self.transform to populate .feat)
-    classifier: str
-    # classifier: str = 'cls: knn, n_neighbors: 3'
-    # classifier: str = 'cls: svm, random_state: 0, probability: true, kernel: rbf, C: 10'  # Like [SBF16]
-    # classifier: str = 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 200'  # Like [SP14]
+    # Useful for learning curves
+    #   - Downsample per class losing all instances from any class causes incidental complexity elsewhere (e.g. sklearn)
+    downsample_classes: Optional[Union[int, float]] = None
+
+    # Params for classifier, e.g.
+    #   - classifier: str = 'cls: knn, n_neighbors: 3'
+    #   - classifier: str = 'cls: svm, random_state: 0, probability: true, kernel: rbf, C: 10'  # Like [SBF16]
+    #   - classifier: str = 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 200'  # Like [SP14]
+    classifier: str = None
+
+    # For downsample_classes (separate from any random_state that might be in classifier params)
+    random_state: int = 0
+
     # verbose: bool = True  # Like GridSearchCV [TODO Hook this up to log / TODO Think through caching implications]
 
     # Dependencies [TODO Simplify with dataclasses.InitVar?]
@@ -558,6 +567,13 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     def fit(self, X, y) -> 'self':
         """feat (k*a,) -> ()"""
         # log.info(f'Search.fit... classifier[{self.classifier}]')
+        if self.downsample_classes is not None:
+            X, y = np_sample_stratified(
+                X, y,
+                **{'n' if isinstance(self.downsample_classes, int) else 'frac': self.downsample_classes},
+                random_state=self.random_state,
+                allow_fewer=True,  # Allow min(n, len(class)) instances in case some class is <n
+            )
         sk.utils.validation.check_X_y(X, y)
         self.X_ = X
         self.y_ = y
@@ -575,7 +591,10 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         # log.info(f'Search.fit. classifier[{self.classifier}]')
         return self
 
-    @cache(version=3, key=lambda self, X, y: (self.classifier_config, X, y))
+    @cache(version=4, key=lambda self, X, y: (
+        self.classifier_config, {k: v for k, v in self.config.items() if k != 'classifier'},  # Prefer classifier dict over str
+        X, y,
+    ))
     def _fit_pure(self, X: np.ndarray, y: np.ndarray) -> sk.base.BaseEstimator:
         """classifier <- .feat (k*a,)"""
         classifier = self._make_classifier(**self.classifier_config)

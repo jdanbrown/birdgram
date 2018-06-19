@@ -20,7 +20,7 @@ from itertools import *
 from more_itertools import *
 import PIL
 from potoo.pandas import df_ensure, df_summary
-from potoo.util import singleton
+from potoo.util import singleton, strip_startswith
 import requests
 
 
@@ -269,9 +269,17 @@ def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
             }
         ]))
         .reset_index(drop=True)
-        .assign(model_id=lambda df: df.apply(axis=1, func=lambda row: '; '.join(flatten([
-            [row[k] for k in row.index if k.startswith('param_')],
-            ['fold: %s' % row.fold],
+        .assign(params=lambda df: df.apply(axis=1, func=lambda row: ', '.join([
+            '%s[%s]' % (strip_startswith(k, 'param_'), row[k])
+            for k in row.index
+            if k.startswith('param_')
+        ])))
+        .assign(model_id=lambda df: df.apply(axis=1, func=lambda row: (
+            '%s, fold[%s]' % (row.params, row.fold),
+        )))
+        .assign(model_id=lambda df: df.apply(axis=1, func=lambda row: ', '.join(flatten([
+            ['%s[%s]' % (strip_startswith(k, 'param_'), row[k]) for k in row.index if k.startswith('param_')],
+            ['fold[%s]' % row.fold],
         ]))))
         .pipe(lambda df: df_reorder_cols(df, first=list(flatten([
             ['model_id'],

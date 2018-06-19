@@ -1,14 +1,21 @@
-bubor/bubor.Rproj
-bubor/.Rbuildignore
-.Rproj.user/
-bubo.Rproj
-*.Rhistory
-*.RData
-*.Ruserdata
+# Python
 *.pyc
 *.egg-info/
 .ipynb_checkpoints/
-data
-caffe/
-.Rproj.user
 .pytest_cache/
+
+# R
+*.Rproj
+.Rproj.user/
+*.Rhistory
+*.RData
+*.Ruserdata
+
+# Project
+bubor/bubor.Rproj
+bubor/.Rbuildignore
+caffe/
+
+# data
+data/*
+!data/bin/

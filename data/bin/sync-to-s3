@@ -1,0 +1,14 @@
+#!/bin/bash -eux
+#
+# TODO Add more paths to sync
+# - `gsutil rsync` only has an exclude option (-x), but not include option...
+# - `s3cmd sync` has more flexible include/exclude options -- use those
+
+data_dir="$HOME/hack/bubo/data"
+s3_dir='s3://jdanbrown-bubo/data'
+
+# XXX Veeeery slow to check s3 targets
+# gsutil -m rsync -dr "$@" {"$data_dir","$s3_dir"}/xc/
+
+# --no-check-md5 because it's slow and s3cmd already finds basic file differences using something like timestamp or size
+s3cmd sync -v --no-check-md5 "$@" {"$data_dir","$s3_dir"}/xc/
