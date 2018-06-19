@@ -74,29 +74,28 @@ RUN cd /tmp \
 # - And then I realized that I only need `jupyter notebook` for remote atom kernels, not full-blown docker
 #   - Woohoo! Defer docker for now!
 
-# TODO Make a new /app, or reuse the /Users/danb/hack/bubo/features that we'll mount during `docker run`?
-# - Maybe it's harmless to make a new /app? And let /Users/danb/hack/bubo/features only be used for data/ interactions?
-WORKDIR /app
-
-# conda/pip/R reqs
-COPY environment.yml ./
-RUN conda env update -f environment.yml
-COPY requirements.txt ./
-RUN pip install -U -r requirements.txt
-COPY Rdepends.R ./
-RUN Rscript --vanilla Rdepends.R
-
-# App code
-COPY . ./
-RUN pip install -e .
-
-# Make linux look in the same place for matplotlibrc as all other platforms (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)
-# (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx) (e.g. osx)
-# - http://matplotlib.org/users/customizing.html#customizing-matplotlib
-ENV MATPLOTLIBRC "/root/.matplotlib"
-
-# Run all cmds within tini, else e.g. `juypter notebook` dies
-# - http://jupyter-notebook.readthedocs.io/en/stable/public_server.html#docker-cmd
-# - https://blog.phusion.nl/2015/01/20/docker-and-the-pid-1-zombie-reaping-problem/
-# - TODO Do this manually when running anything `jupyter ...`
-# ENTRYPOINT ["tini", "-g", "--"]
+# # TODO Make a new /app, or reuse the /Users/danb/hack/bubo/features that we'll mount during `docker run`?
+# # - Maybe it's harmless to make a new /app? And let /Users/danb/hack/bubo/features only be used for data/ interactions?
+# WORKDIR /app
+#
+# # conda/pip/R reqs
+# COPY environment.yml ./
+# RUN conda env update -f environment.yml
+# COPY requirements.txt ./
+# RUN pip install -U -r requirements.txt
+# COPY Rdepends.R ./
+# RUN Rscript --vanilla Rdepends.R
+#
+# # App code
+# COPY . ./
+# RUN pip install -e .
+#
+# # Make linux look in the same place for matplotlibrc as all other platforms (e.g. osx)
+# # - http://matplotlib.org/users/customizing.html#customizing-matplotlib
+# ENV MATPLOTLIBRC "/root/.matplotlib"
+#
+# # Run all cmds within tini, else e.g. `juypter notebook` dies
+# # - http://jupyter-notebook.readthedocs.io/en/stable/public_server.html#docker-cmd
+# # - https://blog.phusion.nl/2015/01/20/docker-and-the-pid-1-zombie-reaping-problem/
+# # - TODO Do this manually when running anything `jupyter ...`
+# # ENTRYPOINT ["tini", "-g", "--"]
