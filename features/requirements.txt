@@ -1,9 +1,11 @@
 # XXX This worked with `pip install`, but doesn't work with `conda env`. Have to manually `pip install -e .` instead.
 # -e /Users/danb/bubo/features
 
-# TODO Switch these back to github urls
--e /Users/danb/hack/potoo
--e /Users/danb/hack/joblib
+# TODO TODO Reconcile local vs. github
+# -e /Users/danb/hack/potoo
+# -e /Users/danb/hack/joblib
+git+https://github.com/jdanbrown/potoo.git@d10264c#egg=potoo
+git+https://github.com/jdanbrown/joblib.git@e205833#egg=joblib
 
 attrdict==2.0.0
 attrs==18.1.0
