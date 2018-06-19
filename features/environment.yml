@@ -38,8 +38,6 @@ dependencies:
 - libsndfile=1.0.27
 - r-rgl=0.98.1 # FIXME Usage fails when trying to load libintl (repro: seewave spectro3D)
 
-# HACK Disabled to split up the docker build, since a fresh `conda update` takes a while
-#
 # pip deps
 # - Keep pip deps in reqs.txt so we can workaround https://github.com/pypa/pip/issues/2837
 #   - We have to -U manually because we can't do it in here
@@ -47,5 +45,7 @@ dependencies:
 #   - We could -e in here except it causes other problems
 #     - https://github.com/conda/conda/issues/5861
 #     - https://github.com/pypa/pip/issues/4688
+#
+# HACK Disabled to split up the docker build, since a fresh `conda update` takes a while
 # - pip:
 #   - -r requirements.txt
