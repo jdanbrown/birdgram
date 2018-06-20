@@ -4,7 +4,7 @@ $ conda env create -f environment.yml
 $ source activate bubo-features
 $ pip install -U -r requirements.txt # Run manually so we can separate the conda/pip steps in docker build
 $ pip install -e .
-$ Rscript --vanilla Rdepends.R
+$ Rscript --vanilla Rdepends.R # FIXME This takes forever
 ```
 
 ## Update python env after changing `environment.yml` or `requirements.txt`
