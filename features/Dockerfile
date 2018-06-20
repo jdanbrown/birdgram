@@ -65,6 +65,13 @@ RUN cd /tmp \
  && conda config --system --set show_channel_urls true \
  && rm -rf "$HOME/.cache/yarn"
 
+# More native deps to workaround issues I couldn't resolve in conda alone
+RUN apt-get update \
+ && apt-get install -yq --no-install-recommends \
+    libreadline-dev \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
 # TODO TODO WIP WIP YOU ARE HERE
 # - Everything above was easy
 # - Things got complicated when I started thinking about how to make a happy dev workflow
@@ -79,6 +86,17 @@ RUN cd /tmp \
 WORKDIR /app
 
 # conda/pip/R reqs
+# - Use `-n base` to install into the global ("base") conda env instead of the one named in env.yml (bubo-features)
+#
+# The "headstart" files are a rough, laggy approximation to environment.yml/requirements.txt whose purpose is to provide
+# a helpful docker layer to speed up building the `conda env update`/`pip install` docker layers. It's ok for these
+# packages to be too old, too new, and incomplete, since the ones in environment.yml/requirements.txt will override
+# them. Changing the "headstart" files will make the next build take a while.
+#
+COPY _environment-headstart.yml ./
+RUN conda env update -n base -f _environment-headstart.yml
+COPY _requirements-headstart.txt ./
+RUN pip install -U -r _requirements-headstart.txt
 COPY environment.yml ./
 RUN conda env update -n base -f environment.yml
 COPY requirements.txt ./

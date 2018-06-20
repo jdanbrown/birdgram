@@ -21,6 +21,7 @@ dependencies:
 
 # R
 - rpy2=2.8.5 # TODO How to install 2.9.3 without conflicts? [HACK We install rpy2==2.9.2 in requirements.txt]
+# - gfortran_linux-64=7.2.0 # TODO Doesn't work on osx! (duh) -- TODO TODO maybe libgfortran instead? what was the rpy2 error again?
 
 # R packages
 # - See Rdepends.R for non-conda deps

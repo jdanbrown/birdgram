@@ -1,0 +1,29 @@
+# The "headstart" files are a rough, laggy approximation to environment.yml/requirements.txt whose purpose is to provide
+# a helpful docker layer to speed up building the `conda env update`/`pip install` docker layers. It's ok for these
+# packages to be too old, too new, and incomplete, since the ones in environment.yml/requirements.txt will override
+# them. Changing the "headstart" files will make the next build take a while.
+
+name: bubo-features
+channels:
+- conda-forge
+dependencies:
+- fftw=3.3.7
+- libsndfile=1.0.27
+- matplotlib=2.1.1
+- numpy=1.14.5
+- openblas=0.2.20
+- pandas=0.23.0
+- pillow=4.3.0
+- pip==9.0.3
+- python=3.6.5
+- r-devtools=1.13.5
+- r-ggally=1.3.2
+- r-ggridges=0.5.0
+- r-irkernel=0.8.11
+- r-mapproj=1.2.6
+- r-rgl=0.98.1
+- r-skimr=1.0.2
+- r-tidyverse=1.1.1
+- rpy2=2.8.5
+- scikit-learn=0.19.1
+- scipy=1.1.0
