@@ -41,7 +41,7 @@ python_speech_features==0.6
 pyyaml==3.12
 requests-html==0.9.0
 retry==0.9.2
-rpy2==2.9.2 # >=2.9.2 so we have the fix for fractional -w/-h args to %R
+# rpy2==2.9.2 # >=2.9.2 so we have the fix for fractional -w/-h args to %R
 scikit-misc==0.1.1
 git+https://github.com/scikit-signal/pytftb@ac2b6a2#egg=pytftb
 snakeviz==0.4.2
