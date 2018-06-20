@@ -101,8 +101,11 @@ COPY environment.yml ./
 RUN conda env update -n base -f environment.yml
 COPY requirements.txt ./
 RUN pip install -U -r requirements.txt
-COPY Rdepends.R ./
-RUN Rscript --vanilla Rdepends.R
+# FIXME Big can of worms here, giving up for now since I don't rely much on R right now
+#   - First errors fixed by: `apt-get install gfortran libudunits2-dev`
+#   - Next error: fftw, and maybe some more...
+# COPY Rdepends.R ./
+# RUN Rscript --vanilla Rdepends.R
 
 # App code
 COPY . ./
