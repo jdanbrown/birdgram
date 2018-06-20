@@ -80,7 +80,7 @@ WORKDIR /app
 
 # conda/pip/R reqs
 COPY environment.yml ./
-RUN conda env update -f environment.yml
+RUN conda env update -n base -f environment.yml
 COPY requirements.txt ./
 RUN pip install -U -r requirements.txt
 COPY Rdepends.R ./
@@ -101,8 +101,8 @@ ENV MATPLOTLIBRC "/root/.matplotlib"
 # ENTRYPOINT ["tini", "-g", "--"]
 
 # TODO Caching
-#   docker pull bubo/features:latest
-#   docker build . --cache-from=bubo/features:latest # Requires `docker pull` first
+#   sudo docker pull bubo/features:latest # Have to pull before --cache-from
+#   sudo docker build . --cache-from=bubo/features:latest
 
 # TODO Auth
 #   scp ~/.docker-jdanbrown/config.json-for-deploy /secrets/.docker/
