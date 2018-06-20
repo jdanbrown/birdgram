@@ -47,6 +47,7 @@ click.option = lambda *args, **kwargs: _click_option(*args, **{'show_default': T
 @click.option('--username', default=None, help='Defaults to your os-login username')
 @click.option('--container-image', default=None, help='Run command in container if given, else run in the instance')
 @click.option('--container-name', default=None, help='Defaults to instance_name')
+@click.option('--docker-pull', default='sudo docker pull')
 @click.option('--docker-run', default='sudo docker run -it --privileged --restart=no --rm')
 @click.argument('command', nargs=1, required=False)  # One cmd string, e.g. quoted by the user
 def main(
@@ -67,6 +68,7 @@ def main(
     username,
     container_image,
     container_name,
+    docker_pull,
     docker_run,
     command,
 ):
@@ -160,6 +162,10 @@ def main(
                 zone=zone,
                 _mode='exec',
                 _end_args=['--', '-t', ' '.join([
+                    'set -x &&',
+                    docker_pull,
+                    shlex.quote(container_image),
+                    '&&',
                     docker_run,
                     '--name=%s' % shlex.quote(container_name),
                     shlex.quote(container_image),
