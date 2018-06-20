@@ -35,6 +35,7 @@ click.option = lambda *args, **kwargs: _click_option(*args, **{'show_default': T
 @click.option('--machine-type', default='n1-standard-4', help='https://cloud.google.com/compute/pricing')
 @click.option('--instance-name', default=None, help='Defaults to: "<instance-name-prefix>-<timestamp>"')
 @click.option('--instance-name-prefix', default='run-in-gcloud')
+@click.option('--reuse', default=None)
 @click.option('--create-instance/--no-create-instance', default=True)
 @click.option('--delete-instance/--no-delete-instance', default=True)
 @click.option('--image-project', default='cos-cloud')
@@ -54,6 +55,7 @@ def main(
     machine_type,
     instance_name,
     instance_name_prefix,
+    reuse,
     create_instance,
     delete_instance,
     image_project,
@@ -78,6 +80,13 @@ def main(
         instance_name_prefix,
         re.sub('[^0-9T]', '-', datetime.utcnow().isoformat()).lower(),
     )
+    if reuse:
+        create_instance = False
+        delete_instance = False
+        await_ready = False
+        instance_name = reuse
+    if command is None:
+        command = 'bash'
 
     # Delete instance on exit
     #   - Use atexit so we can exec
