@@ -91,7 +91,7 @@ class XC(DataclassUtil):
 
     @property
     @lru_cache()
-    @cache(version=3, key=lambda self: (
+    @cache(version=4, key=lambda self: (
         self,
         # TODO Re-enable after we stop downloading all the time, since cache miss is slow (~45s)
         #   - In the meantime, manually bump version after big jumps in downloads

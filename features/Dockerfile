@@ -1,5 +1,3 @@
-# TODO TODO WIP Untested (see "WIP" below)
-
 # Based on:
 # - https://github.com/jupyter/docker-stacks/blob/master/base-notebook/Dockerfile
 # - https://github.com/jupyter/docker-stacks/blob/master/minimal-notebook/Dockerfile
@@ -72,14 +70,30 @@ RUN apt-get update \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-# TODO TODO WIP WIP YOU ARE HERE
-# - Everything above was easy
-# - Things got complicated when I started thinking about how to make a happy dev workflow
-#   - e.g. how to make `-e ~/hack/potoo` in requirements.txt work?
-#     - We'll mount `-v /Users:/Users` on `docker run` (see bin/docker-run), but we can't do it during `docker build`...
-#     - Maybe we can just copy some mock files for now? e.g. just a lone ~/hack/potoo/setup.py?
-# - And then I realized that I only need `jupyter notebook` for remote atom kernels, not full-blown docker
-#   - Woohoo! Defer docker for now!
+# NOTE Useful docker images
+# - ubuntu:bionic
+# - docker:18.03.1
+# - google/cloud-sdk:latest
+
+# TODO Caching
+# - Useful cmds:
+#   - sudo docker pull bubo/features:latest # Have to pull before --cache-from
+#   - sudo docker build . --cache-from=bubo/features:latest
+# - Docker version matters
+#   - v17 vs. v18 will cause --cache-from to not match
+#   - gcloud cos is v17, docker-for-mac is v18, (and coreos is v18 but ssh seems busted)
+#   - [cos] How to `docker build` using v18:
+#     - sudo docker run -v/var/run/docker.sock:/var/run/docker.sock -v... -it docker:18.03.1
+#     - sudo docker run -v/var/run/docker.sock:/var/run/docker.sock -w/app -v$PWD:/app -it docker:18.03.1 sh -c 'docker pull bubo/features:latest && docker build . --cache-from=bubo/features:latest'
+#   - [cos] How to `gcloud`:
+#     - sudo docker run -v/var/run/docker.sock:/var/run/docker.sock -w/app -v$PWD:/app -it google/cloud-sdk
+#   - [cos/gcloud] How to `docker push` to gcr:
+#     - gcloud auth configure-docker --quiet
+#     - docker tag <image> gcr.io/bubo-1/bubo/features:<tag>
+
+# TODO Auth
+#   scp ~/.docker-jdanbrown/config.json-for-deploy /secrets/.docker/
+#   sudo docker --config=/secrets/.docker/ push bubo/features:latest
 
 # TODO Make a new /app, or reuse the /Users/danb/hack/bubo/features that we'll mount during `docker run`?
 # - Maybe it's harmless to make a new /app? And let /Users/danb/hack/bubo/features only be used for data/ interactions?
@@ -107,10 +121,6 @@ RUN pip install -U -r requirements.txt
 # COPY Rdepends.R ./
 # RUN Rscript --vanilla Rdepends.R
 
-# App code
-COPY . ./
-RUN pip install -e .
-
 # Make linux look in the same place for matplotlibrc as all other platforms (e.g. osx)
 # - http://matplotlib.org/users/customizing.html#customizing-matplotlib
 ENV MATPLOTLIBRC "/root/.matplotlib"
@@ -121,10 +131,8 @@ ENV MATPLOTLIBRC "/root/.matplotlib"
 # - TODO Do this manually when running anything `jupyter ...`
 # ENTRYPOINT ["tini", "-g", "--"]
 
-# TODO Caching
-#   sudo docker pull bubo/features:latest # Have to pull before --cache-from
-#   sudo docker build . --cache-from=bubo/features:latest
-
-# TODO Auth
-#   scp ~/.docker-jdanbrown/config.json-for-deploy /secrets/.docker/
-#   sudo docker --config=/secrets/.docker/ push bubo/features:latest
+# App code
+# - Do this last for fast dev cycle
+# - (See .dockerignore for exclusions)
+COPY . ./
+RUN pip install -e .

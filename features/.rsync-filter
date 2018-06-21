@@ -1,0 +1,21 @@
+# Per-dir file read by `rsync -F`
+
+# bubo
+- /_attic/
+- /notebooks/
+
+# python
+- *.pyc
+- *.egg-info/
+- .ipynb_checkpoints/
+- .pytest_cache/
+
+# R
+- *.Rproj
+- .Rproj.user/
+- *.Rhistory
+- *.RData
+- *.Ruserdata
+
+# Dan junk
+- .tags*

@@ -1,0 +1,18 @@
+#!/bin/bash -eu
+#
+# References:
+# - https://cloud.google.com/compute/docs/instances/managing-instance-access
+# - https://console.cloud.google.com/compute/metadata/sshKeys
+# - WARNING If you enable os-login then you apparently can't use ssh keys (I don't see this in the docs anywhere...)
+
+bin="`dirname "$0"`"
+
+# TODO Allow more opts (e.g. --project, --zone)
+# - Workaround: Set default project and zone in `gcloud config` (= ~/.config/gcloud/configurations/)
+host="$1"; shift
+
+ssh_key_file="$bin/../../../.bubo-secrets/ssh/bubo_id_rsa"
+if [[ "$host" = *@* ]]; then user_host="$host"; else user_host="bubo@$host"; fi
+
+set -x
+exec gcloud compute ssh --ssh-key-file="$ssh_key_file" "$user_host" -- -q "$@"
