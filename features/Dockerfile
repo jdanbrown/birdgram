@@ -70,31 +70,6 @@ RUN apt-get update \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-# NOTE Useful docker images
-# - ubuntu:bionic
-# - docker:18.03.1
-# - google/cloud-sdk:latest
-
-# TODO Caching
-# - Useful cmds:
-#   - sudo docker pull bubo/features:latest # Have to pull before --cache-from
-#   - sudo docker build . --cache-from=bubo/features:latest
-# - Docker version matters
-#   - v17 vs. v18 will cause --cache-from to not match
-#   - gcloud cos is v17, docker-for-mac is v18, (and coreos is v18 but ssh seems busted)
-#   - [cos] How to `docker build` using v18:
-#     - sudo docker run -v/var/run/docker.sock:/var/run/docker.sock -v... -it docker:18.03.1
-#     - sudo docker run -v/var/run/docker.sock:/var/run/docker.sock -w/app -v$PWD:/app -it docker:18.03.1 sh -c 'docker pull bubo/features:latest && docker build . --cache-from=bubo/features:latest'
-#   - [cos] How to `gcloud`:
-#     - sudo docker run -v/var/run/docker.sock:/var/run/docker.sock -w/app -v$PWD:/app -it google/cloud-sdk
-#   - [cos/gcloud] How to `docker push` to gcr:
-#     - gcloud auth configure-docker --quiet
-#     - docker tag <image> gcr.io/bubo-1/bubo/features:<tag>
-
-# TODO Auth
-#   scp ~/.docker-jdanbrown/config.json-for-deploy /secrets/.docker/
-#   sudo docker --config=/secrets/.docker/ push bubo/features:latest
-
 # TODO Make a new /app, or reuse the /Users/danb/hack/bubo/features that we'll mount during `docker run`?
 # - Maybe it's harmless to make a new /app? And let /Users/danb/hack/bubo/features only be used for data/ interactions?
 WORKDIR /app

@@ -1,49 +1,83 @@
 #!/bin/bash -eu
+set -o pipefail
+#
+# Usage:
+#   `basename $0` [options]
+#
+# Options:
+#   --project X                  [default: bubo-1]                   The GCP project
+#   --gce-image-family X         [default: bubo-cache]               The GCE image family to boot from and save to
+#   --instance-prefix X          [default: \$gce_image_family]        Prefix to use in naming the temp GCE instance
+#   --reuse INSTANCE             [default: ]                         Reuse an existing GCE instance (e.g. for dev)
+#   --boot-disk-size X           [default: 15g]                      Minimal: you can't boot a disk smaller than its image
+#   --boot-image-family X        [default: \$gce_image_family]        The GCE image family to boot from
+#   --build-dir X                [default: build]                    The remote dir to use for the docker build
+#   --image-with-docker-build X  [default: docker:18.03.1]           Match OSX docker version, else --cache-from will miss
+#   --image-with-gcr X           [default: google/cloud-sdk:203.0.0] An image with gcloud and docker, for GCR pull/push
+#   --image X                    [default: bubo/features]            The docker image to build
+#   --image-tag X                [default: latest]                   The docker image tag to build
+#   --image-repo X               [default: gcr.io/\$project]          The docker repo to push to
+#   --save-gce-image             [default: false]                    Save a GCE image from the instance to speed up future builds
 
+# Constants
+bin="`dirname "$0"`"
+bubo_dir="$bin/../.."
+bubo_features_dir="$bubo_dir/features"
+
+# Parse args
+docopts -h 'usage:' : x -h >/dev/null 2>/dev/null || { echo 'ERROR: docopts needs `pip install docopt==0.6.2`'; exit 1; }
+usage="$(cat "$0" | sed -En '/^# Usage:/ { :loop; /^($|[^#])/q; s/^#($| )//p; n; b loop }' || true)"
+eval "$(eval $'cat <<EOF\n'"$usage"$'\nEOF' | docopts -h - : "$@")"
+# Re-eval to expand options containing $var's [TODO Don't break on values containing '/"]
+eval "$(eval $'cat <<EOF\n'"$usage"$'\nEOF' | docopts -h - : "$@" | tr \' \")"
+
+# Derived args
+run_id="`date -u +%Y%m%dt%H%M%Sz`-`openssl rand -hex 4`"
+if [[ "$reuse" == '' ]]; then
+  instance="$instance_prefix-$run_id"
+  instance_image="$instance"
+else
+  instance="$reuse"
+  instance_image="$instance-$run_id"
+fi
+repo_image="${image_repo:+$image_repo/}$image"
+repo_image_tag="$repo_image:$image_tag"
+
+# Utils
 show_cmd() { echo >&2; (set -x; "$@"); }
 banner() { echo -e "\n#\n# $*\n#"; }
-
-bin="`dirname "$0"`"
-bubo="$bin/../.."
-bubo_features="$bubo/features"
-
-[ $# -eq 0 ] || {
-  echo "Usage: $0"
-  exit 1
-}
-
-# TODO Take opts to override these
-# TODO Assumes at least one --image-family=bubo-build gce image exists -- provide a fallback if it doesn't
-project='bubo-1'
-instance_name_prefix='bubo-build'
-instance="$instance_name_prefix-`date -u +%Y%m%dt%H%M%Sz`-`openssl rand -hex 4`"
-boot_disk_size='15g' # No bigger than necessary, since you can't later boot a disk smaller than the image
-instance_build_dir='./build'
-container_app_dir='/app'
-image_with_docker_build='docker:18.03.1' # NOTE Keep in sync with osx docker version, else --cache-from will "randomly" miss
-image_with_gcr='google/cloud-sdk'
-image="gcr.io/$project/bubo/features"
-image_latest="$image:latest"
-instance_image_family='bubo-build'
-instance_image="$instance"
 
 # Run these on any kind of exit (success or error)
 atexit() {
 
   # Delete instance
   # - Async (&) so the user doesn't have to wait >10s, when in practice it seems pretty reliable...
-  banner "Deleting instance: $instance"
-  show_cmd gcloud compute instances delete --quiet "$instance" >/dev/null 2>/dev/null &
+  if [[ "$reuse" == '' ]]; then
+    banner "Deleting instance: $instance"
+    show_cmd gcloud compute instances delete --quiet "$instance" >/dev/null 2>/dev/null &
+  fi
 
   # Tell the user to be mindful of spend
   #   - TODO Automatically delete old images, to avoid accumulating cost
-  #     - e.g. policy: all but most recent N images in family (upper bound cost, lower bound num images for recovery)
+  #     - e.g. all but most recent N images in family (upper bound cost, lower bound num images for recovery)
   echo
-  echo "Go delete stale GCE/GCR images else we'll keep paying to store them! ($.085/gb/mo)"
-  echo '- GCE instance images: https://console.cloud.google.com/compute/images'
-  echo "- GCR container images: https://console.cloud.google.com/gcr/images/$project/GLOBAL/bubo/features"
-  show_cmd gcloud compute images list --filter=family:"$instance_image_family"
-  show_cmd gcloud container images list-tags "$image"
+  echo 'GCE instance images ($.085/gb/mo): https://console.cloud.google.com/compute/images'
+  echo
+  # (Goddammit python...)
+  gcloud compute images list --no-standard-images --format=json | python -c "$(sed 's/^    //' <<< "
+    import sys
+    import pandas as pd
+    print(
+      pd.read_json(sys.stdin)
+      .sort_values('creationTimestamp')
+      [['diskSizeGb', 'creationTimestamp', 'name', 'family', 'status']]
+      .to_string(index=False)
+    )
+  ")"
+  echo
+  echo "GCR container images ($.026/gb/mo): https://console.cloud.google.com/gcr/images/$project/GLOBAL/bubo/features"
+  echo
+  gsutil du -hs "gs://artifacts.$project.appspot.com"
 
   echo
 
@@ -51,14 +85,16 @@ atexit() {
 trap atexit EXIT
 
 # Create instance for docker build
-banner "Creating instance: $instance"
-show_cmd time "$bin"/gcloud-run \
-  --keep="$instance" \
-  --image-project="$project" \
-  --image-family="$instance_image_family" \
-  --image='' \
-  --boot-disk-size="$boot_disk_size" \
-  true
+if [[ "$reuse" == '' ]]; then
+  banner "Creating instance: $instance"
+  show_cmd time "$bin"/gcloud-run \
+    --keep="$instance" \
+    --image-project="$project" \
+    --image-family="$boot_image_family" \
+    --image='' \
+    --boot-disk-size="$boot_disk_size" \
+    true
+fi
 
 # Show disk space (pre-build), so we can keep an eye on the small-as-possible $boot_disk_size
 banner 'Disk space (pre-build)'
@@ -73,38 +109,55 @@ show_cmd "$bin"/gcloud-run --reuse="$instance" 'df -h'
 banner 'rsync-ing dev code'
 show_cmd time "$bin"/rsync-gcloud \
   -azv --delete -FF --links --prune-empty-dirs \
-  "$bubo_features"/ "$instance":"$instance_build_dir"/
+  "$bubo_features_dir"/ "$instance":"$build_dir"/
 
 # docker build, with all the gnarly supporting stuff to make it happen
 # - `with_gcr` uses a container with gcloud to auth docker to our gcr registry (gcr.io/bubo-1)
 # - `with_docker_build` uses a container with a more up-to-date version of docker (e.g. v18), else `--from-cache` won't
 #   share cache hits across local dev (e.g. osx docker-v18) and remote build/deploy (e.g. cos docker-v17)
-banner "Building docker image: $image_latest"
+# - Misc. detailed notes for reference
+#   - Caching: docker version matters! `docker build --cache-from` won't share cache hits across v17 and v18!
+#     - v18 on docker for mac [https://docs.docker.com/docker-for-mac/release-notes/]
+#     - v17 on gce cos        [https://cloud.google.com/container-optimized-os/docs/release-notes]
+#     - v18 on gce coreos     [https://coreos.com/releases/]
+#       - [But I can't figure out ssh (docs say user 'core')]
+#     - So let's stick with cos
+#       - To get v18 on cos, run image docker:18.03.1 with `docker build`
+#       - To push/pull to gcr.io, run image google/cloud-sdk with `gcloud auth configure-docker` + `docker push/pull`
+#   - To auth to dockerhub instead of gcr.io, you have to install secrets
+#     - scp ~/hack/.bubo-secrets/docker/ $host:/secrets/.docker/
+#     - ssh $host -- sudo docker --config=/secrets/.docker/ push ...
+banner "Building docker image: $repo_image_tag"
 show_cmd "$bin"/gcloud-run --reuse="$instance" '
   set -eux
-  cd '"$instance_build_dir"'
-  vols=(-v/var/run/docker.sock:/var/run/docker.sock -v"$PWD:'"$container_app_dir"'" -w"'"$container_app_dir"'")
-  function _docker_run { sudo docker run "${vols[@]}" -w"'"$container_app_dir"'" -it "$@"; }
-  function with_gcr { _docker_run '"$image_with_gcr"' bash -c "gcloud auth configure-docker --quiet && $*"; }
+  cd '"$build_dir"'
+  vols=(
+    -v/var/run/docker.sock:/var/run/docker.sock
+    -v"$PWD:/'"$build_dir"'"
+  )
+  function _docker_run       { sudo docker run "${vols[@]}" -w"/'"$build_dir"'" -it "$@"; }
+  function with_gcr          { _docker_run '"$image_with_gcr"' bash -c "gcloud auth configure-docker --quiet && $*"; }
   function with_docker_build { _docker_run '"$image_with_docker_build"' "$@"; }
-  time with_gcr docker pull '"$image_latest"'
-  time with_docker_build docker build . --cache-from='"$image_latest"' -t '"$image_latest"'
-  time with_gcr docker push '"$image_latest"'
+  time with_gcr          docker pull '"$repo_image_tag"'
+  time with_docker_build docker build . --cache-from='"$repo_image_tag"' -t '"$repo_image_tag"'
+  time with_gcr          docker push '"$repo_image_tag"'
 '
 
 # Show disk space (post-build), so we can keep an eye on the small-as-possible $boot_disk_size
 banner 'Disk space (post-build)'
 show_cmd "$bin"/gcloud-run --reuse="$instance" 'df -h'
 
-# Snapshot post-build fs as a gce image
-# - Purpose: a cached fs to speed up (a) docker pull for fresh instances and (b) docker build for future builds
-# - Use "image families" so downstream consumers don't have to learn the full id that we just created
+# Save the post-build fs as a gce image to speed up future builds
+# - Saves the docker cache to speed up `docker pull` and `docker build`
+# - Use gce image families so downstream consumers don't have to query for the full id that we just created
 #   - https://cloud.google.com/compute/docs/images
 #   - https://cloud.google.com/compute/docs/images/create-delete-deprecate-private-images
-banner "Building instance image: $instance_image (speeds up future builds)"
-show_cmd time gcloud compute instances stop "$instance"
-show_cmd time gcloud compute images create "$instance_image" --family="$instance_image_family" --source-disk="$instance"
-# show_cmd gcloud compute instances start "$instance" --async # XXX For dev loops
+if [[ "$save_gce_image" == 'true' ]]; then
+  banner "Building instance image: $instance_image (speeds up future builds)"
+  show_cmd time gcloud compute instances stop "$instance"
+  show_cmd time gcloud compute images create "$instance_image" --family="$gce_image_family" --source-disk="$instance"
+  # show_cmd gcloud compute instances start "$instance" --async # XXX For faster dev
+fi
 
-# Whew, let the user know we got to the end
+# Whew, let the user know we made it to the end
 banner 'Done'
