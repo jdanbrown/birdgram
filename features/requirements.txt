@@ -20,7 +20,7 @@ flake8-commas==2.0.0
 flake8-import-order==0.17.1
 frozendict==1.2
 google-cloud==0.33.1
-git+https://github.com/has2k1/plotnine.git@049c197#egg=plotnine
+git+https://github.com/has2k1/plotnine.git@313f465#egg=plotnine
 joypy==0.1.8
 jupyter==1.0.0
 jupyter-nbextensions-configurator==0.4.0
