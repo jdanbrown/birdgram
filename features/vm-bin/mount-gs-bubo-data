@@ -1,0 +1,54 @@
+#!/bin/bash -eu
+
+gs_bucket='bubo-data'
+gs_path='v0/data/'
+mnt_dir="/mnt/disks/gs-$gs_bucket"
+log_file='/var/log/gcsfuse.log'
+
+# Noop if already mounted (avoids ~1s of `gsutil ls -Lb` on every login)
+if mountpoint -q "$mnt_dir"; then
+  exit 0
+fi
+
+# Fail if we can't access the gs bucket
+# - `nohup ... &` below won't fail since it's async
+gsutil ls -Lb "gs://$gs_bucket" >/dev/null
+
+echo "Mounting: gs://$gs_bucket/$gs_path at $mnt_dir"
+
+# Mount bucket
+# - Mount with `gcsfuse` instead of `mount -t gcsfuse -o rw,user,...` so we can route logs to /var/log
+#   - `mount` doesn't support all the options that `gcsfuse` does (e.g. --debug_gcs, or "log to file")
+# - Keep `sudo` in case we manage to get this running in the vm (cos) instead of the container
+# - Scratch
+#   - rm data || true && mkdir -p data/ && umount data/ || true && mount -t gcsfuse -o rw,user,only_dir=v0/data/ bubo-data data/
+#   - rm data || true && mkdir -p data/ && umount data/ || true && gcsfuse --only-dir=v0/data/ bubo-data data/
+#   - rm data || true && mkdir -p data/ && umount data/ || true && gcsfuse --foreground --debug_gcs --only-dir=v0/data/ bubo-data data/
+# - References
+#   - https://cloud.google.com/storage/docs/gcs-fuse
+#   - https://github.com/GoogleCloudPlatform/gcsfuse/
+#   - https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/semantics.md
+#     - --implicit-dirs seems cleaner, but it doesn't appear to be the happy path -- let's avoid it
+#     - --implicit-dirs is also noticeably slower (easy to see the difference with `--foreground --debug_gcs`)
+#   - https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/installing.md
+#   - https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/mounting.md
+sudo mkdir -p "$mnt_dir"
+nohup \
+  sudo gcsfuse --foreground --debug_gcs --only-dir="$gs_path" "$gs_bucket" "$mnt_dir" \
+  2>&1 | sudo tee -a "$log_file" >/dev/null &
+
+# Wait 10s (50ms at a time) for the mountpoint to show up
+for i in `seq $((10000 / 50))`; do
+  if mountpoint -q "$mnt_dir"; then
+    break
+  fi
+  sleep .05
+done
+
+if mountpoint -q "$mnt_dir"; then
+  # echo "Mounted: $(mount | grep "^$gs_bucket ")" # Too verbose, already logged a line above
+  exit 0
+else
+  echo "Failed to mount (see $log_file)"
+  exit 1
+fi

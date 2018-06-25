@@ -8,8 +8,11 @@ set -o pipefail
 #   --project X                  [default: bubo-1]                   The GCP project
 #   --gce-image-family X         [default: bubo-cache]               The GCE image family to boot from and save to
 #   --instance-prefix X          [default: \$gce_image_family]        Prefix to use in naming the temp GCE instance
-#   --reuse INSTANCE             [default: ]                         Reuse an existing GCE instance (e.g. for dev)
-#   --boot-disk-size X           [default: 15g]                      Minimal: you can't boot a disk smaller than its image
+#   --keep INSTANCE              [default: ]                         Keep the booted GCE instance
+#   --reuse INSTANCE             [default: ]                         Reuse an existing GCE instance
+#   --machine-type X             [default: n1-highcpu-16]            (Like gcloud-run)
+#   --boot-disk-size X           [default: 25g]                      Minimal: you can't boot a disk smaller than its image
+#   --boot-disk-type X           [default: pd-ssd]                   pd-ssd | pd-standard
 #   --boot-image-family X        [default: \$gce_image_family]        The GCE image family to boot from
 #   --build-dir X                [default: build]                    The remote dir to use for the docker build
 #   --image-with-docker-build X  [default: docker:18.03.1]           Match OSX docker version, else --cache-from will miss
@@ -33,12 +36,15 @@ eval "$(eval $'cat <<EOF\n'"$usage"$'\nEOF' | docopts -h - : "$@" | tr \' \")"
 
 # Derived args
 run_id="`date -u +%Y%m%dt%H%M%Sz`-`openssl rand -hex 4`"
-if [[ "$reuse" == '' ]]; then
-  instance="$instance_prefix-$run_id"
-  instance_image="$instance"
-else
+if [[ "$keep" != '' ]]; then
+  instance="$keep"
+  instance_image="$instance-$run_id"
+elif [[ "$reuse" != '' ]]; then
   instance="$reuse"
   instance_image="$instance-$run_id"
+else
+  instance="$instance_prefix-$run_id"
+  instance_image="$instance"
 fi
 repo_image="${image_repo:+$image_repo/}$image"
 repo_image_tag="$repo_image:$image_tag"
@@ -52,7 +58,7 @@ atexit() {
 
   # Delete instance
   # - Async (&) so the user doesn't have to wait >10s, when in practice it seems pretty reliable...
-  if [[ "$reuse" == '' ]]; then
+  if [[ "$keep" == '' && "$reuse" == '' ]]; then
     banner "Deleting instance: $instance"
     show_cmd gcloud compute instances delete --quiet "$instance" >/dev/null 2>/dev/null &
   fi
@@ -89,16 +95,21 @@ if [[ "$reuse" == '' ]]; then
   banner "Creating instance: $instance"
   show_cmd time "$bin"/gcloud-run \
     --keep="$instance" \
+    --machine-type="$machine_type" \
     --image-project="$project" \
     --image-family="$boot_image_family" \
     --image='' \
     --boot-disk-size="$boot_disk_size" \
+    --boot-disk-type="$boot_disk_type" \
+    --disk='' \
+    --vm-init='' \
+    --no-container \
     true
 fi
 
 # Show disk space (pre-build), so we can keep an eye on the small-as-possible $boot_disk_size
 banner 'Disk space (pre-build)'
-show_cmd "$bin"/gcloud-run --reuse="$instance" 'df -h'
+show_cmd "$bin"/gcloud-run --reuse="$instance" --no-container 'df -h'
 
 # rsync bubo/features/
 # - Capture dev state for build, instead of requiring user to git commit/push
@@ -107,8 +118,7 @@ show_cmd "$bin"/gcloud-run --reuse="$instance" 'df -h'
 #   - --links: Don't follow symlinks
 #   - --prume-empty-dirs: Don't copy empty dirs
 banner 'rsync-ing dev code'
-show_cmd time "$bin"/rsync-gcloud \
-  -azv --delete -FF --links --prune-empty-dirs \
+show_cmd time "$bin"/rsync-gcloud -azv --delete -FF --links --prune-empty-dirs \
   "$bubo_features_dir"/ "$instance":"$build_dir"/
 
 # docker build, with all the gnarly supporting stuff to make it happen
@@ -128,7 +138,7 @@ show_cmd time "$bin"/rsync-gcloud \
 #     - scp ~/hack/.bubo-secrets/docker/ $host:/secrets/.docker/
 #     - ssh $host -- sudo docker --config=/secrets/.docker/ push ...
 banner "Building docker image: $repo_image_tag"
-show_cmd "$bin"/gcloud-run --reuse="$instance" '
+show_cmd "$bin"/gcloud-run --reuse="$instance" --no-container '
   set -eux
   cd '"$build_dir"'
   vols=(
@@ -145,7 +155,7 @@ show_cmd "$bin"/gcloud-run --reuse="$instance" '
 
 # Show disk space (post-build), so we can keep an eye on the small-as-possible $boot_disk_size
 banner 'Disk space (post-build)'
-show_cmd "$bin"/gcloud-run --reuse="$instance" 'df -h'
+show_cmd "$bin"/gcloud-run --reuse="$instance" --no-container 'df -h'
 
 # Save the post-build fs as a gce image to speed up future builds
 # - Saves the docker cache to speed up `docker pull` and `docker build`
@@ -156,7 +166,9 @@ if [[ "$save_gce_image" == 'true' ]]; then
   banner "Building instance image: $instance_image (speeds up future builds)"
   show_cmd time gcloud compute instances stop "$instance"
   show_cmd time gcloud compute images create "$instance_image" --family="$gce_image_family" --source-disk="$instance"
-  # show_cmd gcloud compute instances start "$instance" --async # XXX For faster dev
+  if [[ "$keep" != '' || "$reuse" != '' ]]; then
+    show_cmd gcloud compute instances start "$instance" #--async
+  fi
 fi
 
 # Whew, let the user know we made it to the end

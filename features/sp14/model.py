@@ -45,6 +45,7 @@ import numpy as np
 from potoo.numpy import np_sample_stratified
 from potoo.util import round_sig
 import sklearn as sk
+import sklearn.ensemble  # For sk.ensemble.RandomForestClassifier
 import yaml
 
 from cache import cache, cache_lambda, cache_pure_method
@@ -179,7 +180,7 @@ class Features(DataclassConfig):
         return spectros
 
     @short_circuit(lambda self, rec: rec.get('patches'))
-    # @cache(version=0, key=lambda self, rec: (rec.id, self.patch_config, self.spectro_config, self.deps))  # TODO TODO After birdclef
+    # @cache(version=0, key=lambda self, rec: (rec.id, self.patch_config, self.spectro_config, self.deps))  # TODO After birdclef
     def _patches(self, rec: Row) -> 'np.ndarray[(f*p, t)]':
         """spectro (f,t) -> patch (f*p,t)"""
         (f, t, S) = self._spectro(rec)  # Cached
@@ -190,7 +191,7 @@ class Features(DataclassConfig):
         ]).T
 
     @short_circuit(lambda self, rec: rec.get('spectro'))
-    # @cache(version=0, key=lambda self, rec: (rec.id, self.spectro_config, self.deps))  # TODO TODO After birdclef
+    # @cache(version=0, key=lambda self, rec: (rec.id, self.spectro_config, self.deps))  # TODO After birdclef
     def _spectro(self, rec: Row) -> Melspectro:
         """
         .spectro (f,t) <- .audio (samples,)
@@ -344,7 +345,7 @@ class Projection(DataclassConfig):
         #             300    0.292    0.001    0.699    0.002 base.py:99(transform)
         #         900/300    0.235    0.000    4.004    0.013 cache.py:99(func_cached)
         with dask_opts(
-            # TODO TODO Threading causes hangs during heavy (xc 13k) cache hits
+            # TODO Threading causes hangs during heavy (xc 13k) cache hits
             # override_scheduler='threads',
             override_scheduler='synchronous',
         ):
@@ -437,7 +438,7 @@ class Projection(DataclassConfig):
         }
 
     @short_circuit(lambda self, rec: rec.get('proj'))
-    # @cache(version=0, key=lambda self, rec: (rec.id, self.skm_config, self.deps))  # TODO TODO After birdclef
+    # @cache(version=0, key=lambda self, rec: (rec.id, self.skm_config, self.deps))  # TODO After birdclef
     def _proj(self, rec: Row) -> 'np.ndarray[(k,t)]':
         """proj (k,t) <- .patch (f*p,t)"""
         patches = self.features._patches(rec)  # Pull

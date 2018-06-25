@@ -11,7 +11,7 @@ from attrdict import AttrDict
 import dask
 import dask.array as da
 import dask.dataframe as dd
-import dateparser
+# import dateparser  # Slow and currently unused
 from itertools import *
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -21,6 +21,7 @@ import pandas as pd
 import PIL
 from potoo.pandas import *
 from potoo.plot import *
+from potoo.pretty import *
 from potoo.util import *
 import requests
 import rpy2.robjects as robjects

@@ -1,4 +1,18 @@
-data_dir = '/Users/danb/hack/bubo/data'
+import os
+
+# TODO Find a cleaner way to do this
+_maybe_code_dirs = [
+    '/Users/danb/hack/bubo/features',  # Local dev (osx)
+    '/app',  # Remote deploy (docker/linux)
+]
+for _maybe_code_dir in _maybe_code_dirs:
+    if os.path.exists(_maybe_code_dir):
+        code_dir = _maybe_code_dir
+        break
+else:
+    raise Exception(f'Found none of these dirs to use as code_dir: {_maybe_code_dirs}')
+
+data_dir = f'{code_dir}/data'
 cache_dir = f'{data_dir}/cache'
 
 standard_sample_rate_hz = 22050  # Can resolve 11025Hz (by Nyquist), which most/all birds are below

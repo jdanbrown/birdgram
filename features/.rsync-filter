@@ -1,14 +1,14 @@
 # Per-dir file read by `rsync -F`
 
 # bubo
-- /_attic/
-- /notebooks/
+- *.ipynb
 
 # python
 - *.pyc
+- __pycache__/
 - *.egg-info/
-- .ipynb_checkpoints/
 - .pytest_cache/
+- .ipynb_checkpoints/
 
 # R
 - *.Rproj

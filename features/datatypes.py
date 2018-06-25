@@ -50,7 +50,7 @@ class Recording(DataclassUtil):
     #   - Defaulted to None because dataclass non-default args can't come after default args
     id: str = None
     path: str = None
-    filesize_b: int = None
+    # filesize_b: int = None  # XXX Disabled to avoid O(n) stat calls (see load._recs_paths)
 
     # Data
     #   - Optional, for partial load

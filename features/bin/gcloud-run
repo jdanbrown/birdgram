@@ -15,6 +15,7 @@ import atexit
 from datetime import datetime, timedelta
 import json
 import os
+from pathlib import Path
 import re
 import shlex
 import subprocess
@@ -28,10 +29,11 @@ import dataclasses
 from dataclasses import dataclass
 from potoo.pretty import pp
 
-
 # click: Default option(show_default=True)
 _click_option = click.option
 click.option = lambda *args, **kwargs: _click_option(*args, **{'show_default': True, **kwargs})
+
+code_dir = Path(__file__).parent.parent
 
 
 # FIXME click doesn't exit nonzero on -h/--help [wat]
@@ -44,27 +46,56 @@ click.option = lambda *args, **kwargs: _click_option(*args, **{'show_default': T
 @click.option('--project', default='bubo-1')
 @click.option('--zone', default='us-west1-b')
 # Instance name
-@click.option('--instance-name', default=None, help='Defaults to: "<instance-name-prefix>-<timestamp>"')
+@click.option('--instance-name', default='%(instance_name_prefix)s-%(timestamp)s')
 @click.option('--instance-name-prefix', default='gcloud-run')
 # Machine type
 #   - https://cloud.google.com/compute/pricing
+#   - Pricing
+#                 type  cpu   mem              $/mo            $/d              $/hr
+#        n1-standard-4    4   15g  $[  97 /  29]/mo  $[  5 /  1]/d  $[ .19 / .04]/hr
+#        n1-standard-8    8   30g  $[ 194 /  58]/mo  $[  9 /  2]/d  $[ .38 / .08]/hr
+#       n1-standard-16   16   60g  $[ 388 / 116]/mo  $[ 18 /  4]/d  $[ .76 / .16]/hr
+#       n1-standard-32   32  120g  $[ 776 / 233]/mo  $[ 36 /  8]/d  $[1.52 / .32]/hr
+#       n1-standard-64   64  240g  $[1553 / 467]/mo  $[ 73 / 16]/d  $[3.04 / .64]/hr
+#       n1-standard-96   96  360g  $[2330 / 700]/mo  $[109 / 23]/d  $[4.56 / .96]/hr
 @click.option('--machine-type', default='n1-standard-4', help='https://cloud.google.com/compute/pricing')
 @click.option('--preemptible/--no-preemptible', default=False)
 # Instance lifetime
-@click.option('--reuse', default=None, help='Instance name to reuse (no create, delete, await)')
 @click.option('--keep', default=None, help='Instance name to create and keep (no delete)')
+@click.option('--reuse', default=None, help='Instance name to reuse (no create, delete, await)')
 @click.option('--create-instance/--no-create-instance', default=True)
 @click.option('--delete-instance/--no-delete-instance', default=True)
 # Image
 #   - `gcloud compute images list`
 #   - https://cloud.google.com/compute/docs/images
-@click.option('--image-project', default='cos-cloud')
-@click.option('--image-family', default='cos-stable')
+#   - $.085/gb/mo
+@click.option('--image-project', default='%(project)s')
+@click.option('--image-family', default='bubo-cache')
 @click.option('--image', default=None)
-# Boot disk
+# Disks
 #   - https://cloud.google.com/compute/docs/disks/
+#   - pd-standard
+#       - $.04/gb/mo
+#       - Throughput r  = max(180, 12*size/100gb) mb/s [max at 1500gb, $60/mo]
+#       - Throughput w  = max(120, 12*size/100gb) mb/s [max at 1000gb, $40/mo]
+#   - pd-ssd
+#       - $.17/gb/mo
+#       - Throughput rw = max(240, 48*size/100gb) mb/s
+#   - Examples
+#       - pd-standard  100gb:  $4/mo,  12mb/s r,  12mb/s w
+#       - pd-standard  200gb:  $8/mo,  24mb/s r,  24mb/s w
+#       - pd-ssd       100gb: $17/mo,  48mb/s rw
+#       - pd-standard  500gb: $20/mo,  60mb/s r,  60mb/s w
+#       - pd-standard  750gb: $30/mo,  90mb/s r,  90mb/s w
+#       - pd-ssd       200gb: $34/mo,  96mb/s rw
+#       - pd-standard 1000gb: $40/mo, 120mb/s r, 120mb/s w
+#       - pd-standard 1500gb: $60/mo, 180mb/s r, 120mb/s w
+#       - pd-ssd       500gb: $85/mo, 240mb/s rw
 @click.option('--boot-disk-size', default='200g')
-@click.option('--boot-disk-type', default='pd-standard')
+@click.option('--boot-disk-type', default='pd-standard', help='pd-standard | pd-ssd')
+@click.option('--disk-name', default='bubo-data-standard')
+@click.option('--disk-mode', default='ro')
+@click.option('--disk', default='name=%(disk_name)s,device-name=%(disk_name)s,boot=no,auto-delete=no,mode=%(disk_mode)s')
 # Network tier
 #   - https://cloud.google.com/network-tiers/pricing
 #   - Standard: Egress NA -> *[$.085/gb]
@@ -78,25 +109,53 @@ click.option = lambda *args, **kwargs: _click_option(*args, **{'show_default': T
 #     activate-service-account` to override it (and `gcloud auth` takes precedence over GOOGLE_APPLICATION_CREDENTIALS)
 @click.option('--service-account', default=None)
 @click.option('--scopes', default='https://www.googleapis.com/auth/cloud-platform')
+# VM
+#   - Can only mount disk here, not also gs [because gcsfuse is too difficult to install into cos...]
+#   - TODO Clean up --disk / --vm-init: tight coupling, wouldn't use one without the other
+#   - HACK Need bash because cos mounts are noexec (ugh) [https://stackoverflow.com/a/50279396/397334]
+@click.option('--vm-init', default='sudo bash vm-bin/mount-disk-bubo-data')
 # Container
-@click.option('--container-image', default=None, help='Run command in container if given, else run in the instance')
-@click.option('--container-name', default=None, help='Defaults to instance_name')
-@click.option('--docker-pull', default='sudo docker pull')
-@click.option('--docker-run', default='sudo docker run -it --privileged --restart=no --rm')
+@click.option('--container/--no-container', default=True, help='Run command in container, else run in instance')
+@click.option('--vm/--no-vm', default=False, help='--vm is an alias for --no-container')
+@click.option('--container-image', default='gcr.io/%(project)s/bubo/features:latest')
+@click.option('--container-name', default='%(instance_name)s')
+@click.option('--container-vols', default='-v/mnt/disks/disk-bubo-data:/mnt/disks/disk-bubo-data')
+# TODO Clean up this mess
+@click.option('--docker-pull', default=' '.join([
+    'sudo docker run -it',
+    '-v/var/run/docker.sock:/var/run/docker.sock',
+    'google/cloud-sdk:203.0.0',
+    'bash -c "gcloud auth configure-docker --quiet && docker pull %(container_image)s"',
+]))
+@click.option('--docker-run', default=' '.join([
+    'if sudo docker exec -it %(container_name)s true 2>/dev/null; then',
+        'sudo docker exec -it',
+        '%(container_name)s',
+        '%(command)s',
+    '; else',
+        '%(docker_pull)s &&',
+        'sudo docker run -it',
+        '--privileged --restart=no --rm --name=%(container_name)s',
+        '%(container_vols)s',
+        '%(container_image)s',
+        '%(command)s',
+    '; fi',
+]))
 # Command
 @click.option('--await-ready/--no-await-ready', default=True)
 @click.option('--username', default='bubo')
-@click.argument('command', nargs=1, required=False)  # One cmd string, e.g. quoted by the user
+@click.argument('command', nargs=1, required=False)  # Cmd as a single shell token, i.e. quote the whole thing
 def main(
     project, zone,
     instance_name, instance_name_prefix,
     machine_type, preemptible,
-    reuse, keep, create_instance, delete_instance,
+    keep, reuse, create_instance, delete_instance,
     image_project, image_family, image,
-    boot_disk_size, boot_disk_type,
+    boot_disk_size, boot_disk_type, disk_name, disk_mode, disk,
     network_tier,
     service_account, scopes,
-    container_image, container_name, docker_pull, docker_run,
+    vm_init,
+    container, vm, container_image, container_name, container_vols, docker_pull, docker_run,
     await_ready, username, command,
 ):
 
@@ -105,20 +164,41 @@ def main(
     )
 
     # Args
-    instance_name = instance_name or '%s-%s' % (
-        instance_name_prefix,
-        re.sub('[^0-9T]', '-', datetime.utcnow().isoformat()).lower(),
+    #   - TODO Do these substitutions generically so you don't have to manually specify each allowed subst
+    instance_name = instance_name % dict(
+        instance_name_prefix=instance_name_prefix,
+        timestamp=re.sub('[^0-9T]', '-', datetime.utcnow().isoformat()).lower(),
     )
+    # TODO Would we want `--keep=x --reuse=x` to mean "assume x exists" (like `--reuse=x`) or "boot x if not exists"?
+    assert not (keep and reuse)
+    if keep:
+        delete_instance = False
+        instance_name = keep
     if reuse:
         create_instance = False
         delete_instance = False
         await_ready = False
         instance_name = reuse
-    if keep:
-        delete_instance = False
-        instance_name = keep
+    image_project = image_project % dict(project=project)
+    if disk:
+        disk = disk % dict(disk_name=disk_name, disk_mode=disk_mode)
+    if vm:
+        container = False
+    container_image = container_image % dict(project=project)
+    container_name = container_name % dict(instance_name=instance_name)
     if command is None:
         command = 'bash'
+    command = 'bash -c %s' % shlex.quote(command)
+    docker_pull = docker_pull % dict(
+        container_image=shlex.quote(container_image),
+    )
+    docker_run = docker_run % dict(
+        docker_pull=docker_pull,
+        container_name=shlex.quote(container_name),
+        container_image=shlex.quote(container_image),
+        container_vols=shlex.quote(container_vols),
+        command=command,
+    )
 
     # Delete instance on exit
     #   - Use atexit so we can exec
@@ -142,6 +222,7 @@ def main(
             image=image,
             boot_disk_size=boot_disk_size,
             boot_disk_type=boot_disk_type,
+            disk=disk,
             network_tier=network_tier,
             service_account=service_account,
             scopes=scopes,
@@ -160,6 +241,7 @@ def main(
         retry(times=60, delay_s=1, f=lambda: (
             gcloud('compute', 'ssh', f'{username}@{instance_name}',
                 zone=zone,
+                _json=False,
                 _end_args=['--', '-tq', 'true'],
             )
         ))
@@ -169,11 +251,33 @@ def main(
         if create_instance:
             print(color('blue', '  external_ip: %s' % external_ip))
 
-    # Run command via ssh
+    # Run vm_init
+    if vm_init and create_instance:
+
+        # rsync vm-bin/ to vm
+        cmd = ' '.join([
+            '%(code_dir)s/bin/rsync-gcloud',
+            '-azv --delete -FF --links --prune-empty-dirs',
+            '%(code_dir)s/vm-bin/',
+            '%(instance_name)s:vm-bin/',
+        ]) % dict(
+            code_dir=shlex.quote(str(code_dir)),
+            instance_name=shlex.quote(instance_name),
+        )
+        print(f'$ {cmd}')
+        subprocess.run(cmd, shell=True, check=True)
+
+        # Mount (non-boot) disks
+        gcloud('compute', 'ssh', f'{username}@{instance_name}',
+            zone=zone,
+            _json=False,
+            _end_args=['--', '-tq', vm_init],
+        )
+
+    # Run command
     #   - WARNING Careful with retry here: need to distinguish transient (network) vs. non-transient (command) errors
     if command:
-        command = 'bash -c %s' % shlex.quote(command)
-        if not container_image:
+        if not container:
             print(color('blue', f'Running command on instance[{instance_name}]...'))
             gcloud('compute', 'ssh', f'{username}@{instance_name}',
                 zone=zone,
@@ -181,7 +285,6 @@ def main(
                 _end_args=['--', '-tq', command],
             )
         else:
-            container_name = container_name or instance_name
             print(color('blue', 'Running command on %s...' % ' / '.join([
                 f'instance[{instance_name}]',
                 f'image[{container_image}]',
@@ -190,16 +293,7 @@ def main(
             gcloud('compute', 'ssh', f'{username}@{instance_name}',
                 zone=zone,
                 _mode='exec',
-                _end_args=['--', '-tq', ' '.join([
-                    'set -x &&',
-                    docker_pull,
-                    shlex.quote(container_image),
-                    '&&',
-                    docker_run,
-                    '--name=%s' % shlex.quote(container_name),
-                    shlex.quote(container_image),
-                    command,
-                ])],
+                _end_args=['--', '-tq', ' && '.join(['set -x', docker_run])],
             )
 
 
@@ -218,7 +312,7 @@ class GCloud:
     def config(self) -> dict:
         return dataclasses.asdict(self)
 
-    def __call__(self, *args, _mode='response', **kwargs):
+    def __call__(self, *args, _mode='response', _json=True, **kwargs):
 
         # Build cmd
         kwargs = {**self.config, **kwargs}  # Silently overwrite duplicate keys with user keys
@@ -232,7 +326,7 @@ class GCloud:
             repro_cmd = gcloud_cmd
             real_cmd = ['bash', '-c', 'exec %s' % repro_cmd]
         elif _mode == 'async':
-            repro_cmd = '%s >/dev/null 2>/dev/null &' % gcloud_cmd  # TODO Use nohup? [How to prevent nohup.out file?]
+            repro_cmd = 'nohup %s >>/var/log/gcloud-run-async.log &' % gcloud_cmd
             real_cmd = ['bash', '-c', repro_cmd]
         else:
             repro_cmd = gcloud_cmd
@@ -257,14 +351,26 @@ class GCloud:
 
             # Handle result
             if proc.returncode != 0:
-                msg = 'Exit %s: %s' % (proc.returncode, re.sub('\n+\s*', ' ', proc.stderr.decode().strip()))
+                msg = 'Exit %s: stderr[%s]' % (
+                    proc.returncode,
+                    re.sub('\n+\s*', ' ', proc.stderr.decode().strip()),
+                )
                 if proc.stdout:
-                    msg += f', stdout[{stdout.decode()}]'
+                    msg += ', stdout[%s]' % (
+                        re.sub('\n+\s*', ' ', proc.stdout.decode().strip()),
+                    )
                 raise Exception(msg)
             else:
                 if proc.stderr:
                     print(color(None, proc.stderr.decode()), end='', file=sys.stderr)
-                return json.loads(proc.stdout)
+                if not _json:
+                    return proc.stdout.decode()
+                else:
+                    try:
+                        return json.loads(proc.stdout.decode())
+                    except:
+                        print(color('red', 'Failed to parse json from stdout[%s]' % proc.stdout))  # TODO Fold into exc msg
+                        raise
 
 
 def shell_cmd(*args, _end_args=None, **kwargs) -> str:

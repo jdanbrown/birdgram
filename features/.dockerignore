@@ -1,1 +1,21 @@
-notebooks/
+# Ignores for Dockerfile COPY (in `docker build`)
+
+# bubo
+**/*.ipynb
+
+# python
+**/__pycache__/
+**/.pytest_cache/
+**/.ipynb_checkpoints/
+# - Don't be fooled by this one still being present -- it's regenerated within the docker image by `pip install -e .`
+**/*.egg-info/
+
+# R
+**/*.Rproj
+**/.Rproj.user/
+**/*.Rhistory
+**/*.RData
+**/*.Ruserdata
+
+# Dan junk
+**/.tags*

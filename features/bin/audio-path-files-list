@@ -1,0 +1,15 @@
+#!/usr/bin/env python
+
+from potoo.pandas import set_display
+
+from datasets import *
+
+set_display()
+
+# Parse args
+[_, *datasets] = sys.argv
+
+print(
+    audio_path_files.list(*datasets)
+    # .to_string(index=False)  # FIXME Messes up alignment of col names
+)

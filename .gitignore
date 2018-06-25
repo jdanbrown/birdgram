@@ -4,11 +4,11 @@ bubor/.Rbuildignore
 caffe/
 
 # data
-data/*
-!data/bin/
+data/
 
 # python
 *.pyc
+__pycache__/
 *.egg-info/
 .ipynb_checkpoints/
 .pytest_cache/

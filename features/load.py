@@ -1,6 +1,5 @@
 from collections import OrderedDict
 from functools import partial
-import glob
 import os.path
 import re
 from typing import Iterable, Tuple
@@ -10,11 +9,12 @@ import audiosegment
 from dataclasses import dataclass
 import pandas as pd
 from potoo.pandas import requires_cols
-from potoo.util import round_sig
+from potoo.util import round_sig, strip_startswith
+import tqdm
 
 from cache import cache
 from constants import cache_dir, data_dir, standard_sample_rate_hz
-from datasets import DATASETS, metadata_from_dataset
+from datasets import audio_path_files, DATASETS, metadata_from_dataset
 from datatypes import Audio, Recording, RecordingDF
 import metadata
 from util import *
@@ -56,7 +56,7 @@ class Load(DataclassConfig):
         """Load recs.{**metadata} from fs"""
         return (
             self.recs_paths(datasets, paths)
-            # .sample(n=limit, random_state=0)  # TODO TODO Why does this return empty? More useful than [:limit]
+            # .sample(n=limit, random_state=0)  # TODO Why does this return empty? More useful than [:limit]
             [:limit]
             .pipe(lambda df: pd.concat(axis=1, objs=[df, self.metadata(df)]))
             .sort_values('species')
@@ -70,28 +70,35 @@ class Load(DataclassConfig):
         datasets: Iterable[str] = None,
         paths: Iterable[Tuple[str, str]] = None,
     ) -> RecordingDF:
-        """Load recs.{id,dataset,path,filesize_b} <- fs"""
+        """Load recs.{id,dataset,path} <- fs"""
         return self._recs_paths((paths or []) + [
             (dataset, path)
-            for dataset, pattern in DATASETS.items()
+            for dataset, config in DATASETS.items()
             if dataset in (datasets or [])
-            for path in glob.glob(f'{data_dir}/{pattern}')
-            if not os.path.isdir(path)
+            for path in tqdm(disable=True, desc='recs_paths', unit=' paths', iterable=(
+                audio_path_files.read(dataset)
+            ))
         ])
 
     def _recs_paths(self, paths: Iterable[Tuple[str, str]]) -> RecordingDF:
-        """Load recs.{id,dataset,path,filesize_b} <- paths"""
+        """Load recs.{id,dataset,path} <- paths"""
         # Helpful error msg for common mistake (because 'paths' is a helpfully short but unhelpfully unclear name)
         if paths and not isinstance(paths[0], tuple):
             raise ValueError(f'Expected paths=[(dataset, path), ...], got paths=[{paths[0]!r}, ...]')
         return RecordingDF([
-            Recording(
-                id=os.path.splitext(os.path.relpath(path, data_dir))[0],
+            # Recording(...).asdict()  # XXX Bottleneck (xc)
+            dict(
+                # id=os.path.splitext(path)[0],
+                id=path.rsplit('.', 1)[0],
                 dataset=dataset,
-                path=os.path.relpath(path, data_dir),
-                filesize_b=os.path.getsize(path),
-            ).asdict()
-            for dataset, path in paths
+                path=path,
+                # filesize_b=os.path.getsize(path),  # XXX Bottleneck (xc) -- O(n) stat calls
+            )
+            for dataset, path in tqdm(disable=True, desc='_recs_paths', unit=' paths', iterable=(
+                paths
+            ))
+            # for path in [os.path.relpath(path, data_dir)]  # XXX Bottleneck (xc)
+            for path in [strip_startswith(str(path), str(data_dir), check=True).lstrip('/')]
         ])
 
     METADATA = [
@@ -211,7 +218,7 @@ class Load(DataclassConfig):
                 dataset=rec.dataset,
                 id=rec.id,
                 path=rec.path,
-                filesize_b=rec.filesize_b,
+                # filesize_b=rec.filesize_b,
                 cache_path=path,
                 cache_filesize_b=os.path.getsize(path),
             ))

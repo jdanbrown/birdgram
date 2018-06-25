@@ -12,22 +12,20 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 from typing import Iterable, Iterator, List, Mapping, Tuple, TypeVar, Union
 
 from attrdict import AttrDict
-import dask
-import dask.array as da
-import dask.dataframe as dd
-import dateparser
 from itertools import *
 from more_itertools import *
 import PIL
 from potoo.pandas import df_ensure, df_summary
 from potoo.util import singleton, strip_startswith
-import requests
+import tqdm
 
 
 ## util
 
 from contextlib import contextmanager
 from functools import partial, wraps
+import glob
+import re
 import os
 import pickle
 import random
@@ -53,6 +51,15 @@ def generator_to(agg):
             return agg(f(*args, **kwargs))
         return g
     return decorator
+
+
+def glob_filenames_ensure_parent_dir(pattern: str) -> Iterable[str]:
+    """
+    Useful for globbing in gcsfuse, which requires dirs to exist as empty objects for its files to be listable
+    """
+    assert not re.match(r'.*[*?[].*/', pattern), \
+        f'pattern[{pattern!r}] can only contain globs (*?[) in filenames, not dirnames'
+    return glob.glob(ensure_parent_dir(pattern))
 
 
 def ensure_parent_dir(path):
@@ -130,7 +137,6 @@ from typing import Iterable
 from attrdict import AttrDict
 import dataclasses
 from potoo.util import get_cols
-import yaml
 
 
 class DataclassUtil:
@@ -244,7 +250,6 @@ from typing import Callable, Iterable, TypeVar
 
 from potoo.pandas import df_reorder_cols
 import sklearn as sk
-import sklearn.ensemble  # So that sk.ensemble.RandomForestClassifier is available, for export
 
 X = TypeVar('X')
 
@@ -375,11 +380,6 @@ import multiprocessing
 from typing import Callable, Iterable, TypeVar
 
 from attrdict import AttrDict
-import dask
-import dask.bag
-import dask.dataframe as dd
-from dask.diagnostics import ProgressBar
-import dask.multiprocessing
 from dataclasses import dataclass
 import pandas as pd
 from potoo.util import AttrContext, get_cols
@@ -421,6 +421,8 @@ def _map_progress_dask(
     if not use_dask:
         return list(map(f, xs))
     else:
+        import dask.bag
+        from dask.diagnostics import ProgressBar
         # HACK dask.bag.from_sequence([pd.Series(...), ...]) barfs -- workaround by boxing it
         # HACK dask.bag.from_sequence([np.array(...), ...]) flattens the arrays -- workaround by boxing it
         # HACK Avoid other cases we haven't tripped over yet by boxing everything unconditionally
@@ -449,6 +451,8 @@ def _npartitions_for_unit_sec(n: int, unit_sec: float, target_sec_per_partition=
 # Mimic http://dask.pydata.org/en/latest/scheduling.html
 def dask_get_for_scheduler_name(scheduler, **kwargs):
     if isinstance(scheduler, str):
+        import dask
+        import dask.multiprocessing
         get = {
             'synchronous': dask.get,
             'threads': dask.threaded.get,

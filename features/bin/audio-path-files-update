@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+
+from datasets import *
+
+# Parse args
+[_, *datasets] = sys.argv
+
+audio_path_files.update(*datasets)

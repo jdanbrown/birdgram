@@ -4,7 +4,7 @@
 # TODO TODO Reconcile local vs. github
 # -e /Users/danb/hack/potoo
 # -e /Users/danb/hack/joblib
-git+https://github.com/jdanbrown/potoo.git@2eb6a60#egg=potoo
+git+https://github.com/jdanbrown/potoo.git@9ddccc4#egg=potoo
 git+https://github.com/jdanbrown/joblib.git@eb9a4ed#egg=joblib
 
 attrdict==2.0.0
@@ -19,6 +19,7 @@ flake8==3.5.0
 flake8-commas==2.0.0
 flake8-import-order==0.17.1
 frozendict==1.2
+glances==2.11.1
 google-cloud==0.33.1
 git+https://github.com/has2k1/plotnine.git@313f465#egg=plotnine
 joypy==0.1.8

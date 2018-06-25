@@ -1,0 +1,19 @@
+#!/bin/bash -eu
+
+disk_uuid='b8a65f2b-fd70-4c2d-8153-1f940f8b9066' # bubo-data-standard
+mnt_dir='/mnt/disks/disk-bubo-data'
+
+# Noop if already mounted
+if mountpoint -q "$mnt_dir"; then
+  exit 0
+fi
+
+echo "Mounting: disk[$disk_uuid] at $mnt_dir"
+
+# Mount disk
+# - https://cloud.google.com/compute/docs/disks/add-persistent-disk
+# - If we want to use cloud-init/cloud-config instead:
+#   - https://cloud.google.com/container-optimized-os/docs/resources/faq#how_do_i_format_and_mount_disks
+#   - https://cloud.google.com/container-optimized-os/docs/how-to/create-configure-instance
+sudo mkdir -p "$mnt_dir"
+sudo mount -o discard,defaults UUID="$disk_uuid" "$mnt_dir"

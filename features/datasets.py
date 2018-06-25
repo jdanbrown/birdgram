@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from functools import lru_cache
-import glob
+import hashlib
+import json
 from pathlib import Path
 import re
 from typing import Optional
@@ -8,26 +9,114 @@ from typing import Optional
 from attrdict import AttrDict
 from dataclasses import dataclass, field
 import joblib
+from more_itertools import ilen
 import pandas as pd
 from potoo.pandas import as_ordered_cat, df_ordered_cat, df_reorder_cols
+import requests
+from tqdm import tqdm
 
 from cache import cache
 import constants
-from constants import data_dir, mul_species, no_species, unk_species, unk_species_species_code
+from constants import code_dir, data_dir, mul_species, no_species, unk_species, unk_species_species_code
 from datatypes import Recording, RecordingDF
+from log import log
 import metadata
 from util import *
 
 DATASETS = {
-    'recordings': 'recordings/*',
-    'peterson-field-guide': 'peterson-field-guide/*/audio/*',
-    'xc': 'xc/data/*/*/*.mp3',
-    'birdclef-2015': 'birdclef-2015/organized/wav/*',
-    'warblrb10k': 'dcase-2018/warblrb10k_public_wav/*',
-    'ff1010bird': 'dcase-2018/ff1010bird_wav/*',
-    'nips4b': 'nips4b/all_wav/*',
-    'mlsp-2013': 'mlsp-2013/mlsp_contest_dataset/essential_data/src_wavs/*',
+    'recordings': dict(
+        # ≥.5g
+        root='recordings',
+        audio_glob='*.wav',
+    ),
+    'peterson-field-guide': dict(
+        # ≥.3g
+        root='peterson-field-guide',
+        audio_glob='*/audio/*.mp3',
+    ),
+    'xc': dict(
+        # ≥98g
+        root='xc',
+        audio_glob='data/*/*/*.mp3',
+    ),
+    # 'birdclef-2015': dict(
+    #     # 94g [moved to external drive to save space]
+    #     root='birdclef-2015',
+    #     audio_glob='organized/wav/*.wav',
+    # ),
+    'warblrb10k': dict(
+        # 6.7g
+        root='dcase-2018/warblrb10k_public_wav',
+        audio_glob='*.wav',
+    ),
+    'ff1010bird': dict(
+        # 6.4g
+        root='dcase-2018/ff1010bird_wav',
+        audio_glob='*.wav',
+    ),
+    'nips4b': dict(
+        # 1.1g
+        root='nips4b',
+        audio_glob='all_wav/*.wav',
+    ),
+    'mlsp-2013': dict(
+        # 1.3g
+        root='mlsp-2013',
+        audio_glob='mlsp_contest_dataset/essential_data/src_wavs/*.wav',
+    ),
 }
+
+
+# WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
+#   - See details in util.Log
+# @singleton
+@dataclass
+class AudioPathFiles(DataclassUtil):
+    """Manage the data/**/audio-paths.jsonl files"""
+
+    @generator_to(pd.DataFrame)
+    def list(self, *datasets: str) -> Iterator[pd.Series]:
+        """List the data/**/audio-paths.jsonl files"""
+        for dataset, config in DATASETS.items():
+            if not datasets or dataset in datasets:
+                root = Path(data_dir) / config['root']
+                audio_paths_path = root / 'audio-paths.jsonl'
+                with audio_paths_path.open() as f:
+                    lines = ilen(line for line in f if line)
+                yield pd.Series(dict(
+                    updated_at=pd.to_datetime(None if not audio_paths_path.exists() else audio_paths_path.stat().st_mtime * 1e9),
+                    dataset=dataset,
+                    path=str(audio_paths_path.relative_to(code_dir)),
+                    lines=lines,
+                ))
+
+    def update(self, *datasets: str):
+        """Call this to update the data/**/audio-paths.jsonl files, which determine which audio paths get loaded"""
+        for dataset, config in DATASETS.items():
+            if not datasets or dataset in datasets:
+                root = Path(data_dir) / config['root']
+                audio_paths_path = root / 'audio-paths.jsonl'
+                log.info('Globbing... %s' % (root / config['audio_glob']).relative_to(code_dir))
+                audio_paths = pd.DataFrame([
+                    dict(path=str(path.relative_to(root)))
+                    for path in tqdm(unit=' paths', iterable=root.glob(config['audio_glob']))
+                ])
+                audio_paths.to_json(audio_paths_path, orient='records', lines=True)
+                log.info('Wrote: %s (%s paths)' % (audio_paths_path.relative_to(code_dir), len(audio_paths)))
+
+    def read(self, dataset: str) -> Iterable[str]:
+        """Read audio paths from data/**/audio-paths.jsonl"""
+        config = DATASETS[dataset]
+        root = Path(data_dir) / config['root']
+        audio_paths_path = root / 'audio-paths.jsonl'
+        if not audio_paths_path.exists():
+            raise ValueError(f'File not found: {audio_paths_path}')
+        audio_paths = pd.read_json(audio_paths_path, lines=True)
+        return [root / p for p in audio_paths['path']]
+
+
+# Workaround for @singleton (above)
+audio_path_files = AudioPathFiles()
 
 
 def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
@@ -40,8 +129,8 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
         m = re.match(r'^([A-Z]{4}) ', basename)
         species_query = m.groups()[0] if m else unk_species
     elif dataset == 'xc':
-        [_lit_xc, _lit_data, species_query, _id, _lit_audio] = id_parts
-        assert (_lit_xc, _lit_data, _lit_audio) == ('xc', 'data', 'audio')
+        [_const_xc, _const_data, species_query, _id, _const_audio] = id_parts
+        assert (_const_xc, _const_data, _const_audio) == ('xc', 'data', 'audio')
     elif dataset == 'mlsp-2013':
         train_labels = mlsp2013.train_labels_for_filename.get(
             basename,
@@ -91,11 +180,9 @@ class XC(DataclassUtil):
 
     @property
     @lru_cache()
-    @cache(version=4, key=lambda self: (
+    @cache(version=5, key=lambda self: (
         self,
-        # TODO Re-enable after we stop downloading all the time, since cache miss is slow (~45s)
-        #   - In the meantime, manually bump version after big jumps in downloads
-        # self._data_paths,
+        hashlib.sha1(json.dumps([str(x) for x in self._audio_paths]).encode()),  # Way faster than joblib.dump
     ))
     def metadata(self) -> 'XCDF':
         """Make a full XCDF by joining _metadata + downloaded_ids"""
@@ -111,7 +198,7 @@ class XC(DataclassUtil):
     @cache(version=3, key=lambda self: self)
     def _metadata(self) -> "pd.DataFrame['id': int, ...]":
         """Load all saved metadata from fs, keeping the latest observed metadata record per XC id"""
-        metadata_paths_best_last = sorted(glob.glob(f'{self.metadata_dir}/*.pkl'))
+        metadata_paths_best_last = sorted(glob_filenames_ensure_parent_dir(f'{self.metadata_dir}/*.pkl'))
         return (
             pd.concat([joblib.load(path) for path in metadata_paths_best_last])
             .drop_duplicates('id', keep='last')
@@ -129,13 +216,14 @@ class XC(DataclassUtil):
     @property
     def downloaded_ids(self) -> "pd.DataFrame['id': int, 'downloaded': bool]":
         return (
-            pd.DataFrame(XCResource.downloaded_ids(self._data_paths), columns=['id'])
+            pd.DataFrame(XCResource.downloaded_ids(self._audio_paths), columns=['id'])
             .assign(downloaded=True)
         )
 
     @property
-    def _data_paths(self) -> Iterable[Path]:
-        return list(self.data_dir.glob('*/*/*'))  # {data_dir}/{species}/{id}/{filename}
+    @lru_cache()
+    def _audio_paths(self) -> Iterable[Path]:
+        return audio_path_files.read('xc')
 
     def metadata_for_id(self, id: int) -> 'XCMetadata':
         assert isinstance(id, int)
@@ -245,15 +333,15 @@ class XCResource(DataclassUtil):
 
     @property
     def dir(self) -> Path:
-        return xc.data_dir.joinpath(self.species, str(self.id))
+        return xc.data_dir / self.species / str(self.id)
 
     @property
     def html_path(self) -> Path:
-        return self.dir.joinpath('page.html')
+        return self.dir / 'page.html'
 
     @property
     def audio_path(self) -> Path:
-        return self.dir.joinpath('audio.mp3')
+        return self.dir / 'audio.mp3'
 
     @property
     def html_url(self):
@@ -280,22 +368,27 @@ class XCResource(DataclassUtil):
         )
 
     @classmethod
-    def downloaded_ids(cls, data_paths: Iterator[Path]) -> Iterable[int]:
+    def downloaded_ids(cls, audio_paths: Iterator[Path]) -> Iterable[int]:
         """
-        Map the set of downloaded data_paths to the set of id's that are (fully) downloaded
+        Map the set of downloaded audio_paths to the set of id's that are (fully) downloaded
         - Needed by xc, but we own this concern to encapsulate that "downloaded" means "page.html and audio.mp3 exist"
         """
-        data_paths_parts = (
+        audio_paths_parts = (
             pd.DataFrame(
-                (p.relative_to(xc.data_dir).parts for p in data_paths),
+                (p.relative_to(xc.data_dir).parts for p in audio_paths),
                 columns=['species', 'id', 'filename'],
             )
             .astype({'id': 'int'})
         )
         return sorted(
             id
-            for id, g in data_paths_parts.groupby('id')
-            if set(g.filename) >= {'page.html', 'audio.mp3'}
+            for id, g in audio_paths_parts.groupby('id')
+            # TODO Restore the page.html check
+            #   - The caller used to supply data_paths containing 'audio.mp3' + 'page.html', but then when we moved from
+            #     globs (fs) to audio-paths.jsonl listings (fs + gs) we inadvertently dropped the 'page.html' listings
+            #   - Restoring this will require expanding the audio-paths.jsonl concern to include "data" paths generally
+            # if set(g.filename) >= {'page.html', 'audio.mp3'}
+            if set(g.filename) >= {'audio.mp3'}
         )
 
 
@@ -420,7 +513,7 @@ def XCDF(xcdf, *args, **kwargs) -> pd.DataFrame:
 @singleton
 class birdclef2015:
 
-    # TODO TODO Finish fleshing this out (20180530_dataset_birdclef.ipynb + 20180524_eval_birdclef.ipynb)
+    # TODO Finish fleshing this out (20180530_dataset_birdclef.ipynb + 20180524_eval_birdclef.ipynb)
 
     def xml_data(self, recs: RecordingDF) -> pd.DataFrame:
         return pd.DataFrame([self.xml_dict_for_rec(rec) for rec in df_rows(recs)])
@@ -430,8 +523,8 @@ class birdclef2015:
         # wav_path -> (<Audio>, 'train'|'test')
         wav_path = os.path.join(data_dir, rec.path)
         xml_path_prefix = wav_path.replace('/wav/', '/xml/').replace('.wav', '')
-        train_path = glob.glob(f'{xml_path_prefix}-train.xml')
-        test_path = glob.glob(f'{xml_path_prefix}-test.xml')
+        train_path = glob_filenames_ensure_parent_dir(f'{xml_path_prefix}-train.xml')
+        test_path = glob_filenames_ensure_parent_dir(f'{xml_path_prefix}-test.xml')
         assert bool(train_path) != bool(test_path), \
             f'Failed to find train_path[{train_path}] xor test_path[{test_path}] for wav_path[{wav_path}]'
         [xml_path], train_test = (train_path, 'train') if train_path else (test_path, 'test')

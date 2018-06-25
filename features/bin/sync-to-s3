@@ -1,0 +1,16 @@
+#!/bin/bash -eux
+
+echo 'DEPRECATED: Use sync-to-gs'
+exit 1
+
+# dir="`dirname "$0"`/.."
+#
+# data_dir="$dir/data"
+# s3_dir='s3://jdanbrown-bubo/data'
+#
+# # XXX Veeeery slow to check s3 targets
+# # gsutil -m rsync -dr "$@" {"$data_dir","$s3_dir"}/xc/
+#
+# # --no-delete-removed to avoid accidentally wiping out all of our cloud data
+# # --no-check-md5 because it's slow and s3cmd already finds basic file differences using something like timestamp or size
+# s3cmd sync -v --no-delete-removed --no-check-md5 "$@" {"$data_dir","$s3_dir"}/xc/

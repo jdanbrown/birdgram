@@ -1,0 +1,179 @@
+#!/usr/bin/env python
+
+##
+# Mimic learning_curve.ipynb
+
+##
+from notebooks import *
+
+##
+# TODO Under par: only ~15-20% total cpu on n1-standard-16
+log.info('make-it-go: load.recs')
+load = Load()
+# with cache_control():  # FIXME Hangs without refresh=True [why?] -- which fortunately doesn't replay the slow .mp3->.wav step
+# with cache_control(refresh=True):
+with cache_control(refresh=False):
+    # recs_all = recs_all if 'recs_all' in locals() else load.recs(
+    recs_all = load.recs(
+        # limit=150,  # XXX Faster dev (need >100 to get >1 species, else things below break)
+        datasets=[
+            # 'peterson-field-guide',
+            # 'recordings',
+            'xc',
+        ],
+    )
+display(
+    df_summary(recs_all).T,
+    # df_summary(recs_all),
+    recs_all[:5],
+)
+
+##
+log.info('make-it-go: Subset the data')
+# Subset the data
+#   - Runtime: reduce data volume
+#   - Class imbalance: clip all classes at the same N (or smaller)
+class_count = np.inf   # All species (168)
+# class_count = 10     # Faster dev
+# class_count = 2      # Faster dev
+# class_size = np.inf  # recs[14k]  @ species[168]
+# class_size = 200     # recs[12k]  @ species[168]
+class_size = 100     # recs[10k]  @ species[168]
+# class_size = 50      # recs[7.0k] @ species[168]
+# class_size = 20      # recs[3.2k] @ species[168]
+# class_size = 10      # recs[1.7k] @ species[168]
+# class_size = 5       # recs[.84k] @ species[168]
+# class_size = 2       # recs[.34k] @ species[168]
+recs = (recs_all
+    # Sample class_size per species
+    .groupby('species').apply(lambda g: g.sample(n=min(len(g), class_size), random_state=0))
+    # Drop classes with <2 instances, else StratifiedShuffleSplit complains (e.g. 'TUVU')
+    [lambda df: df.species.isin(df.species.value_counts()[lambda s: s >= 2].index)]
+    # Sample class_count of the species
+    [lambda df: df.species.isin(df.species.sample(n=min(len(df.species), class_count), random_state=0))]
+)
+display(
+    df_summary(recs_all).T,
+    df_summary(recs).T,
+)
+
+##
+log.info('make-it-go: Projection.load')
+# Load a saved projection model
+projection = Projection.load('peterson-v0-26bae1c', features=Features(load=load))
+
+##
+log.info('make-it-go: Projection.transform')
+# Add .feat
+recs = projection.transform(recs)
+
+##
+log.info('make-it-go: cv.fit')
+# GridSearchCV many models / model params
+param_grid = dict(
+    classifier=[
+
+        # # KNN
+        # #   - Bad for large k because we only have ~7-26 instances per class
+        # #   - Bad for small k because KNN
+        # # 'cls: knn, n_neighbors: 100',
+        # 'cls: knn, n_neighbors: 50',
+        # 'cls: knn, n_neighbors: 25',
+        # # 'cls: knn, n_neighbors: 15',
+        # 'cls: knn, n_neighbors: 10',
+        # 'cls: knn, n_neighbors: 5',
+        # 'cls: knn, n_neighbors: 3',
+        # 'cls: knn, n_neighbors: 1',
+
+        # # SVM(RBF)
+        # #   - [SBF16] Uses these
+        # 'cls: svm, random_state: 0, probability: true, kernel: rbf, C: 1',
+        # 'cls: svm, random_state: 0, probability: true, kernel: rbf, C: 10',  # [SBF16]
+        # 'cls: svm, random_state: 0, probability: true, kernel: rbf, C: 100',  # Same as C:10 [why?]
+        # # 'cls: svm, random_state: 0, probability: true, kernel: rbf, C: 1000',  # Same as C:10 [why?]
+
+        # # RandomForest(entropy)
+        # #   - [SP14] uses entropy
+        # # 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 10',
+        # 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 50',
+        # 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 100',
+        # 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 200',  # [SP14]
+        # 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 400',
+        # 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 800',
+        # 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 1000',
+
+        # # RandomForest(gini)
+        # #   - sk uses gini by default
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 1',  # Faster dev
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 10',  # [sk default]
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 50',
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 100',
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 200',
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 400',
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 600',
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 800',
+        'cls: rf, random_state: 0, criterion: gini, n_estimators: 1000',
+        # WARNING These two are not very mem safe...
+        #   - They finish, but they cause OSX to "Not responding" most/all of its apps at ~2-3 different times
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 1500',
+        # 'cls: rf, random_state: 0, criterion: gini, n_estimators: 2000',
+
+    ],
+    # Downsample for learning curves
+    downsample_classes=[
+        # .1, # Faster dev
+        # .1, 1.0,  # Faster dev
+        100, 75, 50, 25,  # Biggest first, to fail fast
+    ],
+    # TODO agg_funs
+)
+
+# TODO Increase cv to decrease variance in eval metrics (this made Alex extremely squirmy)
+cv = GridSearchCVCached(
+    estimator=Search(projection=projection),
+    param_grid=param_grid,
+    refit=False,  # Don't spend time fitting cv.best_estimator_ at the end (default: True)
+    # cv=3,  # [SP14] uses two-/three-fold CV [why?]
+    # Stratified ensures that all classes have >0 instances in each split, which is statistically maybe fishy but avoids
+    # breaking various code that merges the split results back together and assumes all splits' classes are the same
+    cv=sk.model_selection.StratifiedShuffleSplit(
+        # n_splits=1,  # [for ~18/20 miss: ~19m, ~16g disk cache]
+        # n_splits=3,
+        # n_splits=5,
+        # n_splits=10,
+        n_splits=20,  # Known good [>51m uncached, >25g disk cache]
+        # n_splits=100,  # [?m runtime, ?g disk cache]
+        test_size=.2,
+        random_state=0,
+    ),
+    return_train_score=True,
+    extra_metrics=dict(
+        # [How to specify SearchEvals here without creating caching headaches?]
+        #   - e.g. defs don't bust cache on code edit
+        #   - And avoid thrashing cache every time we refactor SearchEvals
+        test_i='i_test',
+        test_y='y_test',
+        test_classes='estimator.classes_',
+        test_predict_proba='estimator.classifier_.predict_proba(X_test)',
+    ),
+    # return_estimator=True,  # Verrrry heavy, use extra_metrics instead
+    # verbose=100,
+    # verbose=10,  # O(models * n_splits) lines of outputs
+    verbose=1,  # O(1) lines of outputs
+    # n_jobs=1,  # For %prun
+    # n_jobs=6,  # Doesn't peg all 8 hyperthreads
+    # n_jobs=8,
+    n_jobs=16,  # Not mem safe, in general (laptop OOMs with 16x rf classifiers)
+)
+with contextlib.ExitStack() as stack:
+    # stack.enter_context(cache_control(refresh=True))  # Disk unsafe...
+    stack.enter_context(cache_control(enabled=False))  # Disk safe
+    # stack.enter_context(joblib.parallel_backend('threading'))  # Default: 'multiprocessing'
+    # stack.enter_context(joblib.parallel_backend('sequential'))  # For %prun [FIXME Has no effect; why?]
+    stack.enter_context(log.context(level='info'))
+    X, y = Search.Xy(recs)
+    cv.fit(X, y)
+
+##
+log.info('make-it-go: Done!?')
+# TODO TODO

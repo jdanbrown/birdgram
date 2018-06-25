@@ -40,6 +40,7 @@ ENV SHELL=/bin/bash \
     LANGUAGE=en_US.UTF-8
 
 # More native deps
+# - TODO Oops, indent these package names (cache bust)
 RUN apt-get update \
  && apt-get install -yq --no-install-recommends \
     build-essential \
@@ -64,6 +65,7 @@ RUN cd /tmp \
  && rm -rf "$HOME/.cache/yarn"
 
 # More native deps to workaround issues I couldn't resolve in conda alone
+# - TODO Oops, indent these package names (cache bust)
 RUN apt-get update \
  && apt-get install -yq --no-install-recommends \
     libreadline-dev \
@@ -74,7 +76,7 @@ RUN apt-get update \
 # - Maybe it's harmless to make a new /app? And let /Users/danb/hack/bubo/features only be used for data/ interactions?
 WORKDIR /app
 
-# conda/pip/R reqs
+# conda/pip/R reqs (part 1/2, "headstart")
 # - Use `-n base` to install into the global ("base") conda env instead of the one named in env.yml (bubo-features)
 #
 # The "headstart" files are a rough, laggy approximation to environment.yml/requirements.txt whose purpose is to provide
@@ -86,6 +88,63 @@ COPY _environment-headstart.yml ./
 RUN conda env update -n base -f _environment-headstart.yml
 COPY _requirements-headstart.txt ./
 RUN pip install -U -r _requirements-headstart.txt
+
+# Instead of `lsb_release -cs`
+# - TODO Move this to top (cache bust)
+ENV LSB_RELEASE='bionic'
+
+# Utils
+# - TODO Move these up into "More native deps" (cache bust)
+RUN apt-get update \
+ && apt-get install -yq --no-install-recommends \
+      dstat \
+      htop \
+      pv \
+      tree \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install gcloud
+# - Requires py2, so install as native dep instead of conda dep
+# - TODO Move this above conda/pip deps (cache bust)
+RUN export CLOUD_SDK_REPO="cloud-sdk-$LSB_RELEASE" \
+ && apt-get update \
+ && apt-get install -yq --no-install-recommends \
+      gnupg \
+ && echo $CLOUD_SDK_REPO \
+ && echo "deb http://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" \
+      | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
+ && curl -sf https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - \
+ && apt-get update \
+ && apt-get install -yq --no-install-recommends \
+      google-cloud-sdk=206.0.* \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install gcsfuse
+# - TODO Move this up (cache bust)
+ENV GCSFUSE_REPO="gcsfuse-$LSB_RELEASE"
+RUN echo "deb http://packages.cloud.google.com/apt $GCSFUSE_REPO main" | tee '/etc/apt/sources.list.d/gcsfuse.list' \
+ && curl -sf 'https://packages.cloud.google.com/apt/doc/apt-key.gpg' | apt-key add - \
+ && apt-get update \
+ && apt-get install -yq --no-install-recommends \
+      gcsfuse \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install mergerfs
+# - SLOW HEAVY (make install)
+# - https://github.com/trapexit/mergerfs#building
+# - TODO Move this up (cache bust)
+ENV MERGERFS_VERSION=2.24.2
+RUN curl -sfL "https://github.com/trapexit/mergerfs/releases/download/$MERGERFS_VERSION/mergerfs-$MERGERFS_VERSION.tar.gz" \
+      | tar xzC /tmp \
+ && (cd "/tmp/mergerfs-$MERGERFS_VERSION" && make install-build-pkgs install) \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+# conda/pip/R reqs (part 2/2, for real)
+# - Use `-n base` to install into the global ("base") conda env instead of the one named in env.yml (bubo-features)
 COPY environment.yml ./
 RUN conda env update -n base -f environment.yml
 COPY requirements.txt ./
@@ -98,7 +157,7 @@ RUN pip install -U -r requirements.txt
 
 # Make linux look in the same place for matplotlibrc as all other platforms (e.g. osx)
 # - http://matplotlib.org/users/customizing.html#customizing-matplotlib
-ENV MATPLOTLIBRC "/root/.matplotlib"
+ENV MATPLOTLIBRC="/root/.matplotlib"
 
 # Run all cmds within tini, else e.g. `juypter notebook` dies
 # - http://jupyter-notebook.readthedocs.io/en/stable/public_server.html#docker-cmd
@@ -111,3 +170,10 @@ ENV MATPLOTLIBRC "/root/.matplotlib"
 # - (See .dockerignore for exclusions)
 COPY . ./
 RUN pip install -e .
+
+# Warm various caches at build time to speed up app startup at runtime
+RUN python buildtime_warm_caches.py
+
+# Show the /app files we've packaged (e.g. in case we omitted any)
+# - `-I data` so we don't unroll all of s3://bubo-data via gcsfuse... [XXX which isn't mounted in Dockerfile anymore]
+RUN tree -Fa -I data
