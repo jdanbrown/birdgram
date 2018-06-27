@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+
+##
+# NOTE Manual bash stuff, for reference:
+#   bin/gcloud-run --keep=bubo-0 --machine-type=n1-standard-16 --disk-mode=rw bin/jupyter-kernelgateway
+#   bin/gcloud-run --reuse=bubo-0 --container-exec bin/jupyter-kernelgateway
+#   bin/gcloud-run --reuse=bubo-0 --container-exec bin/cache-stuff
+#   bin/gcloud-run --reuse=bubo-0 --container-exec 'htop -d10'
+#   bin/gcloud-run --reuse=bubo-0 --container-exec 'glances -t1 -b -1 -4 --process-short-name'
+#   bin/gcloud-run --reuse=bubo-0 --container-exec 'tail -fn 100 /var/log/gcsfuse.log'
+
+##
+print('cache-stuff: imports')
+from notebooks import *
+
+##
+log.info('cache-stuff: load.recs')
+load = Load()
+recs_all = load.recs(
+    # limit=150,  # XXX Faster dev (need >100 to get >1 species, else things below break)
+    # limit=100,
+    datasets=['xc'],
+)
+display(
+    df_summary(recs_all).T,
+    # df_summary(recs_all),
+    recs_all[:5],
+)
+
+##
+recs = recs_all
+
+##
+# log.info('cache-stuff: Subset the data')
+# # Subset the data
+# #   - Runtime: reduce data volume
+# #   - Class imbalance: clip all classes at the same N (or smaller)
+# class_count = np.inf   # All species (168)
+# # class_count = 10     # Faster dev
+# # class_count = 2      # Faster dev
+# # class_size = np.inf  # recs[14k]  @ species[168]
+# # class_size = 200     # recs[12k]  @ species[168]
+# class_size = 100     # recs[10k]  @ species[168]
+# # class_size = 50      # recs[7.0k] @ species[168]
+# # class_size = 20      # recs[3.2k] @ species[168]
+# # class_size = 10      # recs[1.7k] @ species[168]
+# # class_size = 5       # recs[.84k] @ species[168]
+# # class_size = 2       # recs[.34k] @ species[168]
+# recs = (recs_all
+#     # Sample class_size per species
+#     .groupby('species').apply(lambda g: g.sample(n=min(len(g), class_size), random_state=0))
+#     # Drop classes with <2 instances, else StratifiedShuffleSplit complains (e.g. 'TUVU')
+#     [lambda df: df.species.isin(df.species.value_counts()[lambda s: s >= 2].index)]
+#     # Sample class_count of the species
+#     [lambda df: df.species.isin(df.species.sample(n=min(len(df.species), class_count), random_state=0))]
+# )
+# display(
+#     df_summary(recs_all).T,
+#     df_summary(recs).T,
+# )
+
+##
+log.info('cache-stuff: Projection.load')
+# Load a saved projection model
+projection = Projection.load('peterson-v0-26bae1c', features=Features(load=load))
+
+##
+log.info('cache-stuff: Projection.transform')
+# Add .feat
+recs = projection.transform(recs)
+
+##
+log.info('cache-stuff: Done')

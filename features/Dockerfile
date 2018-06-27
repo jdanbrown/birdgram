@@ -143,6 +143,15 @@ RUN curl -sfL "https://github.com/trapexit/mergerfs/releases/download/$MERGERFS_
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
+# Utils
+# - TODO Move these up into "Utils" (cache bust)
+RUN apt-get update \
+ && apt-get install -yq --no-install-recommends \
+      rsync \
+      jq \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
 # conda/pip/R reqs (part 2/2, for real)
 # - Use `-n base` to install into the global ("base") conda env instead of the one named in env.yml (bubo-features)
 COPY environment.yml ./
@@ -168,12 +177,14 @@ ENV MATPLOTLIBRC="/root/.matplotlib"
 # App code
 # - Do this last for fast dev cycle
 # - (See .dockerignore for exclusions)
-COPY . ./
+COPY setup.py ./
 RUN pip install -e .
+COPY . ./
 
 # Warm various caches at build time to speed up app startup at runtime
 RUN python buildtime_warm_caches.py
 
+# XXX Too noisy when we run `docker build` in the inner dev loop
 # Show the /app files we've packaged (e.g. in case we omitted any)
 # - `-I data` so we don't unroll all of s3://bubo-data via gcsfuse... [XXX which isn't mounted in Dockerfile anymore]
-RUN tree -Fa -I data
+# RUN tree -Fa -I data

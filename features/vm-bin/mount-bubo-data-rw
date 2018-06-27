@@ -1,6 +1,7 @@
-#!/bin/bash -eux
+#!/bin/bash -eu
 
 bin="`dirname "$0"`"
 
-"$bin"/mount-bubo-data
+set -x
+"$bin"/mount-bubo-data-ro
 "$bin"/remount-disk-rw-bubo-data

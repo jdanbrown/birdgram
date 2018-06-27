@@ -1,0 +1,10 @@
+#!/bin/bash -eu
+
+bin="`dirname "$0"`"
+bin="`"$bin"/normpath "$bin"`"
+
+while true; do
+  (set -x; "$bin"/rsync-code-to-container "$@")
+  echo; date; echo
+  read -s
+done

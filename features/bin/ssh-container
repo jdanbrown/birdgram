@@ -1,0 +1,25 @@
+#!/bin/bash -eu
+
+bin="`dirname "$0"`"
+bin="`"$bin"/normpath "$bin"`"
+
+# TODO Allow more opts (e.g. --project, --zone)
+# - Workaround: Set default project and zone in `gcloud config` (= ~/.config/gcloud/configurations/)
+host="$1"; shift
+container="$host" # TODO Add --container for when this isn't the same as $host
+
+if tty -s; then
+  it='-it'
+else
+  it='-i'
+fi
+
+args=("$@")
+if [ ${#args} -eq 0 ]; then
+  args=('bash')
+fi
+
+set -x
+# FIXME -t not working ("not a tty") on cos docker (17.03.2-ce)
+# - Maybe fixed by 17.06: https://github.com/moby/moby/issues/8755
+exec "$bin"/ssh-vm "$host" docker exec "$it" "$container" "${args[@]}"

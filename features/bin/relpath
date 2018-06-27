@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+
+import os.path
+import sys
+
+try:
+    (_, path) = sys.argv
+except:
+    try:
+        (_, path, start) = sys.argv
+    except:
+        print('Usage: relpath <path> [<start>]')
+        sys.exit(1)
+    else:
+        print(os.path.relpath(path, start))
+else:
+    print(os.path.relpath(path))

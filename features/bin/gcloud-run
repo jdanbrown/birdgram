@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 #
-# Example auth, e.g. for deploys:
-#   GOOGLE_APPLICATION_CREDENTIALS=~/hack/.bubo-secrets/gcloud-service-account-bubo.json bin/gcloud-run ...
+# WARNING Full of hacks
 #
 # Notes for different images:
 #   - cos
@@ -10,6 +9,9 @@
 #       - docker v18 [https://coreos.com/releases/]
 #       - --username=core [https://coreos.com/os/docs/latest/booting-on-google-compute-engine.html]
 #       - [I can't get `ssh core@...` to work...]
+#
+# Example auth, e.g. for deploys [XXX Out of date]:
+#   GOOGLE_APPLICATION_CREDENTIALS=~/hack/.bubo-secrets/gcloud-service-account-bubo.json bin/gcloud-run ...
 
 import atexit
 from datetime import datetime, timedelta
@@ -28,12 +30,16 @@ import crayons
 import dataclasses
 from dataclasses import dataclass
 from potoo.pretty import pp
+from potoo.util import shell
+
+from constants import project, zone
 
 # click: Default option(show_default=True)
 _click_option = click.option
 click.option = lambda *args, **kwargs: _click_option(*args, **{'show_default': True, **kwargs})
 
-code_dir = Path(__file__).parent.parent
+code_dir = Path(__file__).parent.parent.resolve()
+bin_dir = code_dir / 'bin'
 
 
 # FIXME click doesn't exit nonzero on -h/--help [wat]
@@ -43,8 +49,8 @@ code_dir = Path(__file__).parent.parent
     max_content_width=click.get_terminal_size()[0],
 ))
 # Project/zone
-@click.option('--project', default='bubo-1')
-@click.option('--zone', default='us-west1-b')
+@click.option('--project', default=project)
+@click.option('--zone', default=zone)
 # Instance name
 @click.option('--instance-name', default='%(instance_name_prefix)s-%(timestamp)s')
 @click.option('--instance-name-prefix', default='gcloud-run')
@@ -109,37 +115,74 @@ code_dir = Path(__file__).parent.parent
 #     activate-service-account` to override it (and `gcloud auth` takes precedence over GOOGLE_APPLICATION_CREDENTIALS)
 @click.option('--service-account', default=None)
 @click.option('--scopes', default='https://www.googleapis.com/auth/cloud-platform')
-# VM
+# vm/container
 #   - Can only mount disk here, not also gs [because gcsfuse is too difficult to install into cos...]
 #   - TODO Clean up --disk / --vm-init: tight coupling, wouldn't use one without the other
 #   - HACK Need bash because cos mounts are noexec (ugh) [https://stackoverflow.com/a/50279396/397334]
-@click.option('--vm-init', default='sudo bash vm-bin/mount-disk-bubo-data')
-# Container
-@click.option('--container/--no-container', default=True, help='Run command in container, else run in instance')
 @click.option('--vm/--no-vm', default=False, help='--vm is an alias for --no-container')
+@click.option('--vm-init', default='sudo bash vm-bin/mount-disk-bubo-data')
+@click.option('--container/--no-container', default=True, help='Run command in container, else run in instance')
+@click.option('--container-init', default='vm-bin/mount-bubo-data-%(disk_mode)s')
+@click.option('--container-pull/--no-container-pull', default=False, help='True if creating an instance, else false')
+@click.option('--container-push/--no-container-push', default=False)
 @click.option('--container-image', default='gcr.io/%(project)s/bubo/features:latest')
 @click.option('--container-name', default='%(instance_name)s')
 @click.option('--container-vols', default='-v/mnt/disks/disk-bubo-data:/mnt/disks/disk-bubo-data')
-# TODO Clean up this mess
+@click.option('--container-ports', default='-p8888:8888')  # TODO Expose '8888' as an option (here and below)
+@click.option('--container-run/--no-container-run', default=True, help='`docker run`')
+@click.option('--container-exec/--no-container-exec', default=False, help='`docker exec`')
+@click.option('--container-attach/--no-container-attach', default=False, help='`docker attach`')
+@click.option('--sync-code/--no-sync-code', default=True, help='rsync code_dir to remote')
+# TODO Ugh, clean up this --docker-pull/--docker-run/--docker-exec mess
 @click.option('--docker-pull', default=' '.join([
     'sudo docker run -it',
     '-v/var/run/docker.sock:/var/run/docker.sock',
     'google/cloud-sdk:203.0.0',
     'bash -c "gcloud auth configure-docker --quiet && docker pull %(container_image)s"',
 ]))
+@click.option('--docker-build', default=' '.join([
+    # TODO Document v18 vs. v17 like docker-build-push-gcloud
+    'sudo docker run -it',
+    '-v/var/run/docker.sock:/var/run/docker.sock',
+    '-v"$PWD"/build:/build',
+    '-w/build',
+    'docker:18.03.1',
+    'docker build . --cache-from=%(container_image)s -t %(container_image)s',
+    # 'docker build . -t %(container_image)s',
+]))
+@click.option('--docker-push', default=' '.join([
+    # XXX Unused
+    'sudo docker run -it',
+    '-v/var/run/docker.sock:/var/run/docker.sock',
+    'google/cloud-sdk:203.0.0',
+    'bash -c "gcloud auth configure-docker --quiet && docker push %(container_image)s"',
+]))
 @click.option('--docker-run', default=' '.join([
-    'if sudo docker exec -it %(container_name)s true 2>/dev/null; then',
-        'sudo docker exec -it',
-        '%(container_name)s',
-        '%(command)s',
-    '; else',
-        '%(docker_pull)s &&',
-        'sudo docker run -it',
-        '--privileged --restart=no --rm --name=%(container_name)s',
-        '%(container_vols)s',
-        '%(container_image)s',
-        '%(command)s',
-    '; fi',
+    # Don't unconditionally pull, since it busts our local cache and we have to rebuild from the pulled image
+    #   - And don't unconditionally push, since it slows down our dev loop
+    '%(maybe_docker_pull)s &&',
+    '%(docker_build)s &&',
+    '%(maybe_docker_push)s &&',
+    'sudo docker run -it',
+    '--privileged --restart=no --rm --name=%(container_name)s -eCONTAINER_NAME=%(container_name)s',
+    '%(docker_run_opts)s',
+    '%(container_vols)s',
+    '%(container_ports)s',
+    '%(container_image)s',
+    '%(command)s',
+]))
+# Increase /dev/shm 64m -> 10g to avoid "No space left on device" errors from sklearn/joblib
+#   - https://stackoverflow.com/questions/40115043/no-space-left-on-device-error-while-fitting-sklearn-model
+#   - https://github.com/joblib/joblib/issues/168
+@click.option('--docker-run-opts', default='--shm-size=10g')
+@click.option('--docker-exec', default=' '.join([
+    'sudo docker exec -it',
+    '%(container_name)s',
+    '%(command)s',
+]))
+@click.option('--docker-attach', default=' '.join([
+    'sudo docker attach',
+    '%(container_name)s',
 ]))
 # Command
 @click.option('--await-ready/--no-await-ready', default=True)
@@ -154,8 +197,11 @@ def main(
     boot_disk_size, boot_disk_type, disk_name, disk_mode, disk,
     network_tier,
     service_account, scopes,
-    vm_init,
-    container, vm, container_image, container_name, container_vols, docker_pull, docker_run,
+    vm, vm_init,
+    container, container_init, container_pull, container_push,
+    container_image, container_name, container_vols, container_ports,
+    container_run, container_exec, container_attach, sync_code,
+    docker_pull, docker_build, docker_push, docker_run, docker_run_opts, docker_exec, docker_attach,
     await_ready, username, command,
 ):
 
@@ -182,21 +228,50 @@ def main(
     image_project = image_project % dict(project=project)
     if disk:
         disk = disk % dict(disk_name=disk_name, disk_mode=disk_mode)
+    container_init = container_init % dict(disk_mode=disk_mode)
     if vm:
         container = False
+    container_pull = container_pull or create_instance  # Always pull if the instance is fresh
     container_image = container_image % dict(project=project)
     container_name = container_name % dict(instance_name=instance_name)
+    container_op = (
+        'attach' if container_attach else
+        'exec' if container_exec else
+        'run'
+    )
+    assert not sync_code or container_op in ['run', 'exec']
     if command is None:
         command = 'bash'
+    command = command % dict(instance_name=instance_name)
+    if container and container_op == 'run':
+        command = ' && '.join([container_init, command])
     command = 'bash -c %s' % shlex.quote(command)
     docker_pull = docker_pull % dict(
         container_image=shlex.quote(container_image),
     )
-    docker_run = docker_run % dict(
-        docker_pull=docker_pull,
-        container_name=shlex.quote(container_name),
+    docker_build = docker_build % dict(
         container_image=shlex.quote(container_image),
+    )
+    docker_push = docker_push % dict(
+        container_image=shlex.quote(container_image),
+    )
+    docker_run = docker_run % dict(
+        maybe_docker_pull=docker_pull if container_pull else ':',
+        docker_build=docker_build,
+        maybe_docker_push=docker_push if container_push else ':',
+        container_name=shlex.quote(container_name),
+        docker_run_opts=docker_run_opts,
         container_vols=shlex.quote(container_vols),
+        container_ports=shlex.quote(container_ports),
+        container_image=shlex.quote(container_image),
+        command=command,
+    )
+    docker_exec = docker_exec % dict(
+        container_name=shlex.quote(container_name),
+        command=command,
+    )
+    docker_attach = docker_attach % dict(
+        container_name=shlex.quote(container_name),
         command=command,
     )
 
@@ -241,7 +316,7 @@ def main(
         retry(times=60, delay_s=1, f=lambda: (
             gcloud('compute', 'ssh', f'{username}@{instance_name}',
                 zone=zone,
-                _json=False,
+                _mode='no-json',
                 _end_args=['--', '-tq', 'true'],
             )
         ))
@@ -252,31 +327,28 @@ def main(
             print(color('blue', '  external_ip: %s' % external_ip))
 
     # Run vm_init
-    if vm_init and create_instance:
+    if create_instance and vm_init:
 
-        # rsync vm-bin/ to vm
-        cmd = ' '.join([
-            '%(code_dir)s/bin/rsync-gcloud',
-            '-azv --delete -FF --links --prune-empty-dirs',
-            '%(code_dir)s/vm-bin/',
-            '%(instance_name)s:vm-bin/',
-        ]) % dict(
-            code_dir=shlex.quote(str(code_dir)),
-            instance_name=shlex.quote(instance_name),
+        print(color('blue', f'Syncing vm-bin/ to instance[{instance_name}]...'))
+        shell(
+            '%(bin_dir)s/rsync-vm %(code_dir)s/vm-bin/ %(instance_name)s:vm-bin/',
+            bin_dir=bin_dir,
+            code_dir=code_dir,
+            instance_name=instance_name,
         )
-        print(f'$ {cmd}')
-        subprocess.run(cmd, shell=True, check=True)
 
-        # Mount (non-boot) disks
+        print(color('blue', f'Running --vm-init'))
         gcloud('compute', 'ssh', f'{username}@{instance_name}',
             zone=zone,
-            _json=False,
+            _mode='no-json',
             _end_args=['--', '-tq', vm_init],
         )
 
     # Run command
     #   - WARNING Careful with retry here: need to distinguish transient (network) vs. non-transient (command) errors
     if command:
+
+        # Run cmd in vm
         if not container:
             print(color('blue', f'Running command on instance[{instance_name}]...'))
             gcloud('compute', 'ssh', f'{username}@{instance_name}',
@@ -285,15 +357,46 @@ def main(
                 _end_args=['--', '-tq', command],
             )
         else:
+
+            # Sync code (to container)
+            if sync_code:
+                print(color('blue', 'Syncing code_dir[%s] to container on %s...' % (code_dir, ' / '.join([
+                    f'instance[{instance_name}]', f'image[{container_image}]', f'container[{container_name}]',
+                ]))))
+
+                # If docker run, then rsync-vm
+                if container_op == 'run':
+                    shell(
+                        '%(bin_dir)s/rsync-vm %(code_dir)s/ %(instance_name)s:build/',
+                        bin_dir=bin_dir,
+                        code_dir=code_dir,
+                        instance_name=instance_name,
+                    )
+
+                # If docker exec, then rsync-container
+                elif container_op == 'exec':
+                    assert container_name == instance_name, 'TODO Add --container to bin/rsync-container (env var?)'
+                    shell(
+                        '%(bin_dir)s/rsync-code-to-container %(instance_name)s',
+                        bin_dir=bin_dir,
+                        instance_name=instance_name,
+                    )
+
+            # Run cmd via docker run/exec, or just docker attach
             print(color('blue', 'Running command on %s...' % ' / '.join([
-                f'instance[{instance_name}]',
-                f'image[{container_image}]',
-                f'container[{container_name}]',
+                f'instance[{instance_name}]', f'image[{container_image}]', f'container[{container_name}]',
             ])))
             gcloud('compute', 'ssh', f'{username}@{instance_name}',
                 zone=zone,
                 _mode='exec',
-                _end_args=['--', '-tq', ' && '.join(['set -x', docker_run])],
+                _end_args=[
+                    '--',
+                    '-tq',
+                    '-L', '8888:localhost:8888',  # Tunnel port 8888
+                    docker_attach if container_op == 'attach' else
+                        docker_exec if container_op == 'exec' else
+                        docker_run,
+                ],
             )
 
 
@@ -312,7 +415,8 @@ class GCloud:
     def config(self) -> dict:
         return dataclasses.asdict(self)
 
-    def __call__(self, *args, _mode='response', _json=True, **kwargs):
+    def __call__(self, *args, _mode='json', **kwargs):
+        assert _mode in ['json', 'no-json', 'exec', 'async']
 
         # Build cmd
         kwargs = {**self.config, **kwargs}  # Silently overwrite duplicate keys with user keys
@@ -329,7 +433,7 @@ class GCloud:
             repro_cmd = 'nohup %s >>/var/log/gcloud-run-async.log &' % gcloud_cmd
             real_cmd = ['bash', '-c', repro_cmd]
         else:
-            repro_cmd = gcloud_cmd
+            repro_cmd = ('%s --format=json' if _mode == 'json' else '%s') % gcloud_cmd
             real_cmd = ['bash', '-c', repro_cmd]
         print(color('black', f'$ {repro_cmd}'))
         # print(color('red', f'$ {real_cmd}'))  # Debug
@@ -347,30 +451,25 @@ class GCloud:
             subprocess.run(real_cmd)
         else:
             # Run, wait for completion, parse output (assumes '--format=json', above)
-            proc = subprocess.run(real_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            proc = subprocess.run(
+                real_cmd,
+                stdout=subprocess.PIPE if _mode == 'json' else None,
+            )
 
             # Handle result
             if proc.returncode != 0:
-                msg = 'Exit %s: stderr[%s]' % (
-                    proc.returncode,
-                    re.sub('\n+\s*', ' ', proc.stderr.decode().strip()),
-                )
+                msg = 'Process exited %s' % proc.returncode
                 if proc.stdout:
                     msg += ', stdout[%s]' % (
                         re.sub('\n+\s*', ' ', proc.stdout.decode().strip()),
                     )
                 raise Exception(msg)
-            else:
-                if proc.stderr:
-                    print(color(None, proc.stderr.decode()), end='', file=sys.stderr)
-                if not _json:
-                    return proc.stdout.decode()
-                else:
-                    try:
-                        return json.loads(proc.stdout.decode())
-                    except:
-                        print(color('red', 'Failed to parse json from stdout[%s]' % proc.stdout))  # TODO Fold into exc msg
-                        raise
+            elif _mode == 'json':
+                try:
+                    return json.loads(proc.stdout.decode())
+                except:
+                    print(color('red', 'Failed to parse json from stdout[%s]' % proc.stdout))  # TODO Fold into exc msg
+                    raise
 
 
 def shell_cmd(*args, _end_args=None, **kwargs) -> str:
@@ -404,7 +503,10 @@ def retry(f, times: int, delay_s: float):
 
 def color(name: str, s: str, **kwargs) -> str:
     kwargs.setdefault('bold', True)  # Bold is great
-    return s if not name else getattr(crayons, name)(s, **kwargs)
+    if not name or not sys.stdout.isatty():
+        return s
+    else:
+        return getattr(crayons, name)(s, **kwargs)
 
 
 if __name__ == '__main__':

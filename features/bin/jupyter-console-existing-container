@@ -1,0 +1,21 @@
+#!/bin/bash -eu
+
+bin="`dirname "$0"`"
+bin="`"$bin"/normpath "$bin"`"
+
+host="$1"; shift
+
+"$bin"/gcloud-run --reuse="$host" --no-sync-code --container-exec '
+  kernel_ids=(`http localhost:8888/api/kernels | jq .[].id -r`)
+  if [ ${#kernel_ids[*]} -eq 0 ]; then
+    echo "ERROR: No kernels found"
+    exit 1
+  elif [ ${#kernel_ids[*]} -gt 1 ]; then
+    echo "ERROR: Multiple kernels found: ${kernel_ids[@]}"
+    exit 1
+  else
+    kernel_id="${kernel_ids[0]}"
+    set -x
+    jupyter console --existing=kernel-"$kernel_id".json
+  fi
+'

@@ -52,19 +52,24 @@ memory = Memory(
     cachedir=cache_dir,  # It adds its own joblib/ subdir
     invalidate_on_code_change=False,
     log=log,
-    verbose=-1,  # Log '.'/'!' on hit/miss [HACK HACK HACK]
-    # verbose=0,  # Log nothing
+    # verbose=-1,  # Log '.'/'!' on hit/miss [HACK HACK HACK]
+    verbose=0,  # Log nothing [FIXME -1 (log.char) is causing the 'IOStream.flush timed out' errors in remote kernels]
     # verbose=1,  # Log cache miss
     # verbose=10,  # Log cache miss, cache hit [need >10 to log "Function has changed" before "Clearing cache"]
     # verbose=100,  # Log cache miss, cache hit, plus extra
 )
 
 
-@singleton
+# WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
+#   - See details in util.Log
 @dataclass
-class cache_control(AttrContext):
+class _cache_control(AttrContext):
     enabled: bool = True
     refresh: bool = False
+
+
+# Workaround for @singleton (above)
+cache_control = _cache_control()
 
 
 # TODO This is becoming really hacky; consider making a separate api that reuses joblib storage but not joblib.Memory

@@ -387,11 +387,16 @@ from potoo.util import AttrContext, get_cols
 X = TypeVar('X')
 
 
-@singleton
+# WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
+#   - See details in util.Log
 @dataclass
-class dask_opts(AttrContext):
+class _dask_opts(AttrContext):
     override_use_dask: bool = None
     override_scheduler: bool = None
+
+
+# Workaround for @singleton (above)
+dask_opts = _dask_opts()
 
 
 def _df_apply_progress_dask(

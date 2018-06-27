@@ -1,0 +1,9 @@
+#!/bin/bash -eu
+
+bin="`dirname "$0"`"
+bin="`"$bin"/normpath "$bin"`"
+code_dir="`"$bin"/normpath "$bin"/..`"
+
+host="$1"; shift
+
+exec "$bin"/rsync-container "$code_dir"/ "$host":./

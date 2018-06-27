@@ -1,9 +1,11 @@
 from datetime import datetime
 import json
 import logging
+import sys
 import threading
 from typing import Optional, Union
 
+import crayons
 from dataclasses import dataclass
 from potoo.util import AttrContext, singleton
 import yaml
@@ -23,7 +25,6 @@ import yaml
 #   foo = Foo()
 #   cloudpickle.dump(foo)  # Ok! Use this as a workaround.
 #
-# @singleton
 @dataclass
 class Log(AttrContext):
     """Simple, ad-hoc logging specialized for interactive usage"""
@@ -89,13 +90,17 @@ class Log(AttrContext):
         else:
             raise ValueError(f"Can't convert to Level: {level}")
 
-    def _format_level(self, level: LevelLike) -> str:
-        return {
-            logging.DEBUG: 'DEBUG',
-            logging.INFO:  'INFO',
-            logging.WARN:  'WARN',
-            logging.ERROR: 'ERROR',
+    def _format_level(self, level: LevelLike, color=None, color_bold=True) -> str:
+        color = color if color is not None else sys.stdout.isatty()
+        (name, _color) = {
+            logging.DEBUG: ('DEBUG', 'blue'),
+            logging.INFO:  ('INFO',  'green'),
+            logging.WARN:  ('WARN',  'yellow'),
+            logging.ERROR: ('ERROR', 'red'),
         }[self._to_level(level)]
+        if color:
+            name = getattr(crayons, _color)(name, bold=color_bold)
+        return name
 
 
 # Workaround for @singleton (above)

@@ -3,6 +3,7 @@
 # TODO TODO WIP Untested (see "WIP" in Dockerfile)
 
 bin="`dirname "$0"`"
+bin="`"$bin"/normpath "$bin"`"
 
 # TODO Does hydrogen/connection.json prevent us from running multiple concurrent kernels in atom?
 

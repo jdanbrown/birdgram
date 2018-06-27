@@ -1,15 +1,16 @@
 from collections import OrderedDict
 from functools import partial
 import os.path
+from pathlib import Path
 import re
-from typing import Iterable, Tuple
+from typing import Iterable, Optional, Tuple
 
 from attrdict import AttrDict
 import audiosegment
 from dataclasses import dataclass
 import pandas as pd
 from potoo.pandas import requires_cols
-from potoo.util import round_sig, strip_startswith
+from potoo.util import or_else, round_sig, strip_startswith
 import tqdm
 
 from cache import cache
@@ -124,7 +125,14 @@ class Load(DataclassConfig):
         # Performance (600 peterson recs):
         #   - Scheduler: [TODO Measure -- 'threads' is like the outcome, like n-1 of the rest]
         #   - Bottlenecks (no_dask): [TODO Measure]
-        metadata = map_progress(self._metadata, df_rows(recs), use='dask', scheduler='threads')
+        #   - TODO TODO Revisiting with ~87k xc recs...
+        metadata = map_progress(self._metadata, df_rows(recs),
+            # use='dask', scheduler='threads',    # Optimal for 600 peterson recs on laptop
+            # Perf comparison:                             machine     cpu   disk_r     disk_w  disk_io_r  disk_io_w
+            # use='dask', scheduler='threads',    # n1-standard-16   5-20%   1-5m/s  10-120m/s      10-50     50-500
+            # use='dask', scheduler='processes',  # n1-standard-16  10-50%  5-20m/s    ~100m/s     50-200    300-600
+            use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),
+        )
         # Filter out dropped rows (e.g. junky audio file)
         metadata = [x for x in metadata if x is not None]
         # Convert to df
@@ -154,8 +162,27 @@ class Load(DataclassConfig):
             samples_n=len(samples),
         )
 
-    @short_circuit(lambda self, recs: recs.get('audio'))
-    def audio(self, recs: RecordingDF) -> Column['Box[Audio]']:
+    def audio_to_wav(self, recs: RecordingDF):
+        """Compute and save .wav files for recs (return nothing)"""
+        log('Load.audio_to_wav:in', **{
+            'len(recs)': len(recs),
+            'len(recs) per dataset': recs.dataset.value_counts().to_dict(),
+        })
+        # Precompute and filter out exists=True so we get a more accurate estimate of progress on the exists=False set
+        recs = (recs
+            .pipe(df_apply_progress, use='dask', scheduler='processes', f=lambda row: (
+                row.set_value('cache_path', self._cache_path(row.path))
+            ))
+            .pipe(df_apply_progress, use='dask', scheduler='threads', f=lambda row: (
+                row.set_value('exists', (Path(data_dir) / row.cache_path).exists())
+            ))
+            [lambda df: ~df.exists]
+        )
+        # Convert recs to .wav (and return nothing)
+        self.audio(recs, load=False)
+
+    @short_circuit(lambda self, recs, **kwargs: recs.get('audio'))
+    def audio(self, recs: RecordingDF, load=True, **kwargs) -> Column['Box[Optional[Audio]]']:
         """.audio <- .path"""
         log('Load.audio:in', **{
             'len(recs)': len(recs),
@@ -170,15 +197,26 @@ class Load(DataclassConfig):
         #               1    0.060    0.060    0.845    0.845 <string>:1(<module>)
         #           61176    0.018    0.000    0.039    0.000 {built-in method builtins.isinstance}
         #             600    0.015    0.000    0.015    0.000 {built-in method io.open}
-        audio = map_progress(self._audio, df_rows(recs), use='dask', scheduler='threads')
+        audio = map_progress(partial(self._audio, load=load), df_rows(recs), **{
+            **dict(
+                # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
+                # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # FIXME Quiet...
+                use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,
+            ),
+            **kwargs,
+        })
         log('Load.audio:out', **{
             'len(audio)': len(audio),
         })
         return audio
 
-    @short_circuit(lambda self, rec: rec.get('audio'))
+    @short_circuit(lambda self, rec, **kwargs: rec.get('audio'))
     # Caching doesn't help here, since our bottleneck is file read (.wav), which is also cache hit's bottleneck
-    def _audio(self, rec: Row) -> 'Box[Audio]':
+    def _audio(
+        self,
+        rec: Row,
+        load=True,  # load=False if you just want to trigger lots of wav encodings
+    ) -> 'Box[Optional[Audio]]':
         """audio <- .path, and (optionally) cache a standardized .wav for faster subsequent loads"""
 
         path = rec.path
@@ -193,11 +231,14 @@ class Load(DataclassConfig):
         try:
 
             # Cache transcribed audio, if requested
-            if c.cache_audio:
-                rel_path_noext, _ext = os.path.splitext(os.path.relpath(path, data_dir))
-                params_id = f'{c.sample_rate}hz-{c.channels}ch-{c.sample_width_bit}bit'
-                cache_path = f'{cache_dir}/{params_id}/{rel_path_noext}.wav'
-                if not os.path.exists(cache_path):
+            if not c.cache_audio:
+                cache_path = None
+            else:
+                cache_path = self._cache_path(path)
+                if os.path.exists(cache_path):
+                    log.char('info', '•')
+                else:
+                    # log.char('info', '!')
                     log(f'Caching: {cache_path}')
                     in_audio = audiosegment.from_file(path)
                     std_audio = in_audio.resample(
@@ -209,7 +250,10 @@ class Load(DataclassConfig):
                 path = cache_path
 
             # Caching aside, always load from disk for consistency
-            audio = audiosegment.from_file(path)
+            if load:
+                audio = audiosegment.from_file(path)
+            else:
+                audio = None
 
         except Exception as e:
             # "Drop" invalid audio files by replacing them with a 0s audio, so we can detect and filter out downstream
@@ -219,20 +263,32 @@ class Load(DataclassConfig):
                 id=rec.id,
                 path=rec.path,
                 # filesize_b=rec.filesize_b,
-                cache_path=path,
-                cache_filesize_b=os.path.getsize(path),
+                cache_in_path=path,
+                cache_in_path_exists=os.path.exists(path),
+                cache_in_filesize_b=or_else(None, lambda: os.path.getsize(path)),
+                cache_out_path=cache_path,
+                cache_out_path_exists=or_else(None, lambda: os.path.exists(cache_path)),
+                cache_out_filesize_b=or_else(None, lambda: os.path.getsize(cache_path)),
             ))
             audio = audiosegment.empty()
             audio.name = path
             audio.seg.frame_rate = c.sample_rate
 
-        # Make audiosegment.AudioSegment attrs more ergonomic
-        audio = self._ergonomic_audio(audio)
+        if load:
 
-        # Box to avoid downstream pd.Series errors, since AudioSegment is iterable and np.array tries to flatten it
-        audio = box(audio)
+            # Make audiosegment.AudioSegment attrs more ergonomic
+            audio = self._ergonomic_audio(audio)
 
-        return audio
+            # Box to avoid downstream pd.Series errors, since AudioSegment is iterable and np.array tries to flatten it
+            audio = box(audio)
+
+            return audio
+
+    def _cache_path(self, path: str) -> str:
+        c = self.audio_config
+        rel_path_noext, _ext = os.path.splitext(os.path.relpath(path, data_dir))
+        params_id = f'{c.sample_rate}hz-{c.channels}ch-{c.sample_width_bit}bit'
+        return f'{cache_dir}/{params_id}/{rel_path_noext}.wav'
 
     # HACK Make our own Audio instead of monkeypatching audiosegment.AudioSegment
     def _ergonomic_audio(self, audio: audiosegment.AudioSegment) -> audiosegment.AudioSegment:

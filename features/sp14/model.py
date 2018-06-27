@@ -41,12 +41,14 @@ from attrdict import AttrDict
 import dask
 from dataclasses import dataclass, field
 import joblib
+import lightgbm as lgb  # For Search.cls
 import numpy as np
 from potoo.numpy import np_sample_stratified
 from potoo.util import round_sig
 import sklearn as sk
-import sklearn.ensemble  # For sk.ensemble.RandomForestClassifier
+import sklearn.ensemble  # For Search.cls (sk.ensemble.RandomForestClassifier)
 import yaml
+import xgboost as xgb  # For Search.cls
 
 from cache import cache, cache_lambda, cache_pure_method
 from constants import data_dir
@@ -346,8 +348,9 @@ class Projection(DataclassConfig):
         #         900/300    0.235    0.000    4.004    0.013 cache.py:99(func_cached)
         with dask_opts(
             # TODO Threading causes hangs during heavy (xc 13k) cache hits
-            # override_scheduler='threads',
-            override_scheduler='synchronous',
+            # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)
+            # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs)
+            override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)
         ):
             return RecordingDF(recs
                 # Compute row-major with the 'threads' scheduler, since all cols perform best with 'threads'
@@ -499,7 +502,9 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     # sk.utils.estimator_checks.check_estimator(Search)
 
     _X_col = 'feat'
+    _X_dtype = np.float32  # TODO Bubble this up through Projection (default is np.float64, which we don't need)
     _y_col = 'species'
+    _y_dtype = None
 
     @classmethod
     def df(cls, X: Iterable, y: Iterable) -> pd.DataFrame:
@@ -511,12 +516,12 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     @classmethod
     @requires_cols(_X_col)
     def X(cls, df: pd.DataFrame) -> np.ndarray:
-        return np.array(list(df[cls._X_col]))
+        return np.array(list(df[cls._X_col]), dtype=cls._X_dtype)
 
     @classmethod
     @requires_cols(_y_col)
     def y(cls, df: pd.DataFrame) -> np.ndarray:
-        return np.array(list(df[cls._y_col]))
+        return np.array(list(df[cls._y_col]), dtype=cls._y_dtype)
 
     @classmethod
     @requires_cols(_X_col, _y_col)

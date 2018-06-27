@@ -3,5 +3,6 @@
 # TODO TODO WIP Untested (see "WIP" in Dockerfile)
 
 bin="`dirname "$0"`"
+bin="`"$bin"/normpath "$bin"`"
 
 exec "$bin"/docker-run python "$@"

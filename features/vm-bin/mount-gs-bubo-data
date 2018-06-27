@@ -30,11 +30,12 @@ echo "Mounting: gs://$gs_bucket/$gs_path at $mnt_dir"
 #   - https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/semantics.md
 #     - --implicit-dirs seems cleaner, but it doesn't appear to be the happy path -- let's avoid it
 #     - --implicit-dirs is also noticeably slower (easy to see the difference with `--foreground --debug_gcs`)
+#     - But without --implicit-dirs we have to touch all the files to create all the empty dir files...
 #   - https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/installing.md
 #   - https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/mounting.md
 sudo mkdir -p "$mnt_dir"
 nohup \
-  sudo gcsfuse --foreground --debug_gcs --only-dir="$gs_path" "$gs_bucket" "$mnt_dir" \
+  sudo gcsfuse --foreground --debug_gcs --implicit-dirs --only-dir="$gs_path" "$gs_bucket" "$mnt_dir" \
   2>&1 | sudo tee -a "$log_file" >/dev/null &
 
 # Wait 10s (50ms at a time) for the mountpoint to show up

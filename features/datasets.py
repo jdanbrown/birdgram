@@ -69,9 +69,8 @@ DATASETS = {
 
 # WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
 #   - See details in util.Log
-# @singleton
 @dataclass
-class AudioPathFiles(DataclassUtil):
+class _audio_path_files(DataclassUtil):
     """Manage the data/**/audio-paths.jsonl files"""
 
     @generator_to(pd.DataFrame)
@@ -116,7 +115,7 @@ class AudioPathFiles(DataclassUtil):
 
 
 # Workaround for @singleton (above)
-audio_path_files = AudioPathFiles()
+audio_path_files = _audio_path_files()
 
 
 def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
@@ -160,9 +159,8 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
 
 # WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
 #   - See details in util.Log
-# @singleton
 @dataclass(frozen=True)  # frozen=True so we can hash, for @lru_cache
-class XC(DataclassUtil):
+class _xc(DataclassUtil):
 
     # TODO Scrape more (non-audio) metadata from downloaded html (e.g. https://www.xeno-canto.org/417638):
     #   - remarks
@@ -280,7 +278,7 @@ class XC(DataclassUtil):
 
 
 # Workaround for @singleton (above)
-xc = XC()
+xc = _xc()
 
 
 @dataclass

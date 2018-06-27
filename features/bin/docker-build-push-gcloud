@@ -24,8 +24,9 @@ set -o pipefail
 
 # Constants
 bin="`dirname "$0"`"
-bubo_dir="$bin/../.."
-bubo_features_dir="$bubo_dir/features"
+bin="`"$bin"/normpath "$bin"`"
+bubo_dir="`"$bin"/normpath "$bin/../.."`"
+bubo_features_dir="`"$bin"/normpath "$bubo_dir/features"`"
 
 # Parse args
 docopts -h 'usage:' : x -h >/dev/null 2>/dev/null || { echo 'ERROR: docopts needs `pip install docopt==0.6.2`'; exit 1; }
@@ -118,7 +119,7 @@ show_cmd "$bin"/gcloud-run --reuse="$instance" --no-container 'df -h'
 #   - --links: Don't follow symlinks
 #   - --prume-empty-dirs: Don't copy empty dirs
 banner 'rsync-ing dev code'
-show_cmd time "$bin"/rsync-gcloud -azv --delete -FF --links --prune-empty-dirs \
+show_cmd time "$bin"/rsync-vm -azv --delete -FF --links --prune-empty-dirs \
   "$bubo_features_dir"/ "$instance":"$build_dir"/
 
 # docker build, with all the gnarly supporting stuff to make it happen

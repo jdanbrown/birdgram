@@ -6,13 +6,15 @@
 # - WARNING If you enable os-login then you apparently can't use ssh keys (I don't see this in the docs anywhere...)
 
 bin="`dirname "$0"`"
+bin="`"$bin"/normpath "$bin"`"
 
 # TODO Allow more opts (e.g. --project, --zone)
 # - Workaround: Set default project and zone in `gcloud config` (= ~/.config/gcloud/configurations/)
 host="$1"; shift
 
-ssh_key_file="$bin/../../../.bubo-secrets/ssh/bubo_id_rsa"
+ssh_key_file="`"$bin"/normpath "$bin/../../../.bubo-secrets/ssh/bubo_id_rsa"`"
 if [[ "$host" = *@* ]]; then user_host="$host"; else user_host="bubo@$host"; fi
 
 set -x
+# WARNING Don't add -t here else it will break rsync ("unexpected tag 87 [sender]")
 exec gcloud compute ssh --ssh-key-file="$ssh_key_file" "$user_host" -- -q "$@"

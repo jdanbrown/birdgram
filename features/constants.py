@@ -1,5 +1,9 @@
 import os
 
+project = 'bubo-1'
+zone = 'us-west1-b'
+gs_bucket = 'bubo-data'
+
 # TODO Find a cleaner way to do this
 _maybe_code_dirs = [
     '/Users/danb/hack/bubo/features',  # Local dev (osx)
@@ -12,6 +16,7 @@ for _maybe_code_dir in _maybe_code_dirs:
 else:
     raise Exception(f'Found none of these dirs to use as code_dir: {_maybe_code_dirs}')
 
+bin_dir = f'{code_dir}/bin'
 data_dir = f'{code_dir}/data'
 cache_dir = f'{data_dir}/cache'
 
