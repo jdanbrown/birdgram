@@ -132,6 +132,12 @@ bin_dir = code_dir / 'bin'
 @click.option('--container-name', default='%(instance_name)s')
 @click.option('--container-vols', default='-v/mnt/disks/disk-bubo-data:/mnt/disks/disk-bubo-data')
 @click.option('--container-ports', default='-p8888:8888')  # TODO Expose '8888' as an option (here and below)
+# Send container logs to stackdriver
+#   - Disabled by default, since ncurses stuff like htop/glances produces a ton of noise
+#   - Docs: https://cloud.google.com/community/tutorials/docker-gcplogs-driver
+#   - Docs: https://docs.docker.com/config/containers/logging/gcplogs/
+#   - Pricing ($.5/gb/mo): https://cloud.google.com/stackdriver/pricing
+@click.option('--container-logging/--no-container-logging', default=False)
 @click.option('--container-run/--no-container-run', default=True, help='`docker run`')
 @click.option('--container-exec/--no-container-exec', default=False, help='`docker exec`')
 @click.option('--container-attach/--no-container-attach', default=False, help='`docker attach`')
@@ -171,13 +177,16 @@ bin_dir = code_dir / 'bin'
     '%(docker_run_opts)s',
     '%(container_vols)s',
     '%(container_ports)s',
+    '%(container_logging)s',
     '%(container_image)s',
     '%(command)s',
 ]))
-# Increase /dev/shm 64m -> 10g to avoid "No space left on device" errors from sklearn/joblib
-#   - https://stackoverflow.com/questions/40115043/no-space-left-on-device-error-while-fitting-sklearn-model
-#   - https://github.com/joblib/joblib/issues/168
-@click.option('--docker-run-opts', default='--shm-size=10g')
+@click.option('--docker-run-opts', default=' '.join([
+    # Increase /dev/shm 64m -> 10g to avoid "No space left on device" errors from sklearn/joblib
+    #   - https://stackoverflow.com/questions/40115043/no-space-left-on-device-error-while-fitting-sklearn-model
+    #   - https://github.com/joblib/joblib/issues/168
+    '--shm-size=10g',
+]))
 @click.option('--docker-exec', default=' '.join([
     'sudo docker exec -it',
     '%(container_name)s',
@@ -202,7 +211,7 @@ def main(
     service_account, scopes,
     vm, vm_init,
     container, container_init, container_pull, container_push,
-    container_image, container_name, container_vols, container_ports,
+    container_image, container_name, container_vols, container_ports, container_logging,
     container_run, container_exec, container_attach, sync_code,
     docker_pull, docker_build, docker_push, docker_run, docker_run_opts, docker_exec, docker_attach,
     await_ready, username, command,
@@ -237,6 +246,7 @@ def main(
     container_pull = container_pull or create_instance  # Always pull if the instance is fresh
     container_image = container_image % dict(project=project)
     container_name = container_name % dict(instance_name=instance_name)
+    container_logging = '--log-driver=gcplogs' if container_logging else ''
     container_op = (
         'attach' if container_attach else
         'exec' if container_exec else
@@ -264,8 +274,9 @@ def main(
         maybe_docker_push=docker_push if container_push else ':',
         container_name=shlex.quote(container_name),
         docker_run_opts=docker_run_opts,
-        container_vols=shlex.quote(container_vols),
-        container_ports=shlex.quote(container_ports),
+        container_vols=container_vols,
+        container_ports=container_ports,
+        container_logging=container_logging,
         container_image=shlex.quote(container_image),
         command=command,
     )
