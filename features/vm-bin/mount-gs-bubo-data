@@ -14,7 +14,7 @@ fi
 # - `nohup ... &` below won't fail since it's async
 gsutil ls -Lb "gs://$gs_bucket" >/dev/null
 
-echo "Mounting: gs://$gs_bucket/$gs_path at $mnt_dir"
+echo "Mounting gs://$gs_bucket/$gs_path at $mnt_dir"
 
 # Mount bucket
 # - Mount with `gcsfuse` instead of `mount -t gcsfuse -o rw,user,...` so we can route logs to /var/log
@@ -47,7 +47,7 @@ for i in `seq $((10000 / 50))`; do
 done
 
 if mountpoint -q "$mnt_dir"; then
-  # echo "Mounted: $(mount | grep "^$gs_bucket ")" # Too verbose, already logged a line above
+  # echo "Mounted $(mount | grep "^$gs_bucket ")" # Too verbose, already logged a line above
   exit 0
 else
   echo "Failed to mount (see $log_file)"

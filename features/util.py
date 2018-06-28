@@ -25,11 +25,13 @@ import tqdm
 from contextlib import contextmanager
 from functools import partial, wraps
 import glob
+import hashlib
 import re
 import os
 import pickle
 import random
 import shlex
+from typing import Union
 
 
 def coalesce(*xs):
@@ -108,6 +110,12 @@ def cache_to_file_forever(path):
                 return x
         return g
     return decorator
+
+
+def sha1hex(x: Union[bytes, str]) -> str:
+    if isinstance(x, str):
+        x = x.encode()
+    return hashlib.sha1(x).hexdigest()
 
 
 ## unix

@@ -1,0 +1,25 @@
+#!/bin/bash -eu
+#
+# NOTE How to manually sync gs://bubo-data to persistent disk (from within docker container):
+# - time gsutil -m cp -nr gs://bubo-data/v0/data/* /mnt/disks/disk-bubo-data
+
+bin="`dirname "$0"`"
+
+# Assumes /mnt/disks/disk-bubo-data is already mounted [by vm, and -v'd into the container]
+"$bin"/mount-gs-bubo-data
+
+# # XXX Mount /mnt/disks/bubo-data as an overlayfs combining the two above
+# mnt_dir="/mnt/disks/gs-$gs_bucket"
+# ln -sfT '/mnt/disks/disk-bubo-data' '/mnt/disks/bubo-data'
+
+# TODO mergerfs [WIP manual]
+# - https://github.com/trapexit/mergerfs
+"$bin"/mount-gs-bubo-data
+mkdir -p '/mnt/disks/disk-ro-bubo-data'
+mount --bind -o ro '/mnt/disks/disk-bubo-data' '/mnt/disks/disk-ro-bubo-data'
+mkdir -p '/data'
+
+# TODO Big performance risk here -- let's stick to simple rw/ro disk mounts until we figure out gcsfuse better
+#   - TODO I don't grok the srcmounts order yet, but the gcsfuse logs suggest that 'disk:gs' is more right than 'gs:disk'
+# mergerfs -o defaults,allow_other,direct_io,use_ino,hard_remove '/mnt/disks/disk-ro-bubo-data':'/mnt/disks/gs-bubo-data' '/data'
+mount --bind '/mnt/disks/disk-ro-bubo-data' '/data'

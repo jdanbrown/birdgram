@@ -4,7 +4,7 @@ bin="`dirname "$0"`"
 bin="`"$bin"/normpath "$bin"`"
 code_dir="`"$bin"/normpath "$bin"/..`"
 
-data_dir="$code_dir/data"
+data_dir="/mnt/disks/disk-bubo-data"
 gs_data_dir='gs://bubo-data/v0/data'
 
 # WARNING Careful with -d (delete) -- it'd be easy to make a typo that wipes out all of our cloud data...

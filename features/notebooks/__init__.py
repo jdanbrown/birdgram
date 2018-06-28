@@ -75,8 +75,8 @@ from potoo.ipython import *
 # set_display_on_ipython_prompt()
 ipy_formats.set()
 
-# from potoo.pandas import *
-# set_display_on_sigwinch()
+from potoo.pandas import *
+set_display()
 
 from potoo.plot import *
 plot_set_defaults()

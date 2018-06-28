@@ -180,7 +180,7 @@ class _xc(DataclassUtil):
     @lru_cache()
     @cache(version=5, key=lambda self: (
         self,
-        hashlib.sha1(json.dumps([str(x) for x in self._audio_paths]).encode()),  # Way faster than joblib.dump
+        sha1hex(json.dumps([str(x) for x in self._audio_paths])),  # Way faster than joblib.dump
     ))
     def metadata(self) -> 'XCDF':
         """Make a full XCDF by joining _metadata + downloaded_ids"""
@@ -214,7 +214,7 @@ class _xc(DataclassUtil):
     @property
     def downloaded_ids(self) -> "pd.DataFrame['id': int, 'downloaded': bool]":
         return (
-            pd.DataFrame(XCResource.downloaded_ids(self._audio_paths), columns=['id'])
+            pd.DataFrame(columns=['id'], data=XCResource.downloaded_ids(self._audio_paths))
             .assign(downloaded=True)
         )
 
@@ -374,15 +374,11 @@ class XCResource(DataclassUtil):
             )
             .astype({'id': 'int'})
         )
-        return sorted(
-            id
-            for id, g in audio_paths_parts.groupby('id')
-            # TODO Restore the page.html check
-            #   - The caller used to supply data_paths containing 'audio.mp3' + 'page.html', but then when we moved from
-            #     globs (fs) to audio-paths.jsonl listings (fs + gs) we inadvertently dropped the 'page.html' listings
-            #   - Restoring this will require expanding the audio-paths.jsonl concern to include "data" paths generally
-            # if set(g.filename) >= {'page.html', 'audio.mp3'}
-            if set(g.filename) >= {'audio.mp3'}
+        return (audio_paths_parts
+            # Audio is the completion marker for all the files (it's downloaded last), so we only need to check for it
+            [lambda df: df.filename == 'audio.mp3']
+            .id
+            .values
         )
 
 

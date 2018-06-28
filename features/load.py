@@ -42,8 +42,8 @@ class Load(DataclassConfig):
             'cache_audio',
         ]})
 
-    @cache(version=1, key=lambda self, datasets, *args, **kwargs: (
-        {k: DATASETS[k] for k in datasets},
+    @cache(version=1, key=lambda self, datasets=None, *args, **kwargs: (
+        {k: DATASETS[k] for k in (datasets or [])},
         args,
         kwargs,
     ))
@@ -127,11 +127,13 @@ class Load(DataclassConfig):
         #   - Bottlenecks (no_dask): [TODO Measure]
         #   - TODO TODO Revisiting with ~87k xc recs...
         metadata = map_progress(self._metadata, df_rows(recs),
-            # use='dask', scheduler='threads',    # Optimal for 600 peterson recs on laptop
+            # [Local]
+            use='dask', scheduler='threads',    # Optimal for 600 peterson recs on laptop
+            # [Remote]
             # Perf comparison:                             machine     cpu   disk_r     disk_w  disk_io_r  disk_io_w
             # use='dask', scheduler='threads',    # n1-standard-16   5-20%   1-5m/s  10-120m/s      10-50     50-500
             # use='dask', scheduler='processes',  # n1-standard-16  10-50%  5-20m/s    ~100m/s     50-200    300-600
-            use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),
+            # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),
         )
         # Filter out dropped rows (e.g. junky audio file)
         metadata = [x for x in metadata if x is not None]

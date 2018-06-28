@@ -285,7 +285,7 @@ class Projection(DataclassConfig):
         return projection
 
     def save(self, basename: str):
-        nonce = hashlib.sha1(str(uuid.uuid4()).encode()).hexdigest()[:7]
+        nonce = sha1hex(str(uuid.uuid4()))[:7]
         model_id = f'{basename}-{nonce}'
         self._save(model_id)
         return model_id
