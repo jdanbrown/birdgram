@@ -1,13 +1,9 @@
 #!/usr/bin/env python
 
 ##
-# NOTE Manual bash stuff, for reference:
+# NOTE Workflow:
 #   bin/gcloud-run --keep=bubo-0 --machine-type=n1-standard-16 --disk-mode=rw bin/jupyter-kernelgateway
-#   bin/gcloud-run --reuse=bubo-0 --container-exec bin/jupyter-kernelgateway
 #   bin/gcloud-run --reuse=bubo-0 --container-exec bin/cache-stuff
-#   bin/gcloud-run --reuse=bubo-0 --container-exec 'htop -d10'
-#   bin/gcloud-run --reuse=bubo-0 --container-exec 'glances -t1 -b -1 -4 --process-short-name'
-#   bin/gcloud-run --reuse=bubo-0 --container-exec 'tail -fn 100 /var/log/gcsfuse.log'
 
 ##
 print('cache-stuff: imports')

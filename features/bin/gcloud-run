@@ -2,6 +2,9 @@
 #
 # WARNING Full of hacks
 #
+# How to launch a vanilla node (e.g. f1-micro):
+#   bin/gcloud-run --keep=... --machine-type=... --boot-disk-size=25g --boot-disk-type=pd-standard --disk= --vm-init= --container-init= true
+#
 # Notes for different images:
 #   - cos
 #       - docker v17 [https://cloud.google.com/container-optimized-os/docs/release-notes]
@@ -240,12 +243,12 @@ def main(
         'run'
     )
     assert not sync_code or container_op in ['run', 'exec']
-    if command is None:
+    if not command:
         command = 'bash'
     command = command % dict(instance_name=instance_name)
-    if container and container_op == 'run':
+    if container and container_op == 'run' and container_init:
         command = ' && '.join([container_init, command])
-    command = 'bash -c %s' % shlex.quote(command)
+    command = 'bash -x -c %s' % shlex.quote(command)
     docker_pull = docker_pull % dict(
         container_image=shlex.quote(container_image),
     )

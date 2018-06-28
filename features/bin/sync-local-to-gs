@@ -5,17 +5,20 @@ bin="`"$bin"/normpath "$bin"`"
 code_dir="`"$bin"/normpath "$bin"/..`"
 
 data_dir="$code_dir/data"
-gs_dir='gs://bubo-data/v0/data'
+scratch_dir="$HOME/scratch/bubo"
+gs_data_dir='gs://bubo-data/v0/data'
+gs_scratch_dir="$gs_data_dir/_scratch"
 
 # WARNING Careful with -d (delete) -- it'd be easy to make a typo that wipes out all of our cloud data...
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_dir"}/metadata/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_dir"}/models/
-# time gsutil -m rsync -r "$@" {"$data_dir","$gs_dir"}/cache/22050hz-1ch-16bit/xc
-# time gsutil -m rsync -r "$@" {"$data_dir","$gs_dir"}/cache/joblib/sp14/model/feat/
-# time gsutil -m rsync -r "$@" {"$data_dir","$gs_dir"}/cache/joblib/sp14/model/_feat/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_dir"}/peterson-field-guide/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_dir"}/recordings/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_dir"}/xc/ids/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_dir"}/xc/
+time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/metadata/
+time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/models/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/22050hz-1ch-16bit/xc
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/sp14/model/feat/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/sp14/model/_feat/
+time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/peterson-field-guide/
+time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/recordings/
+time gsutil -m rsync -r "$@" {"$scratch_dir","$gs_scratch_dir"}/
+time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/xc/ids/
+time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/xc/
 # TODO Add more paths to sync
 # - `gsutil rsync` only has an exclude option (-x), but not include option...

@@ -74,7 +74,7 @@ class _audio_path_files(DataclassUtil):
     """Manage the data/**/audio-paths.jsonl files"""
 
     @generator_to(pd.DataFrame)
-    def list(self, *datasets: str) -> Iterator[pd.Series]:
+    def list(self, *datasets: str) -> Iterator[dict]:
         """List the data/**/audio-paths.jsonl files"""
         for dataset, config in DATASETS.items():
             if not datasets or dataset in datasets:
@@ -82,12 +82,12 @@ class _audio_path_files(DataclassUtil):
                 audio_paths_path = root / 'audio-paths.jsonl'
                 with audio_paths_path.open() as f:
                     lines = ilen(line for line in f if line)
-                yield pd.Series(dict(
+                yield dict(
                     updated_at=pd.to_datetime(None if not audio_paths_path.exists() else audio_paths_path.stat().st_mtime * 1e9),
                     dataset=dataset,
                     path=str(audio_paths_path.relative_to(code_dir)),
                     lines=lines,
-                ))
+                )
 
     def update(self, *datasets: str):
         """Call this to update the data/**/audio-paths.jsonl files, which determine which audio paths get loaded"""
@@ -326,9 +326,6 @@ class XCResource(DataclassUtil):
     id: int
     downloaded: Optional[bool]
 
-    # HACK Optional fields to avoid refactoring scrape_xc.py
-    _metadata: AttrDict = field(default_factory=lambda: None, init=True, repr=False, compare=False)
-
     @property
     def dir(self) -> Path:
         return xc.data_dir / self.species / str(self.id)
@@ -362,7 +359,6 @@ class XCResource(DataclassUtil):
             species=metadata.species,
             id=metadata.id,
             downloaded=metadata.downloaded,
-            _metadata=metadata,  # HACK Optional field to avoid refactoring scrape_xc.py
         )
 
     @classmethod

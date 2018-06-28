@@ -77,11 +77,6 @@ def mkdir_p(path):
     os.system('mkdir -p %s' % shlex.quote(path))
 
 
-def puts(x):
-    print(x)
-    return x
-
-
 def timed(f):
     start_s = time.time()
     x = f()
@@ -510,7 +505,8 @@ def _df_apply_progress_sync(
 ) -> pd.DataFrame:
     return pd.DataFrame(_map_progress_sync(
         f=lambda row: f(row),
-        xs=[row for i, row in df.iterrows()],
+        xs=(row for i, row in df.iterrows()),
+        n=len(df),
         **kwargs,
     ))
 
@@ -520,7 +516,7 @@ def _map_progress_sync(
     xs: Iterable[X],
     **kwargs,
 ) -> Iterable[X]:
-    return list(iter_progress(map(f, xs)))
+    return list(iter_progress(map(f, xs), **kwargs))
 
 
 def iter_progress(

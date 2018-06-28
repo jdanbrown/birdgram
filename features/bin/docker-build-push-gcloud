@@ -20,7 +20,7 @@ set -o pipefail
 #   --image X                    [default: bubo/features]            The docker image to build
 #   --image-tag X                [default: latest]                   The docker image tag to build
 #   --image-repo X               [default: gcr.io/\$project]          The docker repo to push to
-#   --save-gce-image             [default: false]                    Save a GCE image from the instance to speed up future builds
+#   --no-save-gce-image          [default: false]                    Skip saving a GCE image from the instance (~2m)
 
 # Constants
 bin="`dirname "$0"`"
@@ -163,7 +163,7 @@ show_cmd "$bin"/gcloud-run --reuse="$instance" --no-container 'df -h'
 # - Use gce image families so downstream consumers don't have to query for the full id that we just created
 #   - https://cloud.google.com/compute/docs/images
 #   - https://cloud.google.com/compute/docs/images/create-delete-deprecate-private-images
-if [[ "$save_gce_image" == 'true' ]]; then
+if [[ "$no_save_gce_image" == 'false' ]]; then
   banner "Building instance image: $instance_image (speeds up future builds)"
   show_cmd time gcloud compute instances stop "$instance"
   show_cmd time gcloud compute images create "$instance_image" --family="$gce_image_family" --source-disk="$instance"
