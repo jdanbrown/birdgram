@@ -1,0 +1,4 @@
+#!/bin/bash -eu
+
+exec "`dirname "$0"`"/container-exec "$@" \
+  htop -d10

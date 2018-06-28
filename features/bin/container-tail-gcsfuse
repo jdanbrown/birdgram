@@ -1,0 +1,4 @@
+#!/bin/bash -eu
+
+exec "`dirname "$0"`"/container-exec "$@" \
+  tail -fn 100 /var/log/gcsfuse.log
