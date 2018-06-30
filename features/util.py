@@ -540,4 +540,25 @@ def iter_progress(
 
 ## bubo-features
 
+import platform
+
+import psutil
+import yaml
+
 from log import log  # For export [TODO Update callers]
+
+
+def print_sys_info():
+    print(
+        ''.join([
+            yaml.safe_dump(default_flow_style=False, data=dict(
+                platform=dict(platform.uname()._asdict()),
+            )),
+            yaml.safe_dump(default_flow_style=False, data=dict(
+                cpu=psutil.cpu_count(),
+                mem='%.0fg' % (psutil.virtual_memory().total / 1024**3),
+                swap='%.0fg' % (psutil.swap_memory().total / 1024**3),
+            )),
+        ])
+        .rstrip()
+    )

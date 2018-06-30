@@ -61,12 +61,19 @@ bin_dir = code_dir / 'bin'
 #   - https://cloud.google.com/compute/pricing
 #   - Pricing
 #                 type  cpu   mem              $/mo            $/d              $/hr
-#        n1-standard-4    4   15g  $[  97 /  29]/mo  $[  5 /  1]/d  $[ .19 / .04]/hr
-#        n1-standard-8    8   30g  $[ 194 /  58]/mo  $[  9 /  2]/d  $[ .38 / .08]/hr
-#       n1-standard-16   16   60g  $[ 388 / 116]/mo  $[ 18 /  4]/d  $[ .76 / .16]/hr
-#       n1-standard-32   32  120g  $[ 776 / 233]/mo  $[ 36 /  8]/d  $[1.52 / .32]/hr
-#       n1-standard-64   64  240g  $[1553 / 467]/mo  $[ 73 / 16]/d  $[3.04 / .64]/hr
-#       n1-standard-96   96  360g  $[2330 / 700]/mo  $[109 / 23]/d  $[4.56 / .96]/hr
+#         n1-highmem-2    2   13g                                   $[ .12 /  .03]/hr
+#        n1-standard-4    4   15g  $[  97 /  29]/mo  $[  5 /  1]/d  $[ .19 /  .04]/hr
+#         n1-highmem-4    4   26g                                   $[ .24 /  .05]/hr
+#        n1-standard-8    8   30g  $[ 194 /  58]/mo  $[  9 /  2]/d  $[ .38 /  .08]/hr
+#         n1-highmem-8    8   52g                                   $[ .47 /  .10]/hr
+#       n1-standard-16   16   60g  $[ 388 / 116]/mo  $[ 18 /  4]/d  $[ .76 /  .16]/hr
+#        n1-highmem-16   16  104g                                   $[ .95 /  .20]/hr
+#       n1-standard-32   32  120g  $[ 776 / 233]/mo  $[ 36 /  8]/d  $[1.52 /  .32]/hr
+#        n1-highmem-32   32  208g                                   $[1.89 /  .40]/hr
+#       n1-standard-64   64  240g  $[1553 / 467]/mo  $[ 73 / 16]/d  $[3.04 /  .64]/hr
+#        n1-highmem-64   64  416g                                   $[3.79 /  .80]/hr
+#       n1-standard-96   96  360g  $[2330 / 700]/mo  $[109 / 23]/d  $[4.56 /  .96]/hr
+#        n1-highmem-96   96  624g                                   $[5.68 / 1.20]/hr
 @click.option('--machine-type', default='n1-standard-4', help='https://cloud.google.com/compute/pricing')
 @click.option('--preemptible/--no-preemptible', default=False)
 # Instance lifetime

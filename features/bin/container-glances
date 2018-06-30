@@ -1,4 +1,4 @@
 #!/bin/bash -eu
 
 exec "`dirname "$0"`"/container-exec "$@" \
-  glances -t1 -b -1 -4 --process-short-name
+  glances -t1 -b -1 -4 --process-short-name --fs-free-space

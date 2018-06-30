@@ -238,7 +238,9 @@ class Load(DataclassConfig):
             else:
                 cache_path = self._cache_path(path)
                 if os.path.exists(cache_path):
-                    log.char('info', '•')
+                    # FIXME log.char might cause 'IOStream.flush timed out' errors in remote kernels (see cache.py)
+                    # log.char('info', '•')
+                    pass
                 else:
                     # log.char('info', '!')
                     log(f'Caching: {cache_path}')

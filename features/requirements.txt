@@ -4,13 +4,16 @@
 # TODO TODO Reconcile local vs. github
 # -e /Users/danb/hack/potoo
 # -e /Users/danb/hack/joblib
-git+https://github.com/jdanbrown/potoo.git@f748847#egg=potoo
+git+https://github.com/jdanbrown/potoo.git@623590a#egg=potoo
 git+https://github.com/jdanbrown/joblib.git@3eb2c96#egg=joblib
 
 attrdict==2.0.0
 attrs==18.1.0
 click==6.7
 crayons==0.1.2
+# TODO Upgrade to 0.18.x. Might need to update for these changes (from http://dask.pydata.org/en/latest/changelog.html):
+# - "Replace get= keyword with scheduler= keyword"
+# - "Replace dask.set_options with dask.config.set"
 dask[complete]==0.17.5
 dataclasses==0.6
 dateparser==0.7.0

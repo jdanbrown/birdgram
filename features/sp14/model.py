@@ -43,14 +43,14 @@ from dataclasses import dataclass, field
 import joblib
 import lightgbm as lgb  # For Search.cls
 import numpy as np
-from potoo.numpy import np_sample_stratified
+from potoo.numpy import np_sample, np_sample_stratified
 from potoo.util import round_sig
 import sklearn as sk
 import sklearn.ensemble  # For Search.cls (sk.ensemble.RandomForestClassifier)
 import yaml
 import xgboost as xgb  # For Search.cls
 
-from cache import cache, cache_lambda, cache_pure_method
+from cache import cache
 from constants import data_dir
 from datasets import *
 from datatypes import Audio, RecordingDF
@@ -347,10 +347,10 @@ class Projection(DataclassConfig):
         #             300    0.292    0.001    0.699    0.002 base.py:99(transform)
         #         900/300    0.235    0.000    4.004    0.013 cache.py:99(func_cached)
         with dask_opts(
-            # TODO Threading causes hangs during heavy (xc 13k) cache hits
+            # FIXME Threading causes hangs during heavy (xc 13k) cache hits, going with processes to work around
             # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)
             # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs)
-            override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)
+            # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO I commented this out while debugging learning_curve
         ):
             return RecordingDF(recs
                 # Compute row-major with the 'threads' scheduler, since all cols perform best with 'threads'
@@ -533,9 +533,11 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     #   - TODO Pull up agg_funs from Projection (and add a self.transform to populate .feat)
     #
 
-    # Useful for learning curves
-    #   - Downsample per class losing all instances from any class causes incidental complexity elsewhere (e.g. sklearn)
-    downsample_classes: Optional[Union[int, float]] = None
+    # HACK Expose training set adjustments as model params, so the analysis code can think only in terms of model params
+    #   - subset_species: Train on fewer classes -- "learning difficulty?"
+    #   - subset_recs: Train on fewer instances per class (i.e. stratified) -- "learning curve"
+    subset_species: Optional[Union[int, float]] = None
+    subset_recs: Optional[Union[int, float]] = None
 
     # Params for classifier, e.g.
     #   - classifier: str = 'cls: knn, n_neighbors: 3'
@@ -543,7 +545,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     #   - classifier: str = 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 200'  # Like [SP14]
     classifier: str = None
 
-    # For downsample_classes (separate from any random_state that might be in classifier params)
+    # For subset_* (separate from any random_state that might be in classifier params)
     random_state: int = 0
 
     # verbose: bool = True  # Like GridSearchCV [TODO Hook this up to log / TODO Think through caching implications]
@@ -573,10 +575,19 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     def fit(self, X, y) -> 'self':
         """feat (k*a,) -> ()"""
         # log.info(f'Search.fit... classifier[{self.classifier}]')
-        if self.downsample_classes is not None:
+        if self.subset_species is not None:
+            orig_classes = sk.utils.multiclass.unique_labels(y)
+            sub_classes = np_sample(
+                orig_classes,
+                **{'n' if isinstance(self.subset_species, int) else 'frac': self.subset_species},
+                random_state=self.random_state,
+            )
+            i = np.isin(y, sub_classes)
+            X, y = X[i], y[i]
+        if self.subset_recs is not None:
             X, y = np_sample_stratified(
                 X, y,
-                **{'n' if isinstance(self.downsample_classes, int) else 'frac': self.downsample_classes},
+                **{'n' if isinstance(self.subset_recs, int) else 'frac': self.subset_recs},
                 random_state=self.random_state,
                 allow_fewer=True,  # Allow min(n, len(class)) instances in case some class is <n
             )
@@ -734,6 +745,11 @@ class SearchEvals(DataclassUtil):
     classes: np.ndarray
     y_scores: np.ndarray
 
+    # TODO Need to port to sk Pipeline so that both test/train data are filtered the same, else subset_species gets way
+    # too gnarly in the cv_results code since y_test doesn't know it should be filtered
+    #   - But! here's a hack to avoid it in the short term (fingers crossed it doesn't introduce non-obvious bugs...)
+    drop_missing_classes_for_subset_species: bool
+
     def __init__(
         self,
         search=None,
@@ -743,6 +759,7 @@ class SearchEvals(DataclassUtil):
         y=None,
         classes=None,
         y_scores=None,
+        drop_missing_classes_for_subset_species=False,
     ):
 
         # Check inputs
@@ -762,16 +779,27 @@ class SearchEvals(DataclassUtil):
             classes = search.classifier_.classes_
         assert defined(y, classes, y_scores)
 
+        # HACK See comment above
+        if drop_missing_classes_for_subset_species:
+            # classes is post-subset_species but y and y_scores aren't. Update them to match.
+            j = np.isin(y, classes)
+            y = y[j]
+            y_scores = y_scores[j]
+
         # Store
         self.i = i
         self.y = y
         self.classes = classes
         self.y_scores = y_scores
+        self.drop_missing_classes_for_subset_species = drop_missing_classes_for_subset_species
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ', '.join([
             f'{k}[{v.shape}]'
             for k, v in self.asdict().items()
+            if k not in [
+                'drop_missing_classes_for_subset_species',
+            ]
         ]))
 
     def score(self) -> float:
@@ -786,8 +814,11 @@ class SearchEvals(DataclassUtil):
         """Predict and measure each instance's coverage error (avoid sk's internal np.mean so we can do our own agg)"""
         y_trues = (self.classes == self.y[:, None])
         return np.array([
-            sk.metrics.coverage_error([y_true], [y_score])
+            # If y_true isn't in y_score at all then sk.metrics.coverage_error returns 0, which is really confusing. Map
+            # to np.inf instead to (try to) avoid surprises.
+            np.inf if coverage_error == 0 else coverage_error
             for y_true, y_score in zip(y_trues, self.y_scores)
+            for coverage_error in [sk.metrics.coverage_error([y_true], [y_score])]
         ])
 
     @classmethod

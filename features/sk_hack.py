@@ -256,19 +256,25 @@ class GridSearchCVCached(GridSearchCV):
             """A small helper to store the scores/times to the cv_results_"""
             # When iterated first by splits, then by parameters
             # We want `array` to have `n_candidates` rows and `n_splits` cols.
-            # HACK(db): Added box/unbox to protect np.array values inside of array
+
             if not np.issubdtype(dtype, np.number):
+                # HACK(db): Added box/unbox to protect np.array values inside of array
                 array = [box(x) for x in array]
             array = np.array(array, dtype=dtype).reshape(n_candidates, n_splits)
-            # HACK(db): Added box/unbox to protect np.array values inside of array
             if not np.issubdtype(dtype, np.number):
-                array = np.array([[x.unbox for x in y] for y in array])
+                # HACK(db): Added box/unbox to protect np.array values inside of array
+                array = [[x.unbox for x in y] for y in array]
             if splits:
                 for split_i in range(n_splits):
                     # Uses closure to alter the results
-                    results["split%d_%s"
-                            % (split_i, key_name)] = array[:, split_i]
+                    results["split%d_%s" % (split_i, key_name)] = (
+                        # HACK(db): Added list vs. np.array branching in case array contains irregular np.array's
+                        [x[split_i] for x in array] if not np.issubdtype(dtype, np.number) else
+                        array[:, split_i]
+                    )
 
+            # HACK(db): Disabled mean/std/rank altogether, to allow irregular-sized array (e.g. variable num classes)
+            #   - TODO(db): Update the refit logic below, since it reads from mean_*/rank_*
             # HACK(db): Added condition on issubdtype, to allow non-numeric dtype overrides
             if np.issubdtype(dtype, np.number):
                 array_means = np.average(array, axis=1, weights=weights)
@@ -283,8 +289,9 @@ class GridSearchCVCached(GridSearchCV):
                 results["rank_%s" % key_name] = np.asarray(
                     rankdata(-array_means, method='min'), dtype=np.int32)
 
-        _store('fit_time', fit_time)
-        _store('score_time', score_time)
+        # HACK(db): Added splits=True to return the full distribution of fit/score times instead of just (mean, std)
+        _store('fit_time', fit_time, splits=True)
+        _store('score_time', score_time, splits=True)
         # Use one MaskedArray and mask all the places where the param is not
         # applicable for that candidate. Use defaultdict as each candidate may
         # not contain all the params
