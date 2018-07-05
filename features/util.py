@@ -175,7 +175,7 @@ class DataclassConfig(DataclassUtil):
     def config(self) -> AttrDict:
         return {
             k: v
-            for k, v in self.asattr().items()
+            for k, v in self.asdict().items()
             if k not in (self.deps or {})
         }
 
@@ -248,13 +248,44 @@ def plt_signal(y: np.array, x_scale: float = 1, show_ydtype=False, show_yticks=F
 
 ## sklearn
 
+from functools import partial, reduce
 import re
 from typing import Callable, Iterable, TypeVar
 
-from potoo.pandas import df_reorder_cols
+from more_itertools import flatten
+from potoo.numpy import np_sample
+from potoo.pandas import df_ordered_cat, df_reorder_cols
 import sklearn as sk
+import sklearn.ensemble
 
 X = TypeVar('X')
+
+
+def combine_ensembles(ensembles: Iterable[sk.ensemble.BaseEnsemble]) -> sk.ensemble.BaseEnsemble:
+    for x, y in zip(ensembles, ensembles[1:]):
+        assert x.get_params() == y.get_params(), f'Not all ensemble params match: {x.get_params()} != {y.get_params()}'
+    return rebuild_ensemble(
+        ensembles[0],
+        lambda _: list(flatten(e.estimators_ for e in ensembles)),
+    )
+
+
+def sample_ensemble(ensemble: sk.ensemble.BaseEnsemble, **np_sample_kwargs) -> sk.ensemble.BaseEnsemble:
+    return rebuild_ensemble(ensemble, partial(np_sample, **np_sample_kwargs))
+
+
+def rebuild_ensemble(
+    ensemble: sk.ensemble.BaseEnsemble,
+    estimators_f: Callable[[List[sk.base.BaseEstimator]], Iterable[sk.base.BaseEstimator]],
+) -> sk.ensemble.BaseEnsemble:
+    # Based on:
+    #   - https://stackoverflow.com/a/25925913/397334
+    #   - https://github.com/pydata/pyrallel/blob/master/pyrallel/ensemble.py
+    estimators_ = list(estimators_f(ensemble.estimators_))
+    ensemble = sk.clone(ensemble)
+    ensemble.estimators_ = estimators_
+    ensemble.n_estimators = len(ensemble.estimators_)
+    return ensemble
 
 
 def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
@@ -279,21 +310,21 @@ def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
         .reset_index(drop=True)
         .assign(params=lambda df: df.apply(axis=1, func=lambda row: ', '.join([
             '%s[%s]' % (strip_startswith(k, 'param_'), row[k])
-            for k in row.index
+            for k in reversed(row.index)
             if k.startswith('param_')
         ])))
         .assign(model_id=lambda df: df.apply(axis=1, func=lambda row: (
-            '%s, fold[%s]' % (row.params, row.fold),
+            '%s, fold[%s]' % (row.params, row.fold)
         )))
-        .assign(model_id=lambda df: df.apply(axis=1, func=lambda row: ', '.join(flatten([
-            ['%s[%s]' % (strip_startswith(k, 'param_'), row[k]) for k in row.index if k.startswith('param_')],
-            ['fold[%s]' % row.fold],
-        ]))))
         .pipe(lambda df: df_reorder_cols(df, first=list(flatten([
             ['model_id'],
             [c for c in df if re.match(r'^param_', c)],
             ['fold', 'train_score', 'test_score'],
         ]))))
+        .pipe(df_ordered_cat,
+            model_id=lambda df: df.model_id.unique(),
+            params=lambda df: df.params.unique(),
+        )
     )
 
 
@@ -536,6 +567,16 @@ def iter_progress(
         return tqdm(xs, total=n)
     else:
         return xs
+
+
+## statsmodels
+
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+
+
+def lm(*args, **kwargs):
+    return smf.ols(*args, **kwargs).fit()
 
 
 ## bubo-features

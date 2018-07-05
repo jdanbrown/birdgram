@@ -3,6 +3,7 @@ import os
 project = 'bubo-1'
 zone = 'us-west1-b'
 gs_bucket = 'bubo-data'
+gs_data_dir = f'gs://{gs_bucket}/v0/data'  # Mirror of data_dir in gs
 
 # TODO Find a cleaner way to do this
 _maybe_code_dirs = [

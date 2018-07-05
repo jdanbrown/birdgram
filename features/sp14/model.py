@@ -31,6 +31,7 @@ Pipeline
 import copy
 from datetime import datetime
 from frozendict import frozendict
+from functools import partial
 import hashlib
 import itertools
 import json
@@ -534,10 +535,10 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     #
 
     # HACK Expose training set adjustments as model params, so the analysis code can think only in terms of model params
-    #   - subset_species: Train on fewer classes -- "learning difficulty?"
-    #   - subset_recs: Train on fewer instances per class (i.e. stratified) -- "learning curve"
-    subset_species: Optional[Union[int, float]] = None
-    subset_recs: Optional[Union[int, float]] = None
+    #   - n_species: Train on fewer classes -- "learning difficulty?"
+    #   - n_recs: Train on fewer instances per class (i.e. stratified) -- "learning curve"
+    n_species: Optional[Union[int, float]] = None
+    n_recs: Optional[Union[int, float]] = None
 
     # Params for classifier, e.g.
     #   - classifier: str = 'cls: knn, n_neighbors: 3'
@@ -545,7 +546,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     #   - classifier: str = 'cls: rf, random_state: 0, criterion: entropy, n_estimators: 200'  # Like [SP14]
     classifier: str = None
 
-    # For subset_* (separate from any random_state that might be in classifier params)
+    # For n_species/n_recs, as well as self.classifier params (when appropriate)
     random_state: int = 0
 
     # verbose: bool = True  # Like GridSearchCV [TODO Hook this up to log / TODO Think through caching implications]
@@ -575,19 +576,19 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     def fit(self, X, y) -> 'self':
         """feat (k*a,) -> ()"""
         # log.info(f'Search.fit... classifier[{self.classifier}]')
-        if self.subset_species is not None:
+        if self.n_species is not None:
             orig_classes = sk.utils.multiclass.unique_labels(y)
             sub_classes = np_sample(
                 orig_classes,
-                **{'n' if isinstance(self.subset_species, int) else 'frac': self.subset_species},
+                **{'n' if isinstance(self.n_species, int) else 'frac': self.n_species},
                 random_state=self.random_state,
             )
             i = np.isin(y, sub_classes)
             X, y = X[i], y[i]
-        if self.subset_recs is not None:
+        if self.n_recs is not None:
             X, y = np_sample_stratified(
                 X, y,
-                **{'n' if isinstance(self.subset_recs, int) else 'frac': self.subset_recs},
+                **{'n' if isinstance(self.n_recs, int) else 'frac': self.n_recs},
                 random_state=self.random_state,
                 allow_fewer=True,  # Allow min(n, len(class)) instances in case some class is <n
             )
@@ -618,11 +619,17 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         return classifier.fit(X, y)
 
     def _make_classifier(self, cls, **kwargs) -> sk.base.BaseEstimator:
-        cls = {
-            'knn': 'sk.neighbors.KNeighborsClassifier',
-            'svm': 'sk.svm.SVC',
-            'rf': 'sk.ensemble.RandomForestClassifier',
-        }.get(cls, cls)
+        knn = sk.neighbors.KNeighborsClassifier
+        svm = partial(sk.svm.SVC,
+            random_state=self.random_state,
+        )
+        rf = partial(sk.ensemble.RandomForestClassifier,
+            random_state=self.random_state,
+            n_jobs=-1,  # Use all cores (default: 1)
+        )
+        lgbm = partial(lgb.LGBMClassifier,
+            random_state=self.random_state,
+        )
         return eval(cls)(**kwargs)
 
     #
@@ -745,10 +752,10 @@ class SearchEvals(DataclassUtil):
     classes: np.ndarray
     y_scores: np.ndarray
 
-    # TODO Need to port to sk Pipeline so that both test/train data are filtered the same, else subset_species gets way
+    # TODO Need to port to sk Pipeline so that both test/train data are filtered the same, else n_species gets way
     # too gnarly in the cv_results code since y_test doesn't know it should be filtered
     #   - But! here's a hack to avoid it in the short term (fingers crossed it doesn't introduce non-obvious bugs...)
-    drop_missing_classes_for_subset_species: bool
+    drop_missing_classes_for_n_species: bool
 
     def __init__(
         self,
@@ -759,7 +766,7 @@ class SearchEvals(DataclassUtil):
         y=None,
         classes=None,
         y_scores=None,
-        drop_missing_classes_for_subset_species=False,
+        drop_missing_classes_for_n_species=False,
     ):
 
         # Check inputs
@@ -780,8 +787,8 @@ class SearchEvals(DataclassUtil):
         assert defined(y, classes, y_scores)
 
         # HACK See comment above
-        if drop_missing_classes_for_subset_species:
-            # classes is post-subset_species but y and y_scores aren't. Update them to match.
+        if drop_missing_classes_for_n_species:
+            # classes is post-n_species but y and y_scores aren't. Update them to match.
             j = np.isin(y, classes)
             y = y[j]
             y_scores = y_scores[j]
@@ -791,14 +798,14 @@ class SearchEvals(DataclassUtil):
         self.y = y
         self.classes = classes
         self.y_scores = y_scores
-        self.drop_missing_classes_for_subset_species = drop_missing_classes_for_subset_species
+        self.drop_missing_classes_for_n_species = drop_missing_classes_for_n_species
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ', '.join([
             f'{k}[{v.shape}]'
             for k, v in self.asdict().items()
             if k not in [
-                'drop_missing_classes_for_subset_species',
+                'drop_missing_classes_for_n_species',
             ]
         ]))
 

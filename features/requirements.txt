@@ -4,7 +4,7 @@
 # TODO TODO Reconcile local vs. github
 # -e /Users/danb/hack/potoo
 # -e /Users/danb/hack/joblib
-git+https://github.com/jdanbrown/potoo.git@623590a#egg=potoo
+git+https://github.com/jdanbrown/potoo.git@c391515#egg=potoo
 git+https://github.com/jdanbrown/joblib.git@3eb2c96#egg=joblib
 
 attrdict==2.0.0
@@ -25,6 +25,7 @@ frozendict==1.2
 gcsfs==0.1.0
 glances==2.11.1
 google-cloud==0.33.1
+graphviz==0.8.4
 httpie==0.9.9
 joypy==0.1.8
 jupyter==1.0.0
@@ -45,6 +46,7 @@ pprofile==1.11.0
 git+https://github.com/jdanbrown/prettyprinter.git@patch-1#egg=prettyprinter
 pyinstrument==2.0.2
 pytest==3.6.0
+git+https://github.com/scikit-signal/pytftb@ac2b6a2#egg=pytftb
 python_speech_features==0.6
 pyyaml==3.12
 requests-html==0.9.0
@@ -54,7 +56,7 @@ retry==0.9.2
 # - ==2.9.3 to match env.yml so that pip doesn't try to build it itself, which is error prone (e.g. -lgfortran on linux)
 rpy2==2.9.3
 scikit-misc==0.1.1
-git+https://github.com/scikit-signal/pytftb@ac2b6a2#egg=pytftb
+sh==1.12.14
 snakeviz==0.4.2
 statsmodels==0.9.0
 stringcase==1.2.0

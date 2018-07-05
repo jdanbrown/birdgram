@@ -10,7 +10,7 @@ set -o pipefail
 #   --instance-prefix X          [default: \$gce_image_family]        Prefix to use in naming the temp GCE instance
 #   --keep INSTANCE              [default: ]                         Keep the booted GCE instance
 #   --reuse INSTANCE             [default: ]                         Reuse an existing GCE instance
-#   --machine-type X             [default: n1-highcpu-16]            (Like gcloud-run)
+#   --machine-type X             [default: n1-standard-4]            (Like gcloud-run)
 #   --boot-disk-size X           [default: 25g]                      Minimal: you can't boot a disk smaller than its image
 #   --boot-disk-type X           [default: pd-ssd]                   pd-ssd | pd-standard
 #   --boot-image-family X        [default: \$gce_image_family]        The GCE image family to boot from

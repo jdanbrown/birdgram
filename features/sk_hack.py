@@ -7,14 +7,23 @@ See sk_util for more modular, responsible utils for sklearn.
 
 from collections import defaultdict
 from functools import partial
+import glob
 import inspect
 from itertools import product
+import os
+from pathlib import Path
+import re
+import textwrap
 import warnings
 
+import humanize
+import joblib
 from more_itertools import flatten, unique_everseen
 import numpy as np
 from potoo.util import timed
 from scipy.stats import rankdata
+import sh
+import yaml
 
 from sklearn.base import is_classifier, clone
 from sklearn.model_selection._search import GridSearchCV
@@ -31,7 +40,9 @@ from sklearn.metrics.scorer import _check_multimetric_scoring
 
 from cache import cache
 from log import log
-from util import box
+from proc_stats import ProcStats
+from sk_util import joblib_dumps
+from util import box, ensure_parent_dir
 
 
 @cache(version=4)
@@ -46,6 +57,16 @@ def _fit_and_score_cached(*args, **kwargs):
     extra_metrics = kwargs.pop('extra_metrics', None)
     return_estimator = kwargs.pop('return_estimator', False)
     split_i = kwargs.pop('split_i')
+    proc_stats_interval = kwargs.pop('proc_stats_interval', 1.)  # sec
+    artifacts = kwargs.pop('artifacts', {})
+    if artifacts:
+        # Fail fast on required fields
+        assert artifacts['save'] or artifacts['load']
+        artifacts_dir = artifacts['dir']
+        if artifacts.get('load'):
+            experiment_id = artifacts['load']
+        else:
+            experiment_id = artifacts['experiment_id']
 
     a = inspect.signature(_fit_and_score).bind(*args, **kwargs).arguments
     estimator = a['estimator']
@@ -63,30 +84,73 @@ def _fit_and_score_cached(*args, **kwargs):
         f'classes[{len(np.unique(y))}]',
         f'estimator[{log_estimator}]',
     ])
-    log.info('_fit_and_score... %s' % (log_details))
-    _, ret = timed(_fit_and_score, *args, **kwargs, finally_=lambda elapsed_s: (
-        log.info('_fit_and_score[%.3fs]: %s' % (elapsed_s, log_details))
-    ))
 
-    if extra_metrics:
-        X_train, y_train = _safe_split(estimator, X, y, train)  # Copied from _fit_and_score
-        X_test, y_test = _safe_split(estimator, X, y, test, train)  # Copied from _fit_and_score
-        ret.append({
-            # eval instead of lambda because lambda's (and def's) surprisingly don't bust cache when they change
-            metric_name: eval(metric_expr, None, dict(
-                estimator=estimator,
-                i_train=train,
-                X_train=X_train,
-                y_train=y_train,
-                i_test=test,
-                X_test=X_test,
-                y_test=y_test,
+    if artifacts:
+        model_desc = (
+            re.sub(r'[^a-zA-Z0-9_=,"\'()]+', '-',
+                re.sub(r'[[:]', '=',
+                    re.sub(r'[] ]', '',
+                        log_details,
+                    )
+                )
+            )
+        )
+        artifact_save_dir = f'{artifacts_dir}/{experiment_id}/{model_desc}'
+        artifact_log_details = ', '.join([
+            f'model_desc[{model_desc}]',
+        ])
+
+    # Load from artifacts
+    if artifacts.get('load'):
+        ret_path = f'{artifact_save_dir}/ret.pkl'
+        log.info('_fit_and_score.load[%s]: %s' % (
+            humanize.naturalsize(os.stat(ret_path).st_size),
+            Path(ret_path).relative_to(artifacts_dir),
+        ))
+        ret = joblib.load(ret_path)
+
+    # Compute (and maybe save to artifacts)
+    else:
+
+        log.info('_fit_and_score... %s' % log_details)
+        # Mem overhead of proc_stats: ~370b/poll (interval=1s -> ~1.3mb/hr = ~30mb/d)
+        with ProcStats(interval=proc_stats_interval).poll() as proc_stats:
+            _, ret = timed(_fit_and_score, *args, **kwargs, finally_=lambda elapsed_s, _: (
+                log.info('_fit_and_score[%.3fs]: %s' % (elapsed_s, log_details))
             ))
-            for metric_name, metric_expr in extra_metrics.items()
-        })
 
-    if return_estimator:
-        ret.append(estimator)
+        if extra_metrics:
+            X_train, y_train = _safe_split(estimator, X, y, train)  # Copied from _fit_and_score
+            X_test, y_test = _safe_split(estimator, X, y, test, train)  # Copied from _fit_and_score
+            _locals = locals()
+            ret.append({
+                # eval instead of lambda because lambda's (and def's) surprisingly don't bust cache when they change
+                metric_name: eval(metric_expr, None, _locals)
+                for metric_name, metric_expr in extra_metrics.items()
+            })
+
+        if return_estimator:
+            ret.append(estimator)
+
+        if artifacts:
+            _locals = locals()
+            def save_artifacts():
+                artifacts_to_save = dict(
+                    ret='ret',
+                    **artifacts.get('extra', {}),
+                )
+                for artifact_name, artifact_expr in artifacts_to_save.items():
+                    joblib.dump(
+                        value=eval(artifact_expr, None, _locals),
+                        filename=ensure_parent_dir(f'{artifact_save_dir}/{artifact_name}.pkl'),
+                    )
+                return int(sh.du('-ks', artifact_save_dir).split()[0]) * 1024
+            log.info('_fit_and_score.save_artifacts... %s' % artifact_log_details)
+            timed(save_artifacts, finally_=lambda elapsed_s, pkl_size: (
+                log.info('_fit_and_score.save_artifacts[%.3fs, %s]: %s' % (
+                    elapsed_s, pkl_size and humanize.naturalsize(pkl_size), artifact_log_details,
+                ))
+            ))
 
     return ret
 
@@ -114,6 +178,8 @@ class GridSearchCVCached(GridSearchCV):
         return_train_score='warn',
         extra_metrics=None,  # HACK(db): Added
         return_estimator=False,  # HACK(db): Added
+        artifacts=None,  # HACK(db): Added
+        **fit_and_score_kwargs,  # HACK(db): Added
     ):
         # HACK(db): Method body isn't copied (it just calls super and sets an attr)
         super().__init__(
@@ -132,6 +198,8 @@ class GridSearchCVCached(GridSearchCV):
         )
         self.extra_metrics = extra_metrics
         self.return_estimator = return_estimator
+        self.artifacts = artifacts
+        self.fit_and_score_kwargs = fit_and_score_kwargs
 
     def fit(self, X, y=None, groups=None, **fit_params):
         """Run fit with all sets of parameters.
@@ -202,6 +270,10 @@ class GridSearchCVCached(GridSearchCV):
         base_estimator = clone(self.estimator)
         pre_dispatch = self.pre_dispatch
 
+        # HACK(db): Added logging for self.artifacts
+        if self.verbose > 0 and self.artifacts:
+            log.info('artifacts', **self.artifacts)
+
         # HACK(db): Reformatted
         out = Parallel(
             n_jobs=self.n_jobs, verbose=self.verbose,
@@ -219,6 +291,8 @@ class GridSearchCVCached(GridSearchCV):
                 return_estimator=self.return_estimator,  # HACK(db): Added
                 error_score=self.error_score,
                 split_i=split_i,  # HACK(db): Added
+                artifacts=self.artifacts,  # HACK(db): Added
+                **self.fit_and_score_kwargs,  # HACK(db): Added
             )
             for parameters, (split_i, (train, test)) in product(  # HACK(db): Added split_i
                 candidate_params,

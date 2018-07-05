@@ -44,6 +44,8 @@ import rpy2.robjects as robjects
 import scipy
 import scipy.stats as stats
 import sklearn as sk
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
 import toolz
 from tqdm import tqdm
 import yaml
@@ -54,6 +56,8 @@ from constants import *
 from datasets import *
 from features import *
 from load import *
+from proc_stats import *
+from sk_hack import *
 from sk_util import *
 from sp14.model import *
 from util import *
