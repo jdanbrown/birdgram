@@ -547,6 +547,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     classifier: str = None
 
     # For n_species/n_recs, as well as self.classifier params (when appropriate)
+    #   - TODO Fork RandomState before passing off to others (e.g. RandomState(0) -> .randint() -> .randint() -> ...)
     random_state: int = 0
 
     # verbose: bool = True  # Like GridSearchCV [TODO Hook this up to log / TODO Think through caching implications]
@@ -590,7 +591,6 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
                 X, y,
                 **{'n' if isinstance(self.n_recs, int) else 'frac': self.n_recs},
                 random_state=self.random_state,
-                allow_fewer=True,  # Allow min(n, len(class)) instances in case some class is <n
             )
         sk.utils.validation.check_X_y(X, y)
         self.X_ = X

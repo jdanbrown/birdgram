@@ -2,6 +2,7 @@ from collections import *
 import contextlib
 from datetime import datetime, date, timedelta
 import glob
+import gzip
 import importlib
 import inspect
 import json
@@ -11,6 +12,7 @@ from pathlib import Path
 import pdb
 import re
 import shlex
+import string
 import sys
 import subprocess
 import tempfile

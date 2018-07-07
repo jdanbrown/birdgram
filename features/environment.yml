@@ -9,7 +9,7 @@ dependencies:
 
 # 3rd-party libs
 - ffmpeg=3.4.1 # For pydub
-- lightgbm=2.1.1
+- lightgbm=2.1.2
 - matplotlib=2.1.1 # TODO How to install 2.2.x without conflicts?
 - numpy=1.14.5 # Keep this up to date so that pip deps don't install a newer numpy without openblas
 - pillow=4.3.0 # pillow brings in mkl [TODO How do we want this to work?]
