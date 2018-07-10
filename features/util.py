@@ -31,7 +31,9 @@ import os
 import pickle
 import random
 import shlex
-from typing import Union
+from typing import TypeVar, Union
+
+X = TypeVar('X')
 
 
 def coalesce(*xs):
@@ -116,6 +118,12 @@ def sha1hex(x: Union[bytes, str]) -> str:
     if isinstance(x, str):
         x = x.encode()
     return hashlib.sha1(x).hexdigest()
+
+
+def enumerate_with_n(xs: Iterable[X]) -> (int, int, Iterator[X]):
+    """Like enumerate(xs) but assume xs is materialized and include n = len(xs)"""
+    n = len(xs)
+    return ((i, n, x) for i, x in enumerate(xs))
 
 
 ## unix
@@ -248,17 +256,97 @@ def plt_signal(y: np.array, x_scale: float = 1, show_ydtype=False, show_yticks=F
 
 ## sklearn
 
-from functools import partial, reduce
+from functools import partial, reduce, singledispatch
 import re
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, Mapping, Optional, TypeVar
 
 from more_itertools import flatten
 from potoo.numpy import np_sample
 from potoo.pandas import df_ordered_cat, df_reorder_cols
 import sklearn as sk
 import sklearn.ensemble
+import sklearn.multiclass
 
 X = TypeVar('X')
+
+
+@singledispatch
+def model_stats(model: Optional[sk.base.BaseEstimator]) -> Optional[pd.DataFrame]:
+    return None
+
+
+@model_stats.register(sk.multiclass.OneVsRestClassifier)
+def _(ovr) -> pd.DataFrame:
+    return (
+        pd.concat(ignore_index=True, objs=[
+            model_stats(estimator)
+            .assign(
+                type=lambda df: 'ovr/' + df.type,
+                n_classes=len(ovr.classes_),
+                class_=class_,
+            )
+            for class_, estimator in zip(ovr.classes_, ovr.estimators_)
+        ])
+        .pipe(df_reorder_cols, first=['type', 'n_classes', 'class_'])
+    )
+
+
+@model_stats.register(sk.ensemble.forest.BaseForest)
+def _(forest) -> pd.DataFrame:
+    return (
+        pd.DataFrame(_tree_stats(tree.tree_) for tree in forest.estimators_)
+        .reset_index().rename(columns={'index': 'tree_i'})
+        .assign(
+            type=lambda df: 'forest/' + df.type,
+            n_trees=len(forest.estimators_),
+        )
+        .pipe(df_reorder_cols, first=['type', 'n_trees', 'tree_i'])
+    )
+
+
+@model_stats.register(sk.tree.tree.BaseDecisionTree)
+def _(tree) -> pd.DataFrame:
+    return model_stats(tree.tree_)
+
+
+@model_stats.register(sk.tree._tree.Tree)
+def _(tree) -> pd.DataFrame:
+    return pd.DataFrame([_tree_stats(tree)])
+
+
+# Expose a single dict of stats so that the BaseForest impl isn't bottlenecked by constructing O(n) 1-row dfs
+def _tree_stats(tree: sk.tree._tree.Tree) -> OrderedDict:
+    return OrderedDict(
+        type='tree',
+        leaf_count=(tree.children_left == -1).sum(),
+        fork_count=(tree.children_left != -1).sum(),
+        depth=tree_depth(tree),
+        # Useful
+        max_depth=tree.max_depth,  # Seems to always agree with tree_depth()
+        node_count=tree.node_count,  # = num_leaves + num_internal
+        # Include these in case we find a use
+        capacity=tree.capacity,  # Seems to always agree with node_count
+        max_n_classes=tree.max_n_classes,
+        # 'n_classes',  # Excluding because it's an np.array (seems to be np.array([max_n_classes])?)
+        n_features=tree.n_features,
+        n_outputs=tree.n_outputs,  # 1 unless multi-label
+    )
+
+
+def tree_depth(tree: sk.tree._tree.Tree) -> int:
+    return tree_node_depths(tree).max()
+
+
+def tree_node_depths(tree: sk.tree._tree.Tree) -> 'np.ndarray[int]':
+    depths = np.full(tree.node_count, -1)
+    def f(node, depth):
+        depths[node] = depth
+        if tree.children_left[node] != -1:
+            f(tree.children_left[node], depth + 1)
+            f(tree.children_right[node], depth + 1)
+    f(0, 0)
+    assert -1 not in depths  # Else we failed to visit some node(s) in our traverse
+    return depths
 
 
 def combine_ensembles(ensembles: Iterable[sk.ensemble.BaseEnsemble]) -> sk.ensemble.BaseEnsemble:
@@ -293,10 +381,10 @@ def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
     return (
         # box/unbox to allow np.array/list values inside the columns [how to avoid?]
         pd.DataFrame({k: list(map(box, v)) for k, v in cv_results.items()}).applymap(lambda x: x.unbox)
-        [lambda df: [c for c in df if re.match(r'^split|^param_', c)]]
+        [lambda df: [c for c in df if re.match(r'^split|^param_|^estimators$', c)]]
         .pipe(df_flatmap, lambda row: ([
             (row
-                .filter(regex=r'^param_|^split%s_' % fold)
+                .filter(regex=r'^param_|^split%s_|^estimators$' % fold)
                 .rename(lambda c: c.split('split%s_' % fold, 1)[-1])
                 .set_value('fold', fold)
             )
@@ -308,19 +396,29 @@ def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
             }
         ]))
         .reset_index(drop=True)
+        .rename(columns={'estimators': 'model'})
         .assign(params=lambda df: df.apply(axis=1, func=lambda row: ', '.join([
             '%s[%s]' % (strip_startswith(k, 'param_'), row[k])
             for k in reversed(row.index)
             if k.startswith('param_')
         ])))
-        .assign(model_id=lambda df: df.apply(axis=1, func=lambda row: (
-            '%s, fold[%s]' % (row.params, row.fold)
-        )))
-        .pipe(lambda df: df_reorder_cols(df, first=list(flatten([
-            ['model_id'],
-            [c for c in df if re.match(r'^param_', c)],
-            ['fold', 'train_score', 'test_score'],
-        ]))))
+        .assign(
+            model_id=lambda df: df.apply(axis=1, func=lambda row: (
+                '%s, fold[%s]' % (row.params, row.fold)
+            )),
+            # model_stats=lambda df: df.model.map(model_stats),  # XXX Now done by sk_hack._fit_and_score_cached
+        )
+        .pipe(lambda df: df_reorder_cols(df,
+            first=list(flatten([
+                ['model_id'],
+                [c for c in df if re.match(r'^param_', c)],
+                ['fold', 'train_score', 'test_score'],
+            ])),
+            last=[
+                'model',
+                # 'model_stats',  # XXX Now done by sk_hack._fit_and_score_cached
+            ],
+        ))
         .pipe(df_ordered_cat,
             model_id=lambda df: df.model_id.unique(),
             params=lambda df: df.params.unique(),

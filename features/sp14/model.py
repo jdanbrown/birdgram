@@ -48,6 +48,7 @@ from potoo.numpy import np_sample, np_sample_stratified
 from potoo.util import round_sig
 import sklearn as sk
 import sklearn.ensemble  # For Search.cls (sk.ensemble.RandomForestClassifier)
+import sklearn.multiclass  # For Search.cls (sk.multiclass.OneVsRestClassifier)
 import yaml
 import xgboost as xgb  # For Search.cls
 
@@ -618,7 +619,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         classifier = self._make_classifier(**self.classifier_config)
         return classifier.fit(X, y)
 
-    def _make_classifier(self, cls, **kwargs) -> sk.base.BaseEstimator:
+    def _make_classifier(self, cls, multiclass=None, **kwargs) -> sk.base.BaseEstimator:
         knn = sk.neighbors.KNeighborsClassifier
         svm = partial(sk.svm.SVC,
             random_state=self.random_state,
@@ -630,7 +631,15 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         lgbm = partial(lgb.LGBMClassifier,
             random_state=self.random_state,
         )
-        return eval(cls)(**kwargs)
+        classifier = eval(cls)(**kwargs)
+        if multiclass:
+            classifier = {
+                'ovr': sk.multiclass.OneVsRestClassifier(
+                    estimator=classifier,
+                    n_jobs=-1,  # Use all cores (default: 1) [TODO Should this and rf n_jobs both be -1 together?]
+                ),
+            }[multiclass]
+        return classifier
 
     #
     # Predict
@@ -820,11 +829,12 @@ class SearchEvals(DataclassUtil):
     def coverage_errors(self) -> 'np.ndarray[int @ len(X)]':
         """Predict and measure each instance's coverage error (avoid sk's internal np.mean so we can do our own agg)"""
         y_trues = (self.classes == self.y[:, None])
+        y_scores = np.nan_to_num(self.y_scores, 0)  # In case any predict_proba's return nan (e.g. OneVsRestClassifier)
         return np.array([
             # If y_true isn't in y_score at all then sk.metrics.coverage_error returns 0, which is really confusing. Map
             # to np.inf instead to (try to) avoid surprises.
             np.inf if coverage_error == 0 else coverage_error
-            for y_true, y_score in zip(y_trues, self.y_scores)
+            for y_true, y_score in zip(y_trues, y_scores)
             for coverage_error in [sk.metrics.coverage_error([y_true], [y_score])]
         ])
 
@@ -852,6 +862,14 @@ class SearchEvals(DataclassUtil):
 
     def confusion_matrix_prob(self) -> 'np.ndarray[prob @ (c, c)]':
         return confusion_matrix_prob(self.y, self.y_scores, self.classes)
+
+
+@model_stats.register(Search)
+def _(search) -> pd.DataFrame:
+    return (
+        model_stats(search.classifier_)
+        .assign(type=lambda df: 'search/' + df.type)
+    )
 
 
 def to_X(recs: RecordingDF) -> Iterable[AttrDict]:

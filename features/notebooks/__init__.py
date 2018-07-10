@@ -40,6 +40,7 @@ from potoo.plot import *
 from potoo.pretty import *
 from potoo.pytest import *
 from potoo.util import *
+import pprint
 import requests
 import rpy2
 import rpy2.robjects as robjects

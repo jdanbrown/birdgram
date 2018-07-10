@@ -6,6 +6,7 @@ See sk_util for more modular, responsible utils for sklearn.
 """
 
 from collections import defaultdict
+from datetime import datetime
 from functools import partial
 import glob
 import inspect
@@ -14,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import textwrap
+import uuid
 import warnings
 
 import humanize
@@ -25,7 +27,7 @@ from scipy.stats import rankdata
 import sh
 import yaml
 
-from sklearn.base import is_classifier, clone
+from sklearn.base import BaseEstimator, clone, is_classifier
 from sklearn.model_selection._search import GridSearchCV
 from sklearn.model_selection._split import check_cv
 from sklearn.model_selection._validation import _fit_and_score
@@ -42,7 +44,7 @@ from cache import cache
 from log import log
 from proc_stats import ProcStats
 from sk_util import joblib_dumps
-from util import box, ensure_parent_dir
+from util import box, ensure_parent_dir, enumerate_with_n, model_stats, sha1hex
 
 
 @cache(version=4)
@@ -56,17 +58,17 @@ def _fit_and_score_cached(*args, **kwargs):
 
     extra_metrics = kwargs.pop('extra_metrics', None)
     return_estimator = kwargs.pop('return_estimator', False)
-    split_i = kwargs.pop('split_i')
+    (i, n) = kwargs.pop('i_n', (None, None))
+    split_i = kwargs.pop('split_i', None)
     proc_stats_interval = kwargs.pop('proc_stats_interval', 1.)  # sec
     artifacts = kwargs.pop('artifacts', {})
     if artifacts:
         # Fail fast on required fields
-        assert artifacts['save'] or artifacts['load']
+        assert artifacts['save'] or artifacts['reuse'], f'Expected save and/or reuse: artifacts[{artifacts}]'
         artifacts_dir = artifacts['dir']
-        if artifacts.get('load'):
-            experiment_id = artifacts['load']
-        else:
-            experiment_id = artifacts['experiment_id']
+        if artifacts.get('reuse'):
+            assert artifacts['reuse'] == artifacts['experiment_id']
+        experiment_id = artifacts['experiment_id']
 
     a = inspect.signature(_fit_and_score).bind(*args, **kwargs).arguments
     estimator = a['estimator']
@@ -77,6 +79,7 @@ def _fit_and_score_cached(*args, **kwargs):
     parameters = a['parameters']
 
     log_estimator = clone(estimator).set_params(**parameters)  # Like _fit_and_score
+    log_name = '_fit_and_score[%s/%s]' % (i + 1, n)
     log_details = ', '.join([
         f'split_i[{split_i}]',
         f'train[{len(train)}]',
@@ -86,8 +89,8 @@ def _fit_and_score_cached(*args, **kwargs):
     ])
 
     if artifacts:
-        model_desc = (
-            re.sub(r'[^a-zA-Z0-9_=,"\'()]+', '-',
+        model_id = (
+            re.sub(r'[^a-zA-Z0-9._=,"\'()]+', '-',
                 re.sub(r'[[:]', '=',
                     re.sub(r'[] ]', '',
                         log_details,
@@ -95,62 +98,103 @@ def _fit_and_score_cached(*args, **kwargs):
                 )
             )
         )
-        artifact_save_dir = f'{artifacts_dir}/{experiment_id}/{model_desc}'
+        artifact_model_dir = f'{artifacts_dir}/{experiment_id}/{model_id}'
         artifact_log_details = ', '.join([
-            f'model_desc[{model_desc}]',
+            f'model_id[{model_id}]',
         ])
 
-    # Load from artifacts
-    if artifacts.get('load'):
-        ret_path = f'{artifact_save_dir}/ret.pkl'
-        log.info('_fit_and_score.load[%s]: %s' % (
-            humanize.naturalsize(os.stat(ret_path).st_size),
-            Path(ret_path).relative_to(artifacts_dir),
-        ))
-        ret = joblib.load(ret_path)
+    # HACK Hard-code slots for extra_metrics and estimator
+    #   - TODO Change ret list->dict so we can avoid this brittleness
+    EXTRA_METRICS_I = 5
+    ESTIMATOR_I = 6
 
-    # Compute (and maybe save to artifacts)
-    else:
+    # Compute model
+    compute = not artifacts.get('reuse') or not os.path.exists(artifact_model_dir)
+    if compute:
 
-        log.info('_fit_and_score... %s' % log_details)
+        log.info('%s.compute... %s' % (log_name, log_details))
         # Mem overhead of proc_stats: ~370b/poll (interval=1s -> ~1.3mb/hr = ~30mb/d)
         with ProcStats(interval=proc_stats_interval).poll() as proc_stats:
             _, ret = timed(_fit_and_score, *args, **kwargs, finally_=lambda elapsed_s, _: (
-                log.info('_fit_and_score[%.3fs]: %s' % (elapsed_s, log_details))
+                log.info('%s.compute[%.3fs]: %s' % (log_name, elapsed_s, log_details))
             ))
 
-        if extra_metrics:
-            X_train, y_train = _safe_split(estimator, X, y, train)  # Copied from _fit_and_score
-            X_test, y_test = _safe_split(estimator, X, y, test, train)  # Copied from _fit_and_score
-            _locals = locals()
-            ret.append({
-                # eval instead of lambda because lambda's (and def's) surprisingly don't bust cache when they change
-                metric_name: eval(metric_expr, None, _locals)
-                for metric_name, metric_expr in extra_metrics.items()
-            })
+        # HACK ("Hard-code slots", above)
+        ret.append(None)  # extra_metrics
+        ret.append(None)  # estimator
 
-        if return_estimator:
-            ret.append(estimator)
+    # Load model from artifacts (if they exist)
+    else:
 
-        if artifacts:
-            _locals = locals()
-            def save_artifacts():
-                artifacts_to_save = dict(
-                    ret='ret',
-                    **artifacts.get('extra', {}),
-                )
-                for artifact_name, artifact_expr in artifacts_to_save.items():
-                    joblib.dump(
-                        value=eval(artifact_expr, None, _locals),
-                        filename=ensure_parent_dir(f'{artifact_save_dir}/{artifact_name}.pkl'),
-                    )
-                return int(sh.du('-ks', artifact_save_dir).split()[0]) * 1024
-            log.info('_fit_and_score.save_artifacts... %s' % artifact_log_details)
-            timed(save_artifacts, finally_=lambda elapsed_s, pkl_size: (
-                log.info('_fit_and_score.save_artifacts[%.3fs, %s]: %s' % (
-                    elapsed_s, pkl_size and humanize.naturalsize(pkl_size), artifact_log_details,
+        # Load ret
+        ret_path = f'{artifact_model_dir}/ret.pkl'
+        _, ret = timed(joblib.load, ret_path, finally_=lambda elapsed_s, _: (
+            log.info('%s.reuse.ret[%.3fs, %s]: %s' % (
+                log_name,
+                elapsed_s,
+                humanize.naturalsize(os.stat(ret_path).st_size),
+                Path(ret_path).relative_to(artifacts_dir),
+            ))
+        ))
+
+        # HACK ("Hard-code slots", above)
+        if len(ret) < EXTRA_METRICS_I + 1:
+            ret.append(None)
+        if len(ret) < ESTIMATOR_I + 1:
+            ret.append(None)
+
+        # Load estimator (if requested)
+        if not return_estimator:
+            estimator = None
+        else:
+            estimator_path = f'{artifact_model_dir}/estimator.pkl'
+            _, estimator = timed(joblib.load, estimator_path, finally_=lambda elapsed_s, _: (
+                log.info('%s.reuse.estimator[%.3fs, %s]: %s' % (
+                    log_name,
+                    elapsed_s,
+                    humanize.naturalsize(os.stat(estimator_path).st_size),
+                    Path(estimator_path).relative_to(artifacts_dir),
                 ))
             ))
+
+    # HACK ("Hard-code slots", above)
+    assert len(ret) == ESTIMATOR_I + 1
+
+    # Recompute extra_metrics so that reuse + return_estimator allows us to add/change extra_metrics without retraining
+    if extra_metrics and estimator:
+        X_train, y_train = _safe_split(estimator, X, y, train)  # Copied from _fit_and_score
+        X_test, y_test = _safe_split(estimator, X, y, test, train)  # Copied from _fit_and_score
+        _locals = locals()
+        ret[EXTRA_METRICS_I] = {
+            # eval instead of lambda because lambda's (and def's) surprisingly don't bust cache when they change
+            metric_name: eval(metric_expr, None, _locals)
+            for metric_name, metric_expr in extra_metrics.items()
+        }
+
+    if return_estimator:
+        # Treat estimator as source of truth in case they disagree (like e.g. extra_metrics)
+        ret[ESTIMATOR_I] = estimator or ret[ESTIMATOR_I]
+
+    # Save model (only if we just computed it)
+    if artifacts.get('save') and compute:
+        _locals = locals()
+        def save():
+            artifacts_to_save = dict(
+                ret='ret',
+                **artifacts.get('extra', {}),
+            )
+            for artifact_name, artifact_expr in artifacts_to_save.items():
+                joblib.dump(
+                    value=eval(artifact_expr, None, _locals),
+                    filename=ensure_parent_dir(f'{artifact_model_dir}/{artifact_name}.pkl'),
+                )
+            return int(sh.du('-ks', artifact_model_dir).split()[0]) * 1024
+        log.info('%s.save... %s' % (log_name, artifact_log_details))
+        timed(save, finally_=lambda elapsed_s, pkl_size: (
+            log.info('%s.save[%.3fs, %s]: %s' % (
+                log_name, elapsed_s, pkl_size and humanize.naturalsize(pkl_size), artifact_log_details,
+            ))
+        ))
 
     return ret
 
@@ -272,6 +316,15 @@ class GridSearchCVCached(GridSearchCV):
 
         # HACK(db): Added logging for self.artifacts
         if self.verbose > 0 and self.artifacts:
+            if self.artifacts.get('reuse'):
+                self.artifacts['experiment_id'] = self.artifacts['reuse']
+            else:
+                # Stamp experiment_id once for all calls to _fit_and_score_cached
+                if not self.artifacts.get('experiment_id'):
+                    self.artifacts['experiment_id'] = '-'.join([
+                        datetime.utcnow().strftime('%Y%m%d-%H%M%S'),
+                        sha1hex(str(uuid.uuid4()))[:7],
+                    ])
             log.info('artifacts', **self.artifacts)
 
         # HACK(db): Reformatted
@@ -290,14 +343,16 @@ class GridSearchCVCached(GridSearchCV):
                 extra_metrics=self.extra_metrics,  # HACK(db): Added
                 return_estimator=self.return_estimator,  # HACK(db): Added
                 error_score=self.error_score,
+                i_n=(i, n),  # HACK(db): Added
                 split_i=split_i,  # HACK(db): Added
                 artifacts=self.artifacts,  # HACK(db): Added
                 **self.fit_and_score_kwargs,  # HACK(db): Added
             )
-            for parameters, (split_i, (train, test)) in product(  # HACK(db): Added split_i
+            # HACK(db): Added i, n, split_i
+            for i, n, (parameters, (split_i, (train, test))) in enumerate_with_n(list(product(
                 candidate_params,
                 enumerate(cv.split(X, y, groups)),  # HACK(db): Added enumerate for split_i
-            )
+            )))
         )
 
         # HACK(db): Added extra_metrics + return_estimator , and refactored `outs` deconstruction to be more modular
@@ -309,11 +364,13 @@ class GridSearchCVCached(GridSearchCV):
         test_sample_counts = outs.pop(0)
         fit_time = outs.pop(0)
         score_time = outs.pop(0)
-        if self.extra_metrics:
-            extra_metrics = outs.pop(0)
-        if self.return_estimator:
-            estimators = outs.pop(0)
+        extra_metrics = outs.pop(0)
+        estimator = outs.pop(0)
         assert outs == []
+        if not self.extra_metrics:
+            assert set(extra_metrics) == {None}
+        if not self.return_estimator:
+            assert set(estimator) == {None}
 
         # test_score_dicts and train_score dicts are lists of dictionaries and
         # we make them into dict of lists
@@ -386,7 +443,7 @@ class GridSearchCVCached(GridSearchCV):
 
         # HACK(db): Added
         if self.return_estimator:
-            results['estimators'] = list(estimators)
+            _store('estimator', estimator, splits=True, dtype='object')
 
         # NOTE test_sample counts (weights) remain the same for all candidates
         test_sample_counts = np.array(test_sample_counts[:n_splits],
