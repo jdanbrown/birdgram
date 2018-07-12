@@ -27,7 +27,6 @@ def _(gbm, sample_tree_n=None, random_state=None) -> pd.DataFrame:
     if sample_tree_n:
         tree_node_strs = np_sample(tree_node_strs, n=sample_tree_n, replace=False, random_state=random_state)
     return (
-
         pd.DataFrame(
             OrderedDict(
                 type='xgb',
@@ -45,47 +44,4 @@ def _(gbm, sample_tree_n=None, random_state=None) -> pd.DataFrame:
         .pipe(df_reorder_cols,
             first=['n_trees', 'tree_i', 'depth', 'node_count', 'leaf_count', 'fork_count'],
         )
-
-        # XXX
-        # pd.DataFrame(
-        #     OrderedDict(
-        #         type='xgb',
-        #         n_trees=n_trees,
-        #         tree_i=tree_i,
-        #         node_count=node_count,
-        #         node_i=node_i,
-        #         is_leaf=':leaf=' in node_str,
-        #         node_depth=ilen(takewhile(lambda x: x == '\t', node_str)),
-        #         node_str=node_str,
-        #     )
-        #     for tree_i, n_trees, node_strs in enumerate_with_n(tree_node_strs)
-        #     for node_i, node_count, node_str in enumerate_with_n(node_strs)
-        # )
-        # # Two versions of sql agg-over-partition-by, keeping both for reference:
-        # #
-        # # Version 1: simple code, a little slower:
-        # # .assign(
-        # #     depth=lambda df: df.groupby('tree_i').node_depth.transform(np.max),
-        # #     leaf_count=lambda df: df.groupby('tree_i').is_leaf.transform(lambda x: x.sum()),
-        # #     fork_count=lambda df: df.groupby('tree_i').is_leaf.transform(lambda x: (~x).sum()),
-        # # )
-        # #
-        # # Version 2: not-simple code, a little faster:
-        # .pipe(lambda df: df.merge(on='tree_i', how='left', right=(df
-        #     .groupby('tree_i')[['node_depth', 'is_leaf']].agg({
-        #         'node_depth': {
-        #             'depth': np.max,
-        #         },
-        #         'is_leaf': {
-        #             'leaf_count': lambda x: x.sum(),
-        #             'fork_count': lambda x: (~x).sum(),
-        #         },
-        #     })
-        #     .reset_index()
-        # )))
-        # .pipe(df_reorder_cols,
-        #     first=['n_trees', 'tree_i', 'node_count', 'leaf_count', 'fork_count', 'depth'],
-        #     last=['node_str'],
-        # )
-
     )
