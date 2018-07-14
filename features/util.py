@@ -31,9 +31,13 @@ import os
 import pickle
 import random
 import shlex
-from typing import TypeVar, Union
+from typing import Optional, TypeVar, Union
 
 X = TypeVar('X')
+
+
+def none_or(x, f, is_none=lambda x: x is None):
+    return x if is_none(x) else f(x)
 
 
 def coalesce(*xs):
@@ -161,6 +165,9 @@ class DataclassUtil:
             if all(getattr(x, k) == v for k, v in filters.items())
         ]
 
+    def replace(self, **kwargs) -> 'Self':
+        return dataclasses.replace(self, **kwargs)
+
     def asdict(self) -> dict:
         """Convert to dict preserving field order, e.g. for df rows"""
         return OrderedDict(dataclasses.asdict(self))
@@ -271,15 +278,17 @@ X = TypeVar('X')
 
 
 @singledispatch
-def model_stats(model: Optional[sk.base.BaseEstimator]) -> Optional[pd.DataFrame]:
-    return None
+def model_stats(model: Optional[sk.base.BaseEstimator], **kwargs) -> pd.DataFrame:
+    return pd.DataFrame([
+        dict(type=f'unknown:{type(model).__name__}'),
+    ])
 
 
 @model_stats.register(sk.multiclass.OneVsRestClassifier)
-def _(ovr) -> pd.DataFrame:
+def _(ovr, **kwargs) -> pd.DataFrame:
     return (
         pd.concat(ignore_index=True, objs=[
-            model_stats(estimator)
+            model_stats(estimator, **kwargs)
             .assign(
                 type=lambda df: 'ovr/' + df.type,
                 n_classes=len(ovr.classes_),
@@ -305,8 +314,8 @@ def _(forest) -> pd.DataFrame:
 
 
 @model_stats.register(sk.tree.tree.BaseDecisionTree)
-def _(tree) -> pd.DataFrame:
-    return model_stats(tree.tree_)
+def _(tree, **kwargs) -> pd.DataFrame:
+    return model_stats(tree.tree_, **kwargs)
 
 
 @model_stats.register(sk.tree._tree.Tree)

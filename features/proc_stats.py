@@ -4,7 +4,7 @@ import gc
 import os
 import threading
 import time
-from typing import Callable, List
+from typing import Callable, Iterable, List
 
 from attrdict import AttrDict
 from dataclasses import dataclass, field
@@ -13,27 +13,34 @@ from plotnine import *
 from potoo.util import or_else
 import psutil
 
-from util import DataclassUtil, X
+from util import DataclassUtil, none_or, X
 
 
 @dataclass(repr=False)
 class ProcStats(DataclassUtil):
 
     interval: float
-    stats: List[dict] = field(default_factory=lambda: [])
+    stats: pd.DataFrame = None
 
-    @contextlib.contextmanager
-    def poll(self) -> 'ProcStats':
+    def __enter__(self) -> 'ProcStats':
+        self.start()
+        return self
+
+    def __exit__(self, *exc_details):
+        self.stop()
+
+    def start(self):
         """
         Mem overhead: ~370B per sample
-        - Methodology: sum(len(pickle.dumps(x)) for x in proc_stats.stats) / len(proc_stats.stats)
+        - Methodology: sum(len(pickle.dumps(x)) for x in proc_stats._stats) / len(proc_stats._stats)
         """
         proc = psutil.Process(os.getpid())
         # GC once before we start to calibrate mem usage
         gc.collect()
-        with Poll(
+        self._stats = []
+        self._poll = Poll(
             interval=self.interval,
-            run=lambda: self.stats.extend((
+            run=lambda: self._stats.extend((
                 oneshot(p, lambda p: dict(
                     time=pd.Timestamp.now(),
                     role=role,
@@ -56,26 +63,31 @@ class ProcStats(DataclassUtil):
                     *[('child', p) for p in proc.children(recursive=True)],
                 ]
             )),
-        ):
-            yield self
+        )
+        self._poll.start()
 
-    @property
-    def df(self):
+    def stop(self):
+        self._poll.stop()
+        self._poll = None  # Avoid pickling Poll.run, which will fail on e.g. lambdas
+        self.stats = self._freeze(self._stats)
+        self._stats = None
+
+    def _freeze(self, stats: Iterable[dict]) -> pd.DataFrame:
         """Convert .stats from List[dict] to df, because I don't know an efficient way to accumulate a df directly"""
         return pd.DataFrame(
             OrderedDict(d)  # To preserve dict key ordering for pandas
-            for d in self.stats
+            for d in stats
         )
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ', '.join([
             'interval=%r' % self.interval,
-            'stats[%s]' % len(self.stats),
+            'stats[%s]' % none_or(self.stats, len),
         ]))
 
 
 def oneshot(proc: psutil.Process, f: Callable[[psutil.Process], X]) -> X:
-    """Process.oneshot as an expression"""
+    """Process.oneshot as an expression instead of a statement"""
     with proc.oneshot():
         return f(proc)
 
@@ -89,8 +101,9 @@ class Poll(DataclassUtil):
     _thread = None
     _stop = None
 
-    def __enter__(self):
+    def __enter__(self) -> 'Poll':
         self.start()
+        return self
 
     def __exit__(self, *exc_details):
         self.stop()

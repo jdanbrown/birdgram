@@ -64,6 +64,7 @@ from sk_util import *
 from sp14.skm import SKM
 from util import *
 from viz import *
+import xgb_sklearn_hack
 
 
 @dataclass
@@ -601,7 +602,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
             'recs': len(X),
             '(n, f*p)': X.shape,
         })
-        self.classifier_ = self._fit_pure(X, y)
+        self.classifier_ = self._fit_pure(X, y, self.classes_)
         log.debug('Search.fit:out', **{
             'classifier.get_params': self.classifier_.get_params(),
             'classifier.classes_': sorted_species(self.classifier_.classes_.tolist()),
@@ -610,36 +611,122 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         # log.info(f'Search.fit. classifier[{self.classifier}]')
         return self
 
-    @cache(version=4, key=lambda self, X, y: (
+    @cache(version=4, key=lambda self, X, y, classes: (
         self.classifier_config, {k: v for k, v in self.config.items() if k != 'classifier'},  # Prefer classifier dict over str
-        X, y,
+        X, y, classes,
     ))
-    def _fit_pure(self, X: np.ndarray, y: np.ndarray) -> sk.base.BaseEstimator:
+    def _fit_pure(self, X: np.ndarray, y: np.ndarray, classes: np.ndarray) -> sk.base.BaseEstimator:
         """classifier <- .feat (k*a,)"""
-        classifier = self._make_classifier(**self.classifier_config)
+        classifier = self._make_classifier(
+            **self.classifier_config,
+            n_features=X.shape[1],  # For xgb/lgb
+            n_classes=len(classes),  # For xgb/lgb
+        )
         return classifier.fit(X, y)
 
-    def _make_classifier(self, cls, multiclass=None, **kwargs) -> sk.base.BaseEstimator:
+    def _make_classifier(
+        self,
+        cls,
+        multiclass=None,
+        n_features=None,  # For xgb/lgb
+        n_classes=None,  # For xgb/lgb
+        **kwargs,
+    ) -> sk.base.BaseEstimator:
+
+        # Expand complex shorthands
+        if cls.startswith('ovr-'):
+            [multiclass, cls] = cls.split('-', 1)
+
+        # Define constructor shorthands
         knn = sk.neighbors.KNeighborsClassifier
-        svm = partial(sk.svm.SVC,
+        logreg_ovr = partial(sk.linear_model.LogisticRegression,
             random_state=self.random_state,
+            multi_class='ovr',  # Default
+            n_jobs=-1,  # Use all cores (default: 1)
+        )
+        logreg_multi = partial(logreg_ovr,
+            multi_class='multinomial',
+        )
+        svm = partial(sk.svm.SVC,
+            probability=True,
+            random_state=self.random_state,
+            kernel='rbf',  # Default
         )
         rf = partial(sk.ensemble.RandomForestClassifier,
+            # criterion='gini',  # Default
             random_state=self.random_state,
             n_jobs=-1,  # Use all cores (default: 1)
         )
+        xgbm = partial(self._xgb_rf_classifier,
+            n_features=n_features,
+            n_classes=n_classes,
+            random_state=self.random_state,
+            n_jobs=-1,  # Use all cores (default: 1)
+            # FIXME silent=False causes annoying atom notifications instead of ipykernel stdout/stderr (because subprocess?)
+            silent=True,
+        )
         lgbm = partial(lgb.LGBMClassifier,
             random_state=self.random_state,
+            # TODO Flesh out like xgb
         )
+
+        # Eval classifier
         classifier = eval(cls)(**kwargs)
+
+        # Add wrappers
         if multiclass:
+            assert not isinstance(classifier, xgb.XGBClassifier), 'xgb is already structured as OVR internally'
             classifier = {
                 'ovr': sk.multiclass.OneVsRestClassifier(
                     estimator=classifier,
                     n_jobs=-1,  # Use all cores (default: 1) [TODO Should this and rf n_jobs both be -1 together?]
                 ),
             }[multiclass]
+
         return classifier
+
+    def _xgb_rf_classifier(
+        self,
+        n_features,
+        n_classes,
+        **kwargs,
+    ):
+        # Based on 20180710_xgb_train_eval_example.ipynb
+        return xgb_sklearn_hack.XGBClassifier(**{
+            **dict(
+
+                # Multiclass
+                #   - softmax: .predict will return (len(X_test),) like sk .predict
+                #   - softprob: .predict will return (len(X_test), n_classes) like sk .predict_proba
+                #       - https://github.com/dmlc/xgboost/issues/101
+                #   - Both require num_class
+                objective='multi:softprob',
+                num_class=n_classes,
+
+                # Random forest
+                learning_rate=1,  # Don't down-weight each round's trees, since there's only 1 round
+                subsample=1 - 1 / np.e,  # Approximate the instance exposure (no replacement) for bootstrap (replacement)
+                colsample_bylevel=np.sqrt(n_features) / n_features,  # sqrt(p) for classification, p/3 for regression
+                train_kwargs=dict(  # HACK Non-standard arg added in xgb_sklearn_hack
+                    num_boost_round=1,
+                ),
+
+                # Tree tuning
+                max_depth=0,  # TODO Does 0 actually work as "no limit"? -- the notebook results don't support this
+                #   - Default: 6
+                #   - 0 means no limit
+                min_child_weight=0,
+                #   - Default: 1
+                tree_method='exact',  # TODO Switch back to 'auto' after we figure out how to make xgb rf's work correctly
+                #   - Default: 'auto'
+                #   - 'exact' | 'approx' | 'hist'
+                #   - Quick takeaways
+                #       - 'exact'/'approx' take comparable duration, 'hist' takes _way_ longer
+                #       - Stick with 'exact'/'auto' for now
+
+            ),
+            **kwargs,
+        })
 
     #
     # Predict
@@ -811,16 +898,16 @@ class SearchEvals(DataclassUtil):
 
     def __repr__(self):
         return '%s(%s)' % (type(self).__name__, ', '.join([
-            f'{k}[{v.shape}]'
+            f'{k}[{none_or(v, lambda v: v.shape)}]'
             for k, v in self.asdict().items()
             if k not in [
                 'drop_missing_classes_for_n_species',
             ]
         ]))
 
-    def score(self) -> float:
+    def score(self, **kwargs) -> float:
         """Goodness-of-fit measure (higher is better)"""
-        return -self.coverage_error()
+        return -self.coverage_error(**kwargs)
 
     def coverage_error(self, agg=np.median) -> float:
         """Predict and measure aggregate coverage error"""
@@ -828,15 +915,10 @@ class SearchEvals(DataclassUtil):
 
     def coverage_errors(self) -> 'np.ndarray[int @ len(X)]':
         """Predict and measure each instance's coverage error (avoid sk's internal np.mean so we can do our own agg)"""
-        y_trues = (self.classes == self.y[:, None])
-        y_scores = np.nan_to_num(self.y_scores, 0)  # In case any predict_proba's return nan (e.g. OneVsRestClassifier)
-        return np.array([
-            # If y_true isn't in y_score at all then sk.metrics.coverage_error returns 0, which is really confusing. Map
-            # to np.inf instead to (try to) avoid surprises.
-            np.inf if coverage_error == 0 else coverage_error
-            for y_true, y_score in zip(y_trues, y_scores)
-            for coverage_error in [sk.metrics.coverage_error([y_true], [y_score])]
-        ])
+        return coverage_errors(
+            y_true=(self.classes == self.y[:, None]),
+            y_score=np.nan_to_num(self.y_scores, 0),  # In case a predict_proba returns nan (e.g. OneVsRestClassifier)
+        )
 
     @classmethod
     @requires_cols('feat', 'species')
@@ -865,9 +947,9 @@ class SearchEvals(DataclassUtil):
 
 
 @model_stats.register(Search)
-def _(search) -> pd.DataFrame:
+def _(search, **kwargs) -> pd.DataFrame:
     return (
-        model_stats(search.classifier_)
+        model_stats(search.classifier_, **kwargs)
         .assign(type=lambda df: 'search/' + df.type)
     )
 

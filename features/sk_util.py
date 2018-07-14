@@ -3,6 +3,7 @@ import io
 import joblib
 import numpy as np
 import pandas as pd
+import sklearn as sk
 
 
 def joblib_dumps(x: any, *args, **kwargs) -> bytes:
@@ -41,3 +42,29 @@ def confusion_matrix_prob(
         M[class_i[c]] += y_prob
     assert M.shape == (C, C)
     return M
+
+
+# Like sk.metrics.ranking.coverage_error, except:
+#   - Return one coverage error per sample (instead of returning the mean)
+#   - If y_true isn't in y_score then fill with np.inf (instead of 0, which is really confusing)
+def coverage_errors(
+    y_true: 'np.ndarray[bool @ n]',
+    y_score: 'np.ndarray[float @ n]',
+    fill=np.inf,
+) -> 'np.ndarray[np.float @ n]':  # float to represent Union[int, np.inf]
+
+    # Validate inputs
+    y_true = sk.utils.check_array(y_true, ensure_2d=False)
+    y_score = sk.utils.check_array(y_score, ensure_2d=False)
+    sk.utils.check_consistent_length(y_true, y_score)
+    y_type = sk.utils.multiclass.type_of_target(y_true)
+    if y_type != 'multilabel-indicator':
+        raise ValueError('%s format is not supported' % y_type)
+    if y_true.shape != y_score.shape:
+        raise ValueError('y_true and y_score have different shape')
+
+    y_score_mask = np.ma.masked_array(y_score, mask=np.logical_not(y_true))
+    y_min_relevant = y_score_mask.min(axis=1).reshape((-1, 1))
+    coverage = (y_score >= y_min_relevant).sum(axis=1)
+    coverage = coverage.astype(float).filled(fill)
+    return coverage

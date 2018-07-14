@@ -6,6 +6,7 @@ See sk_util for more modular, responsible utils for sklearn.
 """
 
 from collections import defaultdict
+import copy
 from datetime import datetime
 from functools import partial
 import glob
@@ -57,6 +58,7 @@ def _fit_and_score_cached(*args, **kwargs):
     """
 
     extra_metrics = kwargs.pop('extra_metrics', None)
+    recompute_extra_metrics = kwargs.pop('recompute_extra_metrics', False)
     return_estimator = kwargs.pop('return_estimator', False)
     (i, n) = kwargs.pop('i_n', (None, None))
     split_i = kwargs.pop('split_i', None)
@@ -64,7 +66,7 @@ def _fit_and_score_cached(*args, **kwargs):
     artifacts = kwargs.pop('artifacts', {})
     if artifacts:
         # Fail fast on required fields
-        assert artifacts['save'] or artifacts['reuse'], f'Expected save and/or reuse: artifacts[{artifacts}]'
+        assert artifacts.get('save') or artifacts.get('reuse'), f'Expected save and/or reuse: artifacts[{artifacts}]'
         artifacts_dir = artifacts['dir']
         if artifacts.get('reuse'):
             assert artifacts['reuse'] == artifacts['experiment_id']
@@ -78,30 +80,31 @@ def _fit_and_score_cached(*args, **kwargs):
     test = a['test']
     parameters = a['parameters']
 
-    log_estimator = clone(estimator).set_params(**parameters)  # Like _fit_and_score
-    log_name = '_fit_and_score[%s/%s]' % (i + 1, n)
-    log_details = ', '.join([
-        f'split_i[{split_i}]',
-        f'train[{len(train)}]',
-        f'test[{len(test)}]',
-        f'classes[{len(np.unique(y))}]',
-        f'estimator[{log_estimator}]',
-    ])
-
-    if artifacts:
-        model_id = (
-            re.sub(r'[^a-zA-Z0-9._=,"\'()]+', '-',
-                re.sub(r'[[:]', '=',
-                    re.sub(r'[] ]', '',
-                        log_details,
-                    )
+    # model_id
+    estimator_for_model_id = clone(estimator).set_params(**parameters)  # Like _fit_and_score
+    model_id = (
+        re.sub(r'[^a-zA-Z0-9._=,"\'()]+', '-',
+            re.sub(r'[[:]', '=',
+                re.sub(r'[] ]', '',
+                    # TODO Simplify: merge this defunct log_details into the above re.sub's to cancel them out
+                    ', '.join([
+                        f'split_i[{split_i}]',
+                        f'train[{len(train)}]',
+                        f'test[{len(test)}]',
+                        f'classes[{len(np.unique(y))}]',
+                        f'estimator[{estimator_for_model_id}]',
+                    ])
                 )
             )
         )
+    )
+
+    # Logging strs
+    log_name = '_fit_and_score: n[%s/%s], model_id[%s]' % (i + 1, n, model_id)
+
+    if artifacts:
         artifact_model_dir = f'{artifacts_dir}/{experiment_id}/{model_id}'
-        artifact_log_details = ', '.join([
-            f'model_id[{model_id}]',
-        ])
+        artifact_model_dir_done = f'{artifact_model_dir}/DONE'
 
     # HACK Hard-code slots for extra_metrics and estimator
     #   - TODO Change ret list->dict so we can avoid this brittleness
@@ -109,14 +112,14 @@ def _fit_and_score_cached(*args, **kwargs):
     ESTIMATOR_I = 6
 
     # Compute model
-    compute = not artifacts.get('reuse') or not os.path.exists(artifact_model_dir)
+    compute = not (artifacts.get('reuse') and os.path.exists(artifact_model_dir_done))
     if compute:
 
-        log.info('%s.compute... %s' % (log_name, log_details))
+        log.info('%s: fit...' % log_name)
         # Mem overhead of proc_stats: ~370b/poll (interval=1s -> ~1.3mb/hr = ~30mb/d)
-        with ProcStats(interval=proc_stats_interval).poll() as proc_stats:
+        with ProcStats(interval=proc_stats_interval) as proc_stats:
             _, ret = timed(_fit_and_score, *args, **kwargs, finally_=lambda elapsed_s, _: (
-                log.info('%s.compute[%.3fs]: %s' % (log_name, elapsed_s, log_details))
+                log.info('%s: fit[%.3fs]' % (log_name, elapsed_s))
             ))
 
         # HACK ("Hard-code slots", above)
@@ -129,11 +132,10 @@ def _fit_and_score_cached(*args, **kwargs):
         # Load ret
         ret_path = f'{artifact_model_dir}/ret.pkl'
         _, ret = timed(joblib.load, ret_path, finally_=lambda elapsed_s, _: (
-            log.info('%s.reuse.ret[%.3fs, %s]: %s' % (
+            log.info('%s: reuse.load[%.3fs, %s]: ret' % (
                 log_name,
                 elapsed_s,
                 humanize.naturalsize(os.stat(ret_path).st_size),
-                Path(ret_path).relative_to(artifacts_dir),
             ))
         ))
 
@@ -144,57 +146,85 @@ def _fit_and_score_cached(*args, **kwargs):
             ret.append(None)
 
         # Load estimator (if requested)
-        if not return_estimator:
+        if not (return_estimator or recompute_extra_metrics):
             estimator = None
         else:
             estimator_path = f'{artifact_model_dir}/estimator.pkl'
             _, estimator = timed(joblib.load, estimator_path, finally_=lambda elapsed_s, _: (
-                log.info('%s.reuse.estimator[%.3fs, %s]: %s' % (
+                log.info('%s: reuse.load[%.3fs, %s]: estimator' % (
                     log_name,
                     elapsed_s,
                     humanize.naturalsize(os.stat(estimator_path).st_size),
-                    Path(estimator_path).relative_to(artifacts_dir),
                 ))
             ))
+
+        # HACK Needed for extra_metrics, below
+        #   - TODO Consolidate this concern: currently split across user extra_metrics and `if compute`, above
+        proc_stats = ret[EXTRA_METRICS_I].get('proc_stats')
 
     # HACK ("Hard-code slots", above)
     assert len(ret) == ESTIMATOR_I + 1
 
     # Recompute extra_metrics so that reuse + return_estimator allows us to add/change extra_metrics without retraining
     if extra_metrics and estimator:
+
         X_train, y_train = _safe_split(estimator, X, y, train)  # Copied from _fit_and_score
         X_test, y_test = _safe_split(estimator, X, y, test, train)  # Copied from _fit_and_score
         _locals = locals()
-        ret[EXTRA_METRICS_I] = {
-            # eval instead of lambda because lambda's (and def's) surprisingly don't bust cache when they change
-            metric_name: eval(metric_expr, None, _locals)
-            for metric_name, metric_expr in extra_metrics.items()
-        }
+        def compute_extra_metrics():
+            ret[EXTRA_METRICS_I] = {
+                # eval instead of lambda because lambda's (and def's) surprisingly don't bust cache when they change
+                metric_name: eval(metric_expr, None, _locals)
+                for metric_name, metric_expr in extra_metrics.items()
+            }
+        sizeof_pickle = lambda x: len(joblib_dumps(x))
+        log.info('%s: extra_metrics... %s' % (log_name, list(extra_metrics.keys())))
+        timed(compute_extra_metrics, finally_=lambda elapsed_s, _: (
+            log.info('%s: extra_metrics[%.3fs, %s]: %s' % (
+                log_name,
+                elapsed_s,
+                humanize.naturalsize(sizeof_pickle(ret[EXTRA_METRICS_I])),
+                list(extra_metrics.keys()),
+            ))
+        ))
 
     if return_estimator:
         # Treat estimator as source of truth in case they disagree (like e.g. extra_metrics)
         ret[ESTIMATOR_I] = estimator or ret[ESTIMATOR_I]
+    else:
+        # Force-exclude estimator, e.g. if ret.pkl already included it
+        ret[ESTIMATOR_I] = None
 
-    # Save model (only if we just computed it)
-    if artifacts.get('save') and compute:
+    # Save ret.pkl + estimator.pkl (if needed)
+    if artifacts.get('save') and (compute or recompute_extra_metrics):
+        artifacts_to_save = artifacts['save']
+        if artifacts_to_save is True:
+            artifacts_to_save = ['ret', 'estimator']
+        if isinstance(artifacts_to_save, list):
+            artifacts_to_save = {k: k for k in artifacts_to_save}
         _locals = locals()
-        def save():
-            artifacts_to_save = dict(
-                ret='ret',
-                **artifacts.get('extra', {}),
-            )
-            for artifact_name, artifact_expr in artifacts_to_save.items():
-                joblib.dump(
-                    value=eval(artifact_expr, None, _locals),
-                    filename=ensure_parent_dir(f'{artifact_model_dir}/{artifact_name}.pkl'),
-                )
-            return int(sh.du('-ks', artifact_model_dir).split()[0]) * 1024
-        log.info('%s.save... %s' % (log_name, artifact_log_details))
-        timed(save, finally_=lambda elapsed_s, pkl_size: (
-            log.info('%s.save[%.3fs, %s]: %s' % (
-                log_name, elapsed_s, pkl_size and humanize.naturalsize(pkl_size), artifact_log_details,
+        for artifact_name, artifact_expr in artifacts_to_save.items():
+            def save():
+                value = eval(artifact_expr, None, _locals)
+                if artifact_name == 'ret':
+                    # Always ret.pkl without estimator to avoid double-saving huge estimators (even if no estimator.pkl)
+                    value = copy.copy(value)
+                    value[ESTIMATOR_I] = None
+                pkl_path = ensure_parent_dir(f'{artifact_model_dir}/{artifact_name}.pkl')
+                # Atomic file write (via tmp + atomic rename)
+                #   - Don't use /tmp: if it's on a different fs then os.rename will fail. Write in the same dir instead.
+                #   - And don't use shutil.move (from /tmp), since it doesn't do an atomic write
+                tmp_path = f'{pkl_path}.tmp'
+                joblib.dump(value, tmp_path)
+                os.rename(tmp_path, pkl_path)
+                return os.stat(pkl_path).st_size
+            log.info('%s: save: %s...' % (log_name, artifact_name))
+            timed(save, finally_=lambda elapsed_s, pkl_size: (
+                log.info('%s: save[%.3fs, %s]: %s' % (
+                    log_name, elapsed_s, pkl_size and humanize.naturalsize(pkl_size), artifact_name,
+                ))
             ))
-        ))
+        Path(ensure_parent_dir(artifact_model_dir_done)).touch()
 
     return ret
 

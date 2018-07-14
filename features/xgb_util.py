@@ -41,7 +41,4 @@ def _(gbm, sample_tree_n=None, random_state=None) -> pd.DataFrame:
         .assign(
             fork_count=lambda df: df.node_count - df.leaf_count,
         )
-        .pipe(df_reorder_cols,
-            first=['n_trees', 'tree_i', 'depth', 'node_count', 'leaf_count', 'fork_count'],
-        )
     )

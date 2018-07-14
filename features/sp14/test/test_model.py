@@ -6,7 +6,7 @@ import sklearn.utils
 
 from cache import cache_control
 from load import Load
-from sp14.model import Features, Projection, Search
+from sp14.model import Features, Projection, Search, SearchEvals
 from util import *
 
 
@@ -86,7 +86,7 @@ def test_model_pipeline_steps():
     'synchronous',
 ])
 def test_model_pipeline_steps_with_cache_and_dask(override_scheduler, cache_enabled, cache_refresh):
-    with dask_get_for_scheduler_name.context(override_scheduler=override_scheduler):
+    with dask_opts(override_scheduler=override_scheduler):
         with cache_control(enabled=cache_enabled, refresh=cache_refresh):
             test_model_pipeline_steps()
 
@@ -222,3 +222,27 @@ def test_projection_proj():
         ]),
     ]):
         np.testing.assert_array_equal(a_proj, expected)
+
+
+def test_coverage_errors():
+    search_evals = SearchEvals(
+        classes=np.array(['a', 'b', 'c']),
+        y=np.array([
+            'b',
+            'b',
+            'a',
+            'z',
+        ]),
+        y_scores=np.array([
+            [.2, .6, .2],
+            [.5, .3, .3],
+            [.9, .1, .0],
+            [.4, .1, .3],
+        ])
+    )
+    np.testing.assert_array_equal(search_evals.coverage_errors(), [
+        1,
+        3,
+        1,
+        np.inf,
+    ])
