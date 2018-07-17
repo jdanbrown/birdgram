@@ -267,11 +267,12 @@ from functools import partial, reduce, singledispatch
 import re
 from typing import Callable, Iterable, Mapping, Optional, TypeVar
 
-from more_itertools import flatten
+from more_itertools import flatten, one
 from potoo.numpy import np_sample
 from potoo.pandas import df_ordered_cat, df_reorder_cols
 import sklearn as sk
 import sklearn.ensemble
+import sklearn.linear_model
 import sklearn.multiclass
 
 X = TypeVar('X')
@@ -298,6 +299,30 @@ def _(ovr, **kwargs) -> pd.DataFrame:
         ])
         .pipe(df_reorder_cols, first=['type', 'n_classes', 'class_'])
     )
+
+
+@model_stats.register(sk.linear_model.LogisticRegression)
+def _(logreg) -> pd.DataFrame:
+    return (
+        pd.DataFrame(
+            dict(
+                type='logreg',
+                class_=class_,
+                n_iter=n_iter,
+            )
+            for class_, n_iter in (
+                zip(logreg.classes_, logreg.n_iter_) if logreg.n_iter_.shape == logreg.classes_.shape else
+                [('*', one(logreg.n_iter_))]
+            )
+        )
+        .pipe(df_reorder_cols, first=['type', 'class_', 'n_iter'])
+    )
+
+
+# TODO
+# @model_stats.register(sk.linear_model.LogisticRegressionCV)
+# def _(logreg_cv) -> pd.DataFrame:
+#     pass
 
 
 @model_stats.register(sk.ensemble.forest.BaseForest)
@@ -390,10 +415,10 @@ def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
     return (
         # box/unbox to allow np.array/list values inside the columns [how to avoid?]
         pd.DataFrame({k: list(map(box, v)) for k, v in cv_results.items()}).applymap(lambda x: x.unbox)
-        [lambda df: [c for c in df if re.match(r'^split|^param_|^estimators$', c)]]
+        [lambda df: [c for c in df if re.match(r'^split|^param_|^estimator$', c)]]
         .pipe(df_flatmap, lambda row: ([
             (row
-                .filter(regex=r'^param_|^split%s_|^estimators$' % fold)
+                .filter(regex=r'^param_|^split%s_|^estimator$' % fold)
                 .rename(lambda c: c.split('split%s_' % fold, 1)[-1])
                 .set_value('fold', fold)
             )
@@ -405,7 +430,7 @@ def cv_results_splits_df(cv_results: Mapping[str, list]) -> pd.DataFrame:
             }
         ]))
         .reset_index(drop=True)
-        .rename(columns={'estimators': 'model'})
+        .rename(columns={'estimator': 'model'})
         .assign(params=lambda df: df.apply(axis=1, func=lambda row: ', '.join([
             '%s[%s]' % (strip_startswith(k, 'param_'), row[k])
             for k in reversed(row.index)

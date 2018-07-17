@@ -657,7 +657,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
             random_state=self.random_state,
             n_jobs=-1,  # Use all cores (default: 1)
         )
-        xgbm = partial(self._xgb_rf_classifier,
+        xgb_rf = partial(self._xgb_rf_classifier,
             n_features=n_features,
             n_classes=n_classes,
             random_state=self.random_state,
@@ -676,6 +676,9 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         # Add wrappers
         if multiclass:
             assert not isinstance(classifier, xgb.XGBClassifier), 'xgb is already structured as OVR internally'
+            if 'n_jobs' in classifier.get_params():
+                # OVR does its own par, and setting n_jobs=1 avoids O(classes) warnings
+                classifier.set_params(n_jobs=1)
             classifier = {
                 'ovr': sk.multiclass.OneVsRestClassifier(
                     estimator=classifier,
