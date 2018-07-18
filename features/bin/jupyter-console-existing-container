@@ -6,7 +6,7 @@ bin="`"$bin"/normpath "$bin"`"
 host="$1"; shift
 
 "$bin"/gcloud-run --reuse="$host" --no-sync-code --container-exec '
-  kernel_ids=(`http localhost:8888/api/kernels | jq .[].id -r`)
+  kernel_ids=(`http 127.0.0.1:8888/api/kernels | jq .[].id -r`)
   if [ ${#kernel_ids[*]} -eq 0 ]; then
     echo "ERROR: No kernels found"
     exit 1

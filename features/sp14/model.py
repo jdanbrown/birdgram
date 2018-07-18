@@ -49,6 +49,7 @@ from potoo.util import round_sig
 import sklearn as sk
 import sklearn.ensemble  # For Search.cls (sk.ensemble.RandomForestClassifier)
 import sklearn.multiclass  # For Search.cls (sk.multiclass.OneVsRestClassifier)
+import sklearn.naive_bayes  # For Search.cls (sk.naive_bayes.GaussianNB)
 import yaml
 import xgboost as xgb  # For Search.cls
 
@@ -354,6 +355,7 @@ class Projection(DataclassConfig):
             # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)
             # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs)
             # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO I commented this out while debugging learning_curve
+            override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO I uncommented this after encountering hangs again
         ):
             return RecordingDF(recs
                 # Compute row-major with the 'threads' scheduler, since all cols perform best with 'threads'
@@ -583,7 +585,12 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
             orig_classes = sk.utils.multiclass.unique_labels(y)
             sub_classes = np_sample(
                 orig_classes,
-                **{'n' if isinstance(self.n_species, int) else 'frac': self.n_species},
+                # **{'n' if isinstance(self.n_species, int) else 'frac': self.n_species},  # FIXME n_species > len(orig_classes)
+                **(
+                    # Have to min(..., len(orig_classes)) in case the test/train split lost classes (e.g. with few obs)
+                    dict(n=min(self.n_species, len(orig_classes))) if isinstance(self.n_species, int) else
+                    dict(frac=self.n_species)
+                ),
                 random_state=self.random_state,
             )
             i = np.isin(y, sub_classes)
@@ -638,6 +645,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
             [multiclass, cls] = cls.split('-', 1)
 
         # Define constructor shorthands
+        nb = sk.naive_bayes.GaussianNB
         knn = sk.neighbors.KNeighborsClassifier
         logreg_ovr = partial(sk.linear_model.LogisticRegression,
             random_state=self.random_state,
