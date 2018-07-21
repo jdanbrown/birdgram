@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from functools import lru_cache
 import re
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 import pandas as pd
 from potoo.pandas import as_ordered_cat, df_reorder_cols, df_transform_column_names
@@ -20,7 +20,7 @@ ebird_taxa_path = f'{metadata_dir}/ebird-ws1.1-taxa-species.csv'
 
 
 @singleton
-class species:
+class ebird:
 
     def __getitem__(self, x):
         """
@@ -69,6 +69,17 @@ class species:
                 ))
             )]
         )
+
+    # HACK Ad-hoc function for constants.*_com_names_*
+    #   - TODO Unify api with __getitem__
+    #   - TODO Clean up along with xc.com_names_to_species
+    def com_names_to_species(self, com_names: Iterable[str], check=True) -> Iterable[str]:
+        com_names = set(com_names)
+        res = self.df[['com_name', 'shorthand']][lambda df: df.com_name.isin(com_names)]
+        unmatched = list(set(com_names) - set(res.com_name))
+        if check and unmatched:
+            raise ValueError('Unmatched com_names: %s' % unmatched)
+        return res.shorthand.sort_values().tolist()
 
     @property
     @lru_cache()
@@ -240,6 +251,10 @@ class species:
 
     def _normalize_query(self, query: str) -> str:
         return query.lower().replace("'", '')
+
+
+# Back compat [TODO Remove all old usage of metadata.species]
+species = ebird
 
 
 def sorted_species(species_queries: List[str], **kwargs) -> List[str]:

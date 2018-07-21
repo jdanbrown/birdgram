@@ -115,6 +115,11 @@ def _fit_and_score_cached(*args, **kwargs):
     compute = not (artifacts.get('reuse') and os.path.exists(artifact_model_dir_done))
     if compute:
 
+        # Skip uncached model, if requested
+        if artifacts.get('skip_compute_if_missing'):
+            log.info('%s: skip_compute_if_missing' % log_name)
+            return None
+
         log.info('%s: fit...' % log_name)
         # Mem overhead of proc_stats: ~370b/poll (interval=1s -> ~1.3mb/hr = ~30mb/d)
         with ProcStats(interval=proc_stats_interval) as proc_stats:
@@ -384,6 +389,15 @@ class GridSearchCVCached(GridSearchCV):
                 enumerate(cv.split(X, y, groups)),  # HACK(db): Added enumerate for split_i
             )))
         )
+
+        # HACK(db): Added None filter to out to allow _fit_and_score_cached to return None (for skip_compute_if_missing)
+        #   - Must also recompute n_candidates
+        skip_ix = np.array([x is None for x in out])
+        out = list(np.array(out)[~skip_ix])
+        if not out:
+            raise ValueError('skip_compute_if_missing skipped all models (%s -> %s)' % (n_candidates, len(out)))
+        candidate_params = list(np.array(candidate_params)[~skip_ix])
+        n_candidates = len(candidate_params)
 
         # HACK(db): Added extra_metrics + return_estimator , and refactored `outs` deconstruction to be more modular
         outs = list(zip(*out))

@@ -59,23 +59,58 @@ bin_dir = code_dir / 'bin'
 @click.option('--instance-name-prefix', default='gcloud-run')
 # Machine type
 #   - https://cloud.google.com/compute/pricing
-#   - Pricing
-#                 type  cpu   mem              $/mo            $/d              $/hr
-#         n1-highmem-2    2   13g                                   $[ .12 /  .03]/hr
-#        n1-standard-4    4   15g  $[  97 /  29]/mo  $[  5 /  1]/d  $[ .19 /  .04]/hr
-#         n1-highmem-4    4   26g                                   $[ .24 /  .05]/hr
-#        n1-standard-8    8   30g  $[ 194 /  58]/mo  $[  9 /  2]/d  $[ .38 /  .08]/hr
-#         n1-highmem-8    8   52g                                   $[ .47 /  .10]/hr
-#       n1-standard-16   16   60g  $[ 388 / 116]/mo  $[ 18 /  4]/d  $[ .76 /  .16]/hr
-#        n1-highmem-16   16  104g                                   $[ .95 /  .20]/hr
-#       n1-standard-32   32  120g  $[ 776 / 233]/mo  $[ 36 /  8]/d  $[1.52 /  .32]/hr
-#        n1-highmem-32   32  208g                                   $[1.89 /  .40]/hr
-#       n1-standard-64   64  240g  $[1553 / 467]/mo  $[ 73 / 16]/d  $[3.04 /  .64]/hr
-#        n1-highmem-64   64  416g                                   $[3.79 /  .80]/hr
-#       n1-standard-96   96  360g  $[2330 / 700]/mo  $[109 / 23]/d  $[4.56 /  .96]/hr
-#        n1-highmem-96   96  624g                                   $[5.68 / 1.20]/hr
+#
+#                      type  cpu   mem  $[   dem /  pre ]/mo  $[    dem /  pre  ]/d  $[    dem  /   pre  ]/hr
+#
+#                  f1-micro    1   .6g  $[     4 /    3 ]/mo  $[    .19 /   .10 ]/d  $[   .0076 /  .0035 ]/hr
+#                  g1-small    1  1.7g  $[    13 /    5 ]/mo  $[    .62 /   .17 ]/d  $[   .026  /  .0070 ]/hr
+#
+#              n1-highcpu-2    2    2g  $[    36 /   11 ]/mo  $[   1.7  /   .48 ]/d  $[   .071  /  .015  ]/hr
+#              n1-highcpu-4    4    4g  $[    72 /   22 ]/mo  $[   3.4  /   .72 ]/d  $[   .14   /  .030  ]/hr
+#              n1-highcpu-8    8    7g  $[   145 /   44 ]/mo  $[   6.7  /  1.4  ]/d  $[   .28   /  .060  ]/hr
+#             n1-highcpu-16   16   14g  $[   290 /   88 ]/mo  $[  14    /  2.9  ]/d  $[   .57   /  .12   ]/hr
+#             n1-highcpu-32   32   29g  $[   580 /  175 ]/mo  $[  27    /  5.8  ]/d  $[  1.1    /  .24   ]/hr
+#             n1-highcpu-64   64   58g  $[  1159 /  350 ]/mo  $[  54    / 12    ]/d  $[  2.3    /  .48   ]/hr
+#             n1-highcpu-96   96   86g  $[  1739 /  526 ]/mo  $[  82    / 17    ]/d  $[  3.4    /  .72   ]/hr
+#
+#             n1-standard-2    2    7g  $[    49 /   15 ]/mo  $[   2.4  /   .48 ]/d  $[   .10   /  .020  ]/hr
+#             n1-standard-4    4   15g  $[    97 /   29 ]/mo  $[   4.6  /   .96 ]/d  $[   .19   /  .040  ]/hr
+#             n1-standard-8    8   30g  $[   194 /   58 ]/mo  $[   9.1  /  1.9  ]/d  $[   .38   /  .080  ]/hr
+#            n1-standard-16   16   60g  $[   388 /  116 ]/mo  $[  18    /  3.8  ]/d  $[   .76   /  .16   ]/hr
+#            n1-standard-32   32  120g  $[   776 /  233 ]/mo  $[  36    /  7.7  ]/d  $[  1.5    /  .32   ]/hr
+#            n1-standard-64   64  240g  $[  1553 /  467 ]/mo  $[  73    / 16    ]/d  $[  3.0    /  .64   ]/hr
+#            n1-standard-96   96  360g  $[  2330 /  700 ]/mo  $[ 109    / 23    ]/d  $[  4.6    /  .96   ]/hr
+#
+#              n1-highmem-2    2   13g  $[    61 /   18 ]/mo  $[   2.9  /   .72 ]/d  $[   .12   /  .025  ]/hr
+#              n1-highmem-4    4   26g  $[   121 /   37 ]/mo  $[   5.8  /  1.2  ]/d  $[   .24   /  .050  ]/hr
+#              n1-highmem-8    8   52g  $[   242 /   73 ]/mo  $[  11    /  2.4  ]/d  $[   .47   /  .10   ]/hr
+#             n1-highmem-16   16  104g  $[   484 /  146 ]/mo  $[  23    /  4.8  ]/d  $[   .95   /  .20   ]/hr
+#             n1-highmem-32   32  208g  $[   968 /  292 ]/mo  $[  45    /  9.6  ]/d  $[  1.9    /  .40   ]/hr
+#             n1-highmem-64   64  416g  $[  1936 /  584 ]/mo  $[  91    / 19    ]/d  $[  3.8    /  .80   ]/hr
+#             n1-highmem-96   96  624g  $[  2904 /  876 ]/mo  $[ 136    / 29    ]/d  $[  5.7    / 1.2    ]/hr
+#
+#                     model  gpu   mem  $[   dem /  pre ]/mo  $[    dem /   pre ]/d  $[   dem   /  pre   ]/h
+#
+#  NVIDIA Tesla K80 (GDDR5)    1   12g  $[   230 /   99 ]/mo  $[  11    /   3.2 ]/d  $[   .45   /  .14   ]/h
+#  NVIDIA Tesla K80 (GDDR5)    2   24g  $[   460 /  198 ]/mo  $[  22    /   6.5 ]/d  $[   .90   /  .27   ]/h
+#  NVIDIA Tesla K80 (GDDR5)    4   48g  $[   920 /  396 ]/mo  $[  43    /  13   ]/d  $[  1.8    /  .54   ]/h
+#  NVIDIA Tesla K80 (GDDR5)    8   96g  $[  1840 /  792 ]/mo  $[  86    /  26   ]/d  $[  3.6    / 1.1    ]/h
+#
+#  NVIDIA Tesla P100 (HBM2)    1   16g  $[   746 /  314 ]/mo  $[  35    /  10   ]/d  $[  1.5    /  .43   ]/h
+#  NVIDIA Tesla P100 (HBM2)    2   32g  $[  1492 /  628 ]/mo  $[  70    /  21   ]/d  $[  2.9    /  .86   ]/h
+#  NVIDIA Tesla P100 (HBM2)    4   64g  $[  2984 / 1256 ]/mo  $[ 140    /  41   ]/d  $[  5.8    / 1.7    ]/h
+#
+#  NVIDIA Tesla V100 (HBM2)    1   16g  $[  1267 /  540 ]/mo  $[  60    /  18   ]/d  $[  2.5    /  .74   ]/h
+#  NVIDIA Tesla V100 (HBM2)    2   32g  $[  2534 / 1080 ]/mo  $[ 120    /  36   ]/d  $[  5.0    / 1.5    ]/h
+#  NVIDIA Tesla V100 (HBM2)    4   64g  $[  5068 / 2160 ]/mo  $[ 238    /  71   ]/d  $[  9.9    / 3.0    ]/h
+#  NVIDIA Tesla V100 (HBM2)    8  128g  $[ 10140 / 4320 ]/mo  $[ 476    / 142   ]/d  $[ 20      / 5.9    ]/h
+#
 @click.option('--machine-type', default='n1-standard-4', help='https://cloud.google.com/compute/pricing')
 @click.option('--preemptible/--no-preemptible', default=False)
+# CPU platform
+#   - https://cloud.google.com/compute/docs/instances/specify-min-cpu-platform
+#   - https://cloud.google.com/compute/docs/regions-zones/#available
+@click.option('--min-cpu-platform', default='Intel Skylake')
 # Instance lifetime
 @click.option('--keep', default=None, help='Instance name to create and keep (no delete)')
 @click.option('--reuse', default=None, help='Instance name to reuse (no create, delete, await)')
@@ -210,7 +245,7 @@ bin_dir = code_dir / 'bin'
 def main(
     project, zone,
     instance_name, instance_name_prefix,
-    machine_type, preemptible,
+    machine_type, preemptible, min_cpu_platform,
     keep, reuse, create_instance, delete_instance,
     image_project, image_family, image,
     boot_disk_size, boot_disk_type, disk_name, disk_mode, disk,
@@ -313,6 +348,7 @@ def main(
             zone=zone,
             machine_type=machine_type,
             preemptible=preemptible,
+            min_cpu_platform=min_cpu_platform,
             image_project=image_project,
             image_family=image_family,
             image=image,

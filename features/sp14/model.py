@@ -47,11 +47,12 @@ import numpy as np
 from potoo.numpy import np_sample, np_sample_stratified
 from potoo.util import round_sig
 import sklearn as sk
-import sklearn.ensemble  # For Search.cls (sk.ensemble.RandomForestClassifier)
-import sklearn.multiclass  # For Search.cls (sk.multiclass.OneVsRestClassifier)
-import sklearn.naive_bayes  # For Search.cls (sk.naive_bayes.GaussianNB)
+import sklearn.ensemble
+import sklearn.multiclass
+import sklearn.pipeline
+import sklearn.naive_bayes
 import yaml
-import xgboost as xgb  # For Search.cls
+import xgboost as xgb
 
 from cache import cache
 from constants import data_dir
@@ -111,8 +112,8 @@ class Features(DataclassConfig):
     #   - 100% cache hit:  row-major-synchronous[.61s], row-major-threads[.39s], col-major-defaults[1.2s]
     #   - By default we choose col-major-defaults
     #   - When the user wants to assume near-100% cache hits, they can manually `dask_opts`/`features.patches`
-    @short_circuit(lambda self, recs: recs if 'patches' in recs else None)
-    def transform(self, recs: RecordingDF) -> RecordingDF:
+    @short_circuit(lambda self, recs, **kwargs: recs if 'patches' in recs else None)
+    def transform(self, recs: RecordingDF, drop_spectro=True) -> RecordingDF:
         """Adds .patches (f*p,t)"""
         # Performance (100 peterson recs):
         #   - Row-major: defaults[5.5s], no_dask[5.6s], synchronous[5.8s], threads[6.5s], processes[?]
@@ -128,7 +129,8 @@ class Features(DataclassConfig):
             # Compute col-major instead of row-major, since they each perform best with different schedulers
             .assign(spectro=self.spectro)  # Fastest with 'threads'
             .assign(patches=self.patches)  # Fastest with 'synchronous'
-            .drop(columns=['spectro'])  # Drop to minimize mem usage (the rows are now in cache if anyone wants them)
+            # Drop .spectro by default to minimize mem usage (pass drop_spectro=True, or read the rows from cache)
+            .drop(columns=['spectro'] if drop_spectro else [])
         )
 
     @short_circuit(lambda self, recs: recs.get('patches'))
@@ -160,8 +162,8 @@ class Features(DataclassConfig):
         })
         return patches
 
-    @short_circuit(lambda self, recs: recs.get('spectro'))
-    def spectro(self, recs: RecordingDF) -> Column[Melspectro]:
+    @short_circuit(lambda self, recs, **kwargs: recs.get('spectro'))
+    def spectro(self, recs: RecordingDF, **kwargs) -> Column[Melspectro]:
         """.spectro (f,t) <- .audio (samples,)"""
         log.debug('Features.spectros:in', **{
             'len(recs)': len(recs),
@@ -179,7 +181,12 @@ class Features(DataclassConfig):
         #       3843/3839    0.333    0.000    0.334    0.000 {built-in method numpy.core.multiarray.array}
         #             100    0.285    0.003    3.228    0.032 spectral.py:563(spectrogram)
         #             100    0.284    0.003    0.381    0.004 signaltools.py:2464(detrend)
-        spectros = map_progress(self._spectro, df_rows(recs), use='dask', scheduler='threads')
+        spectros = map_progress(self._spectro, df_rows(recs), **{
+            **dict(
+                use='dask', scheduler='threads',
+            ),
+            **kwargs,
+        })
         log.debug('Features.spectros:out', **{
             '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
         })
@@ -337,8 +344,8 @@ class Projection(DataclassConfig):
             skm.pca.components_ = np.eye(skm.D.shape[0])
         return skm
 
-    @short_circuit(lambda self, recs: recs if 'feat' in recs else None)
-    def transform(self, recs: RecordingDF) -> RecordingDF:
+    @short_circuit(lambda self, recs, **kwargs: recs if 'feat' in recs else None)
+    def transform(self, recs: RecordingDF, **kwargs) -> RecordingDF:
         """Adds .feat (k*a,)"""
         # Performance (300 peterson recs):
         #   - Row-major: no_dask[4.1s], synchronous[4.4s], threads[3.5s], processes[?]
@@ -350,13 +357,16 @@ class Projection(DataclassConfig):
         #             300    0.777    0.003    1.039    0.003 _methods.py:86(_var)
         #             300    0.292    0.001    0.699    0.002 base.py:99(transform)
         #         900/300    0.235    0.000    4.004    0.013 cache.py:99(func_cached)
-        with dask_opts(
-            # FIXME Threading causes hangs during heavy (xc 13k) cache hits, going with processes to work around
-            # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)
-            # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs)
-            # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO I commented this out while debugging learning_curve
-            override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO I uncommented this after encountering hangs again
-        ):
+        with dask_opts(**{
+            **dict(
+                # FIXME Threading causes hangs during heavy (xc 13k) cache hits, going with processes to work around
+                # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)  # Fastest for cache hits, by a lot
+                # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs)
+                # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO Commented while debugging learning_curve
+                override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO Uncommented after encountering hangs again
+            ),
+            **kwargs,
+        }):
             return RecordingDF(recs
                 # Compute row-major with the 'threads' scheduler, since all cols perform best with 'threads'
                 .assign(feat=self.feat)
@@ -634,6 +644,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     def _make_classifier(
         self,
         cls,
+        standardize=None,
         multiclass=None,
         n_features=None,  # For xgb/lgb
         n_classes=None,  # For xgb/lgb
@@ -641,6 +652,8 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     ) -> sk.base.BaseEstimator:
 
         # Expand complex shorthands
+        if cls.startswith('std-'):
+            [standardize, cls] = cls.split('-', 1)
         if cls.startswith('ovr-'):
             [multiclass, cls] = cls.split('-', 1)
 
@@ -652,8 +665,18 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
             multi_class='ovr',  # Default
             n_jobs=-1,  # Use all cores (default: 1)
         )
+        # NOTE logreg_multi is single core (only ovr is multicore)
         logreg_multi = partial(logreg_ovr,
             multi_class='multinomial',
+        )
+        sgdlog = partial(
+            sk.linear_model.SGDClassifier,
+            loss='log',
+            penalty='l2',
+            max_iter=1000,  # Match defaults coming in 0.21
+            tol=1e-3,  # Match defaults coming in 0.21
+            random_state=self.random_state,
+            n_jobs=-1,  # Use all cores (default: 1)
         )
         svm = partial(sk.svm.SVC,
             probability=True,
@@ -681,7 +704,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         # Eval classifier
         classifier = eval(cls)(**kwargs)
 
-        # Add wrappers
+        # Add multiclass wrappers
         if multiclass:
             assert not isinstance(classifier, xgb.XGBClassifier), 'xgb is already structured as OVR internally'
             if 'n_jobs' in classifier.get_params():
@@ -693,6 +716,13 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
                     n_jobs=-1,  # Use all cores (default: 1) [TODO Should this and rf n_jobs both be -1 together?]
                 ),
             }[multiclass]
+
+        # Add preprocessing steps
+        if standardize:
+            # WARNING logreg with std does worse than logreg without std -- which is very counterintuitive
+            #   - See notebooks/20180717_logreg_std_does_worse_(weird...).ipynb
+            #   - TODO Why is this?
+            classifier = sk.pipeline.make_pipeline(sk.preprocessing.StandardScaler(), classifier)
 
         return classifier
 
@@ -769,6 +799,7 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
 
         return species
 
+    # TODO Add args to limit results: top_k, at_least_p
     @requires_cols('feat')
     def species_probs(self, recs: RecordingDF) -> pd.DataFrame:
         """feat (k*a,) -> species (len(y_),)"""

@@ -9,7 +9,7 @@ gs_data_dir='gs://bubo-data/v0/data'
 
 # WARNING Careful with -d (delete) -- it'd be easy to make a typo that wipes out all of our cloud data...
 time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/artifacts/
+time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/cache/joblib/sp14/model/feat/
+# time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/cache/joblib/sp14/model/_feat/  # Slow: >170k small files
 # time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/xc/data/ # WARNING Larger than local disk
 # time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/cache/22050hz-1ch-16bit/xc  # WARNING Larger than local disk
-time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/cache/joblib/sp14/model/feat/
-time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/cache/joblib/sp14/model/_feat/

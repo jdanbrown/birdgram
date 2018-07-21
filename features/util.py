@@ -236,6 +236,11 @@ class box:
         return [box(x) for x in xs]
 
 
+def unbox(x: 'box[X]') -> 'X':
+    """Sometimes more convenient, e.g. map(unbox, xs)"""
+    return x.unbox
+
+
 ## matplotlib
 
 import matplotlib.pyplot as plt
@@ -274,6 +279,7 @@ import sklearn as sk
 import sklearn.ensemble
 import sklearn.linear_model
 import sklearn.multiclass
+import sklearn.pipeline
 
 X = TypeVar('X')
 
@@ -283,6 +289,11 @@ def model_stats(model: Optional[sk.base.BaseEstimator], **kwargs) -> pd.DataFram
     return pd.DataFrame([
         dict(type=f'unknown:{type(model).__name__}'),
     ])
+
+
+@model_stats.register(sk.pipeline.Pipeline)
+def _(pipeline) -> pd.DataFrame:
+    return model_stats(pipeline.steps[-1][-1])
 
 
 @model_stats.register(sk.multiclass.OneVsRestClassifier)
@@ -323,6 +334,14 @@ def _(logreg) -> pd.DataFrame:
 # @model_stats.register(sk.linear_model.LogisticRegressionCV)
 # def _(logreg_cv) -> pd.DataFrame:
 #     pass
+
+
+@model_stats.register(sk.linear_model.SGDClassifier)
+def _(sgd) -> pd.DataFrame:
+    return pd.DataFrame([OrderedDict(
+        type='sgd',
+        n_iter=sgd.n_iter_,
+    )])
 
 
 @model_stats.register(sk.ensemble.forest.BaseForest)
@@ -557,6 +576,7 @@ X = TypeVar('X')
 #   - See details in util.Log
 @dataclass
 class _dask_opts(AttrContext):
+    # FIXME When nested, winner is inner instead of outer, which is surprising
     override_use_dask: bool = None
     override_scheduler: bool = None
 

@@ -42,8 +42,9 @@ class Load(DataclassConfig):
             'cache_audio',
         ]})
 
-    @cache(version=1, key=lambda self, datasets=None, *args, **kwargs: (
+    @cache(version=1, key=lambda self, datasets=None, paths=None, *args, **kwargs: (
         {k: DATASETS[k] for k in (datasets or [])},
+        paths or self.recs_paths(datasets=datasets),
         args,
         kwargs,
     ))

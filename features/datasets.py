@@ -21,6 +21,7 @@ from constants import code_dir, data_dir, mul_species, no_species, unk_species, 
 from datatypes import Recording, RecordingDF
 from log import log
 import metadata
+from metadata import ebird  # For export
 from util import *
 
 DATASETS = {
@@ -152,6 +153,14 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
     )
 
 
+def com_names_to_species(metadata_name: str, com_names: Iterable[str]) -> Iterable[str]:
+    metadata = {
+        'xc': xc,
+        'ebird': ebird,
+    }[metadata_name]
+    return metadata.com_names_to_species(com_names)
+
+
 #
 # xeno-canto (xc)
 #
@@ -275,6 +284,16 @@ class _xc(DataclassUtil):
             if page >= min(rep.numPages, page_limit or np.inf):
                 break
             page += 1
+
+    # HACK Ad-hoc function for constants.*_com_names_*
+    #   - TODO Clean up along with ebird.com_names_to_species
+    def com_names_to_species(self, com_names: Iterable[str], check=True) -> Iterable[str]:
+        com_names = set(com_names)
+        res = self.metadata[['com_name', 'species']][lambda df: df.com_name.isin(com_names)]
+        unmatched = list(set(com_names) - set(res.com_name))
+        if check and unmatched:
+            raise ValueError('Unmatched com_names: %s' % unmatched)
+        return res.species.sort_values().tolist()
 
 
 # Workaround for @singleton (above)
