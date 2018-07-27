@@ -8,6 +8,7 @@ dependencies:
 - pip==9.0.3
 
 # 3rd-party libs
+- feather-format=0.4.0
 - ffmpeg=3.4.1 # For pydub
 - lightgbm=2.1.2
 - matplotlib=2.1.1 # TODO How to install 2.2.x without conflicts?

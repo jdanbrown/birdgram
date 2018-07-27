@@ -585,6 +585,15 @@ class _dask_opts(AttrContext):
 dask_opts = _dask_opts()
 
 
+def dask_progress(**kwargs):
+    """Context manager to show progress bar for dask .compute()"""
+    from dask.diagnostics import ProgressBar
+    return ProgressBar(**{
+        'width': get_cols() - 30,
+        **kwargs,
+    })
+
+
 def _df_apply_progress_dask(
     df: pd.DataFrame,
     f: Callable[['Row'], 'Row'],
@@ -613,12 +622,11 @@ def _map_progress_dask(
         return list(map(f, xs))
     else:
         import dask.bag
-        from dask.diagnostics import ProgressBar
         # HACK dask.bag.from_sequence([pd.Series(...), ...]) barfs -- workaround by boxing it
         # HACK dask.bag.from_sequence([np.array(...), ...]) flattens the arrays -- workaround by boxing it
         # HACK Avoid other cases we haven't tripped over yet by boxing everything unconditionally
         wrap, unwrap = (lambda x: box(x)), (lambda x: x.unbox)
-        with ProgressBar(width=get_cols() - 30):
+        with dask_progress(width=get_cols() - 30):
             if not partition_size and not npartitions:
                 xs = list(xs)
                 (unit_sec, _) = timed(lambda: list(map(f, xs[:1])))
@@ -627,7 +635,7 @@ def _map_progress_dask(
                 .from_sequence(map(wrap, xs), partition_size=partition_size, npartitions=npartitions)
                 .map(unwrap)
                 .map(f)
-                .compute(get=dask_get_for_scheduler_name(scheduler, **(get_kwargs or {})))
+                .compute(get=dask_get_for_scheduler(scheduler, **(get_kwargs or {})))
             )
 
 
@@ -640,7 +648,7 @@ def _npartitions_for_unit_sec(n: int, unit_sec: float, target_sec_per_partition=
 
 
 # Mimic http://dask.pydata.org/en/latest/scheduling.html
-def dask_get_for_scheduler_name(scheduler, **kwargs):
+def dask_get_for_scheduler(scheduler, **kwargs):
     if isinstance(scheduler, str):
         import dask
         import dask.multiprocessing
