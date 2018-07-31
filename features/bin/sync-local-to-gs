@@ -18,6 +18,7 @@ time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/models/
 time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/peterson-field-guide/
 time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/recordings/
 time gsutil -m rsync -r "$@" {"$scratch_dir","$gs_scratch_dir"}/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/ebird/ # TODO
 time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/xc/ids/
 time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/xc/
 # TODO Add more paths to sync

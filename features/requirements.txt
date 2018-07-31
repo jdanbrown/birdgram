@@ -43,9 +43,7 @@ git+https://github.com/has2k1/plotnine.git@db4acba#egg=plotnine
 pp-ez==0.2.0
 pprintpp==0.3.0
 pprofile==1.11.0
-# TODO Switch back to a versioned release after https://github.com/tommikaikkonen/prettyprinter/pull/19
-# - prettyprinter==0.13.2
-git+https://github.com/jdanbrown/prettyprinter.git@patch-1#egg=prettyprinter
+prettyprinter==0.14.0
 pyinstrument==2.0.2
 pytest==3.6.0
 git+https://github.com/scikit-signal/pytftb@ac2b6a2#egg=pytftb
