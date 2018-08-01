@@ -212,6 +212,36 @@ Column = Iterable
 Row = pd.Series
 
 
+def df_inspect(df, *xs: any):
+    for x in xs:
+        if hasattr(x, '__call__'):
+            x = x(df)
+        if isinstance(x, str):
+            # print(x)
+            display({'text/plain': x}, raw=True)  # display() instead of print() to match flush behavior
+        else:
+            if not isinstance(x, tuple):
+                x = (x,)
+            display(*x)  # Less reliable flush, e.g. for single-line strs (which don't make it here), and maybe others...
+            # ipy_print(*x)  # Forces text/plain instead of text/html (e.g. df colors and spacing)
+    return df
+
+
+def df_with_totals(df):
+    return (df
+        .pipe(df_with_totals_col)
+        .pipe(df_with_totals_row)
+    )
+
+
+def df_with_totals_col(df):
+    return df.assign(total=lambda df: df.sum(axis=1))
+
+
+def df_with_totals_row(df):
+    return df.append(df.sum(axis=0).to_frame().T)
+
+
 def df_rows(df) -> Iterator[Row]:
     return (row for i, row in df.iterrows())
 
