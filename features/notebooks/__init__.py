@@ -29,6 +29,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 # import dateparser  # Slow and currently unused
+import geohash
 from IPython.display import display
 from itertools import *
 import lightgbm as lgb
@@ -62,6 +63,7 @@ import xgboost as xgb
 from cache import *
 from constants import *
 from datasets import *
+from ebird_priors import *
 from features import *
 from load import *
 import metadata

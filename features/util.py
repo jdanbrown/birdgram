@@ -36,6 +36,14 @@ from typing import Optional, TypeVar, Union
 X = TypeVar('X')
 
 
+def can_iter(x: any) -> bool:
+    try:
+        iter(x)
+        return True
+    except:
+        return False
+
+
 def none_or(x, f, is_none=lambda x: x is None):
     return x if is_none(x) else f(x)
 
@@ -130,6 +138,14 @@ def enumerate_with_n(xs: Iterable[X]) -> (int, int, Iterator[X]):
     return ((i, n, x) for i, x in enumerate(xs))
 
 
+def assert_(cond, msg=None):
+    """Raise in an expression instead of a statement"""
+    if msg is not None:
+        assert cond, msg
+    else:
+        assert cond
+
+
 ## unix
 
 import os
@@ -193,6 +209,26 @@ class DataclassConfig(DataclassUtil):
             for k, v in self.asdict().items()
             if k not in (self.deps or {})
         }
+
+
+## numpy
+
+import numpy as np
+
+
+def np_vectorize_asscalar(*args, **kwargs):
+    """
+    Like np.vectorize but return scalars instead of 0-dim np arrays
+    - Spec:
+        - np_vectorize_asscalar(f)(x) == np.vectorize(f)(x)[()]
+    - Examples:
+        - np_vectorize_asscalar(f)(3) == f(3)
+        - np_vectorize_asscalar(f)(np.array([3,4])) == np.vectorize(f)(np.array([3,4]))
+    - https://stackoverflow.com/questions/32766210/making-a-vectorized-numpy-function-behave-like-a-ufunc
+    - https://stackoverflow.com/questions/39272465/make-np-vectorize-return-scalar-value-on-scalar-input
+    """
+    f = np.vectorize(*args, **kwargs)
+    return lambda *args, **kwargs: f(*args, **kwargs)[()]
 
 
 ## pandas
@@ -591,13 +627,17 @@ def _map_progress_joblib(
 
 ## dask
 
+from pathlib import Path
 import multiprocessing
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, List, TypeVar, Union
 
 from attrdict import AttrDict
 from dataclasses import dataclass
+import numpy as np
 import pandas as pd
 from potoo.util import AttrContext, get_cols
+
+from log import log
 
 X = TypeVar('X')
 
@@ -678,7 +718,7 @@ def _npartitions_for_unit_sec(n: int, unit_sec: float, target_sec_per_partition=
 
 
 # Mimic http://dask.pydata.org/en/latest/scheduling.html
-def dask_get_for_scheduler(scheduler, **kwargs):
+def dask_get_for_scheduler(scheduler: str, **kwargs):
     if isinstance(scheduler, str):
         import dask
         import dask.multiprocessing
@@ -690,6 +730,115 @@ def dask_get_for_scheduler(scheduler, **kwargs):
     else:
         get = scheduler
     return partial(get, **kwargs)
+
+
+def ddf_divisions_for_dtype(dtype: 'dtype-like', npartitions: int) -> np.ndarray:
+    dtype = np.dtype(dtype)
+    return list(np.linspace(
+        start=np.iinfo(dtype).min,
+        stop=np.iinfo(dtype).max,
+        num=npartitions + 1,
+        endpoint=True,
+        dtype=dtype,
+    ))
+
+
+def ddf_checkpoint(
+    ddf: 'dd.DataFrame',
+    path: str,
+    # TODO Think harder: bad interactions with upstream .compute()'s (e.g. checkpoints without resume, set_index without divisions)
+    #   - Addressing this would require a heavier refactor in the user's pipeline, since they'd have to wrap entire
+    #     prefixes of the pipeline -- and composing these would increase indentation in an awkward way...
+    resume_from_checkpoint=False,
+    # Manually surface common kwargs
+    engine='auto',  # .to_parquet + .read_parquet
+    compression='default',  # .to_parquet
+    get=None,  # .compute
+    # And provide a way to pass arbitrary kwargs we didn't handle above
+    to_parquet=dict(),
+    compute=dict(),
+    read_parquet=dict(),
+) -> 'dd.DataFrame':
+    """
+    Checkpoint a ddf to (parquet) file
+    - Useful to persist the prefix of a computation before a multi-pass operation like .set_index(divisions=None), which
+      needs to force the input ddf once to calculate divisions and then again to do the shuffle
+    """
+    import dask.dataframe as dd
+    if resume_from_checkpoint and dask_parquet_file_exists(path):
+        log.warn(f'Resuming from checkpoint: {path}')
+    else:
+        (ddf
+            .to_parquet(path, compute=False, engine=engine, compression=compression, **to_parquet)
+            .compute(get=get, **compute)
+        )
+    return dd.read_parquet(path, engine=engine, **read_parquet)
+
+
+def dask_parquet_file_exists(url: str) -> bool:
+    """Test if a parquet file exists, allowing any dask-friendly url"""
+    import dask.dataframe as dd
+    try:
+        # This will read the full <url>/_metadata file, which could be big for a parquet file with many parts
+        #   - TODO Get our hands directly on dask's fs module so we can do a more lightweight .exists()
+        #   - But match dask's dd.read_parquet(url) behavior, e.g. treat inputs 'foo.parquet' + 'foo.parquet/_metadata' the same
+        dd.read_parquet(url)
+    except Exception:
+        return False
+    else:
+        return True
+
+
+def dd_read_parquet_sample(
+    path: str,
+    sample: Union[float, List[float]] = None,
+    sample_divisions=None,
+    sample_npartitions=None,
+    sample_repartition_force=False,
+    sample_to_parquet=dict(compression='gzip'),
+    sample_get=None,  # Default: dask_get_for_scheduler('threads')
+    random_state=0,
+    **kwargs,
+) -> 'dd.DataFrame':
+    """
+    dd.read_parquet with sampling, to make it easy to downsample large files for faster dev iteration
+    - Same as dd.read_parquet(path, **kwargs) if sample isn't given
+    """
+    import dask.dataframe as dd
+    if sample:
+        if isinstance(sample, float):
+            sample = [sample]
+        in_path = path_to_sampled_path(path, *sample[:-1])
+        out_path = path_to_sampled_path(path, *sample)
+        if not (Path(out_path) / '_metadata').exists():
+            log.info('Caching sample: %s <- %s' % (out_path, in_path))
+            # Read and sample
+            ddf = (
+                dd.read_parquet(in_path, **kwargs)
+                .sample(frac=sample[-1], replace=False, random_state=random_state)
+            )
+            # Repartition, if requested
+            if sample_divisions or sample_npartitions:
+                ddf = ddf.repartition(
+                    divisions=sample_divisions,
+                    npartitions=sample_npartitions,
+                    force=sample_repartition_force,
+                )
+            # Write cached sample
+            #   - Use 'threads' if repartitioning, else 'processes', to avoid ipc bottlenecks from the shuffle
+            sample_get = sample_get or dask_get_for_scheduler('threads' if sample_npartitions else 'processes')
+            (ddf
+                .to_parquet(out_path, **sample_to_parquet, compute=False)
+                .compute(get=sample_get)
+            )
+        # log.debug('Reading cached sample: %s' % out_path)
+        path = out_path
+    return dd.read_parquet(path, **kwargs)
+
+
+# (Not dask specific)
+def path_to_sampled_path(path: str, *sample: float) -> str:
+    return '-'.join([path, *map(str, sample)])
 
 
 ## sklearn / dask
