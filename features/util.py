@@ -146,6 +146,36 @@ def assert_(cond, msg=None):
         assert cond
 
 
+@contextmanager
+def print_time_delta(print=print):
+    import time
+    start = time.time()
+    try:
+        yield
+    finally:
+        end = time.time()
+        print('time_delta: %.03fs' % (end - start))
+
+
+# Kind of better than %memit...
+@contextmanager
+def print_mem_delta(collect_before=False, collect_after=False, print=print):
+    import gc
+    import psutil
+    proc = psutil.Process(os.getpid())
+    if collect_before:
+        gc.collect()
+    start = proc.memory_full_info()._asdict()
+    try:
+        yield
+    finally:
+        if collect_after:
+            gc.collect()
+        end = proc.memory_full_info()._asdict()
+        diff = {k: '%s B' % (end[k] - start[k]) for k in start.keys()}
+        print('mem_delta: %s' % pformat(diff))
+
+
 ## unix
 
 import os
@@ -348,6 +378,20 @@ import sklearn.multiclass
 import sklearn.pipeline
 
 X = TypeVar('X')
+
+
+class DataclassEstimator(sk.base.BaseEstimator, DataclassConfig):
+    """
+    Manage estimator params as dataclass fields
+    - http://scikit-learn.org/dev/developers/contributing.html#rolling-your-own-estimator
+    """
+
+    def get_params(self, deep=True):
+        return self.config
+
+    def set_params(self, **params):
+        self.__dict__.update(params)
+        return self
 
 
 @singledispatch
