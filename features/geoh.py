@@ -8,7 +8,7 @@ API adapter for python-geohash
 from functools import partial
 from typing import Iterable
 
-from more_itertools import one, unique_everseen
+from more_itertools import first, one, unique_everseen
 import numpy as np
 
 import geohash as _geohash
@@ -19,16 +19,16 @@ from util import generator_to, np_vectorize_asscalar
 #       - e.g. np_vectorize_asscalar(int_decode, otypes=[np.float64, np.float64])
 
 
-@partial(np_vectorize_asscalar, otypes=[str])
+# @partial(np_vectorize_asscalar, otypes=[str])  # TODO Disabled to avoid incidental complexities; restore when we care (rely on tests)
 def str_encode(lat: float, lon: float, precision_bits: int) -> str:
+    """_geohash.encode with precision_bits"""
     return str_at_prec(_geohash.encode(lat, lon, (precision_bits + 4) // 5), precision_bits)
 
 
-def str_decode_origin(x: str) -> (float, float):
-    """Decode (lat, lon) at bottom-left of geohash (independent of precision, since bottom-left is '<x>0...')"""
-    # return _geohash.decode(x)  # Nope: this one returns the center, using an implicit precision=len(s)
-    (lat, lon, _, _) = _geohash._geohash.decode(x)  # Have to reach into the native module to get the bottom-left
-    return (lat, lon)
+# @partial(np_vectorize_asscalar, otypes=[np.uint64])  # TODO Generalize downstream code to not barf on np.uint64 (rely on tests)
+def int_encode(lat: float, lon: float, precision_bits: int) -> int:
+    """_geohash.encode_uint64 with precision_bits"""
+    return int_at_prec(_geohash.encode_uint64(lat, lon), precision_bits)
 
 
 def str_at_prec(x: str, precision_bits: int) -> str:
@@ -51,30 +51,15 @@ _int_to_char = '0123456789bcdefghjkmnpqrstuvwxyz'  # (Copied from error msg give
 _char_to_int = {c: i for i, c in enumerate(_int_to_char)}
 
 
-def str_expand(x: str, precision_bits: int) -> Iterable[str]:
-    return [
-        int_to_str(y, precision_bits)
-        for y in int_expand(str_to_int(x, precision_bits), precision_bits)
-    ]
+def int_at_prec(x: int, precision_bits: int, int_bits: int = 64) -> int:
+    return x >> (int_bits - precision_bits) << (int_bits - precision_bits)
 
 
-def str_neighbors(x: str, precision_bits: int) -> Iterable[str]:
-    """neighbors(x) + [x] = expand(x)"""
-    x = str_at_prec(x, precision_bits)
-    return [y for y in str_expand(x, precision_bits) if y != x]
-
-
-def str_to_int(x: str, precision_bits: int) -> int:
-    return int_encode(*str_decode_origin(x), precision_bits)
-
-
-def int_to_str(x: int, precision_bits: int) -> str:
-    return str_encode(*int_decode_origin(x), precision_bits)
-
-
-# @partial(np_vectorize_asscalar, otypes=[np.uint64])  # TODO Generalize downstream code to not barf on np.uint64 (rely on unit tests)
-def int_encode(lat: float, lon: float, precision_bits: int) -> int:
-    return int_at_prec(_geohash.encode_uint64(lat, lon), precision_bits)
+def str_decode_origin(x: str) -> (float, float):
+    """Decode (lat, lon) at bottom-left of geohash (independent of precision, since bottom-left is '<x>0...')"""
+    # return _geohash.decode(x)  # Nope: this one returns the center, using an implicit precision=len(s)
+    (lat, lon, _, _) = _geohash._geohash.decode(x)  # Have to reach into the native module to get the bottom-left
+    return (lat, lon)
 
 
 def int_decode_origin(x: int) -> (float, float):
@@ -82,12 +67,16 @@ def int_decode_origin(x: int) -> (float, float):
     return _geohash.decode_uint64(x)  # No tricks here, this one returns the bottom-left (like the native module)
 
 
-def int_at_prec(x: int, precision_bits: int, int_bits: int = 64) -> int:
-    return x >> (int_bits - precision_bits) << (int_bits - precision_bits)
+def str_expand(x: str, precision_bits: int) -> Iterable[str]:
+    """_geohash.expand with precision_bits"""
+    return [
+        int_to_str(y, precision_bits)
+        for y in int_expand(str_to_int(x, precision_bits), precision_bits)
+    ]
 
 
 def int_expand(x: int, precision_bits: int) -> Iterable[int]:
-    """Like geohash.expand_uint64, but enumerate all geohashes at precision instead of only returning [lo,hi) ranges"""
+    """Like _geohash.expand_uint64, but enumerate all geohashes at precision instead of only returning [lo,hi) ranges"""
 
     # Special case: there are no 0-bit ints (would return [0] without this case)
     if precision_bits == 0:
@@ -115,7 +104,38 @@ def int_expand(x: int, precision_bits: int) -> Iterable[int]:
         return ret
 
 
+def str_neighbors(x: str, precision_bits: int) -> Iterable[str]:
+    """_geohash.neighbors with precision_bits: neighbors(x) + [x] = expand(x)"""
+    x = str_at_prec(x, precision_bits)
+    return [y for y in str_expand(x, precision_bits) if y != x]
+
+
 def int_neighbors(x: int, precision_bits: int) -> Iterable[int]:
-    """neighbors(x) + [x] = expand(x)"""
+    """_geohash.neighbors for ints: neighbors(x) + [x] = expand(x)"""
     x = int_at_prec(x, precision_bits)
     return [y for y in int_expand(x, precision_bits) if y != x]
+
+
+def str_bbox(x: str, precision_bits: int) -> dict:
+    """_geohash.bbox with precision_bits"""
+    return int_bbox(str_to_int(x, precision_bits), precision_bits)
+
+
+def int_bbox(x: int, precision_bits: int) -> dict:
+    """_geohash.bbox for ints"""
+    (lat_s, lon_w) = int_decode_origin(x)
+    neighbors = [int_decode_origin(y) for y in int_neighbors(x, precision_bits)]
+    lat_n = first([lat_n for lat_n, _ in neighbors if lat_n > lat_s] or [90])
+    lon_e = first([lon_e for _, lon_e in neighbors if lon_e > lon_w] or [180])
+    return dict(
+        s=lat_s, w=lon_w,
+        n=lat_n, e=lon_e,
+    )
+
+
+def str_to_int(x: str, precision_bits: int) -> int:
+    return int_encode(*str_decode_origin(x), precision_bits)
+
+
+def int_to_str(x: int, precision_bits: int) -> str:
+    return str_encode(*int_decode_origin(x), precision_bits)

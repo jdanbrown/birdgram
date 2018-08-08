@@ -3,12 +3,14 @@ from collections import Counter
 from dataclasses import dataclass
 import datetime
 from datetime import date
+from functools import lru_cache
 from typing import Iterable, List, Optional, Set, Tuple, Union
 
 import matplotlib as mpl
 from more_itertools import unique_everseen
 import numpy as np
 import pandas as pd
+import parse
 from potoo.pandas import df_reverse_cat
 from potoo.plot import *
 from potoo.util import tap
@@ -74,77 +76,24 @@ def ebird_week_to_date(week: int, year=2000) -> date:
     return date(year, month=week // 4 + 1, day=week % 4 * 7 + 1)
 
 
-# XXX Defunct
-#
-# def ebird_week_pm(
-#     radius: Union[int, Tuple[int, int]],
-#     weeks: Union[int, Iterable[int]],
-# ) -> Set[int]:
-#     """Given weeks ± week_radius weeks"""
-#     weeks = np.array(list(weeks) if can_iter(weeks) else [weeks])
-#     (radius_l, radius_r) = (-radius, radius) if isinstance(radius, int) else radius
-#     deltas = np.arange(radius_l, radius_r + 1)
-#     return set(ebird_week(
-#         (weeks[:, np.newaxis] + deltas).reshape(-1)
-#     ))
-#
-#
-# def geohash_pm(
-#     radius: int,
-#     geohashes: Union[str, Iterable[str]],
-# ) -> Set[str]:
-#     """Given geohashes + 8 neighbors, repeated radius many times"""
-#     geohashes = {geohashes} if isinstance(geohashes, str) else set(geohashes)
-#     expanded = set()
-#     for _ in range(radius):
-#         for g in geohashes - expanded:
-#             geohashes.update(geoh.str_neighbors(g))  # (.expand(g) = [g] + .neighbors(g))
-#             expanded.add(g)
-#     return geohashes
-
-
 def ebird_species_probs(
-    priors_df: 'pd.DataFrame[week, geohash4, species, n_present, n]',
+    priors_df: 'pd.DataFrame[loc_bin, date_bin, species, n_present, n]',
     groupby: List[str],
     agg: List[str],
     drop=True,
 ) -> 'pd.DataFrame[*groupby, n_present, n, p]':
-    """
-    Aggregate species probs
-    - python-geohash
-        - https://github.com/hkwi/python-geohash/wiki
-        - https://github.com/hkwi/python-geohash/wiki/GeohashReference
-    - How big is a geohash?
-        - https://www.movable-type.co.uk/scripts/geohash.html [sf: (38,-122)]
-        - https://gis.stackexchange.com/questions/115280/what-is-the-precision-of-a-geohash
-    - Misc
-        - https://en.wikipedia.org/wiki/Geohash
-        - https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations-bucket-geohashgrid-aggregation.html
-
-    Geohash dims (height is constant, width varies by lat: max at equator, 0 at poles):
-    -  geohash3:  w×h[≤    97 mi], n[32k]
-    -  geohash32: w×h[≤    48 mi], n[128k]
-    -  geohash34: w×h[≤    24 mi], n[512k]
-    - (geohash4:  w×h[≤ 24×12 mi], n[1m])
-    -  geohash41: w×h[≤    12 mi], n[2m]
-    -  geohash43: w×h[≤     6 mi], n[8m]
-    -  geohash5:  w×h[≤   3.0 mi], n[32m]
-    -  geohash52: w×h[≤   1.5 mi], n[128m]
-    -  geohash54: w×h[≤   .76 mi], n[512m]
-    - (geohash6:  w×h[≤ .8×.4 mi], n[1b])
-    -  geohash61: w×h[≤   .38 mi], n[2b]
-    """
+    """Aggregate species probs"""
     return (priors_df
 
-        # Aggregate n over agg neighborhood (e.g. (week, geohash))
+        # Aggregate n over agg neighborhood (e.g. (loc_bin, date_bin))
         .assign(n=lambda df: df.groupby(agg).n.first().sum())
         .pipe(lambda df: df if not drop else df.drop(columns=agg))
 
-        # Aggregate n_present over agg neighborhood (e.g. (week, geohash))
+        # Aggregate n_present over agg neighborhood (e.g. (loc_bin, date_bin))
         #   - HACK .groupby on species:category produced bogus counts (e.g. TRBL 244 i/o 4); use species:str as a workaround
         .astype({
             **({} if 'species' in agg else {'species': 'str'}),
-            **({} if 'week' in agg else {'week': 'int'}),
+            **({} if 'date_bin' in agg else {'date_bin': 'int'}),
         })
         .pipe(lambda df: (df
             .groupby(observed=True, as_index=False, by=groupby)
@@ -155,7 +104,7 @@ def ebird_species_probs(
         ))
         .astype({
             **({} if 'species' in agg else {'species': metadata.species.df.shorthand.dtype}),
-            **({} if 'week' in agg else {'week': 'int'}),
+            **({} if 'date_bin' in agg else {'date_bin': 'int'}),
         })
 
         # Compute p
@@ -164,6 +113,7 @@ def ebird_species_probs(
     )
 
 
+# TODO How to accommodate ebird_priors.date_bin > 1w?
 def plot_barchart(
     barcharts_df,
     downsample_sp=None,
@@ -219,7 +169,7 @@ def plot_barchart(
         .pipe(df_reverse_cat, 'species', 'longhand', 'com_name')
         .pipe(ggplot)
         + facet_wrap('facet_col', nrow=1, scales='free_y')
-        + aes(x='week', y='longhand', color='factor(w)', fill='factor(w)')
+        + aes(x='date_bin', y='longhand', color='factor(w)', fill='factor(w)')
         + geom_point(aes(size='w'), shape='|', stroke=2)
         + scale_size_radius(
             range=(-1.5, 4),  # Min/max bar height for geom_point(size) (Default: (1, 6))
@@ -265,7 +215,7 @@ class SpeciesCounter(DataclassUtil):
         2    CALT          3  5  0.6
 
     Specific design goal:
-    - Suitable to use as the values of a (large) in-mem dict keyed by (week, geohash), to represent binned ebird
+    - Suitable to use as the values of a (large) in-mem dict keyed by (date_bin, loc_bin), to represent binned ebird
       checklist counts
 
     Takeaways on cpu/mem tradeoffs for SpeciesCounter (based on notebooks/20180802_ebird_counters_comp.ipynb)
@@ -335,7 +285,7 @@ class SpeciesCounter(DataclassUtil):
         )
 
 
-@dataclass
+@dataclass(frozen=True)  # frozen=True so we can hash, for @lru_cache
 class EbirdPriors(DataclassEstimator):
 
     #
@@ -369,13 +319,13 @@ class EbirdPriors(DataclassEstimator):
     # Generate the table comment above (with color!)
     from ebird_priors import *
     from potoo.pandas import df_style_cell
-    g_slice = slice(5, 20)
-    g_binwidths = np.array(list(EbirdPriors._geohash_binwidths.keys()))[g_slice]
-    g_bin_ns = 2 ** np.array(list(EbirdPriors._geohash_binwidths.values()))[g_slice]
-    w_binwidths = ['%sw' % x for x in EbirdPriors._week_binwidths]
-    w_bin_ns = 48 // np.array(EbirdPriors._week_binwidths)
-    (DF(columns=w_binwidths, index=g_binwidths, data=np.vectorize(humanize.naturalsize)(
-        400 * np.array(g_bin_ns)[:, np.newaxis] * np.array(w_bin_ns)
+    loc_bin_slice = slice(5, 20)
+    loc_binwidths = np.array(list(EbirdPriors._loc_binwidths.keys()))[loc_bin_slice]
+    loc_bin_ns = 2 ** np.array(list(EbirdPriors._loc_binwidths.values()))[loc_bin_slice]
+    date_binwidths = [x for x in EbirdPriors._date_binwidths]
+    date_bin_ns = 48 // np.array([EbirdPriors._date_binwidth_parse_weeks(x) for x in EbirdPriors._date_binwidths])
+    (DF(columns=date_binwidths, index=loc_binwidths, data=np.vectorize(humanize.naturalsize)(
+        400 * np.array(loc_bin_ns)[:, np.newaxis] * np.array(date_bin_ns)
     )).T
         .style.applymap(lambda x: df_style_cell(
             (lambda x: x[-1] in ['Bytes', 'kB'],       'color: #1f78b4'),  # dark blue
@@ -391,12 +341,12 @@ class EbirdPriors(DataclassEstimator):
 
     """
 
-    # Geohash bin size, specified by length of each side of the geohash square
+    # Location bin size, specified by length of sides of a geohash square
     #   - We omit rectangular geohashes, e.g. 4+0 which is 24mi W x 12mi H
     #   - Precisions: 3+2 means geohash char precision 3 plus 2 (of 5) more bits (i.e. precision=3+1 minus 5-2 bits)
-    geohash_binwidth: str
-    _geohash_binwidths = {
-        # Human-friendly str id -> num hi bits of uint64 repr to keep
+    loc_binwidth: str
+    _loc_binwidths = {
+        # Human-friendly str id -> num hi bits to keep in a uint64 geohash
         '12407mi':  1,  # n[  2 ], str_precision[0+1]
         '6204mi':   3,  # n[  8 ], str_precision[0+3]
         '3102mi':   5,  # n[ 32 ], str_precision[1+0]
@@ -416,39 +366,56 @@ class EbirdPriors(DataclassEstimator):
         # .4mi is plenty small of a range, and 2b is plenty big to compute, so we'll stop here
     }
 
-    # Week size, specified by num weeks
-    #   - 48 ebird weeks per year (https://help.ebird.org/customer/portal/articles/1010553-understanding-the-ebird-bar-charts)
-    #   - All factors of 48 are allowed
-    #   - week_binwidth=1 means 48 weeks per year, each 1w long
-    #   - week_binwidth=48 means 1 "week" per year, each 48w long
-    week_binwidth: int
-    _week_binwidths = [48, 24, 16, 12, 8, 6, 4, 3, 2, 1]
+    @property
+    def _loc_binwidth_geohash_precision_bits(self) -> int:
+        return self._loc_binwidths[self.loc_binwidth]
 
     @property
-    def geohash_precision_bits(self):
-        return self._geohash_binwidths[self.geohash_binwidth]
+    def _loc_binwidth_miles(self) -> float:
+        return parse.parse('{:f}mi', self.loc_binwidth)[0]
+
+    # Date bin size, specified by num ebird weeks
+    #   - 48 ebird weeks per year (https://help.ebird.org/customer/portal/articles/1010553-understanding-the-ebird-bar-charts)
+    #   - All factors of 48 are allowed
+    #   - date_binwidth='1w' means 48 weeks per year, each 1w long
+    #   - date_binwidth='48w' means 1 "week" per year, each 48w long
+    date_binwidth: str
+    _date_binwidths = ['48w', '24w', '16w', '12w', '8w', '6w', '4w', '3w', '2w', '1w']
+
+    @property
+    @lru_cache()
+    def _date_binwidth_weeks(self) -> int:
+        return self._date_binwidth_parse_weeks(self.date_binwidth)
+
+    @classmethod
+    def _date_binwidth_parse_weeks(cls, date_binwidth) -> int:
+        return parse.parse('{:d}w', date_binwidth)[0]
 
     def __post_init__(self):
         """Validate params"""
-        if self.geohash_binwidth not in self._geohash_binwidths:
-            raise ValueError(f'Invalid geohash_binwidth[{self.geohash_binwidth}], must be one of: {list(self._geohash_binwidths)}')
-        if self.week_binwidth not in self._week_binwidths:
-            raise ValueError(f'Invalid week_binwidth[{self.week_binwidth}], must be one of: {self._week_binwidths}')
+        if self.loc_binwidth not in self._loc_binwidths:
+            raise ValueError(f'Invalid loc_binwidth[{self.loc_binwidth}], must be one of: {list(self._loc_binwidths)}')
+        if self.date_binwidth not in self._date_binwidths:
+            raise ValueError(f'Invalid date_binwidth[{self.date_binwidth}], must be one of: {self._date_binwidths}')
 
     #
-    # fit/predict
+    # Loc/date binning and smoothing
     #
 
-    def _geohash_smooth(self, lat: float, lon: float) -> Iterable['geohash_bin']:
+    # Types
+    LocBin = str  # geohash
+    DateBin = int  # ebird_week
+
+    def _loc_smooth(self, lat: float, lon: float) -> Iterable[LocBin]:
         """
-        "Smooth" a geohash to avoid proximity to boundaries (to decrease variance)
-        - Maps the geohash to the 4 contiguous bins that best enclose it (i.e. with most balanced margins)
+        "Smooth" a location into loc bins to avoid proximity to bin boundaries (to decrease variance)
+        - Maps the loc to the 4 contiguous loc bins that best enclose it (i.e. with most balanced margins)
         """
 
         # Find neighborhood (≤9 bins) at next level of precision (p+2)
-        p = self.geohash_precision_bits
+        p = self._loc_binwidth_geohash_precision_bits
         finer_p = p + 2  # p+2 because p+1 isn't square (because bits represent alternating lon/lat/lon/lat/...)
-        finer_bin = self._geohash_bin(lat, lon, finer_p)
+        finer_bin = self._loc_bin(lat, lon, finer_p)
         finer_bins = geoh.str_expand(finer_bin, finer_p)
         assert len(finer_bins) <= 9
 
@@ -457,54 +424,63 @@ class EbirdPriors(DataclassEstimator):
         assert len(bins) <= 4
         return bins
 
-    def _geohash_bin(self, lat: float, lon: float, precision_bits: int = None) -> 'geohash_bin':
+    def _loc_bin(self, lat: float, lon: float, precision_bits: int = None) -> LocBin:
         if precision_bits is None:
-            precision_bits = self.geohash_precision_bits
+            precision_bits = self._loc_binwidth_geohash_precision_bits
         return geoh.str_encode(lat, lon, precision_bits)
 
-    def _week_smooth(self, date: date) -> Iterable['week_bin']:
+    def _date_smooth(self, date: date) -> Iterable[DateBin]:
         """
-        "Smooth" a date into week bins to avoid proximity to boundaries (to decrease variance)
-        - Maps the date to the 2 contiguous week bins that best enclose it (i.e. with most balanced margins)
+        "Smooth" a date into date bins to avoid proximity to bin boundaries (to decrease variance)
+        - Maps the date to the 2 contiguous date bins that best enclose it (i.e. with most balanced margins)
         """
 
         assert isinstance(date, datetime.date)
         week = ebird_week(date)
-        week_bin = self._week_bin(date)
+        date_bin = self._date_bin(date)
 
-        # Boundary condition: if week_binwidth=1 (smallest), measure day within week, else week within week_bin
-        if self.week_binwidth == 1:
+        # Boundary condition: if date_binwidth='1w' (smallest), measure day within week, else week within date_bin
+        if self._date_binwidth_weeks == 1:
             closer_to_prev_bin = np.clip(date.day - 1, 0, 27) / 7 % 1. < .5
         else:
-            closer_to_prev_bin = week / self.week_binwidth % 1. < .5
+            closer_to_prev_bin = week / self._date_binwidth_weeks % 1. < .5
 
         bins = sorted({
-            week_bin,
-            ebird_week(week_bin + (-1 if closer_to_prev_bin else 1) * self.week_binwidth),
+            date_bin,
+            ebird_week(date_bin + (-1 if closer_to_prev_bin else 1) * self._date_binwidth_weeks),
         })
-        assert len(bins) == (2 if self.week_binwidth != 48 else 1)
+        assert len(bins) == (2 if self.date_binwidth != '48w' else 1)
         return bins
 
-    def _week_bin(self, date: date) -> 'week_bin':
-        assert isinstance(date, datetime.date)
-        week = ebird_week(date)
-        assert 48 // self.week_binwidth * self.week_binwidth == 48, f'week_binwidth[{self.week_binwidth}] must be factor of 48'
-        return week // self.week_binwidth * self.week_binwidth
+    def _date_bin(self, date: date) -> DateBin:
+        assert hasattr(date, 'day'), f'Expected date, got {type(date)}: {date}'
+        assert 48 // self._date_binwidth_weeks * self._date_binwidth_weeks == 48, \
+            f'date_binwidth[{self.date_binwidth}] must be factor of 48w'
+        return ebird_week(date) // self._date_binwidth_weeks * self._date_binwidth_weeks
+
+    #
+    # fit/predict
+    #
 
     # TODO Crib from notebook (the big, heavy ebird_priors pipeline)
     #   - Need to choose what stage of input to take (definitely after all the shell junk -- leave that in the notebook for now)
-    def fit(self, X, y) -> 'self':
-        pass
+    def fit_df(self, x: ...) -> 'self':
+        ...
+
+    # XXX Nope, pipeline from raw-ish data
+    # def fit_df(self, species_probs: pd.DataFrame) -> 'self':
+    #     self._species_probs = species_probs
 
     # TODO Crib from notebook (ebird_priors lookup -> SpeciesCounter.sum)
-    def species_probs(self, lat: float, lon: float, date: date):
-        geohash = self._geohash_encode(lat, lon)
-        geohashes = self._geohash_smooth(geohash)
-        week = ebird_week(date)
-        weeks = self._week_smooth(week)
-        # ...
-        pass
+    def predict_proba_one_df(self, lat: float, lon: float, date: date) -> pd.DataFrame:
+        loc_bins = self._loc_smooth(lat, lon)
+        date_bins = self._date_smooth(date)
+        ...
 
-    # TODO Batch version of species_probs
+    # TODO sk api
+    def fit(self, X, y):
+        ...
+
+    # TODO sk api + batch prediction
     def predict_proba(self, X):
-        pass
+        ...

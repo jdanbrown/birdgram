@@ -5,10 +5,12 @@ API adapter for python-geohash
 - Interactive map: https://www.movable-type.co.uk/scripts/geohash.html
 """
 
+from functools import partial
 import numpy as np
 import pytest
 
 from more_itertools import sliced
+import toolz
 
 import geoh
 
@@ -18,7 +20,10 @@ def approx_f(x, digits=6):
 
 
 def approx_fs(xs, digits=6):
-    return tuple(approx_f(x, digits=digits) for x in xs)
+    if isinstance(xs, dict):
+        return toolz.valmap(partial(approx_f, digits=digits), xs)
+    else:
+        return type(xs)(map(partial(approx_f, digits=digits), xs))
 
 
 def int_to_bin_str(x, bits=64, **kwargs):
@@ -414,4 +419,89 @@ def test_int_expand_and_neighbors():
     assert out == [
         (i, bits, B(geoh.int_at_prec(unB(i), bits), bits), sorted(B(j, bits) for j in geoh.int_neighbors(unB(i), bits)))
         for i, bits, i_at_prec, neighbors in out
+    ]
+
+
+def test_bbox():
+    out = [
+        # Interactive map: http://geohash.gofreerange.com/
+        (37.9, -122)
+    ]
+
+
+def test_bbox():
+    out = [
+        # Interactive map: http://geohash.gofreerange.com/
+
+        # Mt. Diablo
+        (32, '9q9pxg0', '01001 10110 01001 10101 11101 01111 00', dict(s= 37.90, w=-122.00, n= 37.90, e=-122.00)),
+        (31, '9q9pxg0', '01001 10110 01001 10101 11101 01111 0',  dict(s= 37.90, w=-122.00, n= 37.90, e=-122.00)),
+        (30, '9q9pxg',  '01001 10110 01001 10101 11101 01111',    dict(s= 37.90, w=-122.00, n= 37.90, e=-121.99)),
+        (29, '9q9pxf',  '01001 10110 01001 10101 11101 0111',     dict(s= 37.89, w=-122.00, n= 37.90, e=-121.99)),
+        (28, '9q9pxd',  '01001 10110 01001 10101 11101 011',      dict(s= 37.89, w=-122.01, n= 37.90, e=-121.99)),
+        (27, '9q9px8',  '01001 10110 01001 10101 11101 01',       dict(s= 37.88, w=-122.01, n= 37.90, e=-121.99)),
+        (26, '9q9px0',  '01001 10110 01001 10101 11101 0',        dict(s= 37.88, w=-122.04, n= 37.90, e=-121.99)),
+        (25, '9q9px',   '01001 10110 01001 10101 11101',          dict(s= 37.88, w=-122.04, n= 37.92, e=-121.99)),
+        (24, '9q9pw',   '01001 10110 01001 10101 1110',           dict(s= 37.88, w=-122.08, n= 37.92, e=-121.99)),
+        (23, '9q9pw',   '01001 10110 01001 10101 111',            dict(s= 37.88, w=-122.08, n= 37.97, e=-121.99)),
+        (22, '9q9ps',   '01001 10110 01001 10101 11',             dict(s= 37.88, w=-122.17, n= 37.97, e=-121.99)),
+        (21, '9q9ph',   '01001 10110 01001 10101 1',              dict(s= 37.79, w=-122.17, n= 37.97, e=-121.99)),
+        (20, '9q9p',    '01001 10110 01001 10101',                dict(s= 37.79, w=-122.34, n= 37.97, e=-121.99)),
+        (19, '9q9n',    '01001 10110 01001 1010',                 dict(s= 37.62, w=-122.34, n= 37.97, e=-121.99)),
+        (18, '9q9n',    '01001 10110 01001 101',                  dict(s= 37.62, w=-122.34, n= 37.97, e=-121.64)),
+        (17, '9q9h',    '01001 10110 01001 10',                   dict(s= 37.27, w=-122.34, n= 37.97, e=-121.64)),
+        (16, '9q9h',    '01001 10110 01001 1',                    dict(s= 37.27, w=-122.34, n= 37.97, e=-120.94)),
+        (15, '9q9',     '01001 10110 01001',                      dict(s= 36.56, w=-122.34, n= 37.97, e=-120.94)),
+        (14, '9q8',     '01001 10110 0100',                       dict(s= 36.56, w=-123.75, n= 37.97, e=-120.94)),
+        (13, '9q8',     '01001 10110 010',                        dict(s= 36.56, w=-123.75, n= 39.38, e=-120.94)),
+        (12, '9q8',     '01001 10110 01',                         dict(s= 36.56, w=-123.75, n= 39.38, e=-118.12)),
+        (11, '9q0',     '01001 10110 0',                          dict(s= 33.75, w=-123.75, n= 39.38, e=-118.12)),
+        (10, '9q',      '01001 10110',                            dict(s= 33.75, w=-123.75, n= 39.38, e=-112.50)),
+        (9,  '9q',      '01001 1011',                             dict(s= 33.75, w=-123.75, n= 45.00, e=-112.50)),
+        (8,  '9n',      '01001 101',                              dict(s= 33.75, w=-135.00, n= 45.00, e=-112.50)),
+        (7,  '9h',      '01001 10',                               dict(s= 22.50, w=-135.00, n= 45.00, e=-112.50)),
+        (6,  '9h',      '01001 1',                                dict(s= 22.50, w=-135.00, n= 45.00, e= -90.00)),
+        (5,  '9',       '01001',                                  dict(s=  0.00, w=-135.00, n= 45.00, e= -90.00)),
+        (4,  '8',       '0100',                                   dict(s=  0.00, w=-180.00, n= 45.00, e= -90.00)),
+        (3,  '8',       '010',                                    dict(s=  0.00, w=-180.00, n= 90.00, e= -90.00)),
+        (2,  '8',       '01',                                     dict(s=  0.00, w=-180.00, n= 90.00, e=   0.00)),
+        (1,  '0',       '0',                                      dict(s=-90.00, w=-180.00, n= 90.00, e=   0.00)),
+
+        # Map halves (big)
+        (1,  '0',       '0',                                      dict(s=-90.00, w=-180.00, n= 90.00, e=   0.00)),
+        (1,  'h',       '1',                                      dict(s=-90.00, w=   0.00, n= 90.00, e= 180.00)),
+
+        # Map quarters (big)
+        (2,  '0',       '00',                                     dict(s=-90.00, w=-180.00, n=  0.00, e=   0.00)),
+        (2,  '8',       '01',                                     dict(s=  0.00, w=-180.00, n= 90.00, e=   0.00)),
+        (2,  'h',       '10',                                     dict(s=-90.00, w=   0.00, n=  0.00, e= 180.00)),
+        (2,  's',       '11',                                     dict(s=  0.00, w=   0.00, n= 90.00, e= 180.00)),
+
+        # Map corners (tiny)
+        (60, '00'*6,    ('00000 00000 '*6).rstrip(),              dict(s=-90.00, w=-180.00, n=-90.00, e=-180.00)),
+        (60, 'bp'*6,    ('01010 10101 '*6).rstrip(),              dict(s= 90.00, w=-180.00, n= 90.00, e=-180.00)),
+        (60, 'pb'*6,    ('10101 01010 '*6).rstrip(),              dict(s=-90.00, w= 180.00, n=-90.00, e= 180.00)),
+        (60, 'zz'*6,    ('11111 11111 '*6).rstrip(),              dict(s= 90.00, w= 180.00, n= 90.00, e= 180.00)),
+
+    ]
+    # Validate str == int
+    assert out == [
+        (bits, geoh.int_to_str(unB(i), bits), B(geoh.str_to_int(s, bits), bits), bbox)
+        for bits, s, i, bbox in out
+    ]
+    # Check str_bbox
+    assert [
+        (bits, s, i, approx_fs(digits=2, xs=bbox))
+        for bits, s, i, bbox in out
+    ] == [
+        (bits, s, i, approx_fs(digits=2, xs=geoh.str_bbox(s, bits)))
+        for bits, s, i, bbox in out
+    ]
+    # Check int_bbox (via str_to_int)
+    assert [
+        (bits, s, i, approx_fs(digits=2, xs=bbox))
+        for bits, s, i, bbox in out
+    ] == [
+        (bits, s, i, approx_fs(digits=2, xs=geoh.int_bbox(unB(i), bits)))
+        for bits, s, i, bbox in out
     ]

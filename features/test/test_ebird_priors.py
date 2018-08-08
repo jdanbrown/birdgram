@@ -65,11 +65,11 @@ def test_ebird_week_to_date():
         assert ebird_week(ebird_week_to_date(week)) == week
 
 
-def test_week_smooth():
+def test_date_smooth():
 
-    ebird_priors = partial(EbirdPriors, geohash_binwidth='12mi')  # Dummy param
+    ebird_priors = partial(EbirdPriors, loc_binwidth='12mi')  # Dummy param
 
-    ep = ebird_priors(week_binwidth=1)
+    ep = ebird_priors(date_binwidth='1w')
     out = [
         (42, 42, [41, 42]),
         (43, 43, [42, 43]),
@@ -77,7 +77,7 @@ def test_week_smooth():
         (45, 45, [44, 45]),
         (46, 46, [45, 46]),
         (47, 47, [46, 47]),
-        ( 0,  0, [ 0, 47]),  # week_smooth: Changes every 1 week
+        ( 0,  0, [ 0, 47]),  # date_smooth: Changes every 1 week
         ( 1,  1, [ 0,  1]),
         ( 2,  2, [ 1,  2]),
         ( 3,  3, [ 2,  3]),
@@ -85,11 +85,11 @@ def test_week_smooth():
         ( 5,  5, [ 4,  5]),
     ]
     assert out == [
-        (week, ep._week_bin(ebird_week_to_date(week)), ep._week_smooth(ebird_week_to_date(week)))
-        for week, week_bin, week_smooth in out
+        (week, ep._date_bin(ebird_week_to_date(week)), ep._date_smooth(ebird_week_to_date(week)))
+        for week, date_bin, date_smooth in out
     ]
 
-    ep = ebird_priors(week_binwidth=2)
+    ep = ebird_priors(date_binwidth='2w')
     out = [
         (42, 42, [40, 42]),
         (43, 42, [42, 44]),
@@ -98,18 +98,18 @@ def test_week_smooth():
         (46, 46, [44, 46]),
         (47, 46, [ 0, 46]),
         ( 0,  0, [ 0, 46]),
-        ( 1,  0, [ 0,  2]),  # week_smooth: Changes every 2 weeks at bin midpoints
+        ( 1,  0, [ 0,  2]),  # date_smooth: Changes every 2 weeks at bin midpoints
         ( 2,  2, [ 0,  2]),
         ( 3,  2, [ 2,  4]),
         ( 4,  4, [ 2,  4]),
         ( 5,  4, [ 4,  6]),
     ]
     assert out == [
-        (week, ep._week_bin(ebird_week_to_date(week)), ep._week_smooth(ebird_week_to_date(week)))
-        for week, week_bin, week_smooth in out
+        (week, ep._date_bin(ebird_week_to_date(week)), ep._date_smooth(ebird_week_to_date(week)))
+        for week, date_bin, date_smooth in out
     ]
 
-    ep = ebird_priors(week_binwidth=3)
+    ep = ebird_priors(date_binwidth='3w')
     out = [
         (42, 42, [39, 42]),
         (43, 42, [39, 42]),
@@ -119,17 +119,17 @@ def test_week_smooth():
         (47, 45, [ 0, 45]),
         ( 0,  0, [ 0, 45]),
         ( 1,  0, [ 0, 45]),
-        ( 2,  0, [ 0,  3]),  # week_smooth: Changes every 3 weeks at bin midpoints
+        ( 2,  0, [ 0,  3]),  # date_smooth: Changes every 3 weeks at bin midpoints
         ( 3,  3, [ 0,  3]),
         ( 4,  3, [ 0,  3]),
         ( 5,  3, [ 3,  6]),
     ]
     assert out == [
-        (week, ep._week_bin(ebird_week_to_date(week)), ep._week_smooth(ebird_week_to_date(week)))
-        for week, week_bin, week_smooth in out
+        (week, ep._date_bin(ebird_week_to_date(week)), ep._date_smooth(ebird_week_to_date(week)))
+        for week, date_bin, date_smooth in out
     ]
 
-    ep = ebird_priors(week_binwidth=4)
+    ep = ebird_priors(date_binwidth='4w')
     out = [
         (42, 40, [40, 44]),
         (43, 40, [40, 44]),
@@ -139,17 +139,17 @@ def test_week_smooth():
         (47, 44, [ 0, 44]),
         ( 0,  0, [ 0, 44]),
         ( 1,  0, [ 0, 44]),
-        ( 2,  0, [ 0,  4]),  # week_smooth: Changes every 4 weeks at bin midpoints
+        ( 2,  0, [ 0,  4]),  # date_smooth: Changes every 4 weeks at bin midpoints
         ( 3,  0, [ 0,  4]),
         ( 4,  4, [ 0,  4]),
         ( 5,  4, [ 0,  4]),
     ]
     assert out == [
-        (week, ep._week_bin(ebird_week_to_date(week)), ep._week_smooth(ebird_week_to_date(week)))
-        for week, week_bin, week_smooth in out
+        (week, ep._date_bin(ebird_week_to_date(week)), ep._date_smooth(ebird_week_to_date(week)))
+        for week, date_bin, date_smooth in out
     ]
 
-    ep = ebird_priors(week_binwidth=6)
+    ep = ebird_priors(date_binwidth='6w')
     out = [
         (42, 42, [36, 42]),
         (43, 42, [36, 42]),
@@ -160,18 +160,18 @@ def test_week_smooth():
         ( 0,  0, [ 0, 42]),
         ( 1,  0, [ 0, 42]),
         ( 2,  0, [ 0, 42]),
-        ( 3,  0, [ 0, 6]),  # week_smooth: Changes every 6 weeks at bin midpoints
+        ( 3,  0, [ 0, 6]),  # date_smooth: Changes every 6 weeks at bin midpoints
         ( 4,  0, [ 0, 6]),
         ( 5,  0, [ 0, 6]),
     ]
     assert out == [
-        (week, ep._week_bin(ebird_week_to_date(week)), ep._week_smooth(ebird_week_to_date(week)))
-        for week, week_bin, week_smooth in out
+        (week, ep._date_bin(ebird_week_to_date(week)), ep._date_smooth(ebird_week_to_date(week)))
+        for week, date_bin, date_smooth in out
     ]
 
-    ep = ebird_priors(week_binwidth=12)
+    ep = ebird_priors(date_binwidth='12w')
     out = [
-        (42, 36, [ 0, 36]),  # week_smooth: Changes every 12 weeks at bin midpoints
+        (42, 36, [ 0, 36]),  # date_smooth: Changes every 12 weeks at bin midpoints
         (43, 36, [ 0, 36]),
         (44, 36, [ 0, 36]),
         (45, 36, [ 0, 36]),
@@ -185,13 +185,13 @@ def test_week_smooth():
         ( 5,  0, [ 0, 36]),
     ]
     assert out == [
-        (week, ep._week_bin(ebird_week_to_date(week)), ep._week_smooth(ebird_week_to_date(week)))
-        for week, week_bin, week_smooth in out
+        (week, ep._date_bin(ebird_week_to_date(week)), ep._date_smooth(ebird_week_to_date(week)))
+        for week, date_bin, date_smooth in out
     ]
 
-    ep = ebird_priors(week_binwidth=24)
+    ep = ebird_priors(date_binwidth='24w')
     out = [
-        (42, 24, [ 0, 24]),  # week_smooth: Changes every 24 weeks at bin midpoints -> all smooths are [0, 24]
+        (42, 24, [ 0, 24]),  # date_smooth: Changes every 24 weeks at bin midpoints -> all smooths are [0, 24]
         (43, 24, [ 0, 24]),
         (44, 24, [ 0, 24]),
         (45, 24, [ 0, 24]),
@@ -205,13 +205,13 @@ def test_week_smooth():
         ( 5,  0, [ 0, 24]),
     ]
     assert out == [
-        (week, ep._week_bin(ebird_week_to_date(week)), ep._week_smooth(ebird_week_to_date(week)))
-        for week, week_bin, week_smooth in out
+        (week, ep._date_bin(ebird_week_to_date(week)), ep._date_smooth(ebird_week_to_date(week)))
+        for week, date_bin, date_smooth in out
     ]
 
-    ep = ebird_priors(week_binwidth=48)
+    ep = ebird_priors(date_binwidth='48w')
     out = [
-        (42,  0, [0]),  # week_smooth: Changes every 48 weeks at bin midpoints -> all smooths are [0]
+        (42,  0, [0]),  # date_smooth: Changes every 48 weeks at bin midpoints -> all smooths are [0]
         (43,  0, [0]),
         (44,  0, [0]),
         (45,  0, [0]),
@@ -225,53 +225,53 @@ def test_week_smooth():
         ( 5,  0, [0]),
     ]
     assert out == [
-        (week, ep._week_bin(ebird_week_to_date(week)), ep._week_smooth(ebird_week_to_date(week)))
-        for week, week_bin, week_smooth in out
+        (week, ep._date_bin(ebird_week_to_date(week)), ep._date_smooth(ebird_week_to_date(week)))
+        for week, date_bin, date_smooth in out
     ]
 
-    # Property: all week smoothings should be exactly 2 week bins, except for binwidth=48 which only has 1 bin
+    # Property: all date smoothings should be exactly 2 date bins, except for binwidth=48 which only has 1 bin
     out = [
-        (week_binwidth, week, 2 if week_binwidth != 48 else 1)
-        for week_binwidth in EbirdPriors._week_binwidths
+        (date_binwidth, week, 2 if date_binwidth != '48w' else 1)
+        for date_binwidth in EbirdPriors._date_binwidths
         for week in range(0, 48)
     ]
     assert out == [
-        (week_binwidth, week, len(ebird_priors(week_binwidth=week_binwidth)._week_smooth(ebird_week_to_date(week))))
-        for week_binwidth, week, len_bins in out
+        (date_binwidth, week, len(ebird_priors(date_binwidth=date_binwidth)._date_smooth(ebird_week_to_date(week))))
+        for date_binwidth, week, len_bins in out
     ]
 
 
-def test_geohash_bin():
+def test_loc_bin():
 
-    ebird_priors = partial(EbirdPriors, week_binwidth=1)  # Dummy param
+    ebird_priors = partial(EbirdPriors, date_binwidth='1w')  # Dummy param
     (lat, lon) = (37.9, -122)  # Mt. Diablo
 
     # Interactive map: http://geohash.gofreerange.com/
-    assert ebird_priors(geohash_binwidth='12407mi')._geohash_bin(lat, lon) == '0'
-    assert ebird_priors(geohash_binwidth= '6204mi')._geohash_bin(lat, lon) == '8'
-    assert ebird_priors(geohash_binwidth= '3102mi')._geohash_bin(lat, lon) == '9'
-    assert ebird_priors(geohash_binwidth= '1551mi')._geohash_bin(lat, lon) == '9h'
-    assert ebird_priors(geohash_binwidth=  '775mi')._geohash_bin(lat, lon) == '9q'
-    assert ebird_priors(geohash_binwidth=  '388mi')._geohash_bin(lat, lon) == '9q0'
-    assert ebird_priors(geohash_binwidth=  '194mi')._geohash_bin(lat, lon) == '9q8'
-    assert ebird_priors(geohash_binwidth=   '97mi')._geohash_bin(lat, lon) == '9q9'
-    assert ebird_priors(geohash_binwidth=   '48mi')._geohash_bin(lat, lon) == '9q9h'
-    assert ebird_priors(geohash_binwidth=   '24mi')._geohash_bin(lat, lon) == '9q9n'
-    assert ebird_priors(geohash_binwidth=   '12mi')._geohash_bin(lat, lon) == '9q9ph'
-    assert ebird_priors(geohash_binwidth=    '6mi')._geohash_bin(lat, lon) == '9q9pw'
-    assert ebird_priors(geohash_binwidth=    '3mi')._geohash_bin(lat, lon) == '9q9px'
-    assert ebird_priors(geohash_binwidth=  '1.5mi')._geohash_bin(lat, lon) == '9q9px8'
-    assert ebird_priors(geohash_binwidth=   '.8mi')._geohash_bin(lat, lon) == '9q9pxf'
-    assert ebird_priors(geohash_binwidth=   '.4mi')._geohash_bin(lat, lon) == '9q9pxg0'
+    assert ebird_priors(loc_binwidth='12407mi')._loc_bin(lat, lon) == '0'
+    assert ebird_priors(loc_binwidth= '6204mi')._loc_bin(lat, lon) == '8'
+    assert ebird_priors(loc_binwidth= '3102mi')._loc_bin(lat, lon) == '9'
+    assert ebird_priors(loc_binwidth= '1551mi')._loc_bin(lat, lon) == '9h'
+    assert ebird_priors(loc_binwidth=  '775mi')._loc_bin(lat, lon) == '9q'
+    assert ebird_priors(loc_binwidth=  '388mi')._loc_bin(lat, lon) == '9q0'
+    assert ebird_priors(loc_binwidth=  '194mi')._loc_bin(lat, lon) == '9q8'
+    assert ebird_priors(loc_binwidth=   '97mi')._loc_bin(lat, lon) == '9q9'
+    assert ebird_priors(loc_binwidth=   '48mi')._loc_bin(lat, lon) == '9q9h'
+    assert ebird_priors(loc_binwidth=   '24mi')._loc_bin(lat, lon) == '9q9n'
+    assert ebird_priors(loc_binwidth=   '12mi')._loc_bin(lat, lon) == '9q9ph'
+    assert ebird_priors(loc_binwidth=    '6mi')._loc_bin(lat, lon) == '9q9pw'
+    assert ebird_priors(loc_binwidth=    '3mi')._loc_bin(lat, lon) == '9q9px'
+    assert ebird_priors(loc_binwidth=  '1.5mi')._loc_bin(lat, lon) == '9q9px8'
+    assert ebird_priors(loc_binwidth=   '.8mi')._loc_bin(lat, lon) == '9q9pxf'
+    assert ebird_priors(loc_binwidth=   '.4mi')._loc_bin(lat, lon) == '9q9pxg0'
 
 
-def test_geohash_smooth():
+def test_loc_smooth():
 
-    ebird_priors = partial(EbirdPriors, week_binwidth=1)
+    ebird_priors = partial(EbirdPriors, date_binwidth='1w')
 
     # Interactive map: http://geohash.gofreerange.com/
     (lat, lon) = (37.9, -122)  # Mt. Diablo
-    assert ebird_priors(geohash_binwidth='.4mi')._geohash_bin(lat, lon) == '9q9pxg0'
+    assert ebird_priors(loc_binwidth='.4mi')._loc_bin(lat, lon) == '9q9pxg0'
     out = [
         ('12407mi', ['0',       'h']),                              #  1 bit
         ( '6204mi', ['0',       '4',       '8',       'd']),        #  3 bit
@@ -290,18 +290,18 @@ def test_geohash_smooth():
         (   '.8mi', ['9q9pxd',  '9q9pxf',  '9q9pxs',  '9q9pxu']),   # 29 bit
         (   '.4mi', ['9q9pxf0', '9q9pxfh', '9q9pxg0', '9q9pxgh']),  # 31 bit
     ]
-    # Check out == _geohash_smooth
+    # Check out == _loc_smooth
     assert out == [
-        (binwidth, ebird_priors(geohash_binwidth=binwidth)._geohash_smooth(lat, lon))
+        (binwidth, ebird_priors(loc_binwidth=binwidth)._loc_smooth(lat, lon))
         for binwidth, bins in out
     ]
     # Check bin == str_at_prec(bin) for each bin
     assert [
         (binwidth, bits, bins)
         for binwidth, bins in out
-        for bits in [ebird_priors(geohash_binwidth=binwidth).geohash_precision_bits]
+        for bits in [ebird_priors(loc_binwidth=binwidth)._loc_binwidth_geohash_precision_bits]
     ] == [
         (binwidth, bits, [geoh.str_at_prec(bin, bits) for bin in bins])
         for binwidth, bins in out
-        for bits in [ebird_priors(geohash_binwidth=binwidth).geohash_precision_bits]
+        for bits in [ebird_priors(loc_binwidth=binwidth)._loc_binwidth_geohash_precision_bits]
     ]
