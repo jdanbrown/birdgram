@@ -10,6 +10,7 @@ gs_data_dir='gs://bubo-data/v0/data'
 gs_scratch_dir="$gs_data_dir/_scratch"
 
 # WARNING Careful with -d (delete) -- it'd be easy to make a typo that wipes out all of our cloud data...
+time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/artifacts/ebird-priors/
 time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/metadata/
 time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/models/
 # time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/22050hz-1ch-16bit/xc

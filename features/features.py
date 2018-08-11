@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import contextlib
 import copy
 from functools import lru_cache
 import logging
@@ -8,11 +9,14 @@ from typing import Any, NewType, Optional, Tuple, Union
 
 import audiosegment
 import dataclasses
+from dataclasses import dataclass
 from functools import partial
 import librosa
 import matplotlib as mpl
 import numpy as np
 import pandas as pd
+import potoo.plot
+from potoo.plot import show_img
 import pydub
 import scipy
 from typing import List
@@ -95,6 +99,7 @@ class HasPlotAudioTF:
     def _plot_audio_tf(
         self,
         powscale=lambda x: x,
+        raw=False,
         yscale='linear',
         ylim=None,  # Hz
         cmap=None,
@@ -104,113 +109,144 @@ class HasPlotAudioTF:
         show_marginals=True,
         show_title=True,
         show_spines=False,
+        yticks=None,
         xformat=lambda x: '%ds' % x,
-        yformat=lambda y: '%.0fKiHz' % int(y / 1024),
-        # yformat=lambda y: '%.0fHz' % y,
+        yformat=lambda y: ('%.1f' % (y / 1000)).rstrip('0').rstrip('.') + 'K',  # Compact (also, 'K' instead of 'KHz')
         fontsize=10,
         labelsize=8,
+        figsize=None,
+        show=False,
         **kwargs,
     ):
 
+        if raw:
+            fancy = False
+            figsize = None
         assert not (fancy and ax), f"Can't supply both fancy[{fancy}] and ax[{ax}]"
 
-        if fancy and show_marginals:
-            fig = plt.figure()
-            gs = mpl.gridspec.GridSpec(nrows=2, ncols=2, width_ratios=[30, 1], height_ratios=[1, 8], wspace=0, hspace=0)
-        else:
-            # Don't interfere with the existing figure/axis
-            fig = plt.gcf()
-            gs = None
+        with contextlib.ExitStack() as stack:
+            if figsize:
+                stack.enter_context(potoo.plot.figsize(**figsize))
 
-        # Setup plot for time-freq spectro (big central plot)
-        if fancy:
-            ax_tf = fig.add_subplot(gs[-1, 0])
-        else:
-            ax_tf = ax or plt.gca()
+            if not raw:
 
-        # Unpack attrs
-        rec = self.rec
-        audio = self.audio
-        (f, t, S) = self  # Delegate to __iter__, e.g. for Mfcc
+                if fancy and show_marginals:
+                    fig = plt.figure()
+                    gs = mpl.gridspec.GridSpec(nrows=2, ncols=2, width_ratios=[30, 1], height_ratios=[1, 8], wspace=0, hspace=0)
+                else:
+                    # Don't interfere with the existing figure/axis
+                    fig = plt.gcf()
+                    gs = None
 
-        # Scale S power, if requested
-        S = powscale(S)
+                # Setup plot for time-freq spectro (big central plot)
+                if fancy and show_marginals:
+                    ax_tf = fig.add_subplot(gs[-1, 0])
+                else:
+                    ax_tf = ax or plt.gca()
 
-        # Compute marginals
-        S_f = S.mean(axis=1)
-        S_t = S.mean(axis=0)
+            # Unpack attrs
+            rec = self.rec
+            audio = self.audio
+            (f, t, S) = self  # Delegate to __iter__, e.g. for Mfcc
 
-        # Plot time-freq spectro (big central plot)
-        ax_tf.pcolormesh(
-            # Extend (t,f) by one element each to avoid dropping the last row and col from S (fence-post problem)
-            #   - https://matplotlib.org/api/_as_gen/matplotlib.pyplot.pcolor.html
-            list(t) + [t[-1] + (t[-1] - t[-2])],
-            list(f) + [f[-1] + (f[-1] - f[-2])],
-            S,
-            cmap=cmap,
-        )
-        if yscale:
-            yscale = yscale if isinstance(yscale, dict) else dict(value=yscale)
-            ax_tf.set_yscale(**yscale)
-        if ylim:
-            ax_tf.set_ylim(ylim)
-        if labelsize:
-            ax_tf.tick_params(labelsize=labelsize)
-        if not show_spines:
-            [s.set_visible(False) for s in ax_tf.spines.values()]
+            # Scale S power, if requested
+            S = powscale(S)
 
-        if fancy and show_marginals:
+            # Compute marginals
+            S_f = S.mean(axis=1)
+            S_t = S.mean(axis=0)
 
-            # Marginal time (top edge)
-            ax_t = fig.add_subplot(gs[0, 0])
-            ax_t.step(t, S_t, 'k', linewidth=.5)
-            ax_t.set_xlim(t[0], t[-1])  # (Off by one, but good enough) [repro: try plt.step with few y bins]
-            # ax_t.set_ylim(S_t.min(), S_t.max())  # Makes the highest bar edge disappear
-            ax_t.set_xticks([])
-            ax_t.set_yticks([])
-            ax_t.axis('off')
-
-            # Marginal freq (right edge)
-            ax_f = fig.add_subplot(gs[-1, -1])
-            ax_f.plot(S_f, f, 'k', linewidth=.5)
-            ax_f.set_ylim(f[0], f[-1])  # (Off by one, but good enough) [repro: try plt.step with few y bins]
-            # ax_f.set_xlim(S_f.min(), S_f.max())  # Makes the highest bar edge disappear
-            if yscale:
-                # ax_f.set_yscale(ax_tf.get_yscale())  # Doesn't work, use **yscale instead
-                ax_f.set_yscale(**yscale)
-            ax_f.set_xticks([])
-            ax_f.set_yticks([])
-            ax_f.axis('off')
-
-            # Match lims across marginal time/freq plots
-            [ax_t_min, ax_t_max] = ax_t.get_ylim()
-            [ax_f_min, ax_f_max] = ax_f.get_xlim()
-            ax_t_f_lim = [min(ax_t_min, ax_f_min), max(ax_t_max, ax_f_max)]
-            ax_t.set_ylim(ax_t_f_lim)
-            ax_f.set_xlim(ax_t_f_lim)
-
-        if show_title and rec:
-            if fancy:
-                # Put title at the bottom (as ax_tf xlabel) because fig.suptitle messes up vspacing with different figsizes
-                ax_tf.set_xlabel(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)
-                # fig.suptitle(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)  # XXX Poop on this
+            if raw:
+                # Output image resolution is 1-1 with input array shape, but we can't add axis labels and figure titles
+                raw_kwargs = raw if isinstance(raw, dict) else {}
+                show_img(S, origin='lower', **raw_kwargs)
             else:
-                ax_tf.set_xlabel(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)
 
-        if xformat: ax_tf.xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda x, pos=None: xformat(x)))
-        if yformat: ax_tf.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda y, pos=None: yformat(y)))
+                # Plot time-freq spectro (big central plot)
+                ax_tf.pcolormesh(
+                    # Extend (t,f) by one element each to avoid dropping the last row and col from S (fence-post problem)
+                    #   - https://matplotlib.org/api/_as_gen/matplotlib.pyplot.pcolor.html
+                    list(t) + [t[-1] + (t[-1] - t[-2])],
+                    list(f) + [f[-1] + (f[-1] - f[-2])],
+                    S,
+                    cmap=cmap,
+                )
+                if yscale:
+                    yscale = yscale if isinstance(yscale, dict) else dict(value=yscale)
+                    ax_tf.set_yscale(**yscale)
+                if ylim:
+                    ax_tf.set_ylim(ylim)
+                if yticks is not None:
+                    if ylim:
+                        yticks = [y for y in yticks if coalesce(ylim[0], -np.inf) <= y <= coalesce(ylim[1], np.inf)]
+                    ax_tf.set_yticks(yticks)
+                if labelsize:
+                    ax_tf.tick_params(labelsize=labelsize)
+                if not show_spines:
+                    [s.set_visible(False) for s in ax_tf.spines.values()]
 
-        if fancy and show_audio:
-            plt.show()  # Flush plot else audio displays first
-            display(audio)
+                if fancy and show_marginals:
+
+                    # Marginal time (top edge)
+                    ax_t = fig.add_subplot(gs[0, 0])
+                    ax_t.step(t, S_t, 'k', linewidth=.5)
+                    ax_t.set_xlim(t[0], t[-1])  # (Off by one, but good enough) [repro: try plt.step with few y bins]
+                    # ax_t.set_ylim(S_t.min(), S_t.max())  # Makes the highest bar edge disappear
+                    ax_t.set_xticks([])
+                    ax_t.set_yticks([])
+                    ax_t.axis('off')
+
+                    # Marginal freq (right edge)
+                    ax_f = fig.add_subplot(gs[-1, -1])
+                    ax_f.plot(S_f, f, 'k', linewidth=.5)
+                    ax_f.set_ylim(f[0], f[-1])  # (Off by one, but good enough) [repro: try plt.step with few y bins]
+                    # ax_f.set_xlim(S_f.min(), S_f.max())  # Makes the highest bar edge disappear
+                    if yscale:
+                        # ax_f.set_yscale(ax_tf.get_yscale())  # Doesn't work, use **yscale instead
+                        ax_f.set_yscale(**yscale)
+                    ax_f.set_xticks([])
+                    ax_f.set_yticks([])
+                    ax_f.axis('off')
+
+                    # Match lims across marginal time/freq plots
+                    [ax_t_min, ax_t_max] = ax_t.get_ylim()
+                    [ax_f_min, ax_f_max] = ax_f.get_xlim()
+                    ax_t_f_lim = [min(ax_t_min, ax_f_min), max(ax_t_max, ax_f_max)]
+                    ax_t.set_ylim(ax_t_f_lim)
+                    ax_f.set_xlim(ax_t_f_lim)
+
+                if show_title and rec:
+                    if fancy:
+                        # Put title at the bottom (as ax_tf xlabel) because fig.suptitle messes up vspacing with different figsizes
+                        ax_tf.set_xlabel(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)
+                        # fig.suptitle(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)  # XXX Poop on this
+                    else:
+                        ax_tf.set_xlabel(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)
+
+                if xformat: ax_tf.xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda x, pos=None: xformat(x)))
+                if yformat: ax_tf.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda y, pos=None: yformat(y)))
+
+            # Avoid forcing a plt.show() if we have nothing to show (e.g. show_audio), else take care to show everything cleanly
+            if show or figsize or fancy or (show_audio and not raw):
+                plt.show()
+            if show_audio:
+                display(audio)
 
 
 class SpectroLike:
 
-    def copy(self, **kwargs) -> 'SpectroLike':
+    def replace(self, **kwargs) -> 'SpectroLike':
         other = copy.copy(self)
         other.__dict__.update(kwargs)
         return other
+
+    def with_audio(self, f) -> 'SpecroLike':
+        rec_or_audio_or_signal = f(self.audio)
+        (rec, audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
+        return self.replace(
+            rec_or_audio_or_signal=rec_or_audio_or_signal,
+            rec=rec, audio=audio, x=x, sample_rate=sample_rate,
+        )
 
     def __iter__(self):
         """For unpacking, e.g. (f, t, S) = FooSpectro(...)"""
@@ -221,7 +257,7 @@ class SpectroLike:
         """Normalize by RMS (like "normalize a spectro by its RMS energy" from [SP14])"""
         S = self.S
         S = S / np.sqrt((S ** 2).mean())
-        return self.copy(S=S)
+        return self.replace(S=S)
 
     # TODO Recompute audio after filtering spectro (e.g. playing audio should sound denoised)
     def clip_below_median_per_freq(self) -> 'SpectroLike':
@@ -229,7 +265,7 @@ class SpectroLike:
         S = self.S
         S = (S.T - np.median(S, axis=1)).T
         S = np.clip(S, 0, None)
-        return self.copy(S=S)
+        return self.replace(S=S)
 
 
 class Spectro(HasPlotAudioTF, SpectroLike):
@@ -314,20 +350,30 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
         3. §12.5.7 of "Text-to-Speech Synthesis" (2009) [https://books.google.com/books?isbn=0521899273]
         """
 
+        self.melspectro_kwargs = {
+            'nperseg': nperseg,
+            'overlap': overlap,
+            'mels_div': mels_div,
+            'n_mels': n_mels,
+            **kwargs,
+        }
+
         (rec, audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
 
         # TODO Why do we match librosa.feature.melspectrogram when overlap>=.5 but not <.5?
         if overlap < .5:
             logger.warn(f"Melspectro gives questionable output when overlap[{overlap}] < .5 (doesn't match librosa)")
 
-        # Normal spectro
-        (f, t, S) = Spectro(audio, **{
+        # Start with a normal spectro
+        self.audio = audio
+        self.spectro_kwargs = {
             'nperseg': nperseg,
             'overlap': overlap,
             'scaling': 'spectrum',
             'mode': 'magnitude',
             **kwargs,
-        })
+        }
+        (f, t, S) = self.to_normal_spectro()
 
         # HACK Apply unknown transforms to match librosa.feature.melspectrogram
         #   - TODO Figure out why these are required to match output
@@ -349,15 +395,42 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
         # Capture env (e.g. self.S, self.audio, self.nperseg)
         self.__dict__.update(locals())
 
+    def reparam(self, **kwargs):
+        return type(self)(self.audio, **{
+            **self.melspectro_kwargs,
+            **kwargs,
+        })
+
+    def to_normal_spectro(self, **kwargs):
+        return Spectro(self.audio, **{
+            **self.spectro_kwargs,
+            **kwargs,
+        })
+
     def plot(self, **kwargs):
         self._plot_audio_tf(**{
             # Mel-scale the y-axis
             #   - Required even though Melspectro already mel-scales the S freq axis, else plt scales it back to linear
             #   - https://matplotlib.org/api/_as_gen/matplotlib.axes.Axes.set_yscale.html#matplotlib.axes.Axes.set_yscale
             #   - https://matplotlib.org/api/_as_gen/matplotlib.pyplot.yscale.html
-            'yscale': dict(value='symlog', basey=2, linthreshy=1024, linscaley=.5),
+            'yscale': dict(
+                value='symlog', basey=1000, linthreshy=1000, linscaley=.1,
+                subsy=[1000],  # Hack to hide minor tick marks
+            ),
+            'yticks': [0, 1000, 2000, 4000, 8000],
             **kwargs,
         })
+
+    def plot_normal(self, **kwargs):
+        """Plot normal spectro"""
+        self.to_normal_spectro().plot(**kwargs)
+
+
+    def plots(self, **kwargs):
+        """Plot normal spectro + melspectro"""
+        kwargs.setdefault('show', True)
+        self.plot_normal(**{**kwargs, 'show_audio': False})
+        self.plot(**kwargs)
 
 
 # TODO Basically works, but I left some loose ends

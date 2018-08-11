@@ -40,6 +40,7 @@ import pandas as pd
 import PIL
 import potoo
 from potoo.ipython import *
+from potoo.numpy import *
 from potoo.pandas import *
 from potoo.plot import *
 from potoo.pretty import *
@@ -67,6 +68,7 @@ from features import *
 import geoh
 from load import *
 import metadata
+from notebooks.app_ux import *
 from proc_stats import *
 from sk_hack import *
 from sk_util import *

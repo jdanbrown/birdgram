@@ -298,7 +298,8 @@ class Load(DataclassConfig):
     # HACK Make our own Audio instead of monkeypatching audiosegment.AudioSegment
     def _ergonomic_audio(self, audio: audiosegment.AudioSegment) -> audiosegment.AudioSegment:
         """Make audiosegment.AudioSegment attrs more ergonomic"""
-        audio = audiosegment.AudioSegment(audio.seg, audio.name)
+        # Copy so we can mutate
+        audio = audiosegment_replace(audio)
         # Save the full path
         audio.path = audio.name
         # More ergonomic .name (which is never used as a path)

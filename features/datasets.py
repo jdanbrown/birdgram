@@ -40,31 +40,32 @@ DATASETS = {
         root='xc',
         audio_glob='data/*/*/*.mp3',
     ),
+    # [Moved to external drive to save space]
     # 'birdclef-2015': dict(
-    #     # 94g [moved to external drive to save space]
+    #     # 94g
     #     root='birdclef-2015',
     #     audio_glob='organized/wav/*.wav',
     # ),
-    'warblrb10k': dict(
-        # 6.7g
-        root='dcase-2018/warblrb10k_public_wav',
-        audio_glob='*.wav',
-    ),
-    'ff1010bird': dict(
-        # 6.4g
-        root='dcase-2018/ff1010bird_wav',
-        audio_glob='*.wav',
-    ),
-    'nips4b': dict(
-        # 1.1g
-        root='nips4b',
-        audio_glob='all_wav/*.wav',
-    ),
-    'mlsp-2013': dict(
-        # 1.3g
-        root='mlsp-2013',
-        audio_glob='mlsp_contest_dataset/essential_data/src_wavs/*.wav',
-    ),
+    # 'warblrb10k': dict(
+    #     # 6.7g
+    #     root='dcase-2018/warblrb10k_public_wav',
+    #     audio_glob='*.wav',
+    # ),
+    # 'ff1010bird': dict(
+    #     # 6.4g
+    #     root='dcase-2018/ff1010bird_wav',
+    #     audio_glob='*.wav',
+    # ),
+    # 'nips4b': dict(
+    #     # 1.1g
+    #     root='nips4b',
+    #     audio_glob='all_wav/*.wav',
+    # ),
+    # 'mlsp-2013': dict(
+    #     # 1.3g
+    #     root='mlsp-2013',
+    #     audio_glob='mlsp_contest_dataset/essential_data/src_wavs/*.wav',
+    # ),
 }
 
 

@@ -4,18 +4,23 @@ from dataclasses import dataclass
 import datetime
 from datetime import date
 from functools import lru_cache
+import os
 from typing import Iterable, List, Optional, Set, Tuple, Union
 
+from attrdict import AttrDict
+import joblib
 import matplotlib as mpl
-from more_itertools import unique_everseen
+from more_itertools import one, unique_everseen
 import numpy as np
 import pandas as pd
 import parse
-from potoo.pandas import df_reverse_cat
+from potoo.pandas import df_reverse_cat, requires_cols
 from potoo.plot import *
-from potoo.util import tap
+from potoo.util import timed
 import sklearn as sk
+from tqdm import tqdm
 
+from constants import artifact_dir, data_dir
 import geoh
 import metadata
 from util import *
@@ -36,6 +41,10 @@ ebird_bar_widths = {
     .003: 2,
     .000: 1,
 }
+ebird_bar_width_lims = (
+    min(ebird_bar_widths.values()),
+    max(ebird_bar_widths.values()),
+)
 
 
 # Vectorized
@@ -205,6 +214,16 @@ def ebird_bar_width(p: float, bar_widths=ebird_bar_widths) -> int:
     return next(v for k, v in bar_widths.items() if p >= k)
 
 
+def ebird_bar_str(
+    p: float,
+    lims=ebird_bar_width_lims,
+    bar_widths=ebird_bar_widths,
+) -> str:
+    assert lims == (1, 9)  # TODO Add rescaling to let lims be a param
+    w = ebird_bar_width(p, bar_widths=bar_widths)
+    return '■' * w + '—' * (9 - w)
+
+
 @dataclass
 class SpeciesCounter(DataclassUtil):
     """
@@ -276,6 +295,7 @@ class SpeciesCounter(DataclassUtil):
           }
         )
         """
+        cs = list(cs)  # Materialize so we can iter twice
         sp = counter_cls()
         for c in cs:
             counter_update(sp, c.sp)
@@ -285,61 +305,12 @@ class SpeciesCounter(DataclassUtil):
         )
 
 
-@dataclass(frozen=True)  # frozen=True so we can hash, for @lru_cache
+@dataclass(unsafe_hash=True)  # So we can hash for @lru_cache (unsafe_hash instead of frozen so we can assign in self.fit*)
 class EbirdPriors(DataclassEstimator):
 
     #
     # Params
     #
-
-    # TODO Pick lightweight tuning params to get started
-    #   - Query radius ~ binwidth, since query region is a rect with sides binwidth*2, approximately centered at the query point
-    #
-    # Theoretical mem ~ query radius (generated from code below):
-    #           388mi     194mi      97mi      48mi      24mi      12mi       6mi       3mi     1.5mi      .8mi      .4mi
-    #   48w  819.2 kB    3.3 MB   13.1 MB   52.4 MB  209.7 MB  838.9 MB    3.4 GB   13.4 GB   53.7 GB  214.7 GB  859.0 GB
-    #   24w    1.6 MB    6.6 MB   26.2 MB  104.9 MB  419.4 MB    1.7 GB    6.7 GB   26.8 GB  107.4 GB  429.5 GB    1.7 TB
-    #   16w    2.5 MB    9.8 MB   39.3 MB  157.3 MB  629.1 MB    2.5 GB   10.1 GB   40.3 GB  161.1 GB  644.2 GB    2.6 TB
-    #   12w    3.3 MB   13.1 MB   52.4 MB  209.7 MB  838.9 MB    3.4 GB   13.4 GB   53.7 GB  214.7 GB  859.0 GB    3.4 TB
-    #   8w     4.9 MB   19.7 MB   78.6 MB  314.6 MB    1.3 GB    5.0 GB   20.1 GB   80.5 GB  322.1 GB    1.3 TB    5.2 TB
-    #   6w     6.6 MB   26.2 MB  104.9 MB  419.4 MB    1.7 GB    6.7 GB   26.8 GB  107.4 GB  429.5 GB    1.7 TB    6.9 TB
-    #   4w     9.8 MB   39.3 MB  157.3 MB  629.1 MB    2.5 GB   10.1 GB   40.3 GB  161.1 GB  644.2 GB    2.6 TB   10.3 TB
-    #   3w    13.1 MB   52.4 MB  209.7 MB  838.9 MB    3.4 GB   13.4 GB   53.7 GB  214.7 GB  859.0 GB    3.4 TB   13.7 TB
-    #   2w    19.7 MB   78.6 MB  314.6 MB    1.3 GB    5.0 GB   20.1 GB   80.5 GB  322.1 GB    1.3 TB    5.2 TB   20.6 TB
-    #   1w    39.3 MB  157.3 MB  629.1 MB    2.5 GB   10.1 GB   40.3 GB  161.1 GB  644.2 GB    2.6 TB   10.3 TB   41.2 TB
-    #
-    # Empirical mem ~ query radius:
-    #   TODO Measure a few points to sketch out the surface
-    #
-    # Empirical time ~ query radius:
-    #   TODO Measure a few points to sketch out the surface
-    #
-    """
-
-    # Generate the table comment above (with color!)
-    from ebird_priors import *
-    from potoo.pandas import df_style_cell
-    loc_bin_slice = slice(5, 20)
-    loc_binwidths = np.array(list(EbirdPriors._loc_binwidths.keys()))[loc_bin_slice]
-    loc_bin_ns = 2 ** np.array(list(EbirdPriors._loc_binwidths.values()))[loc_bin_slice]
-    date_binwidths = [x for x in EbirdPriors._date_binwidths]
-    date_bin_ns = 48 // np.array([EbirdPriors._date_binwidth_parse_weeks(x) for x in EbirdPriors._date_binwidths])
-    (DF(columns=date_binwidths, index=loc_binwidths, data=np.vectorize(humanize.naturalsize)(
-        400 * np.array(loc_bin_ns)[:, np.newaxis] * np.array(date_bin_ns)
-    )).T
-        .style.applymap(lambda x: df_style_cell(
-            (lambda x: x[-1] in ['Bytes', 'kB'],       'color: #1f78b4'),  # dark blue
-            (lambda x: x[-1] in ['MB'] and x[0] < 10,  'color: #a6cee3'),  # blue/green
-            (lambda x: x[-1] in ['MB'] and x[0] < 100, 'color: #33a02c'),  # green
-            (lambda x: x[-1] in ['MB'],                'color: #ffff99'),  # yellow
-            (lambda x: x[-1] in ['GB'] and x[0] < 10,  'color: #ff7f00'),  # orange
-            (lambda x: x[-1] in ['GB'] and x[0] < 100, 'color: #fb9a99'),  # orange/red/pink
-            (lambda x: x[-1] in ['GB'],                'color: #e31a1c'),  # dark red
-            (lambda x: x[-1] in ['TB'],                'color: #6a3d9a'),  # dark purple
-        )(one((float(a), b) for a, b in [x.split()])))
-    )
-
-    """
 
     # Location bin size, specified by length of sides of a geohash square
     #   - We omit rectangular geohashes, e.g. 4+0 which is 24mi W x 12mi H
@@ -399,6 +370,66 @@ class EbirdPriors(DataclassEstimator):
             raise ValueError(f'Invalid date_binwidth[{self.date_binwidth}], must be one of: {self._date_binwidths}')
 
     #
+    # Utils
+    #
+
+    @property
+    @lru_cache()
+    def geoh_prec(self) -> AttrDict:
+        """
+        A mock module with the same api as geoh, except all occurrences of precision_bits are bound to
+        self._loc_binwidth_geohash_precision_bits
+        """
+        import inspect
+        mock = AttrDict()
+        for k, v in geoh.__dict__.items():
+            try:
+                # print(k, type(v))
+                sig = inspect.signature(v)
+                # print(sig)
+                # print()
+            except:
+                pass
+            else:
+                if 'precision_bits' in sig.parameters:
+                    # print(k)
+                    v = partial(v, precision_bits=self._loc_binwidth_geohash_precision_bits)
+            mock[k] = v
+        return mock
+
+    #
+    # Persist
+    #
+
+    @classmethod
+    def load(cls, loc_binwidth: str, date_binwidth: str, sample: float, ebd: str) -> 'cls':
+        self = cls(loc_binwidth=loc_binwidth, date_binwidth=date_binwidth)
+        paths = self.paths(sample, ebd)
+        self = joblib.load(paths.model_pkl)
+        # Back compat: adapt old pkl files (which are slow to regen)
+        if hasattr(self, 'priors_'):
+            self.counts_ = self.__dict__.pop('priors_')
+        return self
+
+    def dump(self, sample: float = None, ebd: str = None, paths: 'Paths' = None) -> 'self':
+        paths = paths or self.paths(sample, ebd)
+        joblib.dump(self, paths.model_pkl)
+        return self
+
+    def paths(self, sample: float, ebd: str) -> 'Paths':
+        artifact_model_dir = os.path.relpath(f'{artifact_dir}/ebird-priors/{self.config_id}/ebd={ebd},sample={sample}')
+        return AttrDict(
+            # Distinguish *-ddf.parquet vs. *-df.parquet because pd.read_parquet isn't happy with hive-style ddf.to_parquet dirs
+            ebd_proj_tsv       = os.path.relpath(f'{data_dir}/ebird/{ebd}/derived/priors/{ebd}-1-proj.tsv-{sample}'),
+            setindex_ddf       = os.path.relpath(f'{artifact_model_dir}/2-setindex-ddf.parquet'),
+            priors_ddf         = os.path.relpath(f'{artifact_model_dir}/3-priors-ddf.parquet'),  # TODO Rename to something meaningful
+            priors_df          = os.path.relpath(f'{artifact_model_dir}/4-priors-df.parquet'),   # TODO Rename to something meaningful
+            counts_df          = os.path.relpath(f'{artifact_model_dir}/5-counts-df.parquet'),
+            model_pkl          = os.path.relpath(f'{artifact_model_dir}/6-model.pkl'),
+            artifact_model_dir = artifact_model_dir,
+        )
+
+    #
     # Loc/date binning and smoothing
     #
 
@@ -406,7 +437,7 @@ class EbirdPriors(DataclassEstimator):
     LocBin = str  # geohash
     DateBin = int  # ebird_week
 
-    def _loc_smooth(self, lat: float, lon: float) -> Iterable[LocBin]:
+    def loc_smooth(self, lat: float, lon: float) -> Iterable[LocBin]:
         """
         "Smooth" a location into loc bins to avoid proximity to bin boundaries (to decrease variance)
         - Maps the loc to the 4 contiguous loc bins that best enclose it (i.e. with most balanced margins)
@@ -415,7 +446,7 @@ class EbirdPriors(DataclassEstimator):
         # Find neighborhood (≤9 bins) at next level of precision (p+2)
         p = self._loc_binwidth_geohash_precision_bits
         finer_p = p + 2  # p+2 because p+1 isn't square (because bits represent alternating lon/lat/lon/lat/...)
-        finer_bin = self._loc_bin(lat, lon, finer_p)
+        finer_bin = self.loc_bin(lat, lon, finer_p)
         finer_bins = geoh.str_expand(finer_bin, finer_p)
         assert len(finer_bins) <= 9
 
@@ -424,12 +455,12 @@ class EbirdPriors(DataclassEstimator):
         assert len(bins) <= 4
         return bins
 
-    def _loc_bin(self, lat: float, lon: float, precision_bits: int = None) -> LocBin:
+    def loc_bin(self, lat: float, lon: float, precision_bits: int = None) -> LocBin:
         if precision_bits is None:
             precision_bits = self._loc_binwidth_geohash_precision_bits
         return geoh.str_encode(lat, lon, precision_bits)
 
-    def _date_smooth(self, date: date) -> Iterable[DateBin]:
+    def date_smooth(self, date: date) -> Iterable[DateBin]:
         """
         "Smooth" a date into date bins to avoid proximity to bin boundaries (to decrease variance)
         - Maps the date to the 2 contiguous date bins that best enclose it (i.e. with most balanced margins)
@@ -437,7 +468,7 @@ class EbirdPriors(DataclassEstimator):
 
         assert isinstance(date, datetime.date)
         week = ebird_week(date)
-        date_bin = self._date_bin(date)
+        date_bin = self.date_bin(date)
 
         # Boundary condition: if date_binwidth='1w' (smallest), measure day within week, else week within date_bin
         if self._date_binwidth_weeks == 1:
@@ -452,7 +483,7 @@ class EbirdPriors(DataclassEstimator):
         assert len(bins) == (2 if self.date_binwidth != '48w' else 1)
         return bins
 
-    def _date_bin(self, date: date) -> DateBin:
+    def date_bin(self, date: date) -> DateBin:
         assert hasattr(date, 'day'), f'Expected date, got {type(date)}: {date}'
         assert 48 // self._date_binwidth_weeks * self._date_binwidth_weeks == 48, \
             f'date_binwidth[{self.date_binwidth}] must be factor of 48w'
@@ -462,25 +493,44 @@ class EbirdPriors(DataclassEstimator):
     # fit/predict
     #
 
-    # TODO Crib from notebook (the big, heavy ebird_priors pipeline)
-    #   - Need to choose what stage of input to take (definitely after all the shell junk -- leave that in the notebook for now)
-    def fit_df(self, x: ...) -> 'self':
-        ...
+    @requires_cols('loc_bin', 'date_bin', 'species', 'n', 'n_present')
+    def fit_df(self, counts_df: pd.DataFrame) -> 'self':
+        log.info('EbirdPriors.fit_df:in', **{
+            'len(counts_df)': len(counts_df),
+        })
+        elapsed_s, groups = timed(lambda: (
+            counts_df.groupby(['loc_bin', 'date_bin'], sort=False)
+        ))
+        log.info('EbirdPriors.fit_df:df.groupby', **{
+            'len(groups)': len(groups),
+            'elapsed_s': float('%.3f' % elapsed_s),
+        })
+        self.counts_ = dict(map_progress(
+            use='dask', scheduler='processes', partition_size=250,  # ~1.5-2x faster than single core without dask
+            xs=groups,
+            f=lambda k_g: one(
+                (k, SpeciesCounter(
+                    n=g['n'].iloc[0],  # All n's are the same (non-negligibly slow to check and assert)
+                    sp={row.species: row.n_present for row in df_rows(g)},
+                ))
+                for k, g in [k_g]
+            ),
+        ))
+        log.info('EbirdPriors.fit_df:counts_')
 
-    # XXX Nope, pipeline from raw-ish data
-    # def fit_df(self, species_probs: pd.DataFrame) -> 'self':
-    #     self._species_probs = species_probs
+    def predict_one_df(self, lat: float, lon: float, date: date) -> pd.DataFrame:
+        loc_bins = self.loc_smooth(lat, lon)
+        date_bins = self.date_smooth(date)
+        sc = SpeciesCounter.sum(
+            self.counts_[(loc_bin, date_bin)]
+            for loc_bin in loc_bins
+            for date_bin in date_bins
+            if (loc_bin, date_bin) in self.counts_
+        )
+        return sc.df
 
-    # TODO Crib from notebook (ebird_priors lookup -> SpeciesCounter.sum)
-    def predict_proba_one_df(self, lat: float, lon: float, date: date) -> pd.DataFrame:
-        loc_bins = self._loc_smooth(lat, lon)
-        date_bins = self._date_smooth(date)
-        ...
-
-    # TODO sk api
-    def fit(self, X, y):
-        ...
-
-    # TODO sk api + batch prediction
-    def predict_proba(self, X):
-        ...
+    # TODO [defer] Expose an sk-style api, once something needs it
+    #   - classes_: [simple] all species present in counts_df, sorted by taxo
+    #   - predict(X) -> species: [Q] how to represent input as array X, given mixed dtypes (lat, lon, date)?
+    #   - predict_proba(X): [blocked] simple once we add classes_ and solve the predict X.dtype question
+    #   - fit(X, y): [blocked] same X.dtype question as predict

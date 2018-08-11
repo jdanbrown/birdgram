@@ -6,6 +6,16 @@ import pandas as pd
 import sklearn as sk
 
 
+def sk_dir_attrs(x):
+    """Like dir(x), but subset to sk 'attributes' [http://scikit-learn.org/dev/glossary.html#term-attribute]"""
+    return [k for k in dir(x) if k.endswith('_') and not k.startswith('_')]
+
+
+def sk_dirs_attrs(x):
+    """Like dirs(x), but subset to sk 'attributes' [http://scikit-learn.org/dev/glossary.html#term-attribute]"""
+    return {k: getattr(x, k) for k in sk_dir_attrs(x)}
+
+
 def joblib_dumps(x: any, *args, **kwargs) -> bytes:
     f = io.BytesIO()
     joblib.dump(x, f, *args, **kwargs)

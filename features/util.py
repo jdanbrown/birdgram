@@ -100,6 +100,18 @@ def timed(f):
     return (elapsed_s, x)
 
 
+class timer_start:
+
+    def __init__(self):
+        self.start_s = time.time()
+
+    def stop(self):
+        if self.start_s is not None:
+            self.elapsed_s = time.time() - self.start_s
+            self.start_s = None
+            return self.elapsed_s
+
+
 def short_circuit(short_f):
     def decorator(f):
         @wraps(f)
@@ -147,21 +159,22 @@ def assert_(cond, msg=None):
 
 
 @contextmanager
-def print_time_delta(print=print):
+def print_time_delta(desc='time_delta', print=print):
     import time
     start = time.time()
     try:
         yield
     finally:
         end = time.time()
-        print('time_delta: %.03fs' % (end - start))
+        print('[%s] %.03fs' % (desc, end - start))
 
 
 # Kind of better than %memit...
 @contextmanager
-def print_mem_delta(collect_before=False, collect_after=False, print=print):
+def print_mem_delta(desc='mem_delta', collect_before=False, collect_after=False, print=print):
     import gc
     import psutil
+    from potoo.pretty import pformat
     proc = psutil.Process(os.getpid())
     if collect_before:
         gc.collect()
@@ -172,8 +185,8 @@ def print_mem_delta(collect_before=False, collect_after=False, print=print):
         if collect_after:
             gc.collect()
         end = proc.memory_full_info()._asdict()
-        diff = {k: '%s B' % (end[k] - start[k]) for k in start.keys()}
-        print('mem_delta: %s' % pformat(diff))
+        diff = {k: '%s KB' % ((end[k] - start[k]) // 1024) for k in start.keys()}
+        print('[%s] %s' % (desc, pformat(diff)))
 
 
 ## unix
@@ -237,7 +250,7 @@ class DataclassConfig(DataclassUtil):
         return {
             k: v
             for k, v in self.asdict().items()
-            if k not in (self.deps or {})
+            if k not in (getattr(self, 'deps', None) or {})
         }
 
 
@@ -259,6 +272,27 @@ def np_vectorize_asscalar(*args, **kwargs):
     """
     f = np.vectorize(*args, **kwargs)
     return lambda *args, **kwargs: f(*args, **kwargs)[()]
+
+
+## scipy
+
+import numpy as np
+import scipy.fftpack as fft
+
+
+def bandpass_filter(
+    x: np.ndarray,
+    sample_rate: int,
+    lo_hz: int = None,
+    hi_hz: int = None,
+) -> np.ndarray:
+    f = fft.rfft(x)  # f.shape == x.shape
+    f_ix = fft.rfftfreq(x.size, d=1 / sample_rate)  # freq indexes, i.e. f[i] is the power of freq f_ix[i]
+    f[
+        (f_ix < lo_hz if lo_hz is not None else False) |
+        (f_ix > hi_hz if hi_hz is not None else False)
+    ] = 0
+    return fft.irfft(f).astype(x.dtype)
 
 
 ## pandas
@@ -320,6 +354,24 @@ def df_flatmap_list_col(df, col_name, col_f=lambda s: s):
             for x in row[col_name]
         ])
     )
+
+
+def df_checkpoint(
+    df: pd.DataFrame,
+    path: str,
+    # Manually surface common kwargs
+    engine='auto',  # .to_parquet + .read_parquet
+    compression='default',  # .to_parquet
+    # And provide a way to pass arbitrary kwargs we didn't handle above
+    to_parquet=dict(),
+    read_parquet=dict(),
+) -> pd.DataFrame:
+    """
+    Checkpoint a df to (parquet) file
+    - Like ddf_checkpoint. Intended not for performance control like with ddfs, but for api simplicity with dfs.
+    """
+    df.to_parquet(path, engine=engine, compression=compression, **to_parquet)
+    return pd.read_parquet(path, engine=engine, **read_parquet)
 
 
 @dataclass
@@ -392,6 +444,14 @@ class DataclassEstimator(sk.base.BaseEstimator, DataclassConfig):
     def set_params(self, **params):
         self.__dict__.update(params)
         return self
+
+    @property
+    def config_id(self) -> str:
+        """
+        Model config str id, e.g. for persistence
+        - Sensitive to field ordering
+        """
+        return ','.join(f'{k}={v}' for k, v in self.config.items())
 
 
 @singledispatch
@@ -962,9 +1022,43 @@ def lm(*args, **kwargs):
     return smf.ols(*args, **kwargs).fit()
 
 
+## audiosegment
+
+from typing import Callable
+
+import audiosegment
+import numpy as np
+import pydub
+
+
+def audiosegment_replace(
+    audio: audiosegment.AudioSegment,
+    seg: pydub.AudioSegment = None,
+    name: str = None,
+) -> audiosegment.AudioSegment:
+    return audiosegment.AudioSegment(
+        seg if seg is not None else audio.seg,
+        name if name is not None else audio.name,
+    )
+
+
+def audiosegment_with_numpy_array(
+    audio: audiosegment.AudioSegment,
+    f: Callable[[np.ndarray], np.ndarray],
+) -> audiosegment.AudioSegment:
+    return audiosegment_replace(
+        audiosegment.from_numpy_array(
+            nparr=f(audio.to_numpy_array()),
+            framerate=audio.frame_rate,
+        ),
+        name=audio.name,
+    )
+
+
 ## bubo-features
 
 import platform
+import types
 
 import psutil
 import yaml
@@ -986,3 +1080,53 @@ def print_sys_info():
         ])
         .rstrip()
     )
+
+
+def audio_bandpass_filter(audio: audiosegment.AudioSegment, **kwargs) -> audiosegment.AudioSegment:
+    return audiosegment_with_numpy_array(audio, lambda x: bandpass_filter(x, audio.frame_rate, **kwargs))
+
+
+def rec_str_line(
+    rec,
+    *_first,
+    first=[],
+    last=[],
+    default=[
+        'audio_id',
+        ('recorded_at', lambda x: x.isoformat()),
+        'species',
+        ('duration_s', '%.1fs'),
+        'basename',
+    ],
+) -> str:
+    """Interactive shorthand"""
+    rec = rec.copy()
+    rec['audio_id'] = rec.audio_id if 'audio_id' in rec else rec.name if isinstance(rec.name, str) else 'NO_AUDIO_ID'
+    strs = []
+    for field in [*_first, *first, *default, *last]:
+        if not isinstance(field, tuple):
+            field = (field, '%s')
+        (k, f) = field
+        if isinstance(f, str):
+            f = lambda x, f=f: f % x
+        strs.append(f(rec[k]))
+    return '  '.join(strs)
+
+
+def species_probs_meta(df):
+    return (df
+        [lambda df: [c for c in df.columns if not isinstance(c, int)]]  # Non-probs cols (non-ints)
+    )
+
+
+def species_probs_probs(df):
+    return (df
+        .reset_index()  # audio_id
+        [lambda df: [c for c in df.columns if isinstance(c, int)]]  # Probs cols (ints)
+        .T.apply(axis=1, func=lambda row: pd.Series(dict(species=row[0][1], p=row[0][0])))  # Split (p, species) -> two cols
+    )
+
+
+def rec_probs(rec, search, n):
+    """Interactive shorthand"""
+    return search.species_probs_one(rec).pipe(species_probs_probs)[:n].T

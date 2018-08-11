@@ -11,18 +11,77 @@ import metadata
 from util import *
 
 
-def plot_many_spectros(
-    recs,
+def plot_spectro_micro(
+    x: Union['rec', 'spectro'],
+    features,
+    wrap=True,  # False to truncate at wrap_s
+    wrap_s=15,
+    limit_s=None,
+    **kwargs,
+):
+    # TODO Pad (like plot_spectros) if audio < wrap_s, for uniform img height across various recs
+    kwargs.setdefault('raw', True)
+    kwargs.setdefault('show_audio', True)
+    if not wrap and not limit_s:
+        limit_s = wrap_s
+    if limit_s:
+        x = features.with_audio(x, lambda audio: audio[:limit_s * 1000])
+    plot_spectro_wrap(x, features, wrap_s=wrap_s, **kwargs)
+
+
+def plot_spectro_wrap(
+    x: Union['rec', 'spectro'],
+    features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
+    wrap_s: float = 10,  # Sane default (5 too small, 20 too big, 10/15 both ok)
+    show_audio=True,
+    raw=False,
+    **kwargs,
+):
+    spectro = x.spectro if hasattr(x, 'spectro') else x
+    wrap_ms = int(wrap_s * 1000)
+    len_audio_ms = len(spectro.audio)
+    n_wraps = int(np.ceil(len_audio_ms / wrap_ms))
+    breaks_ms = np.linspace(0, n_wraps * wrap_ms, n_wraps, endpoint=False)
+    plot_spectros(
+        pd.DataFrame(
+            dict(spectro=features.with_audio(spectro, lambda audio: audio[i : i + wrap_ms]))
+            for i in breaks_ms
+        ),
+        yticks=['%.0fs' % (ms / 1000) for ms in breaks_ms],
+        xformat=lambda s: '+%.0fs' % s,
+        raw=raw,
+        **kwargs,
+    )
+    if show_audio:
+        if not raw:
+            plt.show()
+        display(spectro.audio)
+
+
+def plot_spectro(
+    x: Union['rec', 'spectro'],
+    **kwargs,
+):
+    rec = x if hasattr(x, 'spectro') else pd.Series(dict(spectro=x))
+    plot_spectros(pd.DataFrame([rec]), **kwargs)
+
+
+def plot_spectros(
+    x: Union['recs', 'spectros'],
     query_and_title=None,
     raw=False,
     spectro_col='spectro',
-    ytick_col='species_longhand',
-    t_max=60,
+    xformat=lambda x: '%.0fs' % x,
+    ytick_col=None,  # e.g. 'species_longhand'
+    yticks=None,
+    t_max='auto',  # Pass an int (seconds) to manually set max time (x-axis)
     n=None,
-    verbose=True,
+    verbose=False,
+    **kwargs,
 ):
     """Vis lots of spectros per dataset"""
 
+    recs = x if hasattr(x, 'spectro') else pd.DataFrame(dict(spectro=x))
     if query_and_title:
         recs = recs.query(query_and_title)
 
@@ -35,6 +94,8 @@ def plot_many_spectros(
         ))
     )
     dt = ts.iloc[0][1] - ts.iloc[0][0]  # This isn't exactly right, but it's close enough
+    if t_max == 'auto':
+        t_max = recs.spectro.map(lambda spectro: len(spectro.audio)).max() / 1000
     t_i_max = int(np.ceil(t_max / dt))
     f_i_len = Ss.iloc[0].shape[0]
     Ss = Ss.map(lambda S: S[:, :t_i_max])
@@ -55,20 +116,26 @@ def plot_many_spectros(
 
     if raw:
         # Output image resolution is 1-1 with input array shape, but we can't add axis labels and figure titles
-        show_img(cat_Ss, origin='lower', file_prefix=query_and_title or 'image')
+        raw_kwargs = {
+            **(raw if isinstance(raw, dict) else {}),  # New api (simpler to compose)
+            **kwargs,  # Back compat
+        }
+        show_img(cat_Ss, origin='lower', file_prefix=query_and_title or 'image', **raw_kwargs)
     else:
         # (imshow is faster than pcolormesh by ~4x)
         plt.imshow(cat_Ss, origin='lower')
-        plt.gca().xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda t_i, pos=None: '%.0fs' % (t_i * dt)))
+        plt.gca().xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda t_i, pos=None: xformat(t_i * dt)))
         if query_and_title:
             plt.title(query_and_title, loc='left')
-        if not ytick_col:
+        if not ytick_col and yticks is None:
             plt.yticks([])
         else:
+            if yticks is None:
+                yticks = list(recs[ytick_col])
             plt.yticks(
                 np.arange(len(recs)) * (f_i_len + pad[0].sum()) + f_i_len // 2,
                 # Reverse to align with plt.imshow(..., origin='lower')
-                reversed(list(recs[ytick_col])),
+                reversed(yticks),
             )
 
 

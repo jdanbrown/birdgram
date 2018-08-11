@@ -31,11 +31,12 @@ Pipeline
 import copy
 from datetime import datetime
 from frozendict import frozendict
-from functools import partial
+from functools import partial, singledispatch
 import hashlib
 import itertools
 import json
-from typing import Iterable, Mapping, Optional, Union
+import secrets
+from typing import Callable, Iterable, Mapping, Optional, Union
 import uuid
 
 from attrdict import AttrDict
@@ -55,9 +56,9 @@ import yaml
 import xgboost as xgb
 
 from cache import cache
-from constants import data_dir
+from constants import artifact_dir, data_dir
 from datasets import *
-from datatypes import Audio, RecordingDF
+from datatypes import Audio, Recording, RecordingDF
 from features import *
 from load import *
 import metadata
@@ -203,9 +204,9 @@ class Features(DataclassConfig):
             for i in range(S.shape[1] - (p - 1))
         ]).T
 
-    @short_circuit(lambda self, rec: rec.get('spectro'))
+    @short_circuit(lambda self, rec, **kwargs: rec.get('spectro'))
     # @cache(version=0, key=lambda self, rec: (rec.id, self.spectro_config, self.deps))  # TODO After birdclef
-    def _spectro(self, rec: Row) -> Melspectro:
+    def _spectro(self, rec: Row, denoise=True, **kwargs) -> Melspectro:
         """
         .spectro (f,t) <- .audio (samples,)
           - f: freq indexes (Hz), mel-scaled
@@ -220,14 +221,15 @@ class Features(DataclassConfig):
         )
         # TODO Filter by c.f_min
         #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
-        spectro = Melspectro(
-            audio,
-            nperseg=c.frame_length,
-            overlap=1 - c.hop_length / c.frame_length,
-            window=c.frame_window,
-            n_mels=c.f_bins,
-        )
-        spectro = self._spectro_denoise(spectro)
+        spectro = Melspectro(audio, **{
+            'nperseg': c.frame_length,
+            'overlap': 1 - c.hop_length / c.frame_length,
+            'window': c.frame_window,
+            'n_mels': c.f_bins,
+            **kwargs,
+        })
+        if denoise:
+            spectro = self._spectro_denoise(spectro)
         return spectro
 
     # TODO Add .audio_denoised so we can hear what the denoised spectro sounds like
@@ -236,6 +238,35 @@ class Features(DataclassConfig):
         spectro = spectro.norm_rms()
         spectro = spectro.clip_below_median_per_freq()
         return spectro
+
+    #
+    # Util
+    #
+
+    def with_audio(self, x: 'X', f: Callable[[Audio], Audio]) -> 'X':
+        if isinstance(x, Melspectro):
+            return self._spectro_with_audio(x, f)
+        elif hasattr(x, 'spectro'):
+            return self._rec_with_audio(x, f)
+
+    def _spectro_with_audio(self, spectro: Melspectro, f: Callable[[Audio], Audio]) -> Melspectro:
+        mock_rec = AttrDict(audio=f(spectro.audio))  # TODO Refactor so we don't need to mock a rec
+        return self._spectro(mock_rec)
+
+    def _rec_with_audio(self, rec: Row, f: Callable[[Audio], Audio]) -> Row:
+        rec = rec.copy()
+        # HACK Generate a new random rec.id to invalidate caches (which all key on rec.id, which is mostly just the filename)
+        #   - TODO Replace rec.id with rec.audio_id, which will require rebuilding all feature caches (ugh)
+        rec.id = '%s/%s' % (secrets.token_hex(4), rec.id)
+        audio = rec.audio.unbox
+        # Invalidate downstream features
+        #   - HACK Very brittle; how to avoid maintaining an explicit list? Any easier to whitelist upstreams instead?
+        for k in ['audio', 'spectro', 'patches', 'proj', 'agg', 'feat']:
+            if k in rec:
+                del rec[k]
+        rec['audio'] = box(f(audio))
+        rec['spectro'] = self._spectro(rec)
+        return rec
 
 
 @dataclass
@@ -496,21 +527,20 @@ class Projection(DataclassConfig):
             **kwargs,
         )
 
+    #
+    # Util
+    #
+
+    def with_audio(self, rec: Row, f: Callable[[Audio], Audio]) -> Row:
+        rec = self.features.with_audio(rec, f)
+        # Recompute downstream features
+        recs = pd.DataFrame([rec])
+        recs = self.transform(recs, override_use_dask=False)
+        return recs.iloc[0]
+
 
 @dataclass
-class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
-
-    #
-    # sklearn boilerplate [TODO Move into mixin]
-    #   - http://scikit-learn.org/dev/developers/contributing.html#rolling-your-own-estimator
-    #
-
-    def get_params(self, deep=True):
-        return self.config
-
-    def set_params(self, **params):
-        self.__dict__.update(params)
-        return self
+class Search(DataclassEstimator, sk.base.ClassifierMixin):
 
     # TODO Make this a passing test
     #   - Fix: `projection: Projection` isn't a model param (detected because it's not a primitive type)
@@ -578,6 +608,24 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
     @property
     def classifier_config(self) -> AttrDict:
         return AttrDict(yaml.safe_load('{%s}' % self.classifier))
+
+    #
+    # Persist
+    #
+
+    # "v0" because these inputs are a hacky api that we'll want to change pretty soon
+    @classmethod
+    def load_v0(cls, cv_str, search_params_str, classifier_str, random_state=0) -> 'cls':
+        return joblib.load('/'.join([
+            f'{artifact_dir}',
+            "%s,estimator=Search(%s,classifier='%s',random_state=%s)" % (
+                cv_str,
+                search_params_str,
+                classifier_str,
+                random_state,
+            ),
+            'estimator.pkl',
+        ]))
 
     #
     # Fit
@@ -826,8 +874,12 @@ class Search(DataclassConfig, sk.base.BaseEstimator, sk.base.ClassifierMixin):
         # Join test labels back onto the predictions, if given
         if 'species' in recs:
             species_probs.insert(0, 'species_true', y)
+            species_probs.insert(1, 'in_model', np.isin(y, self.classes_))
 
         return species_probs
+
+    def species_probs_one(self, rec: Recording) -> pd.DataFrame:
+        return self.species_probs(pd.DataFrame([rec]))
 
     # TODO Rethink this for non-knn classifiers
     @requires_cols('feat')
