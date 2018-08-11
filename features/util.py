@@ -1061,6 +1061,7 @@ import platform
 import types
 
 import psutil
+import pydub
 import yaml
 
 from log import log  # For export [TODO Update callers]
@@ -1080,6 +1081,13 @@ def print_sys_info():
         ])
         .rstrip()
     )
+
+
+def audio_pad(audio: 'Audio', duration_s: float) -> 'Audio':
+    pad_ms = (duration_s * 1000) - len(audio)
+    if pad_ms > 0:
+        audio = audio + pydub.AudioSegment.silent(pad_ms)
+    return audio
 
 
 def audio_bandpass_filter(audio: audiosegment.AudioSegment, **kwargs) -> audiosegment.AudioSegment:
