@@ -2,6 +2,7 @@ import itertools
 from typing import Callable, Iterable, Optional, Union
 
 import matplotlib.pyplot as plt
+from more_itertools import first
 import numpy as np
 from potoo.pandas import df_transform_index
 from potoo.plot import *
@@ -33,7 +34,8 @@ def plot_spectro_wrap(
     x: Union['rec', 'spectro'],
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
     wrap_s: float = 10,  # Sane default (5 too small, 20 too big, 10/15 both ok)
-    show_audio=True,
+    pad=True,  # In case there's only one line, pad out to wrap_s, e.g for uniform height when raw=True
+    show_audio=False,
     raw=False,
     **kwargs,
 ):
@@ -42,6 +44,8 @@ def plot_spectro_wrap(
     len_audio_ms = len(spectro.audio)
     n_wraps = int(np.ceil(len_audio_ms / wrap_ms))
     breaks_ms = np.linspace(0, n_wraps * wrap_ms, n_wraps, endpoint=False)
+    if pad:
+        kwargs['t_max'] = wrap_s
     plot_spectros(
         pd.DataFrame(
             dict(spectro=features.with_audio(spectro, lambda audio: audio[i : i + wrap_ms]))
@@ -60,10 +64,16 @@ def plot_spectro_wrap(
 
 def plot_spectro(
     x: Union['rec', 'spectro'],
+    raw=False,
+    show_audio=False,
     **kwargs,
 ):
     rec = x if hasattr(x, 'spectro') else pd.Series(dict(spectro=x))
-    plot_spectros(pd.DataFrame([rec]), **kwargs)
+    plot_spectros(pd.DataFrame([rec]), raw=raw, **kwargs)
+    if show_audio:
+        if not raw:
+            plt.show()
+        display(rec.spectro.audio)
 
 
 def plot_spectros(
@@ -93,24 +103,24 @@ def plot_spectros(
             df.spectro.map(lambda s: s.t),
         ))
     )
-    dt = ts.iloc[0][1] - ts.iloc[0][0]  # This isn't exactly right, but it's close enough
     if t_max == 'auto':
         t_max = recs.spectro.map(lambda spectro: len(spectro.audio)).max() / 1000
-    t_i_max = int(np.ceil(t_max / dt))
+    t_max_i = first(list(np.where(ts.iloc[0] > 3)[0]) or [len(ts.iloc[0])])
     f_i_len = Ss.iloc[0].shape[0]
-    Ss = Ss.map(lambda S: S[:, :t_i_max])
-    ts = ts.map(lambda t: t[:t_i_max])
-    pad = np.array([[0, 1], [0, 0]])  # [top, bottom], [left, right]
-    cat_Ss = (Ss
-        .map(lambda S: np.pad(
+    Ss = Ss.map(lambda S: S[:, :t_max_i])
+    ts = ts.map(lambda t: t[:t_max_i])
+    pad_first = np.array([[0, 0], [0, 0]])  # [top, bottom], [left, right]
+    pad_rest  = np.array([[0, 1], [0, 0]])  # [top, bottom], [left, right]
+    # Flip vertically (twice) to align with plt.imshow(..., origin='lower')
+    cat_Ss = np.flip(axis=0, m=np.concatenate([
+        np.flip(axis=0, m=np.pad(
             S,
-            pad + np.array([[0, 0], [0, t_i_max - S.shape[1]]]),
+            (pad_first if i == 0 else pad_rest) + np.array([[0, 0], [0, t_max_i - S.shape[1]]]),
             'constant',
             constant_values=np.nan,
         ))
-        # Flip vertically (twice) to align with plt.imshow(..., origin='lower')
-        .pipe(lambda s: np.flip(axis=0, m=np.concatenate([np.flip(axis=0, m=S) for S in s], axis=0)))
-    )
+        for i, S in enumerate(Ss)
+    ]))
     if verbose:
         print(f'cat_Ss.shape[{cat_Ss.shape}]')
 
@@ -124,6 +134,7 @@ def plot_spectros(
     else:
         # (imshow is faster than pcolormesh by ~4x)
         plt.imshow(cat_Ss, origin='lower')
+        dt = ts.iloc[0][1] - ts.iloc[0][0]  # Not exactly right, but close enough
         plt.gca().xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda t_i, pos=None: xformat(t_i * dt)))
         if query_and_title:
             plt.title(query_and_title, loc='left')
