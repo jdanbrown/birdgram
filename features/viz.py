@@ -105,17 +105,18 @@ def plot_spectros(
     )
     if t_max == 'auto':
         t_max = recs.spectro.map(lambda spectro: len(spectro.audio)).max() / 1000
-    t_max_i = first(list(np.where(ts.iloc[0] > 3)[0]) or [len(ts.iloc[0])])
+    dt = ts.iloc[0][1] - ts.iloc[0][0]  # Not exactly right, but close enough
+    t_max_len = int(round((t_max - ts.iloc[0][0]) / dt)) - 1
     f_i_len = Ss.iloc[0].shape[0]
-    Ss = Ss.map(lambda S: S[:, :t_max_i])
-    ts = ts.map(lambda t: t[:t_max_i])
+    Ss = Ss.map(lambda S: S[:, :t_max_len])
+    ts = ts.map(lambda t: t[:t_max_len])
     pad_first = np.array([[0, 0], [0, 0]])  # [top, bottom], [left, right]
     pad_rest  = np.array([[0, 1], [0, 0]])  # [top, bottom], [left, right]
     # Flip vertically (twice) to align with plt.imshow(..., origin='lower')
     cat_Ss = np.flip(axis=0, m=np.concatenate([
         np.flip(axis=0, m=np.pad(
             S,
-            (pad_first if i == 0 else pad_rest) + np.array([[0, 0], [0, t_max_i - S.shape[1]]]),
+            (pad_first if i == 0 else pad_rest) + np.array([[0, 0], [0, t_max_len - S.shape[1]]]),
             'constant',
             constant_values=np.nan,
         ))
@@ -134,7 +135,6 @@ def plot_spectros(
     else:
         # (imshow is faster than pcolormesh by ~4x)
         plt.imshow(cat_Ss, origin='lower')
-        dt = ts.iloc[0][1] - ts.iloc[0][0]  # Not exactly right, but close enough
         plt.gca().xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda t_i, pos=None: xformat(t_i * dt)))
         if query_and_title:
             plt.title(query_and_title, loc='left')
@@ -144,7 +144,7 @@ def plot_spectros(
             if yticks is None:
                 yticks = list(recs[ytick_col])
             plt.yticks(
-                np.arange(len(recs)) * (f_i_len + pad[0].sum()) + f_i_len // 2,
+                np.arange(len(recs)) * (f_i_len + pad_rest[0].sum()) + f_i_len // 2,
                 # Reverse to align with plt.imshow(..., origin='lower')
                 reversed(yticks),
             )
