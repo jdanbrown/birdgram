@@ -52,6 +52,9 @@ countries = dict(
 
 com_names = dict(
 
+    # WARNING Ensure this is the only n_species=4 dataset to avoid colliding with other n_species=4 model ids
+    dan4=('ebird', ["Bewick's Wren", "House Wren", "Song Sparrow", "Spotted Towhee"]),
+
     # The first set of hand-curated species I started training with, based on Mitchell Canyon / Coyote Hills checklists
     #   - XXX Not very valuable to hold on to
     #   - WARNING Keep this ≠168 species to avoid colliding with n_species=168 model ids in the eval notebooks

@@ -164,7 +164,7 @@ class Features(DataclassConfig):
         return patches
 
     @short_circuit(lambda self, recs, **kwargs: recs.get('spectro'))
-    def spectro(self, recs: RecordingDF, **kwargs) -> Column[Melspectro]:
+    def spectro(self, recs: RecordingDF, cache=None, **kwargs) -> Column[Melspectro]:
         """.spectro (f,t) <- .audio (samples,)"""
         log.debug('Features.spectros:in', **{
             'len(recs)': len(recs),
@@ -182,7 +182,7 @@ class Features(DataclassConfig):
         #       3843/3839    0.333    0.000    0.334    0.000 {built-in method numpy.core.multiarray.array}
         #             100    0.285    0.003    3.228    0.032 spectral.py:563(spectrogram)
         #             100    0.284    0.003    0.381    0.004 signaltools.py:2464(detrend)
-        spectros = map_progress(self._spectro, df_rows(recs), **{
+        spectros = map_progress(partial(self._spectro, cache=cache), df_rows(recs), **{
             **dict(
                 use='dask', scheduler='threads',
             ),
@@ -205,8 +205,18 @@ class Features(DataclassConfig):
         ]).T
 
     @short_circuit(lambda self, rec, **kwargs: rec.get('spectro'))
-    # @cache(version=0, key=lambda self, rec: (rec.id, self.spectro_config, self.deps))  # TODO After birdclef
-    def _spectro(self, rec: Row, denoise=True, **kwargs) -> Melspectro:
+    def _spectro(self, rec: Row, cache=None, **kwargs) -> Melspectro:
+        cache = coalesce(cache, False)
+        if cache:
+            return self._spectro_cache(rec, **kwargs)
+        else:
+            return self._spectro_nocache(rec, **kwargs)
+
+    @cache(version=0, key=lambda self, rec, **kwargs: (rec.id, kwargs, self.spectro_config, self.deps))
+    def _spectro_cache(self, rec: Row, **kwargs) -> Melspectro:
+        return self._spectro_nocache(rec, **kwargs)
+
+    def _spectro_nocache(self, rec: Row, denoise=True, **kwargs) -> Melspectro:
         """
         .spectro (f,t) <- .audio (samples,)
           - f: freq indexes (Hz), mel-scaled

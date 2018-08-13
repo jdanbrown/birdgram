@@ -5,6 +5,7 @@ from functools import lru_cache
 import logging
 import os.path
 import re
+import sys
 from typing import Any, NewType, Optional, Tuple, Union
 
 import audiosegment
@@ -107,12 +108,10 @@ class HasPlotAudioTF:
         fancy=True,
         show_audio=True,
         show_marginals=True,
-        show_title=True,
         show_spines=False,
         yticks=None,
         xformat=lambda x: '%ds' % x,
         yformat=lambda y: ('%.1f' % (y / 1000)).rstrip('0').rstrip('.') + 'K',  # Compact (also, 'K' instead of 'KHz')
-        fontsize=10,
         labelsize=8,
         figsize=None,
         show=False,
@@ -145,8 +144,6 @@ class HasPlotAudioTF:
                     ax_tf = ax or plt.gca()
 
             # Unpack attrs
-            rec = self.rec
-            audio = self.audio
             (f, t, S) = self  # Delegate to __iter__, e.g. for Mfcc
 
             # Scale S power, if requested
@@ -215,14 +212,6 @@ class HasPlotAudioTF:
                     ax_t.set_ylim(ax_t_f_lim)
                     ax_f.set_xlim(ax_t_f_lim)
 
-                if show_title and rec:
-                    if fancy:
-                        # Put title at the bottom (as ax_tf xlabel) because fig.suptitle messes up vspacing with different figsizes
-                        ax_tf.set_xlabel(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)
-                        # fig.suptitle(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)  # XXX Poop on this
-                    else:
-                        ax_tf.set_xlabel(f'{rec.dataset}/{rec.species}/{rec.basename}', fontsize=fontsize)
-
                 if xformat: ax_tf.xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda x, pos=None: xformat(x)))
                 if yformat: ax_tf.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda y, pos=None: yformat(y)))
 
@@ -230,7 +219,7 @@ class HasPlotAudioTF:
             if show or figsize or fancy or (show_audio and not raw):
                 plt.show()
             if show_audio:
-                display(audio)
+                display(self.audio)
 
 
 class SpectroLike:
@@ -251,6 +240,13 @@ class SpectroLike:
     def __iter__(self):
         """For unpacking, e.g. (f, t, S) = FooSpectro(...)"""
         return iter([self.f, self.t, self.S])
+
+    def __sizeof__(self):
+        return sys.getsizeof(self.__dict__) + sum(
+            sys.getsizeof(k) + sys.getsizeof(v)
+            for k, v in self.__dict__.items()
+            if k != 'self'
+        )
 
     # TODO Recompute audio after filtering spectro (e.g. playing audio should sound denoised)
     def norm_rms(self) -> 'SpectroLike':
@@ -293,7 +289,7 @@ class Spectro(HasPlotAudioTF, SpectroLike):
         - S: S.shape = (len(f), len(t))
         """
 
-        (rec, audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
+        (_rec, audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
         (f, t, S) = scipy.signal.spectrogram(x, sample_rate, **{
             'window': 'hann',
             'nperseg': nperseg,
@@ -303,8 +299,11 @@ class Spectro(HasPlotAudioTF, SpectroLike):
             **kwargs,
         })
 
-        # Capture env (e.g. self.S, self.audio, self.nperseg)
-        self.__dict__.update(locals())
+        # Store
+        self.audio = audio
+        self.f = f
+        self.t = t
+        self.S = S
 
     def plot(self, **kwargs):
         self._plot_audio_tf(**{
@@ -358,7 +357,7 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
             **kwargs,
         }
 
-        (rec, audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
+        (_rec, audio, _x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
 
         # TODO Why do we match librosa.feature.melspectrogram when overlap>=.5 but not <.5?
         if overlap < .5:
@@ -392,8 +391,10 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
         # Mel-scale f to match S[i]
         f = librosa.mel_frequencies(n_mels, f.min(), f.max())
 
-        # Capture env (e.g. self.S, self.audio, self.nperseg)
-        self.__dict__.update(locals())
+        # Store
+        self.f = f
+        self.t = t
+        self.S = S
 
     def reparam(self, **kwargs):
         return type(self)(self.audio, **{
@@ -501,8 +502,10 @@ class Mfcc(HasPlotAudioTF):
         if std:
             M = (M - M.mean(axis=1)[:, np.newaxis]) / M.std(axis=1)[:, np.newaxis]
 
-        # Capture env (e.g. self.M, self.audio, self.nperseg)
-        self.__dict__.update(locals())
+        # Store
+        self.q = q
+        self.t = t
+        self.M = M
 
     def __iter__(self):
         """For unpacking, e.g. (q, t, M) = Mfcc(...)"""

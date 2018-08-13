@@ -2,23 +2,24 @@ from constants import *
 from util import *
 
 
-def load_user_recs(
+def load_app_recs(
     projection,
     spectro=True,
+    cache_spectro=True,
     **kwargs,
-):
-    """Load user recs and featurize"""
-    recs = load_user_recs_lightweight(projection, **kwargs)
+) -> 'recs':
+    """Load recs and featurize"""
+    recs = load_app_recs_lightweight(projection, **kwargs)
     if spectro:
-        recs = user_recs_add_spectro(recs, projection.features)  # Heavyweight
+        recs = app_recs_add_spectro(recs, projection.features, cache=cache_spectro)  # Heavyweight
     return recs
 
 
-def load_user_recs_lightweight(
+def load_app_recs_lightweight(
     projection,
     datasets=['recordings'],
     n=None,
-):
+) -> 'recs':
 
     # Load
     recs = (projection.features.load.recs(datasets=['recordings'])
@@ -63,11 +64,11 @@ def load_user_recs_lightweight(
     return recs
 
 
-def user_recs_add_spectro(recs, features):
+def app_recs_add_spectro(recs, features, **kwargs) -> 'recs':
     """Featurize: Add .spectro (slow)"""
     # Cache control is knotty here: _spectro @cache is disabled to avoid disk blow up on xc, but we'd benefit from it for recordings
     #   - But the structure of the code makes it very tricky to enable @cache just for _spectro from one caller and not the other
     #   - And the app won't have the benefit of caching anyway, so maybe punt and ignore?
     return (recs
-        .assign(spectro=lambda df: features.spectro(df, scheduler='threads'))  # threads >> sync, procs
+        .assign(spectro=lambda df: features.spectro(df, scheduler='threads', **kwargs))  # threads >> sync, procs
     )

@@ -12,13 +12,15 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 from typing import Iterable, Iterator, List, Mapping, Tuple, TypeVar, Union
 
 from attrdict import AttrDict
-from itertools import *
-from more_itertools import *
 import PIL
 from potoo.pandas import df_ensure, df_summary
 from potoo.util import singleton, strip_startswith
 import tqdm
 
+# Order for precedence: last import wins (e.g. more_itertools.take shadows toolz.take)
+from toolz import *
+from more_itertools import *
+from itertools import *
 
 ## util
 
@@ -327,19 +329,22 @@ def df_inspect(df, *xs: any):
     return df
 
 
-def df_with_totals(df):
+def df_with_totals(df, **kwargs):
     return (df
-        .pipe(df_with_totals_col)
-        .pipe(df_with_totals_row)
+        .pipe(df_with_totals_col, **kwargs)
+        .pipe(df_with_totals_row, **kwargs)
     )
 
 
-def df_with_totals_col(df):
-    return df.assign(total=lambda df: df.sum(axis=1))
+def df_with_totals_col(df, **kwargs):
+    return df.assign(total=lambda df: df.sum(axis=1, **kwargs))
 
 
-def df_with_totals_row(df):
-    return df.append(df.sum(axis=0).to_frame().T)
+def df_with_totals_row(df, **kwargs):
+    return (df
+        .append(df.sum(axis=0, **kwargs).to_frame().T)
+        [df.columns]  # Preserve col order
+    )
 
 
 def df_rows(df) -> Iterator[Row]:
@@ -1094,19 +1099,13 @@ def audio_bandpass_filter(audio: audiosegment.AudioSegment, **kwargs) -> audiose
     return audiosegment_with_numpy_array(audio, lambda x: bandpass_filter(x, audio.frame_rate, **kwargs))
 
 
-def rec_str_line(
-    rec,
-    *_first,
-    first=[],
-    last=[],
-    default=[
-        'audio_id',
-        ('recorded_at', lambda x: x.isoformat()),
-        'species',
-        ('duration_s', '%.1fs'),
-        'basename',
-    ],
-) -> str:
+def rec_str_line(rec, *_first, first=[], last=[], default=[
+    'audio_id',
+    ('recorded_at', lambda x: x.isoformat()),
+    'species',
+    ('duration_s', '%.1fs'),
+    'basename',
+]) -> str:
     """Interactive shorthand"""
     rec = rec.copy()
     rec['audio_id'] = rec.audio_id if 'audio_id' in rec else rec.name if isinstance(rec.name, str) else 'NO_AUDIO_ID'
@@ -1119,6 +1118,27 @@ def rec_str_line(
             f = lambda x, f=f: f % x
         strs.append(f(rec[k]))
     return '  '.join(strs)
+
+
+def xc_rec_str_line(rec, *_first, first=[], last=[], default=[
+    'id',
+    'species_subspecies',
+    ('duration_s', '%.1fs'),
+    'quality',
+    'type',
+    'country_locality',  # TODO country -> county_code
+    # 'lat', 'lng',
+    ('date', lambda x: x.date().isoformat()),
+    'recordist_license_type',
+]) -> str:
+    """Interactive shorthand"""
+    rec = rec.copy()
+    # Ad-hoc formatting to make these easier to visually grok
+    rec['id'] = 'XC%s' % rec['id']
+    rec['species_subspecies'] = '/'.join([rec.species, *([rec.subspecies] if rec.subspecies else [])])
+    rec['country_locality'] = '/'.join([rec.country, *reversed(rec.locality.split(', '))])
+    rec['recordist_license_type'] = '%s[%s]' % (rec.recordist, rec.license_type)
+    return rec_str_line(rec, *_first, first=first, last=last, default=default)
 
 
 def species_probs_meta(df):
