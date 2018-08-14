@@ -14,7 +14,7 @@ from typing import Iterable, Iterator, List, Mapping, Tuple, TypeVar, Union
 from attrdict import AttrDict
 import PIL
 from potoo.pandas import df_ensure, df_summary
-from potoo.util import singleton, strip_startswith
+from potoo.util import puts, singleton, strip_startswith, tap
 import tqdm
 
 # Order for precedence: last import wins (e.g. more_itertools.take shadows toolz.take)
@@ -205,7 +205,7 @@ def ls(dir):
 
 ## dataclasses
 
-from collections import OrderedDict
+from collections import abc, OrderedDict
 import json
 import sys
 from typing import Iterable
@@ -242,6 +242,25 @@ class DataclassUtil:
         except:
             sizeof = sys.getsizeof
         return sizeof(list(self.asdict().items()))
+
+
+class DataclassAsDict(abc.MutableMapping):
+    """Expose a dict interface for the fields of a dataclass"""
+
+    def __getitem__(self, k):
+        return self.__dict__.__getitem__(k)
+
+    def __setitem__(self, k, v):
+        return self.__dict__.__setitem__(k, v)
+
+    def __delitem__(self, k):
+        return self.__dict__.__delitem__(k)
+
+    def __iter__(self):
+        return self.__dict__.__iter__()
+
+    def __len__	(self):
+        return self.__dict__.__len__()
 
 
 class DataclassConfig(DataclassUtil):

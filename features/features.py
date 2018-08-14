@@ -24,6 +24,7 @@ from typing import List
 
 from constants import cache_dir, data_dir, default_log_ylim_min_hz, standard_sample_rate_hz
 from datatypes import Audio, Recording, RecOrAudioOrSignal
+from load import Load
 import metadata
 from util import *
 
@@ -59,9 +60,12 @@ def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
     if isinstance(v, box):
         v = v.unbox
 
-    # rec as Recording/attrs
+    # rec as Recording/attrs/Series
     if not isinstance(v, (dict, Audio, np.ndarray, tuple)):
-        v = v.asdict()
+        if isinstance(v, pd.Series):
+            v = dict(v)
+        else:
+            v = v.asdict()
 
     # rec as dict
     if isinstance(v, dict):
@@ -77,6 +81,7 @@ def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
         (x, sample_rate) = (v, standard_sample_rate_hz)
 
     audio = (
+        rec.audio.unbox if rec and hasattr(rec.audio, 'unbox') else
         rec.audio if rec else
         audio if audio is not None else  # Careful: bool(Audio) isn't reliable for ~0s audios
         audiosegment.from_numpy_array(x, framerate=sample_rate)
@@ -219,7 +224,7 @@ class HasPlotAudioTF:
             if show or figsize or fancy or (show_audio and not raw):
                 plt.show()
             if show_audio:
-                display(self.audio)
+                display(self.load_audio())
 
 
 class SpectroLike:
@@ -229,13 +234,24 @@ class SpectroLike:
         other.__dict__.update(kwargs)
         return other
 
-    def with_audio(self, f) -> 'SpecroLike':
-        rec_or_audio_or_signal = f(self.audio)
-        (rec, audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
-        return self.replace(
-            rec_or_audio_or_signal=rec_or_audio_or_signal,
-            rec=rec, audio=audio, x=x, sample_rate=sample_rate,
-        )
+    def load_audio(self) -> 'Audio':
+        """Load .audio from file on demand, instead of bloating storage (mem and disk) with multiple copies of audio"""
+        return self.load_audio_as_rec().audio
+
+    def load_audio_as_rec(self) -> Recording:
+        """Load .audio from file on demand, instead of bloating storage (mem and disk) with multiple copies of audio"""
+        if self.path is None:
+            raise ValueError("Must initialize with rec.{path,duration_s} to use .load_audio* (loads from disk)")
+        else:
+            load = self.load or Load()
+            rec = Recording(
+                dataset=None,  # HACK Required arg that we don't rely on (maybe dataset shouldn't be a required arg?)
+                path=self.path,
+                duration_s=self.duration_s,
+                **kwargs,
+            )
+            rec.audio = load._audio(rec).unbox
+            return rec
 
     def __iter__(self):
         """For unpacking, e.g. (f, t, S) = FooSpectro(...)"""
@@ -269,6 +285,7 @@ class Spectro(HasPlotAudioTF, SpectroLike):
     def __init__(
         self,
         rec_or_audio_or_signal,
+        load=None,
         nperseg=1024,  # Samples per stft segment
         overlap=0.75,  # Fraction of nperseg samples that overlap between segments
         **kwargs,  # Passthru to scipy.signal.spectrogram
@@ -289,7 +306,10 @@ class Spectro(HasPlotAudioTF, SpectroLike):
         - S: S.shape = (len(f), len(t))
         """
 
-        (_rec, audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
+        (rec, _audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
+        path = none_or(rec, lambda x: x.path)
+        duration_s = none_or(rec, lambda x: x.duration_s)
+
         (f, t, S) = scipy.signal.spectrogram(x, sample_rate, **{
             'window': 'hann',
             'nperseg': nperseg,
@@ -300,7 +320,9 @@ class Spectro(HasPlotAudioTF, SpectroLike):
         })
 
         # Store
-        self.audio = audio
+        self.path = path
+        self.duration_s = duration_s
+        self.load = load
         self.f = f
         self.t = t
         self.S = S
@@ -317,6 +339,7 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
     def __init__(
         self,
         rec_or_audio_or_signal,
+        load=None,
         nperseg=1024,  # Samples per stft segment
         overlap=0.75,  # Fraction of nperseg samples that overlap between segments [TODO Fix when < .5 (see below)]
         mels_div=2,  # Increase to get fewer freq bins (unsafe to decrease) [TODO Understand better]
@@ -349,7 +372,16 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
         3. §12.5.7 of "Text-to-Speech Synthesis" (2009) [https://books.google.com/books?isbn=0521899273]
         """
 
+        (rec, audio, _x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
+        path = none_or(rec, lambda x: x.path)
+        duration_s = none_or(rec, lambda x: x.duration_s)
+
+        # TODO Why do we match librosa.feature.melspectrogram when overlap>=.5 but not <.5?
+        if overlap < .5:
+            logger.warn(f"Melspectro gives questionable output when overlap[{overlap}] < .5 (doesn't match librosa)")
+
         self.melspectro_kwargs = {
+            'load': load,
             'nperseg': nperseg,
             'overlap': overlap,
             'mels_div': mels_div,
@@ -357,22 +389,16 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
             **kwargs,
         }
 
-        (_rec, audio, _x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
-
-        # TODO Why do we match librosa.feature.melspectrogram when overlap>=.5 but not <.5?
-        if overlap < .5:
-            logger.warn(f"Melspectro gives questionable output when overlap[{overlap}] < .5 (doesn't match librosa)")
-
         # Start with a normal spectro
-        self.audio = audio
         self.spectro_kwargs = {
+            'load': load,
             'nperseg': nperseg,
             'overlap': overlap,
             'scaling': 'spectrum',
             'mode': 'magnitude',
             **kwargs,
         }
-        (f, t, S) = self.to_normal_spectro()
+        (f, t, S) = self.to_normal_spectro(rec_or_audio_or_signal=rec_or_audio_or_signal)
 
         # HACK Apply unknown transforms to match librosa.feature.melspectrogram
         #   - TODO Figure out why these are required to match output
@@ -392,18 +418,21 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
         f = librosa.mel_frequencies(n_mels, f.min(), f.max())
 
         # Store
+        self.path = path
+        self.duration_s = duration_s
+        self.load = load
         self.f = f
         self.t = t
         self.S = S
 
-    def reparam(self, **kwargs):
-        return type(self)(self.audio, **{
+    def reparam(self, rec_or_audio_or_signal=None, **kwargs):
+        return type(self)(rec_or_audio_or_signal or self.load_audio_as_rec(), **{
             **self.melspectro_kwargs,
             **kwargs,
         })
 
-    def to_normal_spectro(self, **kwargs):
-        return Spectro(self.audio, **{
+    def to_normal_spectro(self, rec_or_audio_or_signal=None, **kwargs):
+        return Spectro(rec_or_audio_or_signal or self.load_audio_as_rec(), **{
             **self.spectro_kwargs,
             **kwargs,
         })
@@ -440,6 +469,7 @@ class Mfcc(HasPlotAudioTF):
     def __init__(
         self,
         rec_or_audio_or_signal,
+        load=None,
         nperseg=1024,  # Samples per stft segment
         overlap=0.75,  # Fraction of nperseg samples that overlap between segments
         mels_div=2,  # Increase to get fewer freq bins (unsafe to decrease) [TODO Understand better]
@@ -473,9 +503,13 @@ class Mfcc(HasPlotAudioTF):
         2. http://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
         3. §12.5.7 of "Text-to-Speech Synthesis" (2009) [https://books.google.com/books?isbn=0521899273]
         """
-        (rec, audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
 
-        (f, t, S) = Melspectro(audio, **{
+        (rec, audio, _x, _sample_rate) = unpack_rec(rec_or_audio_or_signal)
+        path = none_or(rec, lambda x: x.path)
+        duration_s = none_or(rec, lambda x: x.duration_s)
+
+        (f, t, S) = Melspectro(rec_or_audio_or_signal, **{
+            'load': load,
             'nperseg': nperseg,
             'overlap': overlap,
             'mels_div': mels_div,
@@ -503,6 +537,9 @@ class Mfcc(HasPlotAudioTF):
             M = (M - M.mean(axis=1)[:, np.newaxis]) / M.std(axis=1)[:, np.newaxis]
 
         # Store
+        self.path = path
+        self.duration_s = duration_s
+        self.load = load
         self.q = q
         self.t = t
         self.M = M
@@ -536,7 +573,7 @@ def plt_compare_spec_mel_mfcc(rec_or_audio_or_signal):
     Mfcc(rec_or_audio_or_signal).plot(show_audio=False)
     plt.show()
 
-    (rec, audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
+    (_rec, _audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
     mfccs = librosa.feature.mfcc(x.astype(float), sample_rate, n_mfcc=4)
     for i in range(mfccs.shape[0]):
         mfccs[i] = (mfccs[i] - mfccs[i].mean()) / mfccs[i].std()

@@ -41,8 +41,7 @@ def plot_spectro_wrap(
 ):
     spectro = x.spectro if hasattr(x, 'spectro') else x
     wrap_ms = int(wrap_s * 1000)
-    len_audio_ms = len(spectro.audio)
-    n_wraps = int(np.ceil(len_audio_ms / wrap_ms))
+    n_wraps = int(np.ceil(spectro.duration_s * 1000 / wrap_ms))
     breaks_ms = np.linspace(0, n_wraps * wrap_ms, n_wraps, endpoint=False)
     if pad:
         kwargs['t_max'] = wrap_s
@@ -59,7 +58,7 @@ def plot_spectro_wrap(
     if show_audio:
         if not raw:
             plt.show()
-        display(spectro.audio)
+        display(spectro.load_audio())
 
 
 def plot_spectro(
@@ -73,7 +72,7 @@ def plot_spectro(
     if show_audio:
         if not raw:
             plt.show()
-        display(rec.spectro.audio)
+        display(rec.spectro.load_audio())
 
 
 def plot_spectros(
@@ -104,7 +103,7 @@ def plot_spectros(
         ))
     )
     if t_max == 'auto':
-        t_max = recs.spectro.map(lambda spectro: len(spectro.audio)).max() / 1000
+        t_max = recs.spectro.map(lambda spectro: spectro.duration_s).max()
     dt = ts.iloc[0][1] - ts.iloc[0][0]  # Not exactly right, but close enough
     t_max_len = int(round((t_max - ts.iloc[0][0]) / dt)) - 1
     f_i_len = Ss.iloc[0].shape[0]

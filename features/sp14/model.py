@@ -223,21 +223,30 @@ class Features(DataclassConfig):
           - t: time indexes (s)
           - S: log power (f x t): log(X**2) where X is the (energy) unit of the audio signal
         """
-        audio = self.load._audio(rec)  # Pull
+        audio = self.load._audio(rec).unbox  # Pull
         c = self.spectro_config
-        (_rec, audio, _x, _sample_rate) = unpack_rec(audio)
         assert audio.frame_rate == c.sample_rate, 'Unsupported sample_rate[%s != %s] for audio[%s]' % (
             audio.frame_rate, c.sample_rate, audio,
         )
         # TODO Filter by c.f_min
         #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
-        spectro = Melspectro(audio, **{
-            'nperseg': c.frame_length,
-            'overlap': 1 - c.hop_length / c.frame_length,
-            'window': c.frame_window,
-            'n_mels': c.f_bins,
-            **kwargs,
-        })
+        spectro = Melspectro(
+            # Pass rec instead of just audio so that Melspectro can lazy-load audio from disk (it doesn't store it)
+            Recording(
+                dataset=None,  # HACK Required arg that spectro doesn't rely on (maybe dataset shouldn't be a required arg?)
+                path=rec.path,
+                duration_s=rec.duration_s,
+                audio=audio,
+            ),
+            load=self.load,
+            **{
+                'nperseg': c.frame_length,
+                'overlap': 1 - c.hop_length / c.frame_length,
+                'window': c.frame_window,
+                'n_mels': c.f_bins,
+                **kwargs,
+            },
+        )
         if denoise:
             spectro = self._spectro_denoise(spectro)
         return spectro
@@ -260,8 +269,12 @@ class Features(DataclassConfig):
             return self._rec_with_audio(x, f)
 
     def _spectro_with_audio(self, spectro: Melspectro, f: Callable[[Audio], Audio]) -> Melspectro:
-        mock_rec = AttrDict(audio=f(spectro.audio))  # TODO Refactor so we don't need to mock a rec
-        return self._spectro(mock_rec)
+        # TODO Refactor so we don't need to mock a Row
+        return self._spectro(pd.Series(dict(
+            path=spectro.path,
+            duration_s=spectro.duration_s,
+            audio=box(f(spectro.load_audio())),
+        )))
 
     def _rec_with_audio(self, rec: Row, f: Callable[[Audio], Audio]) -> Row:
         rec = rec.copy()
@@ -276,6 +289,7 @@ class Features(DataclassConfig):
                 del rec[k]
         rec['audio'] = box(f(audio))
         rec['spectro'] = self._spectro(rec)
+        # TODO TODO path/duration_s are now wrong
         return rec
 
 

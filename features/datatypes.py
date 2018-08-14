@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from datetime import datetime
 from typing import Iterable, Tuple, Union
 
 from attrdict import AttrDict
@@ -9,7 +10,7 @@ import numpy as np
 import pandas as pd
 from potoo.pandas import df_remove_unused_categories, df_reorder_cols
 
-from util import DataclassUtil
+from util import DataclassAsDict, DataclassUtil
 
 Audio = audiosegment.AudioSegment
 
@@ -29,7 +30,7 @@ class Species(DataclassUtil):
 
 
 @dataclass
-class Recording(DataclassUtil):
+class Recording(DataclassUtil, DataclassAsDict):
 
     # Required (1/2)
     dataset: str
@@ -44,6 +45,12 @@ class Recording(DataclassUtil):
     samples_n: int = None
     basename: str = None
     species_longhand: str = None
+
+    # More recently added metadata, from notebooks/app_ideas_*
+    #   - TODO Push these upstream, e.g. into Load.metadata
+    audio_id: str = None
+    audio_sha: str = None
+    recorded_at: datetime = None
 
     # Required (2/2)
     #   - Located down here so that df display puts it far to the right
@@ -60,7 +67,7 @@ class Recording(DataclassUtil):
     #   - Optional, for partial load
     spectro: np.ndarray = None
     patches: Iterable[np.ndarray] = None
-    feats: np.ndarray = None
+    feat: np.ndarray = None
 
 
 def RecordingDF(*args, **kwargs) -> pd.DataFrame:

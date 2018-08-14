@@ -4,22 +4,13 @@ from util import *
 
 def load_app_recs(
     projection,
+    datasets=['recordings'],
+    n=None,
     spectro=True,
     cache_spectro=True,
     **kwargs,
 ) -> 'recs':
     """Load recs and featurize"""
-    recs = load_app_recs_lightweight(projection, **kwargs)
-    if spectro:
-        recs = app_recs_add_spectro(recs, projection.features, cache=cache_spectro)  # Heavyweight
-    return recs
-
-
-def load_app_recs_lightweight(
-    projection,
-    datasets=['recordings'],
-    n=None,
-) -> 'recs':
 
     # Load
     recs = (projection.features.load.recs(datasets=['recordings'])
@@ -61,11 +52,15 @@ def load_app_recs_lightweight(
         log.warn('Dropped %s recs with duplicate audio_id' % (_n_recs_with_dupes - len(recs)))
         display(_dupe_audio_id)
 
+    # Heavyweight
+    if spectro:
+        recs = app_recs_add_spectro(recs, projection.features, cache=cache_spectro)
+
     return recs
 
 
 def app_recs_add_spectro(recs, features, **kwargs) -> 'recs':
-    """Featurize: Add .spectro (slow)"""
+    """Featurize: .spectro (slow)"""
     # Cache control is knotty here: _spectro @cache is disabled to avoid disk blow up on xc, but we'd benefit from it for recordings
     #   - But the structure of the code makes it very tricky to enable @cache just for _spectro from one caller and not the other
     #   - And the app won't have the benefit of caching anyway, so maybe punt and ignore?

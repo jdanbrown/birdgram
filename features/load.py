@@ -217,7 +217,7 @@ class Load(DataclassConfig):
     # Caching doesn't help here, since our bottleneck is file read (.wav), which is also cache hit's bottleneck
     def _audio(
         self,
-        rec: Row,
+        rec: Row,  # .path is only required attr
         load=True,  # load=False if you just want to trigger lots of wav encodings
     ) -> 'Box[Optional[Audio]]':
         """audio <- .path, and (optionally) cache a standardized .wav for faster subsequent loads"""
@@ -264,10 +264,10 @@ class Load(DataclassConfig):
             # "Drop" invalid audio files by replacing them with a 0s audio, so we can detect and filter out downstream
             log('Load._audio: WARNING: Dropping invalid audio file', **dict(
                 error=str(e),
-                dataset=rec.dataset,
-                id=rec.id,
-                path=rec.path,
-                # filesize_b=rec.filesize_b,
+                dataset=rec.get('dataset'),
+                id=rec.get('id'),
+                path=rec.get('path'),
+                # filesize_b=rec.get('filesize_b'),
                 cache_in_path=path,
                 cache_in_path_exists=os.path.exists(path),
                 cache_in_filesize_b=or_else(None, lambda: os.path.getsize(path)),
