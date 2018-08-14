@@ -130,8 +130,8 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
         m = re.match(r'^([A-Z]{4}) ', basename)
         species_query = m.groups()[0] if m else unk_species
     elif dataset == 'xc':
-        [_const_xc, _const_data, species_query, _id, _const_audio] = id_parts
-        assert (_const_xc, _const_data, _const_audio) == ('xc', 'data', 'audio')
+        [_const_xc, _const_data, species_query, _id, *_rest] = id_parts
+        assert (_const_xc, _const_data) == ('xc', 'data')
     elif dataset == 'mlsp-2013':
         train_labels = mlsp2013.train_labels_for_filename.get(
             basename,

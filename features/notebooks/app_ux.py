@@ -10,18 +10,22 @@ def load_app_recs(
     cache_spectro=True,
     **kwargs,
 ) -> 'recs':
-    """Load recs and featurize"""
+    """Load recs + featurize: .audio, .feat"""
 
     # Load
     recs = (projection.features.load.recs(datasets=['recordings'])
         [:n]
     )
 
-    # Featurize
+    # Featurize: .audio, .feat
     recs = (recs
         # Add .audio
         .assign(audio=lambda df: projection.features.load.audio(df, scheduler='threads'))
         # Add .recorded_at, .audio_sha, .audio_id
+        #   - TODO Move these upstream into Load._metadata
+        #       - Careful: Adding .stat into Load._metadata might add a bottleneck
+        #       - Careful: Adding sha1hex(audio._data) into Load._metadata might add a bottleneck
+        #       - Careful: Replacing rec.id with .audio_id will bust caches
         .assign(
             recorded_at=lambda df: pd.to_datetime(df.path.map(lambda x: (Path(data_dir) / x).stat().st_mtime) * 1e9),
             audio_sha=lambda df: df.audio.map(lambda x: sha1hex(x.unbox._data)),

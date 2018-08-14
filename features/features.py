@@ -224,7 +224,8 @@ class HasPlotAudioTF:
             if show or figsize or fancy or (show_audio and not raw):
                 plt.show()
             if show_audio:
-                display(self.load_audio())
+                assert False, "TODO Refactor spectro.plot -> rec.plot, since spectro no longer knows .audio"  # TODO
+                # display(self.audio)
 
 
 class SpectroLike:
@@ -233,25 +234,6 @@ class SpectroLike:
         other = copy.copy(self)
         other.__dict__.update(kwargs)
         return other
-
-    def load_audio(self) -> 'Audio':
-        """Load .audio from file on demand, instead of bloating storage (mem and disk) with multiple copies of audio"""
-        return self.load_audio_as_rec().audio
-
-    def load_audio_as_rec(self) -> Recording:
-        """Load .audio from file on demand, instead of bloating storage (mem and disk) with multiple copies of audio"""
-        if self.path is None:
-            raise ValueError("Must initialize with rec.{path,duration_s} to use .load_audio* (loads from disk)")
-        else:
-            load = self.load or Load()
-            rec = Recording(
-                dataset=None,  # HACK Required arg that we don't rely on (maybe dataset shouldn't be a required arg?)
-                path=self.path,
-                duration_s=self.duration_s,
-                **kwargs,
-            )
-            rec.audio = load._audio(rec).unbox
-            return rec
 
     def __iter__(self):
         """For unpacking, e.g. (f, t, S) = FooSpectro(...)"""
@@ -264,14 +246,14 @@ class SpectroLike:
             if k != 'self'
         )
 
-    # TODO Recompute audio after filtering spectro (e.g. playing audio should sound denoised)
+    # TODO Recompute rec.audio after denoising rec.spectro? (e.g. playing audio should sound denoised)
     def norm_rms(self) -> 'SpectroLike':
         """Normalize by RMS (like "normalize a spectro by its RMS energy" from [SP14])"""
         S = self.S
         S = S / np.sqrt((S ** 2).mean())
         return self.replace(S=S)
 
-    # TODO Recompute audio after filtering spectro (e.g. playing audio should sound denoised)
+    # TODO Recompute rec.audio after denoising rec.spectro? (e.g. playing audio should sound denoised)
     def clip_below_median_per_freq(self) -> 'SpectroLike':
         """For each freq bin, substract the median and then zero out negative values"""
         S = self.S
@@ -285,7 +267,6 @@ class Spectro(HasPlotAudioTF, SpectroLike):
     def __init__(
         self,
         rec_or_audio_or_signal,
-        load=None,
         nperseg=1024,  # Samples per stft segment
         overlap=0.75,  # Fraction of nperseg samples that overlap between segments
         **kwargs,  # Passthru to scipy.signal.spectrogram
@@ -306,9 +287,7 @@ class Spectro(HasPlotAudioTF, SpectroLike):
         - S: S.shape = (len(f), len(t))
         """
 
-        (rec, _audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
-        path = none_or(rec, lambda x: x.path)
-        duration_s = none_or(rec, lambda x: x.duration_s)
+        (_rec, _audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
 
         (f, t, S) = scipy.signal.spectrogram(x, sample_rate, **{
             'window': 'hann',
@@ -320,9 +299,6 @@ class Spectro(HasPlotAudioTF, SpectroLike):
         })
 
         # Store
-        self.path = path
-        self.duration_s = duration_s
-        self.load = load
         self.f = f
         self.t = t
         self.S = S
@@ -339,7 +315,6 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
     def __init__(
         self,
         rec_or_audio_or_signal,
-        load=None,
         nperseg=1024,  # Samples per stft segment
         overlap=0.75,  # Fraction of nperseg samples that overlap between segments [TODO Fix when < .5 (see below)]
         mels_div=2,  # Increase to get fewer freq bins (unsafe to decrease) [TODO Understand better]
@@ -372,16 +347,13 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
         3. §12.5.7 of "Text-to-Speech Synthesis" (2009) [https://books.google.com/books?isbn=0521899273]
         """
 
-        (rec, audio, _x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
-        path = none_or(rec, lambda x: x.path)
-        duration_s = none_or(rec, lambda x: x.duration_s)
+        (_rec, _audio, _x, sample_rate) = unpack_rec(rec_or_audio_or_signal)
 
         # TODO Why do we match librosa.feature.melspectrogram when overlap>=.5 but not <.5?
         if overlap < .5:
             logger.warn(f"Melspectro gives questionable output when overlap[{overlap}] < .5 (doesn't match librosa)")
 
         self.melspectro_kwargs = {
-            'load': load,
             'nperseg': nperseg,
             'overlap': overlap,
             'mels_div': mels_div,
@@ -391,7 +363,6 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
 
         # Start with a normal spectro
         self.spectro_kwargs = {
-            'load': load,
             'nperseg': nperseg,
             'overlap': overlap,
             'scaling': 'spectrum',
@@ -418,9 +389,6 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
         f = librosa.mel_frequencies(n_mels, f.min(), f.max())
 
         # Store
-        self.path = path
-        self.duration_s = duration_s
-        self.load = load
         self.f = f
         self.t = t
         self.S = S
@@ -469,7 +437,6 @@ class Mfcc(HasPlotAudioTF):
     def __init__(
         self,
         rec_or_audio_or_signal,
-        load=None,
         nperseg=1024,  # Samples per stft segment
         overlap=0.75,  # Fraction of nperseg samples that overlap between segments
         mels_div=2,  # Increase to get fewer freq bins (unsafe to decrease) [TODO Understand better]
@@ -504,12 +471,7 @@ class Mfcc(HasPlotAudioTF):
         3. §12.5.7 of "Text-to-Speech Synthesis" (2009) [https://books.google.com/books?isbn=0521899273]
         """
 
-        (rec, audio, _x, _sample_rate) = unpack_rec(rec_or_audio_or_signal)
-        path = none_or(rec, lambda x: x.path)
-        duration_s = none_or(rec, lambda x: x.duration_s)
-
         (f, t, S) = Melspectro(rec_or_audio_or_signal, **{
-            'load': load,
             'nperseg': nperseg,
             'overlap': overlap,
             'mels_div': mels_div,
@@ -537,9 +499,6 @@ class Mfcc(HasPlotAudioTF):
             M = (M - M.mean(axis=1)[:, np.newaxis]) / M.std(axis=1)[:, np.newaxis]
 
         # Store
-        self.path = path
-        self.duration_s = duration_s
-        self.load = load
         self.q = q
         self.t = t
         self.M = M

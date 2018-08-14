@@ -1140,7 +1140,7 @@ def rec_str_line(rec, *_first, first=[], last=[], default=[
 
 
 def xc_rec_str_line(rec, *_first, first=[], last=[], default=[
-    'id',
+    'xc_id',
     'species_subspecies',
     ('duration_s', '%.1fs'),
     'quality',
@@ -1153,7 +1153,7 @@ def xc_rec_str_line(rec, *_first, first=[], last=[], default=[
     """Interactive shorthand"""
     rec = rec.copy()
     # Ad-hoc formatting to make these easier to visually grok
-    rec['id'] = 'XC%s' % rec['id']
+    rec['xc_id'] = 'XC%s' % rec['xc_id']
     rec['species_subspecies'] = '/'.join([rec.species, *([rec.subspecies] if rec.subspecies else [])])
     rec['country_locality'] = '/'.join([rec.country, *reversed(rec.locality.split(', '))])
     rec['recordist_license_type'] = '%s[%s]' % (rec.recordist, rec.license_type)

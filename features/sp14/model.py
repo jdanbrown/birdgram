@@ -238,7 +238,6 @@ class Features(DataclassConfig):
                 duration_s=rec.duration_s,
                 audio=audio,
             ),
-            load=self.load,
             **{
                 'nperseg': c.frame_length,
                 'overlap': 1 - c.hop_length / c.frame_length,
@@ -262,34 +261,37 @@ class Features(DataclassConfig):
     # Util
     #
 
-    def with_audio(self, x: 'X', f: Callable[[Audio], Audio]) -> 'X':
-        if isinstance(x, Melspectro):
-            return self._spectro_with_audio(x, f)
-        elif hasattr(x, 'spectro'):
-            return self._rec_with_audio(x, f)
-
-    def _spectro_with_audio(self, spectro: Melspectro, f: Callable[[Audio], Audio]) -> Melspectro:
-        # TODO Refactor so we don't need to mock a Row
-        return self._spectro(pd.Series(dict(
-            path=spectro.path,
-            duration_s=spectro.duration_s,
-            audio=box(f(spectro.load_audio())),
-        )))
-
-    def _rec_with_audio(self, rec: Row, f: Callable[[Audio], Audio]) -> Row:
+    def with_audio(self, rec: Row, f: Callable[[Audio], Audio]) -> Row:
         rec = rec.copy()
-        # HACK Generate a new random rec.id to invalidate caches (which all key on rec.id, which is mostly just the filename)
-        #   - TODO Replace rec.id with rec.audio_id, which will require rebuilding all feature caches (ugh)
-        rec.id = '%s/%s' % (secrets.token_hex(4), rec.id)
-        audio = rec.audio.unbox
-        # Invalidate downstream features
-        #   - HACK Very brittle; how to avoid maintaining an explicit list? Any easier to whitelist upstreams instead?
-        for k in ['audio', 'spectro', 'patches', 'proj', 'agg', 'feat']:
+
+        id = '%s+%s' % (rec.id, secrets.token_hex(4))  # Invalide caches
+
+        # Transform .audio
+        rec['audio'] = box(f(rec.audio.unbox))
+        rec['audio'].unbox.name = id
+
+        # Recompute/invalidate attrs coupled to .audio
+        #   - TODO Replace rec.id with rec.audio_id (which will require rebuilding feat/_feat caches...)
+        rec['id'] = id
+        rec['path'] = None  # No meaningful .path for an in-mem .audio
+        rec['basename'] = None  # No meaningful .basename for an in-mem .audio
+        # Recompute .duration_s, .samples_*, basename, species, etc.
+        del rec['duration_s']  # Bust short-circuit
+        for k, v in self.load._metadata(rec).items():
+            rec[k] = v
+        # TODO Recompute [HACK Invalidate, since nothing needs these yet for sliced recs]
+        for k in ['audio_id', 'audio_sha']:
             if k in rec:
                 del rec[k]
-        rec['audio'] = box(f(audio))
+
+        # Recompute/invalidate downstream features
+        #   - HACK Very brittle; how to avoid maintaining an explicit list? Any easier to whitelist upstreams instead?
+        del rec['spectro']  # Bust short-circuit
         rec['spectro'] = self._spectro(rec)
-        # TODO TODO path/duration_s are now wrong
+        for k in ['patches', 'proj', 'agg', 'feat']:
+            if k in rec:
+                del rec[k]
+
         return rec
 
 
@@ -559,7 +561,9 @@ class Projection(DataclassConfig):
         rec = self.features.with_audio(rec, f)
         # Recompute downstream features
         recs = pd.DataFrame([rec])
-        recs = self.transform(recs, override_use_dask=False)
+        recs = self.transform(recs,
+            override_use_dask=False,  # Single row, avoid par overhead
+        )
         return recs.iloc[0]
 
 

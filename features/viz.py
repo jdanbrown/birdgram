@@ -1,5 +1,5 @@
 import itertools
-from typing import Callable, Iterable, Optional, Union
+from typing import Callable, Iterable, Optional
 
 import matplotlib.pyplot as plt
 from more_itertools import first
@@ -13,25 +13,24 @@ from util import *
 
 
 def plot_spectro_micro(
-    x: Union['rec', 'spectro'],
+    rec,
     features,
     wrap=True,  # False to truncate at wrap_s
-    wrap_s=15,
+    wrap_s=10,  # TODO 10 vs. 15 as sane default?
     limit_s=None,
     **kwargs,
 ):
-    # TODO Pad (like plot_spectros) if audio < wrap_s, for uniform img height across various recs
     kwargs.setdefault('raw', True)
     kwargs.setdefault('show_audio', True)
     if not wrap and not limit_s:
         limit_s = wrap_s
     if limit_s:
-        x = features.with_audio(x, lambda audio: audio[:limit_s * 1000])
-    plot_spectro_wrap(x, features, wrap_s=wrap_s, **kwargs)
+        rec = features.with_audio(rec, lambda audio: audio[:limit_s * 1000])
+    plot_spectro_wrap(rec, features, wrap_s=wrap_s, **kwargs)
 
 
 def plot_spectro_wrap(
-    x: Union['rec', 'spectro'],
+    rec,
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
     wrap_s: float = 10,  # Sane default (5 too small, 20 too big, 10/15 both ok)
     pad=True,  # In case there's only one line, pad out to wrap_s, e.g for uniform height when raw=True
@@ -39,15 +38,14 @@ def plot_spectro_wrap(
     raw=False,
     **kwargs,
 ):
-    spectro = x.spectro if hasattr(x, 'spectro') else x
     wrap_ms = int(wrap_s * 1000)
-    n_wraps = int(np.ceil(spectro.duration_s * 1000 / wrap_ms))
+    n_wraps = int(np.ceil(rec.duration_s * 1000 / wrap_ms))
     breaks_ms = np.linspace(0, n_wraps * wrap_ms, n_wraps, endpoint=False)
     if pad:
         kwargs['t_max'] = wrap_s
     plot_spectros(
         pd.DataFrame(
-            dict(spectro=features.with_audio(spectro, lambda audio: audio[i : i + wrap_ms]))
+            features.with_audio(rec, lambda audio: audio[i : i + wrap_ms])
             for i in breaks_ms
         ),
         yticks=['%.0fs' % (ms / 1000) for ms in breaks_ms],
@@ -58,28 +56,26 @@ def plot_spectro_wrap(
     if show_audio:
         if not raw:
             plt.show()
-        display(spectro.load_audio())
+        display(rec.audio)
 
 
 def plot_spectro(
-    x: Union['rec', 'spectro'],
+    rec,
     raw=False,
     show_audio=False,
     **kwargs,
 ):
-    rec = x if hasattr(x, 'spectro') else pd.Series(dict(spectro=x))
     plot_spectros(pd.DataFrame([rec]), raw=raw, **kwargs)
     if show_audio:
         if not raw:
             plt.show()
-        display(rec.spectro.load_audio())
+        display(rec.audio)
 
 
 def plot_spectros(
-    x: Union['recs', 'spectros'],
+    recs,
     query_and_title=None,
     raw=False,
-    spectro_col='spectro',
     xformat=lambda x: '%.0fs' % x,
     ytick_col=None,  # e.g. 'species_longhand'
     yticks=None,
@@ -90,7 +86,6 @@ def plot_spectros(
 ):
     """Vis lots of spectros per dataset"""
 
-    recs = x if hasattr(x, 'spectro') else pd.DataFrame(dict(spectro=x))
     if query_and_title:
         recs = recs.query(query_and_title)
 
@@ -103,7 +98,7 @@ def plot_spectros(
         ))
     )
     if t_max == 'auto':
-        t_max = recs.spectro.map(lambda spectro: spectro.duration_s).max()
+        t_max = recs.duration_s.max()
     dt = ts.iloc[0][1] - ts.iloc[0][0]  # Not exactly right, but close enough
     t_max_len = int(round((t_max - ts.iloc[0][0]) / dt)) - 1
     f_i_len = Ss.iloc[0].shape[0]
