@@ -1,5 +1,5 @@
 import itertools
-from typing import Callable, Iterable, Optional
+from typing import Callable, Iterable, Optional, Union
 
 import matplotlib.pyplot as plt
 from more_itertools import first
@@ -56,7 +56,7 @@ def plot_spectro_wrap(
     if show_audio:
         if not raw:
             plt.show()
-        display(rec.audio)
+        display(rec.audio.unbox)
 
 
 def plot_spectro(
@@ -69,7 +69,7 @@ def plot_spectro(
     if show_audio:
         if not raw:
             plt.show()
-        display(rec.audio)
+        display(rec.audio.unbox)
 
 
 def plot_spectros(
@@ -302,3 +302,141 @@ def plot_confusion_matrix_df(
                 # color='lightgray' if M[i,j] > thresh else 'darkgray',
                 # color='gray',
             )
+
+
+def plot_pca_var_pct(pca: 'sk.decomposition.PCA', filter_df=None) -> ggplot:
+    return (
+        pd.DataFrame(dict(var_pct=pca.explained_variance_ratio_))
+        .reset_index()
+        .assign(
+            component=lambda df: df.index,
+            cum_var_pct=lambda df: df.var_pct.cumsum(),
+        )
+        .pipe(lambda df: df[filter_df] if filter_df is not None else df)
+        .pipe(ggplot)
+        + aes(x='component')
+        + geom_point(aes(y='var_pct'), fill='none')
+        + geom_line(aes(y='var_pct'), alpha=.5)
+        + geom_point(aes(y='cum_var_pct'), color='blue', fill='none')
+        + geom_line(aes(y='cum_var_pct'), color='blue', alpha=.5)
+        + scale_y_continuous(limits=(0, 1), breaks=np.linspace(0, 1, 10+1))
+        + coord_flip()
+        + theme_figsize(aspect=1/4)  # (Caller can override simply by adding another theme_figsize to the result)
+    )
+
+
+# TODO Add diag=True to include marginals (maybe by default when pack=False?)
+def plot_all_projections(
+    df: pd.DataFrame,
+    ndims: int,  # How many dimures to generate pairs for, e.g. ndims=4 -> [(0,1), (0,2), (0,3), (1,2), (1,3), (2,3)]
+    dim_name: Union[str, Callable[[int], str]],  # Dimension column name in df, as a function of dimension index
+    pack=False,  # Pack cells instead of leaving ~half blank
+    nrows: int = None,
+    ncols: int = None,
+    sharex=True,
+    sharey=True,
+    width: float = None,
+    aspect: float = None,
+    title_kwargs=dict(),
+    suptitle=None,
+    suptitle_top=.94,  # Manually adjust top margin for tight_layout + suptitle (ugh)
+    **kwargs,
+):
+    """
+    Similar in spirit to sns.pairplot, except:
+    - Omit plots below the diagonal, for ~2x speedup
+    - Allow sharex/sharey
+    - Allow pack=True, for 2x visual density
+
+    Example usage:
+
+        plot_all_projections(
+            df_pca,
+            ndims=10,
+            dim_name='x%s',
+            hue='species',
+            palette='tab10',
+            pack=True,
+        )
+
+    Similar results from sns.pairplot, for reference:
+
+        sns.pairplot(
+            data=df_pca[['species', *[f'x{i}' for i in range(10)]]],
+            hue='species',
+            diag_kind='kde',
+            markers='.',
+            plot_kws=dict(
+                linewidth=0,
+                s=10,
+            ),
+            diag_kws=dict(
+                shade=True,
+                linewidth=1,
+                alpha=.5,
+            ),
+        )
+
+    """
+
+    # Lazy import
+    import seaborn as sns
+
+    # Defaults
+    title_kwargs = dict(title_kwargs)  # Avoid mutation
+    title_kwargs.setdefault('fontsize', 8)
+    kwargs.setdefault('marker', '.')  # Tiny markers
+    kwargs.setdefault('s', 10) # plt 's' instead of sns 'size', else sns includes the single size value in the legend
+    kwargs.setdefault('linewidth', 0)  # Don't draw edges around markers
+
+    # Interpret params
+    if isinstance(dim_name, str):
+        dim_name = lambda i, dim_name=dim_name: dim_name % i
+    dim_pairs = list(combinations(range(ndims), 2))
+    if not pack:
+        nrows = nrows or ndims - 1
+        ncols = ncols or ndims - 1
+    elif not nrows and not ncols:
+        ncols = int(np.ceil(np.sqrt(len(dim_pairs))))
+    if not nrows:
+        nrows = len(dim_pairs) // ncols + 1
+    elif not ncols:
+        ncols = len(dim_pairs) // nrows + 1
+    ncells = nrows * ncols
+    figsize = theme_figsize(width=width, aspect=aspect or nrows / ncols).figsize
+
+    # Plot
+    fig, axes = plt.subplots(nrows, ncols, sharex=sharex, sharey=sharey, figsize=figsize)
+    if (nrows, ncols) == (1, 1):
+        axes = {(0, 0): axes}
+    for i in range(ncells):
+        (r, c) = (i // ncols, i % ncols)
+        ax = axes[r, c]
+        legend = False if i < ncells - 1 else 'full'  # Show legend only in the last cell
+        if pack:
+            j = i
+        else:
+            row_starts = np.cumsum([0, *np.arange(ndims - 2, 0, -1)])
+            j = row_starts[r] + c if r < ndims - 1 and c < ndims - 1 else None
+        if j is not None and j < len(dim_pairs) and (pack or c >= r):
+            # Draw each cell that has a pair
+            (xi, yi) = dim_pairs[j]
+            (x, y) = (dim_name(xi), dim_name(yi))
+            sns.scatterplot(data=df, x=x, y=y, ax=ax, **kwargs, legend=legend)
+            ax.set_title('%s,%s' % (xi, yi), **title_kwargs)
+            ax.axhline(color='black', alpha=.1, zorder=-1)
+            ax.axvline(color='black', alpha=.1, zorder=-1)
+        elif legend:
+            # If we're on the last cell but out of dim_pairs, draw a blank plot to ensure the legend gets drawn
+            (xi, yi) = dim_pairs[0]
+            (x, y) = (dim_name(xi), dim_name(yi))
+            sns.scatterplot(data=df, x=x, y=y, ax=ax, **{**kwargs, 'marker': ''}, legend=legend)
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+
+    sns.despine()  # Just top,right by default (pass more params for left,bottom)
+    plt.tight_layout()
+
+    if suptitle:
+        fig.suptitle(suptitle)
+        fig.subplots_adjust(top=suptitle_top)  # Manually adjust top margin for tight_layout + suptitle (ugh)
