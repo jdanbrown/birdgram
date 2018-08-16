@@ -7,6 +7,7 @@ import numpy as np
 from potoo.pandas import df_transform_index
 from potoo.plot import *
 from potoo.util import round_sig
+import scipy
 
 import metadata
 from util import *
@@ -325,22 +326,26 @@ def plot_pca_var_pct(pca: 'sk.decomposition.PCA', filter_df=None) -> ggplot:
     )
 
 
-# TODO Add diag=True to include marginals (maybe by default when pack=False?)
 def plot_all_projections(
     df: pd.DataFrame,
     ndims: int,  # How many dimures to generate pairs for, e.g. ndims=4 -> [(0,1), (0,2), (0,3), (1,2), (1,3), (2,3)]
     dim_name: Union[str, Callable[[int], str]],  # Dimension column name in df, as a function of dimension index
     pack=False,  # Pack cells instead of leaving ~half blank
+    diag_hack=False,  # Plot densities on the diagonal [TODO Make this less hacky and brittle]
     nrows: int = None,
     ncols: int = None,
     sharex=True,
     sharey=True,
+    diag_kwargs=dict(),
     width: float = None,
     aspect: float = None,
     title_kwargs=dict(),
     suptitle=None,
     suptitle_top=.94,  # Manually adjust top margin for tight_layout + suptitle (ugh)
-    **kwargs,
+    lim=(-1, 1),  # HACK TODO FIXME How to make sns/plt compute this automatically from the data? (What did I obstruct?)
+    xlim=None,
+    ylim=None,
+    **scatter_kwargs,
 ):
     """
     Similar in spirit to sns.pairplot, except:
@@ -383,19 +388,23 @@ def plot_all_projections(
     import seaborn as sns
 
     # Defaults
-    title_kwargs = dict(title_kwargs)  # Avoid mutation
+    scatter_kwargs.setdefault('marker', '.')  # Tiny markers
+    scatter_kwargs.setdefault('s', 10) # plt 's' instead of sns 'size', else sns includes the single size value in the legend
+    scatter_kwargs.setdefault('linewidth', 0)  # Don't draw edges around markers
+    diag_kwargs = dict(diag_kwargs)  # Don't mutate
+    diag_kwargs.setdefault('linewidth', 1)
+    title_kwargs = dict(title_kwargs)  # Don't mutate
     title_kwargs.setdefault('fontsize', 8)
-    kwargs.setdefault('marker', '.')  # Tiny markers
-    kwargs.setdefault('s', 10) # plt 's' instead of sns 'size', else sns includes the single size value in the legend
-    kwargs.setdefault('linewidth', 0)  # Don't draw edges around markers
+    if xlim is None: xlim = lim
+    if ylim is None: ylim = lim
 
     # Interpret params
     if isinstance(dim_name, str):
         dim_name = lambda i, dim_name=dim_name: dim_name % i
-    dim_pairs = list(combinations(range(ndims), 2))
+    dim_pairs = [(a, b - 1) for a, b in combinations(range(ndims + 1), 2)]
     if not pack:
-        nrows = nrows or ndims - 1
-        ncols = ncols or ndims - 1
+        nrows = nrows or ndims
+        ncols = ncols or ndims
     elif not nrows and not ncols:
         ncols = int(np.ceil(np.sqrt(len(dim_pairs))))
     if not nrows:
@@ -405,35 +414,75 @@ def plot_all_projections(
     ncells = nrows * ncols
     figsize = theme_figsize(width=width, aspect=aspect or nrows / ncols).figsize
 
+    # Pre-compute densities
+    #   - HACK HACK HACK Taking lots of shortcuts here to solve my current use case and move on. Very brittle. Keep
+    #     hacky bits gated behind diag_hack=True, off by default.
+    if diag_hack:
+        densities = []
+        for ci in range(ndims):
+            c = dim_name(ci)
+            hue = scatter_kwargs.get('hue', None)
+            groups = df.groupby(hue) if hue else [(None, df)]
+            densities.append([
+                [xs, ys]
+                for name, g in groups
+                for xs in [np.linspace(df[c].min() * 1.2, df[c].max() * 1.2, 100)]
+                for ys in [scipy.stats.kde.gaussian_kde(g[c])(xs)]
+            ])
+        # Transform ys to fit within ylim
+        y_max = max(
+            np.max(ys)
+            for groups in densities
+            for (xs, ys) in groups
+        )
+        for groups in densities:
+            for g in groups:
+                g[1] = g[1] * (ylim[1] - ylim[0]) / (y_max * 1.05) + ylim[0]
+
     # Plot
+    xmin = xmax = ymin = ymax = 0
     fig, axes = plt.subplots(nrows, ncols, sharex=sharex, sharey=sharey, figsize=figsize)
     if (nrows, ncols) == (1, 1):
         axes = {(0, 0): axes}
     for i in range(ncells):
         (r, c) = (i // ncols, i % ncols)
         ax = axes[r, c]
-        legend = False if i < ncells - 1 else 'full'  # Show legend only in the last cell
+        legend = 'full' if (r, c) == (nrows - 1, 0) else False  # Show legend only once, in the (empty) bottom-left cell
         if pack:
             j = i
         else:
-            row_starts = np.cumsum([0, *np.arange(ndims - 2, 0, -1)])
-            j = row_starts[r] + c if r < ndims - 1 and c < ndims - 1 else None
+            row_starts = np.cumsum([0, *np.arange(ndims - 1, 0, -1)])
+            j = row_starts[r] + c if r < ndims and c < ndims else None
         if j is not None and j < len(dim_pairs) and (pack or c >= r):
-            # Draw each cell that has a pair
-            (xi, yi) = dim_pairs[j]
-            (x, y) = (dim_name(xi), dim_name(yi))
-            sns.scatterplot(data=df, x=x, y=y, ax=ax, **kwargs, legend=legend)
-            ax.set_title('%s,%s' % (xi, yi), **title_kwargs)
-            ax.axhline(color='black', alpha=.1, zorder=-1)
-            ax.axvline(color='black', alpha=.1, zorder=-1)
+            (yi, xi) = dim_pairs[j]
+            (y, x) = (dim_name(yi), dim_name(xi))
+            if x != y:
+                sns.scatterplot(ax=ax, data=df, x=x, y=y, **scatter_kwargs, legend=legend)
+                ax.axhline(color='black', alpha=.1, zorder=-1)
+                ax.axvline(color='black', alpha=.1, zorder=-1)
+                ax.set_title('%s,%s' % (yi, xi), **title_kwargs)
+                xmin = min(xmin, df[x].min())
+                xmax = max(xmax, df[x].max())
+                ymin = min(ymin, df[y].min())
+                ymax = max(ymax, df[y].max())
+            elif diag_hack:
+                for xs, ys in densities[xi]:
+                    ax.plot(xs, ys, **diag_kwargs)
+                ax.set_title('%s' % xi, **title_kwargs)
+                ax.axvline(color='black', alpha=.1, zorder=-1)
         elif legend:
             # If we're on the last cell but out of dim_pairs, draw a blank plot to ensure the legend gets drawn
-            (xi, yi) = dim_pairs[0]
-            (x, y) = (dim_name(xi), dim_name(yi))
-            sns.scatterplot(data=df, x=x, y=y, ax=ax, **{**kwargs, 'marker': ''}, legend=legend)
+            (yi, xi) = dim_pairs[0]
+            (y, x) = (dim_name(yi), dim_name(xi))
+            sns.scatterplot(data=df, x=x, y=y, ax=ax, **{**scatter_kwargs, 'marker': ''}, legend=legend)
         ax.set_xlabel('')
         ax.set_ylabel('')
 
+    # Limits
+    plt.xlim(xlim)
+    plt.ylim(ylim)
+
+    # Aesthetics
     sns.despine()  # Just top,right by default (pass more params for left,bottom)
     plt.tight_layout()
 
