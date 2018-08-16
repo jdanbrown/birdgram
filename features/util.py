@@ -1193,7 +1193,6 @@ def rec_thumbnail_with_start(
     thumbnail_s=1,  # Duration of output thumbnail
     search_s=10,  # Duration of input rec to look for a thumbnail
     smooth_sigma_s=.25,  # σ of gaussian to use to smooth the audio signal
-    threshold_p=.5,  # Thumbnail is first segment within search_s that exceeds this threshold (percentile of y range)
     verbose=False,  # Plot intermediate results
 ) -> (
     float,  # start_s
@@ -1212,13 +1211,15 @@ def rec_thumbnail_with_start(
     sigma_is = i_per_s * smooth_sigma_s
     y = scipy.ndimage.filters.gaussian_filter(x, sigma_is)
 
-    # Smoothed power above threshold (z)
-    z = y.copy()
-    z[z < (z.max() - z.min()) * threshold_p] = 0
+    # Find max smoothed power (highest mode)
+    #   - Ignore the last thumbnail_s of y so we don't pick a partial thumbnail
+    y[-int(thumbnail_s * i_per_s):] = 0
+    max_i = np.argmax(y)
 
-    # Thumbnail is first segment above threshold
-    thumbnail_start_i = np.where(z > 0)[0][0]
-    thumbnail_start_s = thumbnail_start_i / i_per_s
+    # Thumbnail is max smoothed power ± thumbnail_s/2
+    thumbnail_start_s = max_i / i_per_s - thumbnail_s / 2
+    thumbnail_start_s = max(0, thumbnail_start_s)  # Don't start before the start
+    thumbnail_start_s = min(rec.duration_s - thumbnail_s, thumbnail_start_s)  # Don't end after the end
     thumbnail = features.slice_spectro(rec,
         thumbnail_start_s,
         thumbnail_start_s + thumbnail_s,
@@ -1226,12 +1227,12 @@ def rec_thumbnail_with_start(
 
     if verbose:
         plt.plot(x, color='grey')
-        plt.plot(y, color='b')
-        plt.plot(z, color='r')
-        t = z.copy()
+        plt.plot(y, color='black')
+        t = y.copy()
+        thumbnail_start_i = int(thumbnail_start_s * i_per_s)
         t[np.arange(thumbnail_start_i)] = 0
         t[np.arange(thumbnail_start_i + int(i_per_s * thumbnail_s), len(t))] = 0
-        plt.plot(t, color='k')
+        plt.plot(t, color='red')
         plt.xticks([])
         plt.yticks([])
         plt.tight_layout()
