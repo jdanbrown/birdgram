@@ -24,7 +24,6 @@ from typing import List
 
 from constants import cache_dir, data_dir, default_log_ylim_min_hz, standard_sample_rate_hz
 from datatypes import Audio, Recording, RecOrAudioOrSignal
-from load import Load
 import metadata
 from util import *
 
@@ -111,7 +110,7 @@ class HasPlotAudioTF:
         cmap=None,
         ax=None,
         fancy=True,
-        show_audio=True,
+        audio=False,  # XXX Back compat
         show_marginals=True,
         show_spines=False,
         yticks=None,
@@ -220,10 +219,10 @@ class HasPlotAudioTF:
                 if xformat: ax_tf.xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda x, pos=None: xformat(x)))
                 if yformat: ax_tf.yaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda y, pos=None: yformat(y)))
 
-            # Avoid forcing a plt.show() if we have nothing to show (e.g. show_audio), else take care to show everything cleanly
-            if show or figsize or fancy or (show_audio and not raw):
+            # Avoid forcing a plt.show() if we have nothing to show (e.g. audio), else take care to show everything cleanly
+            if show or figsize or fancy or (audio and not raw):
                 plt.show()
-            if show_audio:
+            if audio:
                 assert False, "TODO Refactor spectro.plot -> rec.plot, since spectro no longer knows .audio"  # TODO
                 # display(self.audio)
 
@@ -269,6 +268,7 @@ class Spectro(HasPlotAudioTF, SpectroLike):
         rec_or_audio_or_signal,
         nperseg=1024,  # Samples per stft segment
         overlap=0.75,  # Fraction of nperseg samples that overlap between segments
+        load=None,  # XXX Back compat: old .pkl's have 'load' in spectro_kwargs, and try to pass it back here. Accept and drop.
         **kwargs,  # Passthru to scipy.signal.spectrogram
     ):
         """
@@ -319,6 +319,7 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
         overlap=0.75,  # Fraction of nperseg samples that overlap between segments [TODO Fix when < .5 (see below)]
         mels_div=2,  # Increase to get fewer freq bins (unsafe to decrease) [TODO Understand better]
         n_mels=None,  # Specify directly, instead of mels_div
+        load=None,  # XXX Back compat: old .pkl's have 'load' in spectro_kwargs, and try to pass it back here. Accept and drop.
         **kwargs,  # Passthru to scipy.signal.spectrogram
     ):
         """
@@ -393,17 +394,29 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
         self.t = t
         self.S = S
 
+    # FIXME Oops, we removed load_audio_as_rec() when we removed spectro.audio. Figure out how to handle this now.
     def reparam(self, rec_or_audio_or_signal=None, **kwargs):
         return type(self)(rec_or_audio_or_signal or self.load_audio_as_rec(), **{
             **self.melspectro_kwargs,
             **kwargs,
         })
 
+    # FIXME Oops, we removed load_audio_as_rec() when we removed spectro.audio. Figure out how to handle this now.
     def to_normal_spectro(self, rec_or_audio_or_signal=None, **kwargs):
         return Spectro(rec_or_audio_or_signal or self.load_audio_as_rec(), **{
             **self.spectro_kwargs,
             **kwargs,
         })
+
+    def slice(self, start_s: float = None, end_s: float = None) -> 'Melspectro':
+        if start_s is None: start_s = 0
+        if end_s is None: end_s = np.inf
+        (ix,) = np.where((self.t >= start_s) & (self.t < end_s))
+        new = copy.deepcopy(self)  # Deep copy so that deep mutation is safe (e.g. self.spectro_kwargs[...][...] = ...)
+        new.t = self.t[ix]
+        new.t = new.t - new.t[0] + self.t[0]  # Rebase new.t to match self.t [TODO Should self.t[0] be nonzero? Always 0.012...]
+        new.S = self.S[:, ix]
+        return new
 
     def plot(self, **kwargs):
         self._plot_audio_tf(**{
@@ -427,7 +440,7 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
     def plots(self, **kwargs):
         """Plot normal spectro + melspectro"""
         kwargs.setdefault('show', True)
-        self.plot_normal(**{**kwargs, 'show_audio': False})
+        self.plot_normal(**{**kwargs, 'audio': False})
         self.plot(**kwargs)
 
 
@@ -523,13 +536,13 @@ class Mfcc(HasPlotAudioTF):
 # TODO
 def plt_compare_spec_mel_mfcc(rec_or_audio_or_signal):
 
-    Spectro(rec_or_audio_or_signal).plot(show_audio=False)
+    Spectro(rec_or_audio_or_signal).plot(audio=False)
     plt.show()
 
-    Melspectro(rec_or_audio_or_signal).plot(show_audio=False)
+    Melspectro(rec_or_audio_or_signal).plot(audio=False)
     plt.show()
 
-    Mfcc(rec_or_audio_or_signal).plot(show_audio=False)
+    Mfcc(rec_or_audio_or_signal).plot(audio=False)
     plt.show()
 
     (_rec, _audio, x, sample_rate) = unpack_rec(rec_or_audio_or_signal)

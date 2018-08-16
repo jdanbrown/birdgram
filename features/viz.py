@@ -13,20 +13,51 @@ import metadata
 from util import *
 
 
+def plot_thumbnail_micro(
+    rec,
+    features,
+    plot_kwargs=dict(),
+    **thumbnail_kwargs,
+):
+    plot_spectro_micro(
+        rec_thumbnail(rec, features, **thumbnail_kwargs),
+        features,
+        **plot_kwargs,
+    )
+
+
+def plot_thumbnail(
+    rec,
+    features,
+    raw=True,
+    scale=None,
+    audio=False,
+    plot_kwargs=dict(),
+    **thumbnail_kwargs,
+):
+    plot_spectro(
+        rec_thumbnail(rec, features, **thumbnail_kwargs),
+        raw=raw,
+        scale=scale,
+        audio=audio,
+        **plot_kwargs,
+    )
+
+
 def plot_spectro_micro(
     rec,
     features,
-    wrap=True,  # False to truncate at wrap_s
+    wrap=False,  # True to plot the full duration with wrapping
     wrap_s=10,  # TODO 10 vs. 15 as sane default?
     limit_s=None,
     **kwargs,
 ):
     kwargs.setdefault('raw', True)
-    kwargs.setdefault('show_audio', True)
+    kwargs.setdefault('audio', False)
     if not wrap and not limit_s:
         limit_s = wrap_s
     if limit_s:
-        rec = features.with_audio(rec, lambda audio: audio[:limit_s * 1000])
+        rec = features.slice_spectro(rec, 0, limit_s)
     plot_spectro_wrap(rec, features, wrap_s=wrap_s, **kwargs)
 
 
@@ -35,26 +66,25 @@ def plot_spectro_wrap(
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
     wrap_s: float = 10,  # Sane default (5 too small, 20 too big, 10/15 both ok)
     pad=True,  # In case there's only one line, pad out to wrap_s, e.g for uniform height when raw=True
-    show_audio=False,
+    audio=False,
     raw=False,
     **kwargs,
 ):
-    wrap_ms = int(wrap_s * 1000)
-    n_wraps = int(np.ceil(rec.duration_s * 1000 / wrap_ms))
-    breaks_ms = np.linspace(0, n_wraps * wrap_ms, n_wraps, endpoint=False)
+    n_wraps = int(np.ceil(rec.duration_s / wrap_s))
+    breaks_s = np.linspace(0, n_wraps * wrap_s, n_wraps, endpoint=False)
     if pad:
-        kwargs['t_max'] = wrap_s
+        kwargs['limit_s'] = wrap_s
     plot_spectros(
         pd.DataFrame(
-            features.with_audio(rec, lambda audio: audio[i : i + wrap_ms])
-            for i in breaks_ms
+            features.slice_spectro(rec, b, b + wrap_s)
+            for b in breaks_s
         ),
-        yticks=['%.0fs' % (ms / 1000) for ms in breaks_ms],
+        yticks=['%.0fs' % s for s in breaks_s],
         xformat=lambda s: '+%.0fs' % s,
         raw=raw,
         **kwargs,
     )
-    if show_audio:
+    if audio:
         if not raw:
             plt.show()
         display(rec.audio.unbox)
@@ -63,11 +93,11 @@ def plot_spectro_wrap(
 def plot_spectro(
     rec,
     raw=False,
-    show_audio=False,
+    audio=False,
     **kwargs,
 ):
     plot_spectros(pd.DataFrame([rec]), raw=raw, **kwargs)
-    if show_audio:
+    if audio:
         if not raw:
             plt.show()
         display(rec.audio.unbox)
@@ -80,7 +110,7 @@ def plot_spectros(
     xformat=lambda x: '%.0fs' % x,
     ytick_col=None,  # e.g. 'species_longhand'
     yticks=None,
-    t_max='auto',  # Pass an int (seconds) to manually set max time (x-axis)
+    limit_s='auto',  # Limit duration of x-axis
     n=None,
     verbose=False,
     **kwargs,
@@ -98,20 +128,20 @@ def plot_spectros(
             df.spectro.map(lambda s: s.t),
         ))
     )
-    if t_max == 'auto':
-        t_max = recs.duration_s.max()
+    if limit_s == 'auto':
+        limit_s = recs.duration_s.max()
     dt = ts.iloc[0][1] - ts.iloc[0][0]  # Not exactly right, but close enough
-    t_max_len = int(round((t_max - ts.iloc[0][0]) / dt)) - 1
+    limit_i = int(round(limit_s / dt))
     f_i_len = Ss.iloc[0].shape[0]
-    Ss = Ss.map(lambda S: S[:, :t_max_len])
-    ts = ts.map(lambda t: t[:t_max_len])
+    Ss = Ss.map(lambda S: S[:, :limit_i])
+    ts = ts.map(lambda t: t[:limit_i])
     pad_first = np.array([[0, 0], [0, 0]])  # [top, bottom], [left, right]
     pad_rest  = np.array([[0, 1], [0, 0]])  # [top, bottom], [left, right]
     # Flip vertically (twice) to align with plt.imshow(..., origin='lower')
     cat_Ss = np.flip(axis=0, m=np.concatenate([
         np.flip(axis=0, m=np.pad(
             S,
-            (pad_first if i == 0 else pad_rest) + np.array([[0, 0], [0, t_max_len - S.shape[1]]]),
+            (pad_first if i == 0 else pad_rest) + np.array([[0, 0], [0, limit_i - S.shape[1]]]),
             'constant',
             constant_values=np.nan,
         ))

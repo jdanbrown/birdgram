@@ -261,16 +261,49 @@ class Features(DataclassConfig):
     # Util
     #
 
-    def with_audio(self, rec: Row, f: Callable[[Audio], Audio]) -> Row:
+    def with_audio(self, rec: Row, f: Callable[[Audio], Audio], **kwargs) -> Row:
+        """Transforms .audio, recomputes .spectro (with denoise)"""
+        return self._edit(rec,
+            audio_f=lambda rec, audio: f(audio),
+            spectro_f=lambda rec, spectro: self._spectro(rec, **kwargs),
+        )
+
+    def slice_audio(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
+        """Slices .audio, recomputes .spectro (with denoise)"""
+        return self.with_audio(rec, lambda audio: audio[
+            None if start_s is None else start_s * 1000 :
+            None if end_s is None else end_s * 1000
+        ])
+
+    def slice_spectro(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
+        """Slices .spectro and .audio (as is, no new denoise)"""
+        return self._edit(rec,
+            audio_f=lambda rec, audio: audio[
+                None if start_s is None else start_s * 1000 :
+                None if end_s is None else end_s * 1000
+            ],
+            spectro_f=lambda rec, spectro: (spectro
+                .slice(start_s, end_s)
+            ),
+        )
+
+    def _edit(
+        self,
+        rec: Row,
+        audio_f: Callable[[Row, Audio], Audio],
+        spectro_f: Callable[[Row, Melspectro], Melspectro],
+        # TODO Extend to more attrs
+    ) -> Row:
         rec = rec.copy()
 
         id = '%s+%s' % (rec.id, secrets.token_hex(4))  # Invalide caches
 
-        # Transform .audio
-        rec['audio'] = box(f(rec.audio.unbox))
+        # Edit .audio
+        audio = rec.pop('audio').unbox
+        rec['audio'] = box(audio_f(rec, audio))
         rec['audio'].unbox.name = id
 
-        # Recompute/invalidate attrs coupled to .audio
+        # Recompute/invalidate attrs coupled to .audio + downstream features
         #   - TODO Replace rec.id with rec.audio_id (which will require rebuilding feat/_feat caches...)
         rec['id'] = id
         rec['path'] = None  # No meaningful .path for an in-mem .audio
@@ -284,15 +317,52 @@ class Features(DataclassConfig):
             if k in rec:
                 del rec[k]
 
-        # Recompute/invalidate downstream features
+        # Edit .spectro
+        spectro = rec.pop('spectro')  # Pop to avoid short-circuits on rec.spectro (e.g. self._spectro(rec))
+        rec['spectro'] = spectro_f(rec, spectro)
+
+        # Recompute/invalidate attrs coupled to .spectro + downstream features
         #   - HACK Very brittle; how to avoid maintaining an explicit list? Any easier to whitelist upstreams instead?
-        del rec['spectro']  # Bust short-circuit
-        rec['spectro'] = self._spectro(rec)
         for k in ['patches', 'proj', 'agg', 'feat']:
             if k in rec:
                 del rec[k]
 
         return rec
+
+    # XXX after QA'ing replacement above
+    # def with_audio(self, rec: Row, f: Callable[[Audio], Audio], **kwargs) -> Row:
+    #     """Transforms .audio, recomputes .spectro (with denoise)"""
+    #     rec = rec.copy()
+    #
+    #     id = '%s+%s' % (rec.id, secrets.token_hex(4))  # Invalide caches
+    #
+    #     # Transform .audio
+    #     rec['audio'] = box(f(rec.audio.unbox))
+    #     rec['audio'].unbox.name = id
+    #
+    #     # Recompute/invalidate attrs coupled to .audio
+    #     #   - TODO Replace rec.id with rec.audio_id (which will require rebuilding feat/_feat caches...)
+    #     rec['id'] = id
+    #     rec['path'] = None  # No meaningful .path for an in-mem .audio
+    #     rec['basename'] = None  # No meaningful .basename for an in-mem .audio
+    #     # Recompute .duration_s, .samples_*, basename, species, etc.
+    #     del rec['duration_s']  # Bust short-circuit
+    #     for k, v in self.load._metadata(rec).items():
+    #         rec[k] = v
+    #     # TODO Recompute [HACK Invalidate, since nothing needs these yet for sliced recs]
+    #     for k in ['audio_id', 'audio_sha']:
+    #         if k in rec:
+    #             del rec[k]
+    #
+    #     # Recompute/invalidate downstream features
+    #     #   - HACK Very brittle; how to avoid maintaining an explicit list? Any easier to whitelist upstreams instead?
+    #     del rec['spectro']  # Bust short-circuit
+    #     rec['spectro'] = self._spectro(rec, **kwargs)
+    #     for k in ['patches', 'proj', 'agg', 'feat']:
+    #         if k in rec:
+    #             del rec[k]
+    #
+    #     return rec
 
 
 @dataclass
@@ -557,9 +627,22 @@ class Projection(DataclassConfig):
     # Util
     #
 
-    def with_audio(self, rec: Row, f: Callable[[Audio], Audio]) -> Row:
-        rec = self.features.with_audio(rec, f)
-        # Recompute downstream features
+    def with_audio(self, rec: Row, *args, **kwargs) -> Row:
+        """Transforms .audio, recomputes .spectro (with denoise), recomputes .feat"""
+        rec = self.features.with_audio(rec, *args, **kwargs)
+        return self._recompute_downstream_features(rec)
+
+    def slice_audio(self, rec: Row, *args, **kwargs) -> Row:
+        """Slices .audio, recomputes .spectro (with denoise), recomputes .feat"""
+        rec = self.features.slice_audio(rec, *args, **kwargs)
+        return self._recompute_downstream_features(rec)
+
+    def slice_spectro(self, rec: Row, *args, **kwargs) -> Row:
+        """Slices .spectro and .audio (as is, no new denoise), recomputes .feat"""
+        rec = self.features.slice_spectro(rec, *args, **kwargs)
+        return self._recompute_downstream_features(rec)
+
+    def _recompute_downstream_features(self, rec: Row) -> Row:
         recs = pd.DataFrame([rec])
         recs = self.transform(recs,
             override_use_dask=False,  # Single row, avoid par overhead

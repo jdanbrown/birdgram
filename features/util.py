@@ -1084,8 +1084,11 @@ def audiosegment_with_numpy_array(
 import platform
 import types
 
+import numpy as np
+import matplotlib.pyplot as plt
 import psutil
 import pydub
+import scipy
 import yaml
 
 from log import log  # For export [TODO Update callers]
@@ -1177,3 +1180,60 @@ def species_probs_probs(df):
 def rec_probs(rec, search, n):
     """Interactive shorthand"""
     return search.species_probs_one(rec).pipe(species_probs_probs)[:n].T
+
+
+def rec_thumbnail(*args, **kwargs) -> 'Recording':
+    start_s, thumbnail = rec_thumbnail_with_start(*args, **kwargs)
+    return thumbnail
+
+
+def rec_thumbnail_with_start(
+    rec,
+    features,
+    thumbnail_s=1,  # Duration of output thumbnail
+    search_s=10,  # Duration of input rec to look for a thumbnail
+    smooth_sigma_s=.25,  # σ of gaussian to use to smooth the audio signal
+    threshold_p=.5,  # Thumbnail is first segment within search_s that exceeds this threshold (percentile of y range)
+    verbose=False,  # Plot intermediate results
+) -> (
+    float,  # start_s
+    'Recording',  # thumbnail_rec
+):
+    """Clip an informative thumbnail from a rec"""
+
+    # Clip rec to prefix of duration search_s
+    rec = features.slice_spectro(rec, 0, search_s)
+
+    # Total power per time (x)
+    x = rec.spectro.S.sum(axis=0)
+
+    # Smoothed power (y)
+    i_per_s = len(x) / rec.duration_s
+    sigma_is = i_per_s * smooth_sigma_s
+    y = scipy.ndimage.filters.gaussian_filter(x, sigma_is)
+
+    # Smoothed power above threshold (z)
+    z = y.copy()
+    z[z < (z.max() - z.min()) * threshold_p] = 0
+
+    # Thumbnail is first segment above threshold
+    thumbnail_start_i = np.where(z > 0)[0][0]
+    thumbnail_start_s = thumbnail_start_i / i_per_s
+    thumbnail = features.slice_spectro(rec,
+        thumbnail_start_s,
+        thumbnail_start_s + thumbnail_s,
+    )
+
+    if verbose:
+        plt.plot(x, color='grey')
+        plt.plot(y, color='b')
+        plt.plot(z, color='r')
+        t = z.copy()
+        t[np.arange(thumbnail_start_i)] = 0
+        t[np.arange(thumbnail_start_i + int(i_per_s * thumbnail_s), len(t))] = 0
+        plt.plot(t, color='k')
+        plt.xticks([])
+        plt.yticks([])
+        plt.tight_layout()
+
+    return (thumbnail_start_s, thumbnail)
