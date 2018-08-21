@@ -27,6 +27,9 @@ class Species(DataclassUtil):
     banding_codes: Iterable[str]
     shorthand: str
     longhand: str
+    species_group: str
+    family: str
+    order: str
 
 
 @dataclass

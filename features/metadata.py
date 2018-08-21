@@ -3,8 +3,9 @@ from functools import lru_cache
 import re
 from typing import Iterable, List, Optional
 
+from more_itertools import unique_everseen
 import pandas as pd
-from potoo.pandas import as_ordered_cat, df_reorder_cols, df_transform_column_names
+from potoo.pandas import as_ordered_cat, df_ordered_cat, df_reorder_cols, df_transform_column_names
 
 from constants import (
     data_dir,
@@ -13,10 +14,11 @@ from constants import (
     unk_species, unk_species_com_name, unk_species_species_code, unk_species_taxon_id,
 )
 from datatypes import Species
-from util import cache_to_file_forever, singleton
+from util import cache_to_file_forever, df_rows, singleton
 
 metadata_dir = f'{data_dir}/metadata'
 ebird_taxa_path = f'{metadata_dir}/ebird-ws1.1-taxa-species.csv'
+ebird_clements_checklist_path = f'{metadata_dir}/eBird-Clements-v2018-integrated-checklist-August-2018.csv.gz'
 
 
 @singleton
@@ -147,6 +149,7 @@ class ebird:
                 'banding_codes',
             ])
             .reset_index(drop=True)
+            .pipe(self.add_species_group_cols)
         )
 
     @property
@@ -157,6 +160,18 @@ class ebird:
             dtype={
                 'TAXON_ORDER': 'str',  # Not float
             },
+        )
+
+    @property
+    def _raw_ebird_clements_taxo_df(self):
+        """The raw eBird/Clements Checklist taxonomy (from http://www.birds.cornell.edu/clementschecklist/download/)"""
+        return (
+            pd.read_csv(
+                ebird_clements_checklist_path,
+                encoding='latin1',  # utf8 barfs, latin1 seems to work better
+                low_memory=False,  # Scan full file for dtype inference, else problems
+            )
+            .query("category == 'species'")
         )
 
     def add_shorthand_col(self, df) -> pd.DataFrame:
@@ -212,6 +227,126 @@ class ebird:
         ), "shorthand doesn't equal banding_codes[0] (where present)"
 
         return df
+
+    def add_species_group_cols(self, species_df) -> pd.DataFrame:
+        """Join [species_group, family, order] from the eBird/Clements taxo onto species_df"""
+
+        # taxo_df has the species_group_cols we want to join onto species_df
+        species_group_cols = ['species_group', 'family', 'order']
+        taxo_df = (self._raw_ebird_clements_taxo_df
+            # Simplify col names
+            .rename(columns={
+                'scientific name': 'sci_name',
+                'English name': 'com_name',
+                'eBird species group': 'species_group',
+                'eBird species code 2018': 'species_code',
+            })
+        )
+
+        # Manual joins for magics, e.g. _UNK, _MUL, _NON
+        manual_magics = pd.DataFrame([
+            dict(
+                species_code=row.species_code,
+                species_group=row.com_name,
+                family=row.com_name,
+                order=row.com_name,
+            )
+            for row in df_rows(species_df
+                [lambda df: df.shorthand.str.startswith('_')]
+            )
+        ])
+
+        # Manual joins for lumps/splits/renames
+        manual_renames = {
+            # col -> taxo_df str -> species_df str
+            'com_name': {
+                "Scarlet-rumped Tanager": "Cherrie's Tanager", # https://en.wikipedia.org/wiki/Cherrie%27s_tanager
+                "Sunda Bush Warbler": "Timor Bush Warbler", # https://www.hbw.com/species/sunda-grasshopper-warbler-locustella-montis
+                "Goldcrest": "Canary Islands Kinglet", # https://avibase.bsc-eoc.org/species.jsp?avibaseid=AC00D42656FE4E4D
+                "Icterine Greenbul": "Liberian Greenbul", # https://en.wikipedia.org/wiki/Icterine_greenbul
+                "Line-cheeked Spinetail": "Baron's Spinetail", # https://en.wikipedia.org/wiki/Line-cheeked_spinetail
+                "Yellow-rumped Tinkerbird": "White-chested Tinkerbird", # https://en.wikipedia.org/wiki/White-chested_tinkerbird
+                "Rufescent Screech-Owl": "Colombian Screech-Owl", # https://en.wikipedia.org/wiki/Rufescent_screech_owl
+            },
+        }
+
+        # Add new species_group cols
+        joined_df = (species_df
+
+            # Prep for joins
+            .assign(
+                species_group=None,
+                family=None,
+                order=None,
+            )
+
+            # Join manual_magics
+            .pipe(lambda df: (df
+                .set_index('species_code')
+                .join(how='left', other=(manual_magics
+                    .set_index('species_code')[species_group_cols].rename(columns=lambda c: c + '_y')
+                ))
+                .assign(**{k: lambda df, k=k: df[k].combine_first(df[k + '_y']) for k in species_group_cols})
+                .drop(columns=[c + '_y' for c in species_group_cols])
+                .reset_index()
+            ))
+
+            # Join on species_code
+            #   - Leaves 31 rows unmatched
+            .pipe(lambda df: (df
+                .set_index('species_code')
+                .join(how='left', other=(taxo_df
+                    .set_index('species_code')[species_group_cols].rename(columns=lambda c: c + '_y')
+                ))
+                .assign(**{k: lambda df, k=k: df[k].combine_first(df[k + '_y']) for k in species_group_cols})
+                .drop(columns=[c + '_y' for c in species_group_cols])
+                .reset_index()
+                .astype({'species_code': species_df['species_code'].dtype})  # Restore category (if present)
+            ))
+
+            # Join unmatched rows on sci_name
+            #   - Leaves 7/31 rows unmatched
+            .pipe(lambda df: (df
+                .set_index('sci_name')
+                .join(how='left', other=(taxo_df
+                    .set_index('sci_name')[species_group_cols].rename(columns=lambda c: c + '_y')
+                ))
+                .assign(**{k: lambda df, k=k: df[k].combine_first(df[k + '_y']) for k in species_group_cols})
+                .drop(columns=[c + '_y' for c in species_group_cols])
+                .reset_index()
+                .astype({'sci_name': species_df['sci_name'].dtype})  # Restore category (if present)
+            ))
+
+            # Join unmatched rows manually, via com_name
+            #   - Leaves 0/7 rows unmatched
+            #   - Joining on com_name without manual_renames matches no new rows; we join on com_name only to express the rename mapping
+            .pipe(lambda df: (df
+                .set_index('com_name')
+                .join(how='left', other=(taxo_df
+                    .replace(manual_renames)
+                    .set_index('com_name')[species_group_cols].rename(columns=lambda c: c + '_y')
+                ))
+                .assign(**{k: lambda df, k=k: df[k].combine_first(df[k + '_y']) for k in species_group_cols})
+                .drop(columns=[c + '_y' for c in species_group_cols])
+                .reset_index()
+                .astype({'com_name': species_df['com_name'].dtype})  # Restore category (if present)
+            ))
+
+            # Add ordered categories for species_group_cols
+            .pipe(df_ordered_cat, **{
+                k: lambda df, k=k: list(unique_everseen(df.sort_values('species_code')[k]))
+                for k in species_group_cols
+            })
+
+            # Order cols
+            .pipe(df_reorder_cols, first=species_df.columns, last=species_group_cols)
+
+        )
+
+        # Integrity checks
+        assert {joined_df[c].isnull().sum() for c in species_group_cols} == {0}
+
+        return joined_df
 
     @property
     @lru_cache()
