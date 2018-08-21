@@ -1182,59 +1182,71 @@ def rec_probs(rec, search, n):
     return search.species_probs_one(rec).pipe(species_probs_probs)[:n].T
 
 
-def rec_thumbnail(*args, **kwargs) -> 'Recording':
-    start_s, thumbnail = rec_thumbnail_with_start(*args, **kwargs)
-    return thumbnail
+# NOTE Thumbs are complete recs, so we can't just add a .thumb col to an existing recs...
+def recs_thumb(recs, features, **kwargs) -> 'recs':
+    return (recs
+        .apply(axis=1, func=lambda rec: (
+            rec_thumb(rec, features, **kwargs)
+        ))
+        # Restore col order
+        .pipe(lambda df: df_reorder_cols(df, first=[c for c in recs.columns if c in df.columns]))
+    )
 
 
-def rec_thumbnail_with_start(
+def rec_thumb(*args, **kwargs) -> 'Recording':
+    start_s, thumb = rec_thumb_with_start(*args, **kwargs)
+    return thumb
+
+
+def rec_thumb_with_start(
     rec,
     features,
-    thumbnail_s=1,  # Duration of output thumbnail
-    search_s=10,  # Duration of input rec to look for a thumbnail
+    thumb_s=1,  # Duration of output thumb
+    search_s=10,  # Duration of input rec to look for a thumb
     smooth_sigma_s=.25,  # σ of gaussian to use to smooth the audio signal
     verbose=False,  # Plot intermediate results
 ) -> (
     float,  # start_s
-    'Recording',  # thumbnail_rec
+    'Recording',  # thumb_rec
 ):
     """Clip an informative thumbnail from a rec"""
 
     # Clip rec to prefix of duration search_s
     rec = features.slice_spectro(rec, 0, search_s)
+    (f, t, S) = rec.spectro
 
     # Total power per time (x)
-    x = rec.spectro.S.sum(axis=0)
+    x = S.sum(axis=0)
 
     # Smoothed power (y)
-    i_per_s = len(x) / rec.duration_s
+    i_per_s = 1 / (t[1] - t[0])  # Compute this consistently _across recs_, so we can e.g. grid thumbs together without hassle
     sigma_is = i_per_s * smooth_sigma_s
     y = scipy.ndimage.filters.gaussian_filter(x, sigma_is)
 
     # Find max smoothed power (highest mode)
-    #   - Ignore the last thumbnail_s of y so we don't pick a partial thumbnail
-    y[-int(thumbnail_s * i_per_s):] = 0
+    #   - Ignore the last thumb_s of y so we don't pick a partial thumb
+    y[-int(thumb_s * i_per_s):] = 0
     max_i = np.argmax(y)
 
-    # Thumbnail is max smoothed power ± thumbnail_s/2
-    thumbnail_start_s = max_i / i_per_s - thumbnail_s / 2
-    thumbnail_start_s = max(0, thumbnail_start_s)  # Don't start before the start
-    thumbnail_start_s = min(rec.duration_s - thumbnail_s, thumbnail_start_s)  # Don't end after the end
-    thumbnail = features.slice_spectro(rec,
-        thumbnail_start_s,
-        thumbnail_start_s + thumbnail_s,
+    # thumb is max smoothed power ± thumb_s/2
+    thumb_start_s = max_i / i_per_s - thumb_s / 2
+    thumb_start_s = max(0, thumb_start_s)  # Don't start before the start
+    thumb_start_s = min(rec.duration_s - thumb_s, thumb_start_s)  # Don't end after the end
+    thumb = features.slice_spectro(rec,
+        thumb_start_s,
+        thumb_start_s + thumb_s,
     )
 
     if verbose:
         plt.plot(x, color='grey')
         plt.plot(y, color='black')
         t = y.copy()
-        thumbnail_start_i = int(thumbnail_start_s * i_per_s)
-        t[np.arange(thumbnail_start_i)] = 0
-        t[np.arange(thumbnail_start_i + int(i_per_s * thumbnail_s), len(t))] = 0
+        thumb_start_i = int(thumb_start_s * i_per_s)
+        t[np.arange(thumb_start_i)] = 0
+        t[np.arange(thumb_start_i + int(i_per_s * thumb_s), len(t))] = 0
         plt.plot(t, color='red')
         plt.xticks([])
         plt.yticks([])
         plt.tight_layout()
 
-    return (thumbnail_start_s, thumbnail)
+    return (thumb_start_s, thumb)

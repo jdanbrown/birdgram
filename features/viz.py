@@ -13,34 +13,81 @@ import metadata
 from util import *
 
 
-def plot_thumbnail_micro(
-    rec,
+def plot_thumb_grid(
+    recs,
     features,
+    raw=True,
+    cols=None,
+    order='top-down',  # Thumbs are typically longer than tall, so default grid order to top-down instead of left-right
     plot_kwargs=dict(),
-    **thumbnail_kwargs,
+    **thumb_kwargs,
 ):
-    plot_spectro_micro(
-        rec_thumbnail(rec, features, **thumbnail_kwargs),
-        features,
-        **plot_kwargs,
+    plot_spectro_grid(recs_thumb(recs, features, **thumb_kwargs), **plot_kwargs,
+        raw=raw,
+        cols=cols,
+        order=order,
     )
 
 
-def plot_thumbnail(
+def plot_thumb_micro(
+    rec,
+    features,
+    plot_kwargs=dict(),
+    **thumb_kwargs,
+):
+    plot_spectro_micro(rec_thumb(rec, features, **thumb_kwargs), features, **plot_kwargs)
+
+
+def plot_thumb(
     rec,
     features,
     raw=True,
     scale=None,
     audio=False,
     plot_kwargs=dict(),
-    **thumbnail_kwargs,
+    **thumb_kwargs,
 ):
-    plot_spectro(
-        rec_thumbnail(rec, features, **thumbnail_kwargs),
+    plot_spectro(rec_thumb(rec, features, **thumb_kwargs), **plot_kwargs,
         raw=raw,
         scale=scale,
         audio=audio,
-        **plot_kwargs,
+    )
+
+
+def plot_spectro_grid(
+    recs,
+    raw=True,
+    cols=None,
+    order='top-down',  # Spectros are typically longer than tall, so default grid order to top-down instead of left-right
+    **kwargs,
+):
+    # HACK-y reuse of plot_patches
+    #   - TODO Simplify/refactor/whatever
+    n = len(recs)
+    if cols is None:
+        cols = int(np.sqrt(n))
+    Ss = [s.S for s in recs.spectro]
+    f = max(S.shape[0] for S in Ss)
+    t = max(S.shape[1] for S in Ss)
+    # Pad Ss to a uniform shape
+    Ss = np.array([
+        np.pad(S, mode='constant', constant_values=np.nan, pad_width=np.array([
+            [0, f - S.shape[0]],  # [top, bottom]
+            [0, t - S.shape[1]],  # [left, right]
+        ]))
+        for S in Ss
+    ])
+    plot_patches(
+        patches=np.array([
+            S.reshape(t * f)  # HACK Because plot_patches expects its input to be flattened
+            for S in Ss
+        ]).T,
+        f_bins=f,
+        patch_length=t,
+        raw=raw,
+        rows=int(np.ceil(n / cols)),
+        order=order,
+        **kwargs,
     )
 
 
@@ -139,12 +186,10 @@ def plot_spectros(
     pad_rest  = np.array([[0, 1], [0, 0]])  # [top, bottom], [left, right]
     # Flip vertically (twice) to align with plt.imshow(..., origin='lower')
     cat_Ss = np.flip(axis=0, m=np.concatenate([
-        np.flip(axis=0, m=np.pad(
-            S,
-            (pad_first if i == 0 else pad_rest) + np.array([[0, 0], [0, limit_i - S.shape[1]]]),
-            'constant',
-            constant_values=np.nan,
-        ))
+        np.flip(axis=0, m=np.pad(S, mode='constant', constant_values=np.nan, pad_width=(
+            (pad_first if i == 0 else pad_rest) +
+            np.array([[0, 0], [0, limit_i - S.shape[1]]])
+        )))
         for i, S in enumerate(Ss)
     ]))
     if verbose:
@@ -175,7 +220,16 @@ def plot_spectros(
             )
 
 
-def plot_patches(patches, f_bins, patch_length, raw=False, rows=None, sort={}, **kwargs):
+def plot_patches(
+    patches,
+    f_bins,
+    patch_length,
+    raw=False,
+    rows=None,
+    sort={},
+    order='left-right',  # 'left-right' | 'top-down'
+    **kwargs,
+):
     """Viz a set of patches (f*p, n) as a grid that matches figsize"""
 
     # Dimensions
@@ -208,38 +262,39 @@ def plot_patches(patches, f_bins, patch_length, raw=False, rows=None, sort={}, *
     assert patches.shape == (rows * cols, f, p)
 
     # Wrap into a grid: (rows*cols, ...) -> (rows, cols, ...)
-    patches = patches.reshape(rows, cols, f, p)
+    patches = patches.reshape(rows, cols, f, p,
+        order={
+            'left-right': 'C',
+            'top-down': 'F',
+        }[order],
+    )
     assert patches.shape == (rows, cols, f, p)
 
     # Pad each patch with a 1px bottom/right border: (f,p) -> (f+1, p+1)
     patches = np.array([
         np.array([
-            np.pad(
-                patch,
-                np.array([[0, 1], [0, 1]]),  # [top, bottom], [left, right]
-                'constant',
-                constant_values=np.nan,  # nan renders as white
-            ) for patch in row
+            np.pad(patch, mode='constant', constant_values=np.nan, pad_width=np.array([
+                [0, 1],  # [top, bottom]
+                [0, 1],  # [left, right]
+            ]))
+            for patch in row
         ])
         for row in patches
     ])
     assert patches.shape == (rows, cols, f+1, p+1)
 
+    # Flip row axis for origin='lower' (below) so that patches start in upper left (instead of lower left)
+    patches = np.flip(patches, axis=0)
+
     # Paste everything into a 2D image
-    image = np.pad(
-        np.concatenate(
-            np.concatenate(
-                # Flip row axis for origin='lower' (below) so that patches read left->right, top->bottom
-                np.flip(patches, axis=0),
-                axis=1,
-            ),
-            axis=1,
-        ),
-        # Pad with a top/left border
-        np.array([[1, 0], [1, 0]]),  # [top, bottom], [left, right]
-        'constant',
-        constant_values=np.nan,
-    )
+    image = np.concatenate(axis=1, seq=np.concatenate(axis=1, seq=patches))
+
+    # Pad with a top/left border
+    image = np.pad(image, mode='constant', constant_values=np.nan, pad_width=np.array([
+        [1, 0],  # [top, bottom]
+        [1, 0],  # [left, right]
+    ]))
+
     assert image.shape == (1 + rows*(f+1), 1 + cols*(p+1))
 
     # Plot

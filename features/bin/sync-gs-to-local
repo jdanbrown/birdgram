@@ -8,9 +8,30 @@ data_dir="$code_dir/data"
 gs_data_dir='gs://bubo-data/v0/data'
 
 # WARNING Careful with -d (delete) -- it'd be easy to make a typo that wipes out all of our cloud data...
-# time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/ebird/ # TODO
-time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/artifacts/
-time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/cache/joblib/sp14/model/feat/
-# time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/cache/joblib/sp14/model/_feat/  # Slow: >170k small files
-# time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/xc/data/ # WARNING Larger than local disk
-# time gsutil -m rsync -r "$@" {"$gs_data_dir","$data_dir"}/cache/22050hz-1ch-16bit/xc  # WARNING Larger than local disk
+sync_safe() {
+  src="$1"; shift
+  dest="$1"; shift
+  mkdir -p "$dest"  # gsutil doesn't do this for us when dest is a local dir :/
+  time gsutil -m rsync -r "$@" "$src" "$dest"
+}
+
+# Models with best eval scores: notebooks/20180819_comp_l1_l2.ipynb
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=34875,test=331,classes=331,estimator=Search(n_species=331,n_recs=1.0,classifier='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=331,n_recs=1.0,classifier='cls=ovr-logreg_ovr_l1,solver=liblinear,C=0.001,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=331,n_recs=1.0,classifier='cls=ovr-logreg_ovr,solver=liblinear,C=0.01,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=82,n_recs=1.0,classifier='cls=logreg_ovr_l1,solver=liblinear,C=0.3,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=82,n_recs=1.0,classifier='cls=logreg_ovr,solver=liblinear,C=0.1,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=82,n_recs=1.0,classifier='cls=ovr-logreg_ovr_l1,solver=liblinear,C=0.1,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=82,n_recs=1.0,classifier='cls=ovr-logreg_ovr,solver=liblinear,C=0.01,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=9,n_recs=1.0,classifier='cls=logreg_ovr_l1,solver=liblinear,C=1,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=9,n_recs=1.0,classifier='cls=logreg_ovr,solver=liblinear,C=1,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=9,n_recs=1.0,classifier='cls=ovr-logreg_ovr_l1,solver=liblinear,C=1,class_weight=balanced',random_state=0)"/
+sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=9,n_recs=1.0,classifier='cls=ovr-logreg_ovr,solver=liblinear,C=1,class_weight=balanced',random_state=0)"/
+
+# Whole high-level dirs
+# sync_safe {"$gs_data_dir","$data_dir"}/ebird/ # TODO
+# sync_safe {"$gs_data_dir","$data_dir"}/artifacts/  # Big, don't need all of
+sync_safe {"$gs_data_dir","$data_dir"}/cache/joblib/sp14/model/feat/
+# sync_safe {"$gs_data_dir","$data_dir"}/cache/joblib/sp14/model/_feat/  # Slow: >170k small files
+# sync_safe {"$gs_data_dir","$data_dir"}/xc/data/ # WARNING Larger than local disk
+# sync_safe {"$gs_data_dir","$data_dir"}/cache/22050hz-1ch-16bit/xc  # WARNING Larger than local disk

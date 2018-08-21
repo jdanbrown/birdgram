@@ -490,7 +490,8 @@ class Projection(DataclassConfig):
                 # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)  # Fastest for cache hits, by a lot
                 # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs)
                 # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO Commented while debugging learning_curve
-                override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO Uncommented after encountering hangs again
+                # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO thread -> proc after encountering hangs again
+                override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)  # FIXME proc -> sync after reeaallly slow proc event
             ),
             **kwargs,
         }):
@@ -822,7 +823,11 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
         logreg_ovr = partial(sk.linear_model.LogisticRegression,
             random_state=self.random_state,
             multi_class='ovr',  # Default
+            penalty='l2',  # Default
             n_jobs=-1,  # Use all cores (default: 1)
+        )
+        logreg_ovr_l1 = partial(logreg_ovr,
+            penalty='l1',
         )
         # NOTE logreg_multi is single core (only ovr is multicore)
         logreg_multi = partial(logreg_ovr,
@@ -831,11 +836,14 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
         sgdlog = partial(
             sk.linear_model.SGDClassifier,
             loss='log',
-            penalty='l2',
+            penalty='l2',  # Default
             max_iter=1000,  # Match defaults coming in 0.21
             tol=1e-3,  # Match defaults coming in 0.21
             random_state=self.random_state,
             n_jobs=-1,  # Use all cores (default: 1)
+        )
+        sgdlog_l1 = partial(sgdlog,
+            penalty='l1',
         )
         svm = partial(sk.svm.SVC,
             probability=True,
@@ -872,7 +880,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
             classifier = {
                 'ovr': sk.multiclass.OneVsRestClassifier(
                     estimator=classifier,
-                    n_jobs=-1,  # Use all cores (default: 1) [TODO Should this and rf n_jobs both be -1 together?]
+                    # n_jobs=-1,  # Use all cores (default: 1) [TODO Should this and rf n_jobs both be -1 together?]
+                    n_jobs=72,  # TODO HACK Make l2 mem safe for sp[331] on n1-highmem-96
+                    # n_jobs=45,  # TODO HACK Make l1 mem safe for sp[331] on n1-highmem-96
                 ),
             }[multiclass]
 

@@ -54,6 +54,7 @@ com_names = dict(
 
     # WARNING Ensure this is the only n_species=4 dataset to avoid colliding with other n_species=4 model ids
     dan4=('ebird', ["Bewick's Wren", "House Wren", "Song Sparrow", "Spotted Towhee"]),
+    dan5=('ebird', ["Bewick's Wren", "House Wren", "Song Sparrow", "Spotted Towhee", "Pacific-slope Flycatcher"]),
 
     ggow=('ebird', ["Great Gray Owl"]),
 
