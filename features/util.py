@@ -679,7 +679,7 @@ def cv_results_dfs(cv_results: Mapping[str, list]) -> (pd.DataFrame, pd.DataFram
     )
 
 
-def _df_apply_progress_joblib(
+def _df_map_rows_progress_joblib(
     df: pd.DataFrame,
     f: Callable[['Row'], 'Row'],
     use_joblib=True,
@@ -747,7 +747,7 @@ def dask_progress(**kwargs):
     })
 
 
-def _df_apply_progress_dask(
+def _df_map_rows_progress_dask(
     df: pd.DataFrame,
     f: Callable[['Row'], 'Row'],
     **kwargs,
@@ -935,15 +935,15 @@ from tqdm import tqdm
 X = TypeVar('X')
 
 
-def df_apply_progress(
+def df_map_rows_progress(
     *args,
     use='sync',  # 'sync' | 'dask' | 'joblib'
     **kwargs,
 ) -> pd.DataFrame:
     return ({
-        'sync': _df_apply_progress_sync,
-        'dask': _df_apply_progress_dask,
-        'joblib': _df_apply_progress_joblib,
+        'sync': _df_map_rows_progress_sync,
+        'dask': _df_map_rows_progress_dask,
+        'joblib': _df_map_rows_progress_joblib,
     }[use])(*args, **kwargs)
 
 
@@ -959,7 +959,7 @@ def map_progress(
     }[use])(*args, **kwargs)
 
 
-def _df_apply_progress_sync(
+def _df_map_rows_progress_sync(
     df: pd.DataFrame,
     f: Callable[['Row'], 'Row'],
     **kwargs,

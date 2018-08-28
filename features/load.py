@@ -173,10 +173,10 @@ class Load(DataclassConfig):
         })
         # Precompute and filter out exists=True so we get a more accurate estimate of progress on the exists=False set
         recs = (recs
-            .pipe(df_apply_progress, use='dask', scheduler='processes', f=lambda row: (
+            .pipe(df_map_rows_progress, use='dask', scheduler='processes', f=lambda row: (
                 row.set_value('cache_path', self._cache_path(row.path))
             ))
-            .pipe(df_apply_progress, use='dask', scheduler='threads', f=lambda row: (
+            .pipe(df_map_rows_progress, use='dask', scheduler='threads', f=lambda row: (
                 row.set_value('exists', (Path(data_dir) / row.cache_path).exists())
             ))
             [lambda df: ~df.exists]
