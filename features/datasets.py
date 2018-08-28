@@ -4,20 +4,25 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Optional
+from typing import Optional, Union
 
 from attrdict import AttrDict
 from dataclasses import dataclass, field
 import joblib
 from more_itertools import ilen
 import pandas as pd
+import parse
 from potoo.pandas import as_ordered_cat, df_ordered_cat, df_reorder_cols
+from potoo.util import or_else, strip_startswith
 import requests
+import requests_html
 from tqdm import tqdm
 
 from cache import cache
 import constants
 from constants import code_dir, data_dir, mul_species, no_species, unk_species, unk_species_species_code
+from dataset.birdclef2015 import *  # For export
+from dataset.mlsp2013 import *  # For export
 from datatypes import Recording, RecordingDF
 from log import log
 import metadata
@@ -154,16 +159,18 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
     )
 
 
-def com_names_to_species(metadata_name: str, com_names: Iterable[str]) -> Iterable[str]:
+def com_names_to_species(metadata_name: str, com_names: Iterable[str], **kwargs) -> Iterable[str]:
     metadata = {
         'xc': xc,
         'ebird': ebird,
     }[metadata_name]
-    return metadata.com_names_to_species(com_names)
+    return metadata.com_names_to_species(com_names, **kwargs)
 
 
 #
 # xeno-canto (xc)
+#   - TODO Refactor to split this out into a new module dataset.xc
+#       - Break cycle: xc._audio_paths (should move to dataset.xc) currently depends on audio_path_files (should stay here)
 #
 
 
@@ -188,15 +195,13 @@ class _xc(DataclassUtil):
 
     @property
     @lru_cache()
-    @cache(version=5, key=lambda self: (
-        self,
-        sha1hex(json.dumps([str(x) for x in self._audio_paths])),  # Way faster than joblib.dump
-    ))
+    @cache(version=7, key=lambda self: (self, self._audio_paths_hash))
     def metadata(self) -> 'XCDF':
         """Make a full XCDF by joining _metadata + downloaded_ids"""
         return (self._metadata
             .set_index('id')
             .join(self.downloaded_ids.set_index('id'), how='left')
+            .join(self.downloaded_page_metadata.set_index('id'), how='left')
             .reset_index()
             .fillna({'downloaded': False})
             .pipe(XCDF)
@@ -232,6 +237,10 @@ class _xc(DataclassUtil):
     @lru_cache()
     def _audio_paths(self) -> Iterable[Path]:
         return audio_path_files.read('xc')
+
+    @property
+    def _audio_paths_hash(self) -> str:
+        return sha1hex(json.dumps([str(x) for x in self._audio_paths]))  # Way faster than joblib.dump
 
     def metadata_for_id(self, id: int) -> 'XCMetadata':
         assert isinstance(id, int)
@@ -295,6 +304,178 @@ class _xc(DataclassUtil):
         if check and unmatched:
             raise ValueError('Unmatched com_names: %s' % unmatched)
         return res.species.sort_values().tolist()
+
+    # TODO Clean up along with {xc,ebird}.com_names_to_species
+    @property
+    @lru_cache()
+    def com_name_to_species_dict(self) -> dict:
+        return (xc.metadata
+            [['com_name', 'species']]
+            .drop_duplicates()  # TODO Assert no duplicate keys flow into the dict
+            .pipe(lambda df: {
+                row.com_name: row.species
+                for row in df_rows(df)
+            })
+        )
+
+    def background_to_background_species(self, background: Iterable[str]) -> Iterable[str]:
+        """For self.downloaded_page_metadata.background"""
+        return [
+            species if not pd.isnull(species) else com_name
+            for name in background
+            for com_name in [name.split(' (')[0]]  # "com_name (sci_name)" | "com_name" | free form
+            for species in [self.com_name_to_species_dict.get(com_name)]
+        ]
+
+    @property
+    def downloaded_page_metadata(self) -> "pd.DataFrame['id': int, ...]":
+        return self.downloaded_page_metadata_full[[
+            'id',
+            # "Remarks from the Recordist"
+            'remarks',
+            'bird_seen',
+            'playback_used',
+            # "Recording data"
+            'elevation',
+            'background',
+            # "Sound characteristics"
+            'volume',
+            'speed',
+            'pitch',
+            'length',
+            'number_of_notes',
+            'variable',
+            # "Audio file properties"
+            # 'length',  # FIXME Oops, during parsing this field gets overwritten by 'length' from "Sound characteristics"
+            'channels',
+            'sampling_rate',
+            'bitrate_of_mp3',
+        ]]
+
+    @property
+    @cache(version=0, key=lambda self: (self, self._audio_paths_hash))
+    def downloaded_page_metadata_full(self) -> "pd.DataFrame['id': int, ...]":
+        audio_paths = self._audio_paths
+        page_paths = [p.parent / 'page.html' for p in audio_paths]
+        return (
+            pd.DataFrame(
+                map_progress(self._parse_page_metadata, page_paths,
+                    use='dask',
+                    partition_size=100,
+                    scheduler='processes',      # For 2000 recs: uncached[10s], cached[1.6s]
+                    # scheduler='threads',      # For 2000 recs: uncached[22s], cached[2.7s]
+                    # scheduler='synchronous',  # For 2000 recs: uncached[30s], cached[2.4s]
+                ),
+            )
+            [lambda df: sorted(df.columns)]
+            .pipe(df_reorder_cols, first=['id'])
+        )
+
+    @cache(version=1, key=lambda self, path: (self, path))
+    def _parse_page_metadata(self, path: Path) -> dict:
+        assert isinstance(path, Path)  # Avoid messing with str vs. Path to simplify cache key
+
+        # For logging
+        relpath = path.relative_to(xc.data_dir)
+
+        # For integrity checks
+        (_path_species, path_id, _path_filename) = relpath.parts
+        path_id = int(path_id)
+
+        # Read file
+        with open(path) as f:
+            html = f.read()
+
+        # Prep output
+        ret = dict()
+        ret['id'] = path_id  # Ensure id is always populated, else nulls (which means nan's and float instead of int)
+        ret['_raw'] = dict()
+
+        # Noop if page is empty (else requests_html.HTML() barfs)
+        if not html:
+            log.warn(f'Skipping empty page.html[{relpath}]')
+            return ret
+
+        page = requests_html.HTML(url=path, html=html)
+
+        # Parse: id, com_name, sci_name
+        title = page.find('meta[property="og:title"]', first=True)
+        if title:
+            title = title.attrs.get('content')
+        ret['_raw']['title'] = title
+        if not title:
+            page_id = None
+            ret['com_name'] = None
+            ret['sci_name'] = None
+        else:
+            (page_id, com_name, sci_name) = parse.parse('XC{} {} ({})', title).fixed
+            page_id = int(page_id)
+            ret['com_name'] = com_name
+            ret['sci_name'] = sci_name
+
+        if page_id != path_id:
+            log.warn(f"Skipping malformed page.html[{relpath}]: page_id[{page_id}] != path_id[{path_id}]")
+            return ret
+
+        # Parse: remarks, bird_seen, playback_used
+        #   - Ref: https://www.xeno-canto.org/upload/1/2
+        #   - Examples:
+        #       - '' [https://www.xeno-canto.org/420291]
+        #       - '\n\nbird-seen:no\n\nplayback-used:no' [https://www.xeno-canto.org/413790]
+        #       - 'About 20ft away in sagebrush steppe.\n\nbird-seen:yes\n\nplayback-used:no' [https://www.xeno-canto.org/418018]
+        description = page.find('meta[property="og:description"]', first=True)
+        if description:
+            description = description.attrs.get('content')
+        ret['_raw']['description'] = description
+        if not description:
+            ret['remarks'] = ''  # The branch below produces '' instead of None, so we also produce '' for consistency
+            ret['bird_seen'] = None
+            ret['playback_used'] = None
+        else:
+            lines = description.split('\n')
+            keys = ['bird-seen', 'playback-used']
+            for k in keys:
+                ret[k.replace('-', '_')] = or_else(None, lambda: first(
+                    parse.parse('%s:{}' % k, line)[0]
+                    for line in lines
+                    if line.startswith('%s:' % k)
+                ))
+            ret['remarks'] = '\n'.join(
+                line
+                for line in lines
+                if not any(
+                    line.startswith('%s:' % k)
+                    for k in keys
+                )
+            ).strip()
+
+        # Parse: all key-value pairs from #recording-data
+        #   - (Thanks XC for structuring this so well!)
+        recording_data = {
+            k.lower().replace(' ', '_'): v
+            for tr in page.find('#recording-data .key-value tr')
+            for [k, v, *ignore] in [[td.text for td in tr.find('td')]]
+        }
+        ret['_raw']['recording_data'] = recording_data
+        ret.update(recording_data)
+
+        # Clean up fields
+        #   - background is worth attempting here
+        ret['background'] = [
+            x
+            for x in ret['background'].split('\n')
+            for x in [x.strip()]
+            if x != 'none'
+        ]
+        #   - But don't touch the rest of these so we don't mess anything up (they'd be easy for a motivated user)
+        # ret['latitude'] = or_else(None, lambda: float(ret['latitude']))
+        # ret['longitude'] = or_else(None, lambda: float(ret['longitude']))
+        # ret['elevation'] = or_else(None, lambda: parse.parse('{:g} m', ret['elevation'])[0])
+        # ret['sampling_rate'] = or_else(None, lambda: parse.parse('{:g} (Hz)', ret['sampling_rate'])[0])
+        # ret['bitrate_of_mp3'] = or_else(None, lambda: parse.parse('{:g} (bps)', ret['bitrate_of_mp3'])[0])
+        # ret['channels'] = or_else(None, lambda: parse.parse('{:g} (bps)', ret['channels'])[0])
+
+        return ret
 
 
 # Workaround for @singleton (above)
@@ -516,148 +697,292 @@ def XCDF(xcdf, *args, **kwargs) -> pd.DataFrame:
 
 
 #
-# birdclef-2015
+# HACK TODO Hastily factored out of notebooks; merge into xc above, after cleaning up
 #
 
 
-@singleton
-class birdclef2015:
-
-    # TODO Finish fleshing this out (20180530_dataset_birdclef.ipynb + 20180524_eval_birdclef.ipynb)
-
-    def xml_data(self, recs: RecordingDF) -> pd.DataFrame:
-        return pd.DataFrame([self.xml_dict_for_rec(rec) for rec in df_rows(recs)])
-
-    def xml_dict_for_rec(self, rec: Recording) -> dict:
-
-        # wav_path -> (<Audio>, 'train'|'test')
-        wav_path = os.path.join(data_dir, rec.path)
-        xml_path_prefix = wav_path.replace('/wav/', '/xml/').replace('.wav', '')
-        train_path = glob_filenames_ensure_parent_dir(f'{xml_path_prefix}-train.xml')
-        test_path = glob_filenames_ensure_parent_dir(f'{xml_path_prefix}-test.xml')
-        assert bool(train_path) != bool(test_path), \
-            f'Failed to find train_path[{train_path}] xor test_path[{test_path}] for wav_path[{wav_path}]'
-        [xml_path], train_test = (train_path, 'train') if train_path else (test_path, 'test')
-        with open(xml_path) as f:
-            audio_elem = ET.fromstring(f.read())
-        assert audio_elem.tag == 'Audio'
-
-        # (<Audio>, 'train'|'test') -> xml_dict
-        xml_dict = {
-            self._snakecase_xml_key(e.tag): e.text.strip() if e.text else e.text
-            for e in audio_elem
-        }
-
-        return xml_dict
-
-    def _snakecase_xml_key(self, key: str) -> str:
-        key = stringcase.snakecase(key)
-        key = {
-            # Patch up weird cases
-            'author_i_d': 'author_id',  # Oops: 'AuthorID' became 'author_i_d'
-        }.get(key, key)
-        return key
+def load_xc_recs(
+    projection: 'Projection',
+    countries_k: str,
+    com_names_k: str,
+    recs_at_least: int,
+    num_species: int,
+    num_recs: int,
+) -> DF:
+    xc_meta, recs_stats = _load_xc_meta(countries_k, com_names_k, recs_at_least, num_species, num_recs)
+    xc_raw_recs = _xc_meta_to_xc_raw_recs(projection.features.load, xc_meta)
+    _inspect_xc_raw_recs(xc_raw_recs)
+    xc_recs = _xc_raw_recs_to_xc_recs(projection, xc_raw_recs)
+    _inspect_xc_recs(xc_recs)
+    return xc_recs, recs_stats
 
 
-@dataclass
-class Birdclef2015Rec(DataclassUtil):
-    """birdclef2015 recording"""
-    media_id: int
-    class_id: str
-    vernacular_names: str
-    family: str
-    order: str
-    genus: str
-    species: str
-    sub_species: str
-    background_species: str
-    author_id: str
-    author: str
-    elevation: int
-    locality: str
-    latitude: float
-    longitude: float
-    content: str
-    quality: int
-    date: str
-    time: str
-    comments: str
-    file_name: str
-    year: str
+def _load_xc_meta(
+    countries_k: str,
+    com_names_k: str,
+    recs_at_least: int,
+    num_species: int,
+    num_recs: int,
+) -> DF:
+    log.info('[1/3 fast] Filtering xc.metadata -> xc_meta...', **{
+        '(countries_k, com_names_k)': (countries_k, com_names_k),
+        '(recs_at_least, num_species, num_recs)': (recs_at_least, num_species, num_recs),
+    })
+    # Load xc_meta (fast)
+    #   1. countries: Filter recs to these countries
+    #   2. species: Filter recs to these species
+    #   3. recs_at_least: Filter species to those with at least this many recs
+    #   4. num_species: Sample this many of the species
+    #   5. num_recs: Sample this many recs per species
+    get_recs_stats = lambda df: dict(sp=df.species.nunique(), recs=len(df))
+    puts_stats = lambda desc: partial(tap, f=lambda df: print('%-15s %12s (sp/recs)' % (desc, '%(sp)s/%(recs)s' % get_recs_stats(df))))
+    xc_meta = (xc.metadata
+        .pipe(puts_stats('all'))
+        # 1. countries: Filter recs to these countries
+        [lambda df: df.country.isin(constants.countries[countries_k])]
+        .pipe(puts_stats('countries'))
+        # 2. species: Filter recs to these species
+        [lambda df: df.species.isin(com_names_to_species(*com_names[com_names_k]))]
+        .pipe(puts_stats('species'))
+        # Omit not-downloaded recs (should be few within the selected countries)
+        [lambda df: df.downloaded]
+        .pipe(puts_stats('(downloaded)'))
+        # Remove empty cats for perf
+        .pipe(df_remove_unused_categories)
+        # 3. recs_at_least: Filter species to those with at least this many recs
+        [lambda df: df.species.isin(df.species.value_counts()[lambda s: s >= recs_at_least].index)]
+        .pipe(puts_stats('recs_at_least'))
+        # 4. num_species: Sample this many of the species
+        [lambda df: df.species.isin(df.species.drop_duplicates().pipe(lambda s: s.sample(n=min(len(s), num_species), random_state=0)))]
+        .pipe(puts_stats('num_species'))
+        # 5. num_recs: Sample this many recs per species
+        #   - Remove empty cats else .groupby fails on empty groups
+        .pipe(df_remove_unused_categories)
+        .groupby('species').apply(lambda g: g.sample(n=min(len(g), num_recs), random_state=0))
+        .pipe(puts_stats('num_recs'))
+        # Drop species with <2 recs, else StratifiedShuffleSplit complains (e.g. 'TUVU')
+        [lambda df: df.species.isin(df.species.value_counts()[lambda s: s >= 2].index)]
+        .pipe(puts_stats('recs ≥ 2'))
+        # Clean up for downstream
+        .pipe(df_remove_unused_categories)
+    )
+    _recs_stats = get_recs_stats(xc_meta)
+    recs_stats = ', '.join(['%s[%s]' % (k, v) for k, v in _recs_stats.items()])
+    return (xc_meta, recs_stats)
 
 
-#
-# mlsp-2013
-#
-
-
-@singleton
-class mlsp2013:
-
-    def __init__(self):
-        self.dir = f'{data_dir}/mlsp-2013'
-
-    @property
-    @lru_cache()
-    def labels(self):
-        pass
-
-    @property
-    @lru_cache()
-    def rec_id2filename(self):
-        return pd.read_csv(f'{self.dir}/mlsp_contest_dataset/essential_data/rec_id2filename.txt')
-
-    @property
-    @lru_cache()
-    def sample_submission(self):
-        return pd.read_csv(f'{self.dir}/mlsp_contest_dataset/essential_data/sample_submission.csv')
-
-    @property
-    @lru_cache()
-    def species_list(self):
-        return pd.read_csv(f'{self.dir}/mlsp_contest_dataset/essential_data/species_list.txt')
-
-    @property
-    @lru_cache()
-    def rec_labels_test_hidden(self):
-        # Has variable numbers of columns (multiple labels per rec_id), so parse it manually
-        with open(f'{self.dir}/mlsp_contest_dataset/essential_data/rec_labels_test_hidden.txt') as f:
-            return (
-                pd.DataFrame(line.rstrip().split(',', 1) for line in f.readlines())
-                .T.set_index(0).T  # Pull first row into df col names
+def _xc_meta_to_xc_raw_recs(
+    load: 'Load',
+    xc_meta: DF,
+    xc_paths_dump_path='/tmp/xc_paths',  # When uncached, helpful to run load.recs in a terminal (long running and verbose)
+) -> DF:
+    log.info('[2/3 slower] Loading xc_meta -> xc_raw_recs (.audio, more metadata)...')
+    xc_paths = [
+        ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
+        for row in df_rows(xc_meta)
+    ]
+    if xc_paths_dump_path:
+        joblib.dump(xc_paths, xc_paths_dump_path)
+    xc_raw_recs = (
+        load.recs(paths=xc_paths)
+        .assign(
+            # TODO Push upstream
+            xc_id=lambda df: df.id.str.split('/').str[3].astype(int),
+        )
+        .set_index('xc_id')
+        .join(how='left', other=(xc_meta
+            .set_index('id')
+            .drop(columns=['species', 'sci_name', 'com_name'])
+            # TODO Push upstream
+            .assign(
+                state_only=lambda df: df.locality.str.split(', ').str[-1],
+                place_only=lambda df: df.locality.str.split(', ').str[:-1].str.join(', '),
+                state=lambda df: df.state_only.astype(str) + ', ' + df.country.astype(str),
+                place=lambda df: df.place_only.astype(str) + ', ' + df.state.astype(str),
+                year=lambda df: df.date.dt.year,
+                month=lambda df: df.date.dt.month,
+                month_day=lambda df: df.date.dt.strftime('%m-%d'),
+                hour=lambda df: (df.time
+                    .str.split(':').str[0].str.slice(0, 2)
+                    .pipe(pd.to_numeric, errors='coerce')  # Invalid -> nan
+                    .map(lambda x: x if 0 <= x < 24 else None)
+                    # TODO Handle 'pm' (actually, just look at the .value_counts() and rewrite this as a testable function)
+                ),
+                background_species=lambda df: df.background.map(xc.background_to_background_species),
+                n_background_species=lambda df: df.background_species.str.len(),
             )
+            # Maybe push upstream?
+            .assign(
+                place_only_stack=lambda df: df.place_only.str.split(', ').map(df_cell_stack),
+                state_only_stack=lambda df: df.state_only.str.split(', ').map(df_cell_stack),
+                place_stack=lambda df: df.place.str.split(', ').map(df_cell_stack),
+                state_stack=lambda df: df.state.str.split(', ').map(df_cell_stack),
+                background_species_stack=lambda df: df.background_species.map(df_cell_stack),
+                remarks_stack=df_cell_textwrap('remarks', 40),  # Make this one easy for the user to redo, to change width
+            )
+        ))
+    )
+    return xc_raw_recs
 
-    @property
-    def test_recs(self):
-        return self.rec_labels_test_hidden[lambda df: df['[labels]'] == '?'][['rec_id']]
 
-    @property
-    def _train_labels_raw(self):
-        return self.rec_labels_test_hidden[lambda df: df['[labels]'] != '?']
+def _inspect_xc_raw_recs(xc_raw_recs: DF) -> DF:
 
-    @property
-    @lru_cache()
-    def train_labels(self):
-        return (self._train_labels_raw
-            .astype({'rec_id': 'int'})
-            .fillna({'[labels]': '-1'})
-            .set_index('rec_id')['[labels]']
-            .map(lambda s: [int(x) for x in s.split(',') if x != ''])
-            .apply(pd.Series).unstack()  # flatmap
-            .reset_index(level=0, drop=True)  # Drop 'level' index
-            .sort_index().reset_index()  # Sort and reset 'rec_id' index
-            .rename(columns={0: 'class_id'})
-            .dropna()
-            .merge(self.species_list, how='left', on='class_id').drop(columns=['class_id'])
-            .merge(self.rec_id2filename, how='left', on='rec_id')
-            .pipe(df_reorder_cols, first=['rec_id', 'filename'])
-        )
+    # TODO Useful enough to keep this in here? Or defer to notebook? -- which means it wouldn't display until after the slow stuff...
+    log.info('Inspect xc_raw_recs')
+    display(
+        df_summary(xc_raw_recs).T,
+        df_value_counts(xc_raw_recs, limit=30, dropna=False, exprs=[
+            'species',
+            'subspecies',
+            'country',
+            'state',
+            ('quality', dict(sort_values=True)),
+            'type',
+            ('(duration_s//30)*30', dict(sort_values=True)),
+            'recordist',
+            ('year', dict(sort_values=True, ascending=False)),
+            ('month', dict(sort_values=True)),
+            'hour',
+            'place',
+            'n_background_species',
+            'bird_seen',
+            'playback_used',
+            'elevation',
+            'volume',
+            'speed',
+            'pitch',
+            'length',
+            'number_of_notes',
+            'variable',
+            'channels',
+            'sampling_rate',
+            'bitrate_of_mp3',
+        ]),
+        (xc_raw_recs
+            .sample(n=min(10, len(xc_raw_recs)), random_state=0)
+            .sort_values('species')
+            [lambda df: [c for c in df.columns if not c.endswith('_stack')]]  # Save vertical space by cutting repetition
+        ),
+    )
 
-    @property
-    @lru_cache()
-    def train_labels_for_filename(self) -> dict:
-        return (mlsp2013.train_labels
-            .groupby('filename')['code']
-            .apply(lambda s: [x for x in s if pd.notnull(x)])
-            .pipe(dict)
-        )
+    # Cheap plot: species counts
+    log.info('Inspect xc_raw_recs: species counts (cheap plot)')
+    display(xc_raw_recs
+        .species_longhand.value_counts().sort_index()
+        .reset_index().rename(columns={'index': 'species_longhand', 'species_longhand': 'num_recs'})
+        .assign(num_recs=lambda df: df.num_recs.map(lambda n: '%s /%s' % ('•' * int(n / df.num_recs.max() * 60), df.num_recs.max())))
+    )
+
+
+def _xc_raw_recs_to_xc_recs(
+    projection: 'Projection',
+    xc_raw_recs: DF,
+) -> DF:
+    log.info('[3/3 slowest] Featurizing xc_raw_recs -> xc_recs (.audio, .feat, .spectro)...')
+    # Featurize: .audio, .feat, .spectro (slowest)
+    #   - NOTE .spectro is heavy: 3.1gb for 2167 dan4 recs
+    xc_recs = (xc_raw_recs
+        # .audio
+        .assign(audio=lambda df: projection.features.load.audio(df, scheduler='threads'))
+        # .feat
+        .pipe(projection.transform)
+        # .spectro
+        .pipe(_recs_add_spectro, projection.features, cache=True)
+        .pipe(df_reorder_cols, last=['audio', 'feat', 'spectro'])
+    )
+    assert {'audio', 'feat', 'spectro'} <= set(xc_recs.columns)
+    return xc_recs
+
+
+def _recs_add_spectro(recs, features, **kwargs) -> 'recs':
+    """Featurize: .spectro (slow)"""
+    # Cache control is knotty here: _spectro @cache is disabled to avoid disk blow up on xc, but we'd benefit from it for recordings
+    #   - But the structure of the code makes it very tricky to enable @cache just for _spectro from one caller and not the other
+    #   - And the app won't have the benefit of caching anyway, so maybe punt and ignore?
+    return (recs
+        .assign(spectro=lambda df: features.spectro(df, scheduler='threads', **kwargs))  # threads >> sync, procs
+    )
+
+
+def _inspect_xc_recs(xc_recs: DF):
+    log.info('Inspect xc_recs')
+    display(df_value_counts(xc_recs, limit=25, dropna=False, exprs=[
+        'species',
+        'subspecies',
+        'country',
+        'state',
+        ('quality', dict(sort_values=True)),
+        'type',
+        ('(duration_s//30)*30', dict(sort_values=True)),
+        ('year', dict(sort_values=True, ascending=False)),
+        ('month', dict(sort_values=True)),
+        ('hour', dict(sort_values=True)),
+        'n_background_species',
+    ]))
+
+
+# XC cols that are interesting for EDA (for easy projection)
+xc_eda_cols = [
+    'species',
+    'subspecies',
+    'quality',
+    'duration_s',
+    'type',
+    'state',
+    'lat',
+    'lng',
+    'year',
+    'month_day',
+    'hour',
+    'time',
+    'license_type',
+    'recordist',
+    'elevation',
+    'bird_seen',
+    'playback_used',
+    'background_species',
+    'remarks',
+]
+xc_eda_cols_stack = [
+    {
+        'state': 'state_stack',
+        'background_species': 'background_species_stack',
+        'remarks': 'remarks_stack',
+    }.get(x, x)
+    for x in xc_eda_cols
+]
+
+
+def xc_to_handtype_fwf_df(df: pd.DataFrame, cols=['xc_id', 'handtype']) -> pd.DataFrame:
+    """For hand-labeling song types (motivated by notebooks/app_ideas_5)"""
+    if df.index.name is not None:
+        df = df.reset_index()
+    if 'handtype' not in df.columns:
+        df = df.assign(handtype='')
+    return (df
+        [cols]
+        .reset_index().rename(columns={'index': 'i'})
+        .pipe(df_to_fwf_df)
+    )
+
+
+def load_xc_handtype(relpath_glob: str = '*.fwf', **kwargs) -> pd.DataFrame:
+    """For hand-labeling song types (motivated by notebooks/app_ideas_5)"""
+    df = (
+        pd.concat([
+            pd_read_fwf(
+                path,
+                widths='infer',
+                na_filter=False,  # Map missing values to '' instead of np.nan
+            )
+            for path in glob.glob(f'{hand_labels_dir}/xc/{relpath_glob}')
+        ])
+        [['xc_id', 'handtype']]  # Drop non-hand-label cols, which we only included for context to the human editing the file
+        .drop_duplicates()  # Tolerate non-conflicting dupes in the input files
+        .set_index('xc_id')  # For easy join
+        .pipe(df_col_map, handtype=lambda s: s.split(','))  # .handtype is multi-valued
+        # .pipe(df_col_color_d, handtype=mpl_cmap_concat('Set1', 'Set2'))  [XXX Blood everywhere, defer to downstream]
+    )
+    # Ensure no conflicting dupes in the input files
+    assert len(df) == df.reset_index().xc_id.nunique(), "Oops, non-unique labels; please resolve"
+    return df

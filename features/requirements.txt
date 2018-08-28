@@ -4,8 +4,8 @@
 # TODO TODO Reconcile local vs. github
 # -e /Users/danb/hack/potoo
 # -e /Users/danb/hack/joblib
-git+https://github.com/jdanbrown/potoo.git@ecb23a1#egg=potoo
-git+https://github.com/jdanbrown/joblib.git@3eb2c96#egg=joblib
+git+https://github.com/jdanbrown/potoo.git@859212d#egg=potoo
+git+https://github.com/jdanbrown/joblib.git@2855948#egg=joblib
 
 attrdict==2.0.0
 attrs==18.1.0

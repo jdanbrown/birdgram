@@ -299,10 +299,14 @@ class Load(DataclassConfig):
     def _ergonomic_audio(self, audio: audiosegment.AudioSegment) -> audiosegment.AudioSegment:
         """Make audiosegment.AudioSegment attrs more ergonomic"""
         # Copy so we can mutate
-        audio = audiosegment_replace(audio)
+        audio = audio_copy(audio)
         # Save the full path
         audio.path = audio.name
         # More ergonomic .name (which is never used as a path)
+        #   - WARNING Careful with how this interacts with audiosegment_content_id! Here, we're only making the content
+        #     id _more_ stable because we're replacing and abs path with a rel path, but it'd be easy for small changes
+        #     here to violate audiosegment_content_id assumptions -- we are heavily crossing ownership boundaries here,
+        #     after all.
         if audio.path.startswith(cache_dir):
             # Relative cache path, excluding the leading 'hz=...,ch=...,bit=.../' dir
             name = os.path.relpath(audio.path, cache_dir).split('/', 1)[1]

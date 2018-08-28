@@ -46,6 +46,7 @@ import joblib
 import lightgbm as lgb  # For Search.cls
 import numpy as np
 from potoo.numpy import np_sample, np_sample_stratified
+from potoo.pandas import df_reorder_cols
 from potoo.util import round_sig
 import sklearn as sk
 import sklearn.ensemble
@@ -270,21 +271,27 @@ class Features(DataclassConfig):
 
     def slice_audio(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
         """Slices .audio, recomputes .spectro (with denoise)"""
-        return self.with_audio(rec, lambda audio: audio[
-            None if start_s is None else start_s * 1000 :
-            None if end_s is None else end_s * 1000
-        ])
+        start_ms = None if start_s is None else int(start_s * 1000)
+        end_ms   = None if end_s   is None else int(end_s   * 1000)
+        return self.with_audio(rec,
+            lambda audio: audio[start_ms:end_ms],
+            # Stable rec.id (e.g. for caching)
+            #   - Add '[start:end]' to mark the slice
+            #   - Add '.spectro_denoise' to mark that .spectro was transformed by _spectro_denoise
+            #   - TODO How to track these ids more simply and robustly?
+            id='%s[%s:%s].spectro_denoise' % (rec.id, start_ms, end_ms),
+        )
 
     def slice_spectro(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
         """Slices .spectro and .audio (as is, no new denoise)"""
+        start_ms = None if start_s is None else int(start_s * 1000)
+        end_ms   = None if end_s   is None else int(end_s   * 1000)
         return self._edit(rec,
-            audio_f=lambda rec, audio: audio[
-                None if start_s is None else start_s * 1000 :
-                None if end_s is None else end_s * 1000
-            ],
-            spectro_f=lambda rec, spectro: (spectro
-                .slice(start_s, end_s)
-            ),
+            audio_f=lambda rec, audio: audio[start_ms:end_ms],
+            spectro_f=lambda rec, spectro: spectro.slice(start_s, end_s),
+            # Stable rec.id (e.g. for caching)
+            #   - Add '[start:end]' to mark the slice
+            id='%s[%s:%s]' % (rec.id, start_ms, end_ms),
         )
 
     def _edit(
@@ -292,11 +299,18 @@ class Features(DataclassConfig):
         rec: Row,
         audio_f: Callable[[Row, Audio], Audio],
         spectro_f: Callable[[Row, Melspectro], Melspectro],
+        id: str = None,
         # TODO Extend to more attrs
     ) -> Row:
-        rec = rec.copy()
 
-        id = '%s+%s' % (rec.id, secrets.token_hex(4))  # Invalide caches
+        # Copy so we can mutate
+        #   - Convert series -> dict to avoid bottlenecks from lots of pd.Series.__setitem__ (determined by profiling)
+        rec = rec.to_dict()
+
+        # Generate fresh id to separate from new edited rec from input rec (e.g. for cache correctness)
+        if not id:
+            id = '%s+%s' % (rec['id'], secrets.token_hex(4))
+        assert id != rec['id']
 
         # Edit .audio
         audio = rec.pop('audio').unbox
@@ -310,7 +324,7 @@ class Features(DataclassConfig):
         rec['basename'] = None  # No meaningful .basename for an in-mem .audio
         # Recompute .duration_s, .samples_*, basename, species, etc.
         del rec['duration_s']  # Bust short-circuit
-        for k, v in self.load._metadata(rec).items():
+        for k, v in self.load._metadata(pd.Series(rec)).items():  # Convert dict -> series for load._metadata
             rec[k] = v
         # TODO Recompute [HACK Invalidate, since nothing needs these yet for sliced recs]
         for k in ['audio_id', 'audio_sha']:
@@ -327,42 +341,8 @@ class Features(DataclassConfig):
             if k in rec:
                 del rec[k]
 
-        return rec
-
-    # XXX after QA'ing replacement above
-    # def with_audio(self, rec: Row, f: Callable[[Audio], Audio], **kwargs) -> Row:
-    #     """Transforms .audio, recomputes .spectro (with denoise)"""
-    #     rec = rec.copy()
-    #
-    #     id = '%s+%s' % (rec.id, secrets.token_hex(4))  # Invalide caches
-    #
-    #     # Transform .audio
-    #     rec['audio'] = box(f(rec.audio.unbox))
-    #     rec['audio'].unbox.name = id
-    #
-    #     # Recompute/invalidate attrs coupled to .audio
-    #     #   - TODO Replace rec.id with rec.audio_id (which will require rebuilding feat/_feat caches...)
-    #     rec['id'] = id
-    #     rec['path'] = None  # No meaningful .path for an in-mem .audio
-    #     rec['basename'] = None  # No meaningful .basename for an in-mem .audio
-    #     # Recompute .duration_s, .samples_*, basename, species, etc.
-    #     del rec['duration_s']  # Bust short-circuit
-    #     for k, v in self.load._metadata(rec).items():
-    #         rec[k] = v
-    #     # TODO Recompute [HACK Invalidate, since nothing needs these yet for sliced recs]
-    #     for k in ['audio_id', 'audio_sha']:
-    #         if k in rec:
-    #             del rec[k]
-    #
-    #     # Recompute/invalidate downstream features
-    #     #   - HACK Very brittle; how to avoid maintaining an explicit list? Any easier to whitelist upstreams instead?
-    #     del rec['spectro']  # Bust short-circuit
-    #     rec['spectro'] = self._spectro(rec, **kwargs)
-    #     for k in ['patches', 'proj', 'agg', 'feat']:
-    #         if k in rec:
-    #             del rec[k]
-    #
-    #     return rec
+        # Convert dict -> series for caller
+        return pd.Series(rec)
 
 
 @dataclass
@@ -420,6 +400,7 @@ class Projection(DataclassConfig):
         projection = Projection()
         projection.__dict__.update(saved_attrs)
         projection.__dict__.update(override_attrs)
+        projection.id_ = id
         return projection
 
     def save(self, basename: str):
@@ -727,9 +708,17 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
 
     # "v0" because these inputs are a hacky api that we'll want to change pretty soon
     @classmethod
-    def load_v0(cls, cv_str, search_params_str, classifier_str, random_state=0) -> 'cls':
+    def load_v0(
+        cls,
+        experiment_id,
+        cv_str,
+        search_params_str,
+        classifier_str,
+        random_state=0,
+    ) -> 'cls':
         return joblib.load('/'.join([
             f'{artifact_dir}',
+            experiment_id,
             "%s,estimator=Search(%s,classifier='%s',random_state=%s)" % (
                 cv_str,
                 search_params_str,
@@ -738,6 +727,14 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
             ),
             'estimator.pkl',
         ]))
+
+    def fix_missing_projection_skm(self, projection_id: str) -> 'self':
+        # HACK FIXME Why doesn't search.projection.skm_ exist after unpickle?
+        #   - These both work...
+        #       joblib_loads(joblib_dumps(projection)).skm_
+        #       joblib_loads(joblib_dumps(search)).projection.skm_
+        self.projection = Projection.load(projection_id, features=self.projection.features)
+        return self
 
     #
     # Fit
@@ -999,6 +996,12 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
 
         return species_probs
 
+    @requires_cols('feat')
+    def species_proba(self, recs: RecordingDF) -> np.ndarray:
+        X = self.X(recs)
+        classifier_ = self.classifier_
+        return classifier_.predict_proba(X)
+
     def species_probs_one(self, rec: Recording) -> pd.DataFrame:
         return self.species_probs(pd.DataFrame([rec]))
 
@@ -1217,3 +1220,79 @@ def _print_config(config):
             'agg    ': f'(k, a)   ({_k}, {_a})',
             'feat   ': f'(k*a,)   ({_ka},)',
         })
+
+
+#
+# HACK TODO Hastily factored out of notebooks; merge into Search/SearchEvals above, after evaluating further and cleaning up
+#
+
+# TODO TODO Did I forget pca for all of app_ideas_5!? (And it worked decently well?)
+# TODO TODO Crap, I forgot dist(probs) altogether! Just dist(feat) -- wow...!
+
+
+def species_probs_meta(df) -> pd.DataFrame:
+    """Project just the "metadata" cols (i.e. everything but probs) from Search.species_probs* output"""
+    return (df
+        [lambda df: [c for c in df.columns if not isinstance(c, int)]]  # Non-probs cols (non-ints)
+    )
+
+
+def species_probs_probs(df) -> pd.DataFrame:
+    """Project just the probs cols from Search.species_probs* output"""
+    return (df
+        .reset_index()  # audio_id
+        [lambda df: [c for c in df.columns if isinstance(c, int)]]  # Probs cols (ints)
+        .T.apply(axis=1, func=lambda row: pd.Series(dict(species=row[0][1], p=row[0][0])))  # Split (p, species) -> two cols
+        # .pipe(df_ordered_cat, species=lambda df: sorted_species(df.species.unique()))  # TODO Break module cycle for sorted_species
+    )
+
+
+def rec_probs(rec, search):
+    """Interactive shorthand"""
+    return (
+        search.species_probs_one(rec)
+        .pipe(species_probs_probs)
+    )
+
+
+def rec_neighbors(*args, **kwargs):
+    return rec_neighbors_by(*args, **kwargs, by=Search.X)
+
+
+# TODO Perf: fit the nn tree once and reuse, instead of fitting every time [but wait until this becomes a bottleneck]
+def rec_neighbors_by(
+    query_rec,
+    search_recs,
+    by=Callable[[pd.DataFrame], np.ndarray],  # df.shape[rows, cols] -> x.shape[rows, feats]
+    n: int = None,  # Default: len(search_recs)
+    **nn_kwargs,
+):
+    if n is None:
+        n = len(search_recs)
+    knn = sk.neighbors.NearestNeighbors(**nn_kwargs).fit(by(search_recs.reset_index()))
+    ([dist], [iloc_ix]) = knn.kneighbors(
+        by(pd.DataFrame([query_rec])),
+        n_neighbors=n,
+    )
+    return (search_recs
+        .iloc[iloc_ix]
+        .assign(dist=dist)
+        .pipe(df_reorder_cols, first=['dist'])
+    )
+
+
+# TODO Naming
+def pca_norm_transform(X: np.ndarray, n_components=None, col_prefix=['X_pca']) -> pd.DataFrame:
+    pca = (
+        sk.pipeline.make_pipeline(
+            sk.preprocessing.StandardScaler(with_mean=True, with_std=False),  # De-mean
+            sk.decomposition.PCA(n_components=n_components),
+            sk.preprocessing.Normalizer(),  # No effect iff pca components explain 100% of var (n_components=None)
+        )
+        .fit(X)
+    )
+    _pca = dict(pca.steps)['pca']  # [TODO Why does _pca.transform i/o pca.transform give a cloud that looks more centered?]
+    return pd.DataFrame({
+        col_prefix: list(pca.transform(X)),
+        f'{col_prefix}_var': [_pca.explained_variance_ratio_.cumsum()] * len(X),
+    })

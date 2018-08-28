@@ -9,8 +9,15 @@ from potoo.plot import *
 from potoo.util import round_sig
 import scipy
 
+from cache import cache
 import metadata
 from util import *
+
+# TODO Very chewy, lots of room to improve:
+#   - [ ] Simplify: plot_foo(show=False) -> img_foo() called by plot_foo(), so caller can img_foo() directly
+#   - [.] Add @cache to img_foo()'s
+#   - [.] Add progress=True (via tqdm) to img_foos() / plot_foos(), without lots of duplicated code
+#   - [ ] Simplify: make a reusable pattern for the common args (progress, raw/scale, audio, ...)
 
 
 def plot_thumb_grid(
@@ -22,20 +29,60 @@ def plot_thumb_grid(
     plot_kwargs=dict(),
     **thumb_kwargs,
 ):
-    plot_spectro_grid(recs_thumb(recs, features, **thumb_kwargs), **plot_kwargs,
+    return plot_spectro_grid(recs_thumb(recs, features, **thumb_kwargs), **plot_kwargs,
         raw=raw,
         cols=cols,
         order=order,
     )
 
 
+# TODO
+@generator_to(lambda xs: [x for x in xs if x is not None] or None)
+def plot_thumbs_micro(
+    recs,
+    features,
+    raw=True,
+    **kwargs,
+):
+    for rec in df_rows(recs):
+        yield plot_thumb_micro(rec, features, raw=raw, **kwargs)
+        if not raw:
+            plt.show()
+
+
 def plot_thumb_micro(
     rec,
     features,
+    raw=True,
+    scale=None,
+    audio=False,
+    show=True,
     plot_kwargs=dict(),
     **thumb_kwargs,
 ):
-    plot_spectro_micro(rec_thumb(rec, features, **thumb_kwargs), features, **plot_kwargs)
+    return plot_spectro_micro(rec_thumb(rec, features, **thumb_kwargs), features, **plot_kwargs,
+        raw=raw,
+        scale=scale,
+        audio=audio,
+        show=show,
+    )
+
+
+# TODO
+@cache(version=0, key=lambda recs, features, **kwargs: (recs.id, features, kwargs))
+def plot_thumbs(
+    recs,
+    features,
+    raw=True,
+    **kwargs,
+):
+    return map_progress(use='dask', scheduler='threads',
+        xs=list(df_rows(recs)),
+        f=lambda rec: first([
+            plot_thumb(rec, features, raw=raw, **kwargs),
+            plt.show() if not raw else None,
+        ]),
+    )
 
 
 def plot_thumb(
@@ -44,13 +91,15 @@ def plot_thumb(
     raw=True,
     scale=None,
     audio=False,
+    show=True,
     plot_kwargs=dict(),
     **thumb_kwargs,
 ):
-    plot_spectro(rec_thumb(rec, features, **thumb_kwargs), **plot_kwargs,
+    return plot_spectro(rec_thumb(rec, features, **thumb_kwargs), **plot_kwargs,
         raw=raw,
         scale=scale,
         audio=audio,
+        show=show,
     )
 
 
@@ -77,7 +126,7 @@ def plot_spectro_grid(
         ]))
         for S in Ss
     ])
-    plot_patches(
+    return plot_patches(
         patches=np.array([
             S.reshape(t * f)  # HACK Because plot_patches expects its input to be flattened
             for S in Ss
@@ -91,50 +140,81 @@ def plot_spectro_grid(
     )
 
 
+# TODO
+@generator_to(lambda xs: [x for x in xs if x is not None] or None)
+def plot_spectros_micro(
+    recs,
+    features,
+    raw=True,
+    **kwargs,
+):
+    for rec in df_rows(recs):
+        yield plot_spectro_micro(rec, features, raw=raw, **kwargs)
+        if not raw:
+            plt.show()
+
+
 def plot_spectro_micro(
     rec,
     features,
+    raw=True,
     wrap=False,  # True to plot the full duration with wrapping
     wrap_s=10,  # TODO 10 vs. 15 as sane default?
     limit_s=None,
     **kwargs,
 ):
-    kwargs.setdefault('raw', True)
     kwargs.setdefault('audio', False)
     if not wrap and not limit_s:
         limit_s = wrap_s
     if limit_s:
         rec = features.slice_spectro(rec, 0, limit_s)
-    plot_spectro_wrap(rec, features, wrap_s=wrap_s, **kwargs)
+    return plot_spectro_wrap(rec, features, wrap_s=wrap_s, raw=raw, **kwargs)
+
+
+# TODO
+@generator_to(lambda xs: [x for x in xs if x is not None] or None)
+def plot_spectros_wrap(
+    recs,
+    features,
+    raw=True,
+    **kwargs,
+):
+    for rec in df_rows(recs):
+        yield plot_spectro_wrap(rec, features, raw=raw, **kwargs)
+        if not raw:
+            plt.show()
 
 
 def plot_spectro_wrap(
     rec,
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
-    wrap_s: float = 10,  # Sane default (5 too small, 20 too big, 10/15 both ok)
+    wrap_s=10,  # Sane default (5 too small, 20 too big, 10/15 both ok)
+    limit_s=None,  # Limit duration of rec
     pad=True,  # In case there's only one line, pad out to wrap_s, e.g for uniform height when raw=True
     audio=False,
-    raw=False,
+    raw=True,
     **kwargs,
 ):
-    n_wraps = int(np.ceil(rec.duration_s / wrap_s))
+    limit_s = min(limit_s or np.inf, rec.duration_s)
+    wrap_s = wrap_s or limit_s
+    n_wraps = int(np.ceil(limit_s / wrap_s))
     breaks_s = np.linspace(0, n_wraps * wrap_s, n_wraps, endpoint=False)
-    if pad:
-        kwargs['limit_s'] = wrap_s
-    plot_spectros(
+    ret = plot_spectros(
         pd.DataFrame(
-            features.slice_spectro(rec, b, b + wrap_s)
+            features.slice_spectro(rec, b, min(b + wrap_s, limit_s))
             for b in breaks_s
         ),
         yticks=['%.0fs' % s for s in breaks_s],
-        xformat=lambda s: '+%.0fs' % s,
+        xformat='+%.0fs',
         raw=raw,
+        limit_s=wrap_s if pad else None,
         **kwargs,
     )
     if audio:
         if not raw:
             plt.show()
         display(rec.audio.unbox)
+    return ret
 
 
 def plot_spectro(
@@ -143,45 +223,54 @@ def plot_spectro(
     audio=False,
     **kwargs,
 ):
-    plot_spectros(pd.DataFrame([rec]), raw=raw, **kwargs)
+    ret = plot_spectros(rec, raw=raw, **kwargs)
     if audio:
         if not raw:
             plt.show()
         display(rec.audio.unbox)
+    return ret
 
 
-def plot_spectros(
-    recs,
-    query_and_title=None,
+def plot_spectros(*args, **kwargs):
+    if kwargs.get('show') == False:
+        f = _plot_spectros_cache
+    else:
+        f = _plot_spectros_nocache
+    return f(*args, **kwargs)
+
+
+@cache(version=0, key=lambda recs, *args, **kwargs: (recs.id, args, kwargs))
+def _plot_spectros_cache(*args, **kwargs):
+    return _plot_spectros_nocache(*args, **kwargs)
+
+
+def _plot_spectros_nocache(
+    recs: Union[pd.DataFrame, Row],
     raw=False,
-    xformat=lambda x: '%.0fs' % x,
+    title=None,
+    xformat='%.0fs',
     ytick_col=None,  # e.g. 'species_longhand'
     yticks=None,
-    limit_s='auto',  # Limit duration of x-axis
-    n=None,
+    limit_s=None,  # Limit duration of x-axis
     verbose=False,
     **kwargs,
 ):
     """Vis lots of spectros per dataset"""
 
-    if query_and_title:
-        recs = recs.query(query_and_title)
+    # Allow recs or rec
+    if isinstance(recs, pd.DataFrame):
+        recs = list(df_rows(recs))
+    else:
+        recs = [recs]
 
-    (Ss, ts) = (recs
-        .pipe(lambda df: df.query(query_and_title) if query_and_title else df)
-        [:n]
-        .pipe(lambda df: (
-            df.spectro.map(lambda s: s.S),
-            df.spectro.map(lambda s: s.t),
-        ))
-    )
-    if limit_s == 'auto':
-        limit_s = recs.duration_s.max()
-    dt = ts.iloc[0][1] - ts.iloc[0][0]  # Not exactly right, but close enough
+    Ss = [rec.spectro.S for rec in recs]
+    ts = [rec.spectro.t for rec in recs]
+    limit_s = limit_s or max([rec.duration_s for rec in recs])  # Allow limit_s > duration_s, to allow padding (for consistent sizing)
+    dt = ts[0][1] - ts[0][0]  # Not exactly right, but close enough
     limit_i = int(round(limit_s / dt))
-    f_i_len = Ss.iloc[0].shape[0]
-    Ss = Ss.map(lambda S: S[:, :limit_i])
-    ts = ts.map(lambda t: t[:limit_i])
+    f_i_len = Ss[0].shape[0]
+    Ss = [S[:, :limit_i] for S in Ss]
+    ts = [t[:limit_i] for t in ts]
     pad_first = np.array([[0, 0], [0, 0]])  # [top, bottom], [left, right]
     pad_rest  = np.array([[0, 1], [0, 0]])  # [top, bottom], [left, right]
     # Flip vertically (twice) to align with plt.imshow(..., origin='lower')
@@ -201,18 +290,18 @@ def plot_spectros(
             **(raw if isinstance(raw, dict) else {}),  # New api (simpler to compose)
             **kwargs,  # Back compat
         }
-        show_img(cat_Ss, origin='lower', file_prefix=query_and_title or 'image', **raw_kwargs)
+        return show_img(cat_Ss, origin='lower', file_prefix=title or 'image', **raw_kwargs)
     else:
         # (imshow is faster than pcolormesh by ~4x)
         plt.imshow(cat_Ss, origin='lower')
-        plt.gca().xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda t_i, pos=None: xformat(t_i * dt)))
-        if query_and_title:
-            plt.title(query_and_title, loc='left')
+        plt.gca().xaxis.set_major_formatter(mpl.ticker.FuncFormatter(lambda t_i, pos=None: xformat % (t_i * dt)))
+        if title:
+            plt.title(title, loc='left')
         if not ytick_col and yticks is None:
             plt.yticks([])
         else:
             if yticks is None:
-                yticks = list(recs[ytick_col])
+                yticks = [rec[ytick_col] for rec in recs]
             plt.yticks(
                 np.arange(len(recs)) * (f_i_len + pad_rest[0].sum()) + f_i_len // 2,
                 # Reverse to align with plt.imshow(..., origin='lower')

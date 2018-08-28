@@ -1121,19 +1121,25 @@ def audio_bandpass_filter(audio: audiosegment.AudioSegment, **kwargs) -> audiose
 ## bubo-features
 
 import platform
+import textwrap
 import types
+from typing import Union
 
 import numpy as np
 import matplotlib.pyplot as plt
+from potoo.ipython import *
+from potoo.pandas import *
 import psutil
 import pydub
 import scipy
 import yaml
 
+from constants import *
 from log import log  # For export [TODO Update callers]
 
 
 def print_sys_info():
+    """Useful to put at the top of notebooks so you know which system it ran on (e.g. local dev vs. many-core remote)"""
     print(
         ''.join([
             yaml.safe_dump(default_flow_style=False, data=dict(
@@ -1184,30 +1190,11 @@ def xc_rec_str_line(rec, *_first, first=[], last=[], default=[
     """Interactive shorthand"""
     rec = rec.copy()
     # Ad-hoc formatting to make these easier to visually grok
-    rec['xc_id'] = 'XC%s' % rec['xc_id']
+    rec['xc_id'] = 'XC%s' % rec.get('xc_id', rec.name)  # Col else index
     rec['species_subspecies'] = '/'.join([rec.species, *([rec.subspecies] if rec.subspecies else [])])
     rec['country_locality'] = '/'.join([rec.country, *reversed(rec.locality.split(', '))])
     rec['recordist_license_type'] = '%s[%s]' % (rec.recordist, rec.license_type)
     return rec_str_line(rec, *_first, first=first, last=last, default=default)
-
-
-def species_probs_meta(df):
-    return (df
-        [lambda df: [c for c in df.columns if not isinstance(c, int)]]  # Non-probs cols (non-ints)
-    )
-
-
-def species_probs_probs(df):
-    return (df
-        .reset_index()  # audio_id
-        [lambda df: [c for c in df.columns if isinstance(c, int)]]  # Probs cols (ints)
-        .T.apply(axis=1, func=lambda row: pd.Series(dict(species=row[0][1], p=row[0][0])))  # Split (p, species) -> two cols
-    )
-
-
-def rec_probs(rec, search, n):
-    """Interactive shorthand"""
-    return search.species_probs_one(rec).pipe(species_probs_probs)[:n].T
 
 
 # NOTE Thumbs are complete recs, so we can't just add a .thumb col to an existing recs...
@@ -1278,3 +1265,34 @@ def rec_thumb_with_start(
         plt.tight_layout()
 
     return (thumb_start_s, thumb)
+
+
+def text_bar(
+    size: float,
+    max: float = None,
+    norm: float = None,
+    side: Union['left', 'right'] = 'left',
+    full: str = '■',  # Good for drawing unbroken boxes
+    empty: str = '—',
+) -> str:
+    """Draw a text bar (motivated by rendering distances in dfs)"""
+    max = max or size
+    if norm:
+        size = size / max * norm
+        max = norm
+    fulls = full * int(round(size))
+    empties = empty * int(round(max - size))
+    if side == 'left':
+        return fulls + empties
+    else:
+        return empties + fulls
+
+
+# For potoo.ipython.df_cell
+df_cell_spectros = lambda f, *args, **kwargs: lambda df: df_cell_display.many(f(df, *args, **kwargs, show=False))
+df_cell_audios = lambda df: df_cell_display.many(unbox_many(df.audio))
+df_cell_textwrap = lambda col, width=70: lambda df: df[col].map(lambda x: df_cell_stack([
+    subline
+    for line in x.split('\n')
+    for subline in textwrap.wrap(line, width)
+]))

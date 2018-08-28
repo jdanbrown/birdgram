@@ -1,4 +1,5 @@
 from constants import *
+from datasets import _recs_add_spectro  # TODO Clean up this abstraction (and make it not private)
 from util import *
 
 
@@ -58,16 +59,11 @@ def load_app_recs(
 
     # Heavyweight
     if spectro:
-        recs = app_recs_add_spectro(recs, projection.features, cache=cache_spectro)
+        recs = _recs_add_spectro(recs, projection.features, cache=cache_spectro)
 
     return recs
 
 
-def app_recs_add_spectro(recs, features, **kwargs) -> 'recs':
-    """Featurize: .spectro (slow)"""
-    # Cache control is knotty here: _spectro @cache is disabled to avoid disk blow up on xc, but we'd benefit from it for recordings
-    #   - But the structure of the code makes it very tricky to enable @cache just for _spectro from one caller and not the other
-    #   - And the app won't have the benefit of caching anyway, so maybe punt and ignore?
-    return (recs
-        .assign(spectro=lambda df: features.spectro(df, scheduler='threads', **kwargs))  # threads >> sync, procs
-    )
+# XXX after cleaning up abstractions and updating callers (a handful of recent notebooks that I'd like to keep alive)
+def app_recs_add_spectro(*args, **kwargs) -> 'recs':
+    return _recs_add_spectro(*args, **kwargs)
