@@ -740,9 +740,39 @@ dask_opts = _dask_opts()
 
 def dask_progress(**kwargs):
     """Context manager to show progress bar for dask .compute()"""
-    from dask.diagnostics import ProgressBar
-    return ProgressBar(**{
-        'width': get_cols() - 30,
+
+    from dask.diagnostics.progress import ProgressBar, format_time
+    from dask.utils import ignoring
+    class NamedProgressBar(ProgressBar):
+        """
+        Extend dask.diagnostics.ProgressBar:
+        - Automatically calculate width from terminal $COLUMNS
+        - Optional desc, to print as a prefix so you can distinguish your progress bars
+        """
+
+        def __init__(self, desc=None, **kwargs):
+            super().__init__(**kwargs)
+            self._terminal_cols = get_cols()
+            self._desc = desc
+            self._desc_pad = '%s ' % self._desc if self._desc else ''
+
+        def _draw_bar(self, frac, elapsed):
+            # (Mostly copy/pasted from ProgressBar)
+            percent = int(100 * frac)
+            elapsed = format_time(elapsed)
+            msg_prefix = '\r%s[' % self._desc_pad
+            msg_suffix = '] | %3s%% Completed | %s' % (percent, elapsed)
+            width = self._terminal_cols - len(msg_prefix) - len(msg_suffix)
+            bar = '#' * int(width * frac)
+            msg_bar = '%%-%ds' % width % bar
+            with ignoring(ValueError):
+                self._file.write(msg_prefix)
+                self._file.write(msg_bar)
+                self._file.write(msg_suffix)
+                self._file.flush()
+
+    return NamedProgressBar(**{
+        # 'width': get_cols() - 30,
         **kwargs,
     })
 
@@ -763,6 +793,7 @@ def _map_progress_dask(
     f: Callable[[X], X],
     xs: Iterable[X],
     use_dask=True,
+    desc=None,
     scheduler='threads',  # 'processes' | 'threads' | 'synchronous' [FIXME 'processes' hangs before forking]
     partition_size=None,
     npartitions=None,
@@ -779,7 +810,7 @@ def _map_progress_dask(
         # HACK dask.bag.from_sequence([np.array(...), ...]) flattens the arrays -- workaround by boxing it
         # HACK Avoid other cases we haven't tripped over yet by boxing everything unconditionally
         wrap, unwrap = (lambda x: box(x)), (lambda x: x.unbox)
-        with dask_progress(width=get_cols() - 30):
+        with dask_progress(desc=desc):
             if not partition_size and not npartitions:
                 xs = list(xs)
                 (unit_sec, _) = timed(lambda: list(map(f, xs[:1])))

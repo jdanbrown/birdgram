@@ -14,10 +14,42 @@ import metadata
 from util import *
 
 # TODO Very chewy, lots of room to improve:
-#   - [ ] Simplify: plot_foo(show=False) -> img_foo() called by plot_foo(), so caller can img_foo() directly
-#   - [.] Add @cache to img_foo()'s
-#   - [.] Add progress=True (via tqdm) to img_foos() / plot_foos(), without lots of duplicated code
+#   - [x] Add @cache to img_foo()'s
+#   - [x] Add progress=True (via tqdm) to img_foos() / plot_foos(), without lots of duplicated code
 #   - [ ] Simplify: make a reusable pattern for the common args (progress, raw/scale, audio, ...)
+#   - [ ] Simplify: plot_foo(show=False) -> img_foo() called by plot_foo(), so caller can img_foo() directly
+
+
+def _with_many(plot_f):
+    """
+    Given plot_f(rec), add plot_f.many(recs)
+    - Also adds another layer of caching, with granularity the whole input (i.e. recs)
+    """
+
+    def plot_many(*args, show=True, **kwargs):
+        f = plot_many_nocache if show else plot_many_cache
+        return f(*args, show=show, **kwargs)
+
+    plot_f.many = plot_many
+    plot_f.many.__name__ = plot_f.__name__ + '.many'
+    plot_f.many.__qualname__ = plot_f.__qualname__ + '.many'
+
+    @cache(version=0, key=lambda recs, *args, **kwargs: (recs.id, args, kwargs))
+    def plot_many_cache(*args, **kwargs):
+        return plot_many_nocache(*args, **kwargs)
+
+    def plot_many_nocache(recs, *args, raw=True, **kwargs):
+        return map_progress(
+            use='dask', scheduler='threads',  # Faster than sync and processes (measured on plot_thumbs)
+            desc=plot_f.many.__qualname__,
+            xs=list(df_rows(recs)),
+            f=lambda rec: first([
+                plot_f(rec, *args, raw=raw, **kwargs),
+                plt.show() if not raw else None,
+            ]),
+        )
+
+    return plot_f
 
 
 def plot_thumb_grid(
@@ -36,20 +68,7 @@ def plot_thumb_grid(
     )
 
 
-# TODO
-@generator_to(lambda xs: [x for x in xs if x is not None] or None)
-def plot_thumbs_micro(
-    recs,
-    features,
-    raw=True,
-    **kwargs,
-):
-    for rec in df_rows(recs):
-        yield plot_thumb_micro(rec, features, raw=raw, **kwargs)
-        if not raw:
-            plt.show()
-
-
+@_with_many
 def plot_thumb_micro(
     rec,
     features,
@@ -68,23 +87,7 @@ def plot_thumb_micro(
     )
 
 
-# TODO
-@cache(version=0, key=lambda recs, features, **kwargs: (recs.id, features, kwargs))
-def plot_thumbs(
-    recs,
-    features,
-    raw=True,
-    **kwargs,
-):
-    return map_progress(use='dask', scheduler='threads',
-        xs=list(df_rows(recs)),
-        f=lambda rec: first([
-            plot_thumb(rec, features, raw=raw, **kwargs),
-            plt.show() if not raw else None,
-        ]),
-    )
-
-
+@_with_many
 def plot_thumb(
     rec,
     features,
@@ -140,20 +143,7 @@ def plot_spectro_grid(
     )
 
 
-# TODO
-@generator_to(lambda xs: [x for x in xs if x is not None] or None)
-def plot_spectros_micro(
-    recs,
-    features,
-    raw=True,
-    **kwargs,
-):
-    for rec in df_rows(recs):
-        yield plot_spectro_micro(rec, features, raw=raw, **kwargs)
-        if not raw:
-            plt.show()
-
-
+@_with_many
 def plot_spectro_micro(
     rec,
     features,
@@ -171,20 +161,7 @@ def plot_spectro_micro(
     return plot_spectro_wrap(rec, features, wrap_s=wrap_s, raw=raw, **kwargs)
 
 
-# TODO
-@generator_to(lambda xs: [x for x in xs if x is not None] or None)
-def plot_spectros_wrap(
-    recs,
-    features,
-    raw=True,
-    **kwargs,
-):
-    for rec in df_rows(recs):
-        yield plot_spectro_wrap(rec, features, raw=raw, **kwargs)
-        if not raw:
-            plt.show()
-
-
+@_with_many
 def plot_spectro_wrap(
     rec,
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
@@ -231,12 +208,9 @@ def plot_spectro(
     return ret
 
 
-def plot_spectros(*args, **kwargs):
-    if kwargs.get('show') == False:
-        f = _plot_spectros_cache
-    else:
-        f = _plot_spectros_nocache
-    return f(*args, **kwargs)
+def plot_spectros(*args, show=True, **kwargs):
+    f = _plot_spectros_nocache if show else _plot_spectros_cache
+    return f(*args, show=show, **kwargs)
 
 
 @cache(version=0, key=lambda recs, *args, **kwargs: (recs.id, args, kwargs))
