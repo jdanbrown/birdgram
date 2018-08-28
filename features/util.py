@@ -310,10 +310,6 @@ def df_with_totals_row(df, **kwargs):
     )
 
 
-def df_rows(df) -> Iterator[Row]:
-    return (row for i, row in df.iterrows())
-
-
 def df_flatmap_list_col(df, col_name, col_f=lambda s: s):
     return (df
         .assign(**{col_name: col_f(df[col_name])})
