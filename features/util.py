@@ -140,10 +140,14 @@ def cache_to_file_forever(path):
     return decorator
 
 
-def sha1hex(x: Union[bytes, str]) -> str:
-    if isinstance(x, str):
-        x = x.encode()
-    return hashlib.sha1(x).hexdigest()
+def sha1hex(*xs: Union[bytes, str]) -> str:
+    """sha1hex(x, y) == sha1hex(x + y)"""
+    h = hashlib.sha1()
+    for x in xs:
+        if isinstance(x, str):
+            x = x.encode()
+        h.update(x)
+    return h.hexdigest()
 
 
 def enumerate_with_n(xs: Iterable[X]) -> (int, int, Iterator[X]):
@@ -988,6 +992,7 @@ def lm(*args, **kwargs):
 
 ## audiosegment
 
+import json
 from typing import Callable
 
 import audiosegment
@@ -995,28 +1000,106 @@ import numpy as np
 import pydub
 
 
-def audiosegment_replace(
+def audio_eq(a: audiosegment.AudioSegment, b: audiosegment.AudioSegment) -> audiosegment.AudioSegment:
+    """Equality on AudioSegment that takes metadata into account, unlike builtin == (surprise!)"""
+    return all([
+        a.name == b.name,
+        a.sample_width == b.sample_width,
+        a.frame_rate == b.frame_rate,
+        a.channels == b.channels,
+        a._data == b._data,
+    ])
+
+
+def audio_copy(audio: audiosegment.AudioSegment) -> audiosegment.AudioSegment:
+    # (Surpringly hard to get right)
+    return audiosegment.AudioSegment(
+        name=audio.name,
+        pydubseg=audio.seg._spawn(audio.seg._data),
+    )
+
+
+def audio_replace(
     audio: audiosegment.AudioSegment,
     seg: pydub.AudioSegment = None,
     name: str = None,
 ) -> audiosegment.AudioSegment:
-    return audiosegment.AudioSegment(
-        seg if seg is not None else audio.seg,
-        name if name is not None else audio.name,
-    )
+    audio = audio_copy(audio)
+    if seg is not None:
+        audio.seg = seg
+    if name is not None:
+        audio.name = name
+    return audio
 
 
-def audiosegment_with_numpy_array(
+def audio_with_numpy_array(
     audio: audiosegment.AudioSegment,
     f: Callable[[np.ndarray], np.ndarray],
 ) -> audiosegment.AudioSegment:
-    return audiosegment_replace(
-        audiosegment.from_numpy_array(
+    return audio_replace(
+        audio=audiosegment.from_numpy_array(
             nparr=f(audio.to_numpy_array()),
             framerate=audio.frame_rate,
         ),
         name=audio.name,
     )
+
+
+def audio_hash(audio: audiosegment.AudioSegment) -> str:
+    """
+    A unique content-based id for an audiosegment.AudioSegment
+    - Useful e.g. for caching operations on sliced audios, which don't otherwise have a reliable key
+    """
+    # Do hash(json(x)), since json(x) is typically way faster than pickle(x)
+    return sha1hex(
+        # str fields
+        #   - 1-1 because json is delimited, and we name each field
+        #   - Well defined because we sort the fields by name
+        json.dumps(sort_keys=True, separators=(',', ':'), obj=dict(
+            name=audio.name,
+            sample_width=audio.seg.sample_width,
+            frame_rate=audio.seg.frame_rate,
+            channels=audio.seg.channels,
+        )),
+        # bytes fields
+        #   - 1-1 because there's only one bytes field (else the boundary would need to be delimited, somehow)
+        audio.seg._data,
+    )
+
+
+def audio_concat(audios: audiosegment.AudioSegment, name: str = None) -> audiosegment.AudioSegment:
+    """Concat audios safely, unlike builtin + which mutates (surprise!)"""
+
+    # Preserve metadata from first audio
+    [audio, *_] = audios
+    ret = audio[:0]
+
+    # Use given name, else concat (nonzero) names
+    if name is not None:
+        names = [name]
+    else:
+        names = [a.name for a in audios if len(a) > 0]
+    ret.name = ' + '.join(names)
+
+    # Concat _data (bytes)
+    ret.seg._data = b''.join(
+        a.seg._data for a in audios
+    )
+
+    return ret
+
+
+def audio_pad(audio: audiosegment.AudioSegment, duration_s: float) -> audiosegment.AudioSegment:
+    """Pad audio with duration_s of silence"""
+    return audio_concat([audio, audiosegment.silent(
+        duration=duration_s * 1000,
+        frame_rate=audio.frame_rate,
+    )])
+
+
+def audio_bandpass_filter(audio: audiosegment.AudioSegment, **kwargs) -> audiosegment.AudioSegment:
+    """Filter audio by a frequency band (bandpass filter)"""
+    return audio_with_numpy_array(audio, lambda x: bandpass_filter(x, audio.frame_rate, **kwargs))
 
 
 ## bubo-features
@@ -1048,17 +1131,6 @@ def print_sys_info():
         ])
         .rstrip()
     )
-
-
-def audio_pad(audio: 'Audio', duration_s: float) -> 'Audio':
-    pad_ms = (duration_s * 1000) - len(audio)
-    if pad_ms > 0:
-        audio = audio + pydub.AudioSegment.silent(pad_ms)
-    return audio
-
-
-def audio_bandpass_filter(audio: audiosegment.AudioSegment, **kwargs) -> audiosegment.AudioSegment:
-    return audiosegment_with_numpy_array(audio, lambda x: bandpass_filter(x, audio.frame_rate, **kwargs))
 
 
 def rec_str_line(rec, *_first, first=[], last=[], default=[
