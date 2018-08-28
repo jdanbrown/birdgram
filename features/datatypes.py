@@ -92,8 +92,8 @@ def RecordingDF(*args, **kwargs) -> pd.DataFrame:
         ))
         # Order cols like Recording fields
         .pipe(df_reorder_cols, first=[x.name for x in dataclasses.fields(Recording)])
-        # Drop null cols, so downstream usage can assume that present cols are meaningful
-        .dropna(axis=1)
+        # Drop any cols that are all null
+        .dropna(axis=1, how='all')
         # Drop unused cats to avoid surprising big/slow behaviors when many cats are unused
         .pipe(df_remove_unused_categories)
     )
