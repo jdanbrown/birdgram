@@ -4,7 +4,8 @@ bubor/.Rbuildignore
 caffe/
 
 # data
-data/
+data/*
+!data/hand-labels/
 
 # python
 *.pyc
