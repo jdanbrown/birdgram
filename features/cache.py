@@ -51,9 +51,11 @@ from util import singleton
 memory = Memory(
     cachedir=cache_dir,  # It adds its own joblib/ subdir
     invalidate_on_code_change=False,
-    log=log,
-    # verbose=-1,  # Log '.'/'!' on hit/miss [HACK HACK HACK]
-    verbose=0,  # Log nothing [FIXME -1 (log.char) is causing the 'IOStream.flush timed out' errors in remote kernels]
+    log=log.replace(
+        # level='debug',  # Log '.'/'!' on hit/miss [HACK HACK HACK]
+        level='info',  # Log nothing [FIXME -1 (log.char) is causing the 'IOStream.flush timed out' errors in remote kernels]
+    ),
+    verbose=0,  # Log nothing
     # verbose=1,  # Log cache miss
     # verbose=10,  # Log cache miss, cache hit [need >10 to log "Function has changed" before "Clearing cache"]
     # verbose=100,  # Log cache miss, cache hit, plus extra

@@ -7,6 +7,7 @@ from typing import Optional, Union
 
 import crayons
 from dataclasses import dataclass
+from potoo.dataclasses import DataclassUtil
 from potoo.util import AttrContext, singleton
 import yaml
 
@@ -26,7 +27,7 @@ import yaml
 #   cloudpickle.dump(foo)  # Ok! Use this as a workaround.
 #
 @dataclass
-class Log(AttrContext):
+class Log(DataclassUtil, AttrContext):
     """Simple, ad-hoc logging specialized for interactive usage"""
 
     # TODO Throw this away and migrate to real logging! (e.g. structlog)
