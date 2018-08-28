@@ -348,13 +348,16 @@ class box:
     unbox: any
 
     @classmethod
-    def many(cls, xs):
-        return [box(x) for x in xs]
+    def many(cls, xs: Iterable['X']) -> Iterable['box[X]']:
+        return [cls(x) for x in xs]
 
 
 def unbox(x: 'box[X]') -> 'X':
-    """Sometimes more convenient, e.g. map(unbox, xs)"""
     return x.unbox
+
+
+def unbox_many(xs: Iterable['box[X]']) -> Iterable['X']:
+    return [x.unbox for x in xs]
 
 
 ## matplotlib
