@@ -977,7 +977,12 @@ def _map_progress_sync(
     xs: Iterable[X],
     **kwargs,
 ) -> Iterable[X]:
-    return list(iter_progress(map(f, xs), **kwargs))
+    if hasattr(xs, '__len__'):
+        kwargs.setdefault('n', len(xs))
+    return list(iter_progress(
+        map(f, xs),
+        **kwargs,
+    ))
 
 
 def iter_progress(
