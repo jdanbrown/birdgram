@@ -385,6 +385,14 @@ def plt_signal(y: np.array, x_scale: float = 1, show_ydtype=False, show_yticks=F
             plt.ylim(np.iinfo(y.dtype).min, np.iinfo(y.dtype).max)
 
 
+## plotnine
+
+from plotnine import *
+
+# FIXME Default theme_gray() plots non-transparent bg, but theme_minimal() reverts back to transparent bg
+theme_minimal_white = lambda *args, **kwargs: theme_minimal(*args, **kwargs) + theme(plot_background=element_rect('white'))
+
+
 ## sklearn
 
 from functools import partial, reduce, singledispatch
