@@ -1,4 +1,6 @@
-## Side effects
+#
+# Side effects
+#
 
 import warnings
 
@@ -7,7 +9,9 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
-## For export
+#
+# For export
+#
 
 from typing import Iterable, Iterator, List, Mapping, Tuple, TypeVar, Union
 
@@ -22,7 +26,9 @@ from toolz import *
 from more_itertools import *
 from itertools import *
 
-## util
+#
+# util
+#
 
 from contextlib import contextmanager
 from functools import partial, wraps
@@ -213,7 +219,9 @@ def dedent_and_strip(s: str) -> str:
     return textwrap.dedent(s).strip()
 
 
-## unix
+#
+# unix
+#
 
 import os
 
@@ -225,9 +233,12 @@ def ls(dir):
     ]
 
 
-## dataclasses
+#
+# dataclasses
+#
 
 from potoo.dataclasses import *
+
 
 class DataclassConfig(DataclassUtil):
     """Expose dataclass fields via .config (for sk.base.BaseEstimator)"""
@@ -241,7 +252,9 @@ class DataclassConfig(DataclassUtil):
         }
 
 
-## numpy
+#
+# numpy
+#
 
 import numpy as np
 
@@ -261,7 +274,9 @@ def np_vectorize_asscalar(*args, **kwargs):
     return lambda *args, **kwargs: f(*args, **kwargs)[()]
 
 
-## scipy
+#
+# scipy
+#
 
 import numpy as np
 import scipy.fftpack as fft
@@ -282,7 +297,9 @@ def bandpass_filter(
     return fft.irfft(f).astype(x.dtype)
 
 
-## pandas
+#
+# pandas
+#
 
 from collections import OrderedDict
 import tempfile
@@ -378,7 +395,9 @@ def unbox_many(xs: Iterable['box[X]']) -> Iterable['X']:
     return [x.unbox for x in xs]
 
 
-## matplotlib
+#
+# matplotlib
+#
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -403,7 +422,9 @@ def plt_signal(y: np.array, x_scale: float = 1, show_ydtype=False, show_yticks=F
             plt.ylim(np.iinfo(y.dtype).min, np.iinfo(y.dtype).max)
 
 
-## plotnine
+#
+# plotnine
+#
 
 from plotnine import *
 
@@ -411,7 +432,9 @@ from plotnine import *
 theme_minimal_white = lambda *args, **kwargs: theme_minimal(*args, **kwargs) + theme(plot_background=element_rect('white'))
 
 
-## sklearn
+#
+# sklearn
+#
 
 from functools import partial, reduce, singledispatch
 import re
@@ -726,7 +749,9 @@ def _map_progress_joblib(
         )(joblib.delayed(f)(x) for x in xs)
 
 
-## dask
+#
+# dask
+#
 
 from pathlib import Path
 import multiprocessing
@@ -973,7 +998,9 @@ def path_to_sampled_path(path: str, *sample: float) -> str:
     return '-'.join([path, *map(str, sample)])
 
 
-## sklearn / dask
+#
+# sklearn / dask
+#
 
 import types
 from typing import Callable, Iterable, TypeVar, Union
@@ -1045,7 +1072,9 @@ def iter_progress(
         return xs
 
 
-## statsmodels
+#
+# statsmodels
+#
 
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
@@ -1055,7 +1084,9 @@ def lm(*args, **kwargs):
     return smf.ols(*args, **kwargs).fit()
 
 
-## audiosegment
+#
+# audiosegment
+#
 
 import copy
 import json
@@ -1163,7 +1194,9 @@ def audio_bandpass_filter(audio: audiosegment.AudioSegment, **kwargs) -> audiose
     return audio_with_numpy_array(audio, lambda x: bandpass_filter(x, audio.frame_rate, **kwargs))
 
 
-## bubo-features
+#
+# bubo-features
+#
 
 import platform
 import secrets

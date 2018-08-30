@@ -18,7 +18,12 @@ from util import *
 #   - [x] Add @cache to img_foo()'s
 #   - [x] Add progress=True (via tqdm) to img_foos() / plot_foos(), without lots of duplicated code
 #   - [ ] Simplify: make a reusable pattern for the common args (progress, raw/scale, audio, ...)
-#   - [ ] Simplify: plot_foo(show=False) -> img_foo() called by plot_foo(), so caller can img_foo() directly
+#   - [ ] Simplify: refactor plot_foo(show=False) -> img_foo() called by plot_foo(), so caller can img_foo() directly
+
+
+#
+# Utils
+#
 
 
 def _with_many(plot_f):
@@ -68,26 +73,13 @@ def _display_with_audio_unless_show(plot_f):
     return plot_f_with_audio
 
 
-def plot_thumb_grid(
-    recs,
-    features,
-    raw=True,
-    cols=None,
-    order='top-down',  # Thumbs are typically longer than tall, so default grid order to top-down instead of left-right
-    plot_kwargs=dict(),
-    **thumb_kwargs,
-):
-    return plot_spectro_grid(
-        recs_thumb(recs, features, **thumb_kwargs),
-        raw=raw,
-        cols=cols,
-        order=order,
-        **plot_kwargs,
-    )
+#
+# Spectros
+#
 
 
 @_with_many
-# @_display_with_audio_unless_show  # Unsafe since we transform rec
+# @_display_with_audio_unless_show  # Unsafe because it would audio the input rec, but we plot f(rec)
 def plot_thumb_micro(
     rec,
     features,
@@ -110,7 +102,7 @@ def plot_thumb_micro(
 
 
 @_with_many
-# @_display_with_audio_unless_show  # Unsafe since we transform rec
+# @_display_with_audio_unless_show  # Unsafe because it would audio the input rec, but we plot f(rec)
 def plot_thumb(
     rec,
     features,
@@ -131,45 +123,8 @@ def plot_thumb(
     )
 
 
-def plot_spectro_grid(
-    recs,
-    raw=True,
-    cols=None,
-    order='top-down',  # Spectros are typically longer than tall, so default grid order to top-down instead of left-right
-    **kwargs,
-):
-    # HACK-y reuse of plot_patches
-    #   - TODO Simplify/refactor/whatever
-    n = len(recs)
-    if cols is None:
-        cols = int(np.sqrt(n))
-    Ss = [s.S for s in recs.spectro]
-    f = max(S.shape[0] for S in Ss)
-    t = max(S.shape[1] for S in Ss)
-    # Pad Ss to a uniform shape
-    Ss = np.array([
-        np.pad(S, mode='constant', constant_values=np.nan, pad_width=np.array([
-            [0, f - S.shape[0]],  # [top, bottom]
-            [0, t - S.shape[1]],  # [left, right]
-        ]))
-        for S in Ss
-    ])
-    return plot_patches(
-        patches=np.array([
-            S.reshape(t * f)  # HACK Because plot_patches expects its input to be flattened
-            for S in Ss
-        ]).T,
-        f_bins=f,
-        patch_length=t,
-        raw=raw,
-        rows=int(np.ceil(n / cols)),
-        order=order,
-        **kwargs,
-    )
-
-
 @_with_many
-# @_display_with_audio_unless_show  # Unsafe since we transform rec
+# @_display_with_audio_unless_show  # Unsafe because it would audio the input rec, but we plot f(rec)
 def plot_spectro_micro(
     rec,
     features,
@@ -188,7 +143,7 @@ def plot_spectro_micro(
 
 
 @_with_many
-@_display_with_audio_unless_show  # Safe since we don't transform rec
+@_display_with_audio_unless_show  # Safe because we plot the input rec as is
 def plot_spectro_wrap(
     rec,
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
@@ -221,7 +176,7 @@ def plot_spectro_wrap(
     return ret
 
 
-@_display_with_audio_unless_show  # Safe since we don't transform rec
+@_display_with_audio_unless_show  # Safe because we plot the input rec as is
 def plot_spectro(
     rec,
     raw=False,
@@ -311,6 +266,68 @@ def _plot_spectros_nocache(
             )
 
 
+#
+# Spectro grids
+#   - These have fallen out of favor since we added df_cell and can now viz spectros directly within df tables
+#   - Keeping them around for reference, for now
+#
+
+
+def plot_thumb_grid(
+    recs,
+    features,
+    raw=True,
+    cols=None,
+    order='top-down',  # Thumbs are typically longer than tall, so default grid order to top-down instead of left-right
+    plot_kwargs=dict(),
+    **thumb_kwargs,
+):
+    return plot_spectro_grid(
+        recs_thumb(recs, features, **thumb_kwargs),
+        raw=raw,
+        cols=cols,
+        order=order,
+        **plot_kwargs,
+    )
+
+
+def plot_spectro_grid(
+    recs,
+    raw=True,
+    cols=None,
+    order='top-down',  # Spectros are typically longer than tall, so default grid order to top-down instead of left-right
+    **kwargs,
+):
+    # HACK-y reuse of plot_patches
+    #   - TODO Simplify/refactor/whatever
+    n = len(recs)
+    if cols is None:
+        cols = int(np.sqrt(n))
+    Ss = [s.S for s in recs.spectro]
+    f = max(S.shape[0] for S in Ss)
+    t = max(S.shape[1] for S in Ss)
+    # Pad Ss to a uniform shape
+    Ss = np.array([
+        np.pad(S, mode='constant', constant_values=np.nan, pad_width=np.array([
+            [0, f - S.shape[0]],  # [top, bottom]
+            [0, t - S.shape[1]],  # [left, right]
+        ]))
+        for S in Ss
+    ])
+    return plot_patches(
+        patches=np.array([
+            S.reshape(t * f)  # HACK Because plot_patches expects its input to be flattened
+            for S in Ss
+        ]).T,
+        f_bins=f,
+        patch_length=t,
+        raw=raw,
+        rows=int(np.ceil(n / cols)),
+        order=order,
+        **kwargs,
+    )
+
+
 def plot_patches(
     patches,
     f_bins,
@@ -396,6 +413,11 @@ def plot_patches(
         plt.imshow(image, **kwargs)
 
 
+#
+# Confusion matrix
+#
+
+
 def sort_species_confusion_matrix(
     df: pd.DataFrame,
     dtype=metadata.species.df.shorthand.dtype,
@@ -479,6 +501,11 @@ def plot_confusion_matrix_df(
                 # color='lightgray' if M[i,j] > thresh else 'darkgray',
                 # color='gray',
             )
+
+
+#
+# PCA
+#
 
 
 def plot_pca_var_pct(pca: 'sk.decomposition.PCA', filter_df=None) -> ggplot:
