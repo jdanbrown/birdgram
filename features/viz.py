@@ -33,7 +33,7 @@ def _with_many(plot_f):
     """
 
     @cache(
-        version=3,
+        version=4,
         key=lambda recs, *args, **kwargs: (recs.id, args, kwargs),
         nocache=lambda *args, show=True, **kwargs: show,  # No cache iff side effects iff show
     )
@@ -60,34 +60,19 @@ def _with_many(plot_f):
     return plot_f
 
 
-def _display_with_audio_unless_show(plot_f):
-    """
-    - If show=False, add an <audio> to the ipy html of the return of plot_f
-    - If show=True, just call plot_f
-    """
-    @wraps(plot_f)
-    def plot_f_with_audio(rec, *args, show=True, **kwargs):
-        x = plot_f(rec, *args, show=show, **kwargs)
-        if not show:
-            x = display_with_audio(x, audio=rec.audio.unbox)
-        return x
-    plot_f_with_audio._without_audio = plot_f   # Preserve, e.g. for debugging
-    return plot_f_with_audio
-
-
 #
 # Spectros
 #
 
 
 @_with_many
-# @_display_with_audio_unless_show  # Unsafe because it would audio the input rec, but we plot f(rec)
 def plot_thumb_micro(
     rec,
     features,
     raw=True,
     scale=None,
-    audio=False,
+    pad=True,  # Pad if duration_s < thumb_s (for consistent sizing)
+    audio=True,
     show=True,
     plot_kwargs=dict(),
     **thumb_kwargs,
@@ -97,6 +82,7 @@ def plot_thumb_micro(
         features,
         raw=raw,
         scale=scale,
+        pad=pad,
         audio=audio,
         show=show,
         **plot_kwargs,
@@ -104,16 +90,15 @@ def plot_thumb_micro(
 
 
 @_with_many
-# @_display_with_audio_unless_show  # Unsafe because it would audio the input rec, but we plot f(rec)
 def plot_thumb(
     rec,
     features,
     raw=True,
     scale=None,
-    audio=False,
+    pad=True,  # Pad if duration_s < thumb_s (for consistent sizing)
+    audio=True,
     show=True,
     plot_kwargs=dict(),
-    pad=True,  # In case duration_s < thumb_s, pad out to thumb_s (for consistent sizing)
     thumb_s=1,
     **thumb_kwargs,
 ):
@@ -129,34 +114,32 @@ def plot_thumb(
 
 
 @_with_many
-# @_display_with_audio_unless_show  # Unsafe because it would audio the input rec, but we plot f(rec)
 def plot_spectro_micro(
     rec,
     features,
     raw=True,
+    pad=True,  # Pad if duration_s < wrap_s (for consistent sizing)
     wrap=False,  # True to plot the full duration with wrapping
     wrap_s=10,  # TODO 10 vs. 15 as sane default?
     limit_s=None,
     **kwargs,
 ):
-    kwargs.setdefault('audio', False)
     if not wrap and not limit_s:
         limit_s = wrap_s
     if limit_s:
         rec = features.slice_spectro(rec, 0, limit_s)
-    return plot_spectro_wrap(rec, features, wrap_s=wrap_s, raw=raw, **kwargs)
+    return plot_spectro_wrap(rec, features, wrap_s=wrap_s, pad=pad, raw=raw, **kwargs)
 
 
 @_with_many
-@_display_with_audio_unless_show  # Safe because we plot the input rec as is
 def plot_spectro_wrap(
     rec,
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
     wrap_s=10,  # Sane default (5 too small, 20 too big, 10/15 both ok)
     limit_s=None,  # Limit duration of rec
-    pad=True,  # In case there's only one line, pad out to wrap_s, e.g for uniform height when raw=True
-    audio=False,
+    pad=True,  # Pad to wrap_s if there's only one line (for consistent sizing)
     raw=True,
+    audio=True,
     **kwargs,
 ):
     limit_s = min(limit_s or np.inf, rec.duration_s)
@@ -174,25 +157,20 @@ def plot_spectro_wrap(
         limit_s=wrap_s if pad else None,
         **kwargs,
     )
-    if audio:
-        if not raw:
-            plt.show()
-        display(rec.audio.unbox)
+    if audio and ret:
+        ret = display_with_audio(ret, audio=rec.audio.unbox)
     return ret
 
 
-@_display_with_audio_unless_show  # Safe because we plot the input rec as is
 def plot_spectro(
     rec,
     raw=False,
-    audio=False,
+    audio=True,
     **kwargs,
 ):
     ret = plot_spectros(rec, raw=raw, **kwargs)
-    if audio:
-        if not raw:
-            plt.show()
-        display(rec.audio.unbox)
+    if audio and ret:
+        ret = display_with_audio(ret, audio=rec.audio.unbox)
     return ret
 
 
