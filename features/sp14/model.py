@@ -44,6 +44,7 @@ import dask
 from dataclasses import dataclass, field
 import joblib
 import lightgbm as lgb  # For Search.cls
+from more_itertools   import one
 import numpy as np
 from potoo.numpy import np_sample, np_sample_stratified
 from potoo.pandas import df_reorder_cols
@@ -262,11 +263,12 @@ class Features(DataclassConfig):
     # Util
     #
 
-    def with_audio(self, rec: Row, f: Callable[[Audio], Audio], **kwargs) -> Row:
+    def with_audio(self, rec: Row, f: Callable[[Audio], Audio], id=None, **kwargs) -> Row:
         """Transforms .audio, recomputes .spectro (with denoise)"""
         return self._edit(rec,
             audio_f=lambda rec, audio: f(audio),
             spectro_f=lambda rec, spectro: self._spectro(rec, **kwargs),
+            id=id,
         )
 
     def slice_audio(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
@@ -333,7 +335,7 @@ class Features(DataclassConfig):
 
         # Edit .spectro
         spectro = rec.pop('spectro')  # Pop to avoid short-circuits on rec.spectro (e.g. self._spectro(rec))
-        rec['spectro'] = spectro_f(rec, spectro)
+        rec['spectro'] = spectro_f(pd.Series(rec), spectro)  # Convert dict -> series for spectro_f
 
         # Recompute/invalidate attrs coupled to .spectro + downstream features
         #   - HACK Very brittle; how to avoid maintaining an explicit list? Any easier to whitelist upstreams instead?
@@ -1230,6 +1232,18 @@ def _print_config(config):
 # TODO TODO Crap, I forgot dist(probs) altogether! Just dist(feat) -- wow...!
 
 
+QueryRec = Union['ix', Recording, Callable[[pd.DataFrame], Recording]]
+
+
+def unpack_query_rec(query_rec: QueryRec, search_recs: pd.DataFrame) -> Recording:
+    if callable(query_rec):
+        return query_rec(search_recs)
+    elif isinstance(query_rec, pd.Series):
+        return query_rec
+    else:
+        return search_recs.loc[query_rec]
+
+
 def species_probs_meta(df) -> pd.DataFrame:
     """Project just the "metadata" cols (i.e. everything but probs) from Search.species_probs* output"""
     return (df
@@ -1261,12 +1275,13 @@ def rec_neighbors(*args, **kwargs):
 
 # TODO Perf: fit the nn tree once and reuse, instead of fitting every time [but wait until this becomes a bottleneck]
 def rec_neighbors_by(
-    query_rec,
+    query_rec: QueryRec,
     search_recs,
     by=Callable[[pd.DataFrame], np.ndarray],  # df.shape[rows, cols] -> x.shape[rows, feats]
     n: int = None,  # Default: len(search_recs)
     **nn_kwargs,
 ):
+    query_rec = unpack_query_rec(query_rec, search_recs)
     if n is None:
         n = len(search_recs)
     knn = sk.neighbors.NearestNeighbors(**nn_kwargs).fit(by(search_recs.reset_index()))
@@ -1281,18 +1296,53 @@ def rec_neighbors_by(
     )
 
 
-# TODO Naming
-def pca_norm_transform(X: np.ndarray, n_components=None, col_prefix=['X_pca']) -> pd.DataFrame:
-    pca = (
-        sk.pipeline.make_pipeline(
-            sk.preprocessing.StandardScaler(with_mean=True, with_std=False),  # De-mean
-            sk.decomposition.PCA(n_components=n_components),
-            sk.preprocessing.Normalizer(),  # No effect iff pca components explain 100% of var (n_components=None)
+@dataclass
+class recs_pca_norm:
+
+    by: Callable[[pd.DataFrame], np.ndarray]
+    demean: bool = True  # De-mean (before pca)
+    std: bool = False  # Standardize (before pca)
+    n_components: Union[int, float] = None
+    norm: str = 'l2'  # Normalize (after pca)
+    out_col: str = 'X_pca'
+
+    def fit(self, X: np.ndarray, y=None) -> 'self':
+        # [Why does pca_only.transform i/o pca.transform give a cloud that looks more centered?]
+        self.X_ = X
+        self.pipeline_ = (
+            sk.pipeline.make_pipeline(*[
+                *([] if not (self.demean or self.std) else [
+                    sk.preprocessing.StandardScaler(with_mean=self.demean, with_std=self.std),
+                ]),
+                sk.decomposition.PCA(n_components=self.n_components),
+                *([] if not self.norm else [
+                    sk.preprocessing.Normalizer(norm=self.norm),
+                ]),
+            ])
+            .fit(self.X_)
         )
-        .fit(X)
-    )
-    _pca = dict(pca.steps)['pca']  # [TODO Why does _pca.transform i/o pca.transform give a cloud that looks more centered?]
-    return pd.DataFrame({
-        col_prefix: list(pca.transform(X)),
-        f'{col_prefix}_var': [_pca.explained_variance_ratio_.cumsum()] * len(X),
-    })
+        self.pca_step_ = dict(self.pipeline_.steps)['pca']
+        self.pca_var_ = self.pca_step_.explained_variance_ratio_.cumsum()
+        return self
+
+    def fit_recs(self, recs: pd.DataFrame) -> 'self':
+        return self.fit(self.by(recs))
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        return self.pipeline_.transform(X)
+
+    def transform_recs(self, recs: pd.DataFrame) -> pd.DataFrame:
+        out_col = self.out_col
+        out_col_var = f'{out_col}_var'
+        return (recs
+            .drop(columns=[out_col, out_col_var], errors='ignore')  # Drop out_cols so that we're idempotent
+            .reset_index()  # Set index [0,1,...] for join
+            .join(pd.DataFrame({
+                out_col: list(self.transform(self.by(recs))),
+                out_col_var: [self.pca_var_] * len(recs),
+            }))
+            .set_index(recs.index.name or 'index')  # Restore index
+        )
+
+    def transform_rec(self, rec: 'Recording') -> 'Recording':
+        return one(df_rows(self.transform_recs(pd.DataFrame([rec]))))

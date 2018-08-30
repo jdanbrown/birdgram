@@ -35,6 +35,37 @@ def test_audio_eq():
     assert not audio_eq(a, d)
 
 
+def test_audio_copy():
+    a = audio(random_state=0)
+    a.name = 'a-name'
+    a.seg.frame_rate = 44100
+    a.nonstandard_attr = 'a-nonstandard_attr'
+    b = audio_copy(a)
+    # Copies are the same, structurally
+    assert audio_eq(a, b)
+    # Copies isolate mutation
+    b.name = 'b-name'
+    b.seg.frame_rate = 42
+    assert a.name == 'a-name'
+    assert a.seg.frame_rate == 44100
+    assert not audio_eq(a, b)
+    # Copies preserve nonstandard attrs
+    assert b.nonstandard_attr == 'a-nonstandard_attr'
+
+
+def test_audio_replace():
+    a = audio(random_state=0)
+    a.name = 'a-name'
+    a.path = 'a-path'
+    b = audio_replace(a,
+        name='b-name',  # Standard attr
+        path='b-path',  # Nonstandard attr
+    )
+    assert a.seg == b.seg
+    assert (a.name, a.path) == ('a-name', 'a-path')
+    assert (b.name, b.path) == ('b-name', 'b-path')
+
+
 def test_audio_concat_doesnt_mutate():
     a0 = audio(random_state=0)
     a = audio(random_state=0)

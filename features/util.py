@@ -28,12 +28,13 @@ from contextlib import contextmanager
 from functools import partial, wraps
 import glob
 import hashlib
+import inspect
 import re
 import os
 import pickle
 import random
 import shlex
-from typing import Optional, TypeVar, Union
+from typing import Callable, Optional, TypeVar, Union
 
 X = TypeVar('X')
 
@@ -193,6 +194,17 @@ def print_mem_delta(desc='mem_delta', collect_before=False, collect_after=False,
         end = proc.memory_full_info()._asdict()
         diff = {k: '%s KB' % ((end[k] - start[k]) // 1024) for k in start.keys()}
         print('[%s] %s' % (desc, pformat(diff)))
+
+
+# TODO Does this reject or accept kwargs that are repeated later? (A: Whatever partial does.) Which behavior do we want?
+def sub_kwargs(f: Callable, **kwargs) -> Callable:
+    """Bind to f the subset of kwargs that are accepted by f"""
+    f_kwargs = inspect.signature(f).parameters.keys()
+    return partial(f, **{
+        k: v
+        for k, v in kwargs.items()
+        if k in f_kwargs
+    })
 
 
 ## unix
@@ -1039,6 +1051,7 @@ def lm(*args, **kwargs):
 
 ## audiosegment
 
+import copy
 import json
 from typing import Callable
 
@@ -1060,22 +1073,17 @@ def audio_eq(a: audiosegment.AudioSegment, b: audiosegment.AudioSegment) -> audi
 
 def audio_copy(audio: audiosegment.AudioSegment) -> audiosegment.AudioSegment:
     # (Surpringly hard to get right)
-    return audiosegment.AudioSegment(
-        name=audio.name,
-        pydubseg=audio.seg._spawn(audio.seg._data),
-    )
+    audio_dict = audio.__dict__
+    audio = copy.copy(audio)
+    audio.__dict__.update(audio_dict)  # Copy non-standard attrs (e.g. .path) [TODO Make our own Audio class to own .path]
+    audio.seg = copy.copy(audio.seg)
+    return audio
 
 
-def audio_replace(
-    audio: audiosegment.AudioSegment,
-    seg: pydub.AudioSegment = None,
-    name: str = None,
-) -> audiosegment.AudioSegment:
+def audio_replace(audio: audiosegment.AudioSegment, **kwargs) -> audiosegment.AudioSegment:
     audio = audio_copy(audio)
-    if seg is not None:
-        audio.seg = seg
-    if name is not None:
-        audio.name = name
+    for k, v in kwargs.items():
+        setattr(audio, k, v)
     return audio
 
 
@@ -1228,6 +1236,37 @@ def xc_rec_str_line(rec, *_first, first=[], last=[], default=[
     return rec_str_line(rec, *_first, first=first, last=last, default=default)
 
 
+def rec_audio_ensure_persisted(rec: 'Recording', **kwargs) -> 'Recording':
+    assert rec.id == rec.audio.unbox.name  # TODO Is this actually always true? (Load._ergonomic_audio, ...where else?)
+    rec = rec.copy()  # Copy so we can mutate
+    rec.audio = box(audio_ensure_persisted(rec.audio.unbox, **kwargs))
+    rec.path = rec.audio.unbox.path
+    return rec
+
+
+# TODO Dedupe here vs. Load._ergonomic_audio
+def audio_ensure_persisted(
+    audio: audiosegment.AudioSegment,
+    # Save as .mp3 instead of .wav for ~10x reduction in space
+    #   - Based on audio channels=1,sample_rate=22050 -> format='mp3',bitrate='128'
+    #   - The output .mp3 file reports bitrate=32, which I guess is because of channels=1,sample_rate=22050 vs. the
+    #     more typical channels=2,sample_rate=44100
+    # format='wav',
+    format='mp3', bitrate='128',
+    **kwargs,
+) -> audiosegment.AudioSegment:
+    # print('check %s' % audio.name)
+    if not getattr(audio, 'path', None):
+        # print('path  %s' % audio.name)
+        path = (Path(audio_edits_dir) / audio.name).with_suffix('.' + format).relative_to(data_dir)
+        abs_path = Path(data_dir) / path
+        if not abs_path.exists():
+            print('file  %s' % audio.name)
+            audio.export(ensure_parent_dir(abs_path), format=format, bitrate=bitrate, **kwargs)
+        audio = audio_replace(audio, path=path)
+    return audio
+
+
 # NOTE Thumbs are complete recs, so we can't just add a .thumb col to an existing recs...
 def recs_thumb(recs, features, **kwargs) -> 'recs':
     return (recs
@@ -1276,8 +1315,7 @@ def rec_thumb_with_start(
 
     # thumb is max smoothed power ± thumb_s/2
     thumb_start_s = max_i / i_per_s - thumb_s / 2
-    thumb_start_s = max(0, thumb_start_s)  # Don't start before the start
-    thumb_start_s = min(rec.duration_s - thumb_s, thumb_start_s)  # Don't end after the end
+    thumb_start_s = np.clip(thumb_start_s, 0, rec.duration_s)  # Clip to a valid start_s
     thumb = features.slice_spectro(rec,
         thumb_start_s,
         thumb_start_s + thumb_s,
@@ -1317,6 +1355,86 @@ def text_bar(
         return fulls + empties
     else:
         return empties + fulls
+
+
+def audio_to_url(audio) -> str:
+    import urllib.parse
+    # Render as file:// instead of data:, since files are way faster (~instant) and more lightweight (~0 mem) than
+    # inline data urls for displaying many audios at once (>>10)
+    abs_path = Path(data_dir) / audio_ensure_persisted(audio).path
+    # Quote for url
+    #   - Manually exclude chars known to be safe, for cosmetics (at least '?' is unsafe, not sure what else...)
+    return "file://%s" % urllib.parse.quote(str(abs_path), safe='/,:()[] ')
+
+
+def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='') -> str:
+    audio = audio_ensure_persisted(audio)
+    mimetype = {
+        '.mp3': 'audio/mpeg',
+        # Add more as needed...
+    }[Path(audio.path).suffix]
+    return '''
+        <audio class="bubo-audio" %(controls)s preload="%(preload)s" %(more_audio_attrs)s>
+            <source type="%(type)s" src="%(src)s" />
+        </audio>
+    ''' % dict(
+        controls='controls' if controls else '',
+        preload=preload,
+        more_audio_attrs=more_audio_attrs,
+        type=mimetype,
+        src=audio_to_url(audio),
+    )
+
+
+def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayable':
+    """
+    Wrap an (ipy) `display`-able so that it plays the given audio on click
+    - Click to toggle play/pause
+    - Shift-click to seek back to the beginning
+    """
+
+    # Unpack x._display_with_audio_x (set below) if it exists, so that we're idempotent (else garbage happens)
+    x = getattr(x, '_display_with_audio_x', x)
+
+    # Do the magic
+    audio_html = audio_to_html(audio, **{
+        'controls': False,  # No controls by default, but allow override
+        **kwargs,
+    })
+    container_inner_html = '%s%s' % (
+        ipy_formats_to_html(x),
+        audio_html,
+    )
+    x_with_audio = Javascript('''
+        var container = document.createElement('div');
+        container.classList.add('bubo-audio-container');
+        container.innerHTML = `%(container_inner_html)s`;
+        container.onclick = ev => {
+            var [audio] = container.getElementsByTagName('audio');
+            if (ev.shiftKey && !ev.altKey) {
+                "Seek to beginning"
+                audio.currentTime = 0;
+            } else if (!audio.paused) {
+                "Pause"
+                audio.pause();
+            } else {
+                "Play, pausing all other bubo-audio's first"
+                Array.from(document.getElementsByClassName('bubo-audio')).forEach(audio => {
+                    if (audio.pause) audio.pause();
+                });
+                audio.play();
+            }
+        };
+        "Append to `element`, which is our output container provided by jupyter"
+        element.appendChild(container);
+    ''' % dict(
+        container_inner_html=container_inner_html,
+    ))
+
+    # Save so we can be idempotent (checked above)
+    x_with_audio._display_with_audio_x = x
+
+    return x_with_audio
 
 
 # For potoo.ipython.df_cell

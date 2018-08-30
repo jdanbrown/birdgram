@@ -295,7 +295,8 @@ class Load(DataclassConfig):
         params_id = f'{c.sample_rate}hz-{c.channels}ch-{c.sample_width_bit}bit'
         return f'{cache_dir}/{params_id}/{rel_path_noext}.wav'
 
-    # HACK Make our own Audio instead of monkeypatching audiosegment.AudioSegment
+    # TODO Make our own Audio class to own .path (e.g. see gnarliness in util.audio_* and their tests)
+    #   - TODO Dedupe vs. audio_ensure_persisted
     def _ergonomic_audio(self, audio: audiosegment.AudioSegment) -> audiosegment.AudioSegment:
         """Make audiosegment.AudioSegment attrs more ergonomic"""
         # Copy so we can mutate

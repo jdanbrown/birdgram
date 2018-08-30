@@ -17,11 +17,16 @@ for _maybe_code_dir in _maybe_code_dirs:
 else:
     raise Exception(f'Found none of these dirs to use as code_dir: {_maybe_code_dirs}')
 
+# Dirs
+#   - code/
 bin_dir = f'{code_dir}/bin'
 data_dir = f'{code_dir}/data'
+#   - data/
 cache_dir = f'{data_dir}/cache'
 artifact_dir = f'{data_dir}/artifacts'
 hand_labels_dir = f'{data_dir}/hand-labels'
+#   - cache/
+audio_edits_dir = f'{cache_dir}/audio-edits'
 
 standard_sample_rate_hz = 22050  # Can resolve 11025Hz (by Nyquist), which most/all birds are below
 default_log_ylim_min_hz = 512  # Most/all birds are above 512Hz (but make sure to clip noise below 512Hz)

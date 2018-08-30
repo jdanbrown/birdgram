@@ -1,3 +1,4 @@
+from functools import wraps
 import itertools
 from typing import Callable, Iterable, Optional, Union
 
@@ -52,6 +53,21 @@ def _with_many(plot_f):
     return plot_f
 
 
+def _display_with_audio_unless_show(plot_f):
+    """
+    - If show=False, add an <audio> to the ipy html of the return of plot_f
+    - If show=True, just call plot_f
+    """
+    @wraps(plot_f)
+    def plot_f_with_audio(rec, *args, show=True, **kwargs):
+        x = plot_f(rec, *args, show=show, **kwargs)
+        if not show:
+            x = display_with_audio(x, audio=rec.audio.unbox)
+        return x
+    plot_f_with_audio._without_audio = plot_f   # Preserve, e.g. for debugging
+    return plot_f_with_audio
+
+
 def plot_thumb_grid(
     recs,
     features,
@@ -61,14 +77,17 @@ def plot_thumb_grid(
     plot_kwargs=dict(),
     **thumb_kwargs,
 ):
-    return plot_spectro_grid(recs_thumb(recs, features, **thumb_kwargs), **plot_kwargs,
+    return plot_spectro_grid(
+        recs_thumb(recs, features, **thumb_kwargs),
         raw=raw,
         cols=cols,
         order=order,
+        **plot_kwargs,
     )
 
 
 @_with_many
+@_display_with_audio_unless_show
 def plot_thumb_micro(
     rec,
     features,
@@ -79,15 +98,19 @@ def plot_thumb_micro(
     plot_kwargs=dict(),
     **thumb_kwargs,
 ):
-    return plot_spectro_micro(rec_thumb(rec, features, **thumb_kwargs), features, **plot_kwargs,
+    return plot_spectro_micro(
+        rec_thumb(rec, features, **thumb_kwargs),
+        features,
         raw=raw,
         scale=scale,
         audio=audio,
         show=show,
+        **plot_kwargs,
     )
 
 
 @_with_many
+@_display_with_audio_unless_show
 def plot_thumb(
     rec,
     features,
@@ -98,11 +121,13 @@ def plot_thumb(
     plot_kwargs=dict(),
     **thumb_kwargs,
 ):
-    return plot_spectro(rec_thumb(rec, features, **thumb_kwargs), **plot_kwargs,
+    return plot_spectro(
+        rec_thumb(rec, features, **thumb_kwargs),
         raw=raw,
         scale=scale,
         audio=audio,
         show=show,
+        **plot_kwargs,
     )
 
 
@@ -144,6 +169,7 @@ def plot_spectro_grid(
 
 
 @_with_many
+@_display_with_audio_unless_show
 def plot_spectro_micro(
     rec,
     features,
@@ -162,6 +188,7 @@ def plot_spectro_micro(
 
 
 @_with_many
+@_display_with_audio_unless_show
 def plot_spectro_wrap(
     rec,
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
@@ -194,6 +221,7 @@ def plot_spectro_wrap(
     return ret
 
 
+@_display_with_audio_unless_show
 def plot_spectro(
     rec,
     raw=False,
@@ -471,6 +499,29 @@ def plot_pca_var_pct(pca: 'sk.decomposition.PCA', filter_df=None) -> ggplot:
         + scale_y_continuous(limits=(0, 1), breaks=np.linspace(0, 1, 10+1))
         + coord_flip()
         + theme_figsize(aspect=1/4)  # (Caller can override simply by adding another theme_figsize to the result)
+    )
+
+
+# TODO Oops, did we ~duplicate plot_pca_var_pct? How do these differ? Should we keep both?
+def plot_pca_var_explained(
+    var_explained: np.ndarray,  # Cumulative variance explained, per component
+    max_n_components: float = np.inf,
+    max_var_explained: float = 1,
+) -> ggplot:
+    """Plot PCA var_explained ~ n_components"""
+    return (
+        pd.DataFrame([
+            dict(n_components=i + 1, var_explained=var_explained)
+            for i, var_explained in enumerate(var_explained)
+        ])
+        [lambda df: df.n_components <= max_n_components]
+        [lambda df: df.var_explained <= max_var_explained]
+        .pipe(ggplot)
+        + aes(x='n_components', y='var_explained')
+        + geom_point()
+        + theme_figsize(aspect=1/6)
+        + scale_x_continuous(minor_breaks=[], breaks=lambda lims: np.arange(round(lims[0]), round(lims[1]) + 1))
+        + ggtitle(f'PCA var_explained ({len(var_explained)} components)')
     )
 
 
