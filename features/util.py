@@ -34,6 +34,7 @@ import os
 import pickle
 import random
 import shlex
+import textwrap
 from typing import Callable, Optional, TypeVar, Union
 
 X = TypeVar('X')
@@ -205,6 +206,11 @@ def sub_kwargs(f: Callable, **kwargs) -> Callable:
         for k, v in kwargs.items()
         if k in f_kwargs
     })
+
+
+def dedent_and_strip(s: str) -> str:
+    """Localize the two operations in dedent(s).strip(), which get separated when s is very large (e.g. many lines)"""
+    return textwrap.dedent(s).strip()
 
 
 ## unix
@@ -1160,6 +1166,7 @@ def audio_bandpass_filter(audio: audiosegment.AudioSegment, **kwargs) -> audiose
 ## bubo-features
 
 import platform
+import secrets
 import textwrap
 import types
 from typing import Union
@@ -1255,13 +1262,10 @@ def audio_ensure_persisted(
     format='mp3', bitrate='128',
     **kwargs,
 ) -> audiosegment.AudioSegment:
-    # print('check %s' % audio.name)
     if not getattr(audio, 'path', None):
-        # print('path  %s' % audio.name)
         path = (Path(audio_edits_dir) / audio.name).with_suffix('.' + format).relative_to(data_dir)
         abs_path = Path(data_dir) / path
         if not abs_path.exists():
-            print('file  %s' % audio.name)
             audio.export(ensure_parent_dir(abs_path), format=format, bitrate=bitrate, **kwargs)
         audio = audio_replace(audio, path=path)
     return audio
@@ -1371,13 +1375,14 @@ def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='') -> 
     audio = audio_ensure_persisted(audio)
     mimetype = {
         '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
         # Add more as needed...
     }[Path(audio.path).suffix]
-    return '''
+    return dedent_and_strip('''
         <audio class="bubo-audio" %(controls)s preload="%(preload)s" %(more_audio_attrs)s>
             <source type="%(type)s" src="%(src)s" />
         </audio>
-    ''' % dict(
+    ''') % dict(
         controls='controls' if controls else '',
         preload=preload,
         more_audio_attrs=more_audio_attrs,
@@ -1393,42 +1398,89 @@ def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayab
     - Shift-click to seek back to the beginning
     """
 
-    # Unpack x._display_with_audio_x (set below) if it exists, so that we're idempotent (else garbage happens)
+    # Unpack x._display_with_audio_x (set below) if it exists, so that we're idempotent
     x = getattr(x, '_display_with_audio_x', x)
 
-    # Do the magic
+    # Make an HTML() that wraps x's html, audio's html, and a small amount of js for audio controls
+    #   - This is an HTML() because it needs to be Displayable that emits a 'text/html' mimetype (e.g. not a
+    #     Javascript()), else it will render as junk when used in a df_cell within a df, because df.to_html expects an
+    #     html str from each df_cell
+    x_html = ipy_formats_to_html(x)
     audio_html = audio_to_html(audio, **{
-        'controls': False,  # No controls by default, but allow override
+        'controls': False,  # No controls by default, but allow caller to override
         **kwargs,
     })
-    container_inner_html = '%s%s' % (
-        ipy_formats_to_html(x),
-        audio_html,
-    )
-    x_with_audio = Javascript('''
-        var container = document.createElement('div');
-        container.classList.add('bubo-audio-container');
-        container.innerHTML = `%(container_inner_html)s`;
-        container.onclick = ev => {
-            var [audio] = container.getElementsByTagName('audio');
-            if (ev.shiftKey && !ev.altKey) {
-                "Seek to beginning"
-                audio.currentTime = 0;
-            } else if (!audio.paused) {
-                "Pause"
-                audio.pause();
-            } else {
-                "Play, pausing all other bubo-audio's first"
-                Array.from(document.getElementsByClassName('bubo-audio')).forEach(audio => {
-                    if (audio.pause) audio.pause();
-                });
-                audio.play();
-            }
-        };
-        "Append to `element`, which is our output container provided by jupyter"
-        element.appendChild(container);
-    ''' % dict(
-        container_inner_html=container_inner_html,
+    x_with_audio = HTML(dedent_and_strip('''
+        <div class="bubo-audio-container">
+            <div>
+                <!-- Wrap in case x contains an audio elem, which would fool our selector below -->
+                %(x_html)s
+            </div>
+            %(audio_html)s
+            <script>
+
+                // WARNING To get a reference to our container, use a hard reference (currentScript.parentNode) instead
+                // of an element selector (e.g. document.querySelectorAll) since something in electron dynamically
+                // hides and reveals dom elements depending on the viewport (i.e. document scroll), and querying by
+                // document.querySelectorAll empirically only returned elements currently in view.
+                //  - HACK document_currentScript emulates document.currentScript (manually provided by hydrogen-extras)
+                const container = document_currentScript.parentNode;
+                const [audio] = container.querySelectorAll(':scope > audio');
+
+                // Audio events
+                //  - Ref: https://developer.mozilla.org/en-US/docs/Web/Guide/Events/Media_events
+                const outlineInert = '';
+                container.style.outline = outlineInert;
+                const onAudioEvent = ev => {
+                    if (!audio.paused && !audio.ended) {
+                        // Playing
+                        container.style.outline = '1px solid red';
+                    } else if (!audio.ended && audio.currentTime > 0) {
+                        // Paused but not reset
+                        container.style.outline = '1px solid blue';
+                    } else {
+                        // Finished playing or reset while paused
+                        container.style.outline = outlineInert;
+                    }
+                };
+                audio.onplay   = onAudioEvent;
+                audio.onpause  = onAudioEvent;
+                audio.onended  = onAudioEvent;
+                audio.onseeked = onAudioEvent;
+
+                const forEachAudio = f => {
+                    // (Is this at risk of the same document.querySelectorAll ghost problem described above?)
+                    Array.from(document.getElementsByClassName('bubo-audio')).forEach(audio => {
+                        if (audio.pause) { // Be robust to non-audio things [do these still happen?]
+                            f(audio);
+                        }
+                    });
+                };
+
+                // Container events
+                container.onclick = ev => {
+                    if (!ev.shiftKey && audio.paused) {
+                        // Play audio, after pause+reset all audios (including this one)
+                        forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
+                        audio.play();
+                    } else if (!ev.shiftKey && !audio.paused) {
+                        // Pause+reset all audios
+                        forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
+                    } else if (ev.shiftKey && !audio.paused) {
+                        // Pause all audios (no reset)
+                        forEachAudio(audio => { audio.pause(); });
+                    } else if (ev.shiftKey && audio.paused) {
+                        // Play audio, after pause all audios (no reset)
+                        forEachAudio(audio => { audio.pause(); });
+                        audio.play();
+                    }
+                };
+
+            </script>
+        </div>
+    ''') % dict(
+        x_html=x_html,
+        audio_html=audio_html,
     ))
 
     # Save so we can be idempotent (checked above)

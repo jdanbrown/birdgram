@@ -35,7 +35,7 @@ def _with_many(plot_f):
     plot_f.many.__name__ = plot_f.__name__ + '.many'
     plot_f.many.__qualname__ = plot_f.__qualname__ + '.many'
 
-    @cache(version=0, key=lambda recs, *args, **kwargs: (recs.id, args, kwargs))
+    @cache(version=1, key=lambda recs, *args, **kwargs: (recs.id, args, kwargs))
     def plot_many_cache(*args, **kwargs):
         return plot_many_nocache(*args, **kwargs)
 
@@ -87,7 +87,7 @@ def plot_thumb_grid(
 
 
 @_with_many
-@_display_with_audio_unless_show
+# @_display_with_audio_unless_show  # Unsafe since we transform rec
 def plot_thumb_micro(
     rec,
     features,
@@ -110,7 +110,7 @@ def plot_thumb_micro(
 
 
 @_with_many
-@_display_with_audio_unless_show
+# @_display_with_audio_unless_show  # Unsafe since we transform rec
 def plot_thumb(
     rec,
     features,
@@ -169,7 +169,7 @@ def plot_spectro_grid(
 
 
 @_with_many
-@_display_with_audio_unless_show
+# @_display_with_audio_unless_show  # Unsafe since we transform rec
 def plot_spectro_micro(
     rec,
     features,
@@ -188,7 +188,7 @@ def plot_spectro_micro(
 
 
 @_with_many
-@_display_with_audio_unless_show
+@_display_with_audio_unless_show  # Safe since we don't transform rec
 def plot_spectro_wrap(
     rec,
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
@@ -221,7 +221,7 @@ def plot_spectro_wrap(
     return ret
 
 
-@_display_with_audio_unless_show
+@_display_with_audio_unless_show  # Safe since we don't transform rec
 def plot_spectro(
     rec,
     raw=False,
