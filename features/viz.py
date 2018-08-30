@@ -113,14 +113,17 @@ def plot_thumb(
     audio=False,
     show=True,
     plot_kwargs=dict(),
+    pad=True,  # In case duration_s < thumb_s, pad out to thumb_s (for consistent sizing)
+    thumb_s=1,
     **thumb_kwargs,
 ):
     return plot_spectro(
-        rec_thumb(rec, features, **thumb_kwargs),
+        rec_thumb(rec, features, thumb_s=thumb_s, **thumb_kwargs),
         raw=raw,
         scale=scale,
         audio=audio,
         show=show,
+        limit_s=thumb_s if pad else None,
         **plot_kwargs,
     )
 
