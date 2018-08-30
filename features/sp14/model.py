@@ -207,6 +207,7 @@ class Features(DataclassConfig):
         ]).T
 
     @short_circuit(lambda self, rec, **kwargs: rec.get('spectro'))
+    # TODO @cache(nocache=...) to kill _spectro_cache/_spectro_nocache [code merge is easy, testing takes time (and don't skip it!)]
     def _spectro(self, rec: Row, cache=None, **kwargs) -> Melspectro:
         cache = coalesce(cache, False)
         if cache:

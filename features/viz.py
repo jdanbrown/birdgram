@@ -32,28 +32,30 @@ def _with_many(plot_f):
     - Also adds another layer of caching, with granularity the whole input (i.e. recs)
     """
 
-    def plot_many(*args, show=True, **kwargs):
-        f = plot_many_nocache if show else plot_many_cache
-        return f(*args, show=show, **kwargs)
+    @cache(
+        version=3,
+        key=lambda recs, *args, **kwargs: (recs.id, args, kwargs),
+        nocache=lambda *args, show=True, **kwargs: show,  # No cache iff side effects iff show
+    )
+    def plot_many(recs, *args, show=True, raw=True, **kwargs):
+        xs = list(df_rows(recs))
+        f = lambda rec: first([
+            plot_f(rec, *args, show=show, raw=raw, **kwargs),
+            plt.show() if not raw else None,
+        ])
+        if show:
+            # Side effects, avoid map_progress because (1) order is nondet and (2) dask bag runs f 1+n times (for meta)
+            return list(map(f, xs))
+        else:
+            # No side effects, safe to par with map_progress
+            return map_progress(f, xs,
+                use='dask', scheduler='threads',  # Faster than sync and processes (measured on plot_thumbs)
+                desc=plot_f.many.__qualname__,
+            )
 
     plot_f.many = plot_many
     plot_f.many.__name__ = plot_f.__name__ + '.many'
     plot_f.many.__qualname__ = plot_f.__qualname__ + '.many'
-
-    @cache(version=1, key=lambda recs, *args, **kwargs: (recs.id, args, kwargs))
-    def plot_many_cache(*args, **kwargs):
-        return plot_many_nocache(*args, **kwargs)
-
-    def plot_many_nocache(recs, *args, raw=True, **kwargs):
-        return map_progress(
-            use='dask', scheduler='threads',  # Faster than sync and processes (measured on plot_thumbs)
-            desc=plot_f.many.__qualname__,
-            xs=list(df_rows(recs)),
-            f=lambda rec: first([
-                plot_f(rec, *args, raw=raw, **kwargs),
-                plt.show() if not raw else None,
-            ]),
-        )
 
     return plot_f
 
@@ -191,17 +193,12 @@ def plot_spectro(
     return ret
 
 
-def plot_spectros(*args, show=True, **kwargs):
-    f = _plot_spectros_nocache if show else _plot_spectros_cache
-    return f(*args, show=show, **kwargs)
-
-
-@cache(version=0, key=lambda recs, *args, **kwargs: (recs.id, args, kwargs))
-def _plot_spectros_cache(*args, **kwargs):
-    return _plot_spectros_nocache(*args, **kwargs)
-
-
-def _plot_spectros_nocache(
+@cache(
+    version=0,
+    key=lambda recs, *args, **kwargs: (recs.id, args, kwargs),
+    nocache=lambda *args, show=True, **kwargs: show,  # No cache iff side effects iff show
+)
+def plot_spectros(
     recs: Union[pd.DataFrame, Row],
     raw=False,
     title=None,
