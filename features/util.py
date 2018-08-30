@@ -1451,30 +1451,51 @@ def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayab
                 const forEachAudio = f => {
                     // (Is this at risk of the same document.querySelectorAll ghost problem described above?)
                     Array.from(document.getElementsByClassName('bubo-audio')).forEach(audio => {
-                        if (audio.pause) { // Be robust to non-audio things [do these still happen?]
+                        if (audio.pause) { // Be robust to non-audio elems (does this still happen?)
                             f(audio);
                         }
                     });
                 };
 
+                // Audio behaviors
+                const resetAllPlayThis = () => {
+                    forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
+                    audio.play();
+                };
+                const resetAll = () => {
+                    forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
+                };
+                const pauseAll = () => {
+                    forEachAudio(audio => { audio.pause(); });
+                };
+                const pauseAllPlayThis = () => {
+                    forEachAudio(audio => { audio.pause(); });
+                    audio.play();
+                };
+
                 // Container events
-                container.onclick = ev => {
-                    if (!ev.shiftKey && audio.paused) {
-                        // Play audio, after pause+reset all audios (including this one)
-                        forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
-                        audio.play();
-                    } else if (!ev.shiftKey && !audio.paused) {
-                        // Pause+reset all audios
-                        forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
-                    } else if (ev.shiftKey && !audio.paused) {
-                        // Pause all audios (no reset)
-                        forEachAudio(audio => { audio.pause(); });
-                    } else if (ev.shiftKey && audio.paused) {
-                        // Play audio, after pause all audios (no reset)
-                        forEachAudio(audio => { audio.pause(); });
-                        audio.play();
+                const onContainerMouseEvent = ev => {
+                    if (ev.type === 'click') {
+                        if (!ev.shiftKey && audio.paused) {
+                            resetAllPlayThis();
+                        } else if (!ev.shiftKey && !audio.paused) {
+                            resetAll();
+                        } else if (ev.shiftKey && !audio.paused) {
+                            pauseAll();
+                        } else if (ev.shiftKey && audio.paused) {
+                            pauseAllPlayThis();
+                        }
+                    } else if (ev.type === 'mouseover' && !ev.altKey && !ev.ctrlKey && ev.metaKey && !ev.shiftKey) {
+                        // Like click on
+                        resetAllPlayThis();
+                    } else if (ev.type === 'mouseout' && !ev.altKey && !ev.ctrlKey && ev.metaKey && !ev.shiftKey) {
+                        // Like click off
+                        resetAll();
                     }
                 };
+                container.onclick     = onContainerMouseEvent;
+                container.onmouseover = onContainerMouseEvent;
+                container.onmouseout  = onContainerMouseEvent;
 
             </script>
         </div>
