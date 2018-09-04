@@ -97,9 +97,9 @@ def cache(
         func_cached = memory.cache(func_cached, **kwargs, ignore=['ignore'])
 
         @wraps_workaround(func_cached)
-        def g(*args, **kwargs):
+        def g(*args, _nocache=False, **kwargs):
             ignore = dict(args=args, kwargs=kwargs)
-            if not cache_control.enabled or nocache(*args, **kwargs):
+            if not cache_control.enabled or nocache(*args, **kwargs) or _nocache:
                 cache_key = None
                 return func_cached.func(cache_key, ignore)
             else:
