@@ -1,3 +1,6 @@
+# Before `import config`
+import os; os.environ['BUBO_ROLE'] = 'notebook'
+
 import calendar
 from collections import *
 import contextlib
@@ -61,6 +64,7 @@ import yaml
 import xgboost as xgb
 
 from cache import *
+from config import config
 from constants import *
 from datasets import *
 from ebird_priors import *
@@ -78,8 +82,10 @@ from viz import *
 from xgb_sklearn_hack import *
 from xgb_util import *
 
-##
+#
 # Mimic the relevant bits of ~/.pythonrc
+#   - cf. api.app.init_potoo
+#
 
 if ipy:
     ipy.magic('load_ext autoreload')
@@ -90,12 +96,18 @@ if ipy:
         'matplotlib.axes._subplots', 'AxesSubplot', lambda x, p, cycle: (p.text(repr(x)), plt.show()),
     )
 
-from potoo.ipython import *
-# set_display_on_ipython_prompt()
-ipy_formats.set()
+from potoo.python import *
+ensure_python_bin_dir_in_path()
+# install_sigusr_hooks()
 
 from potoo.pandas import *
+# set_display_on_sigwinch()
 set_display()
+
+from potoo.ipython import *
+# disable_special_control_backslash_handler()
+# set_display_on_ipython_prompt()
+ipy_formats.set()
 
 from potoo.plot import *
 plot_set_defaults()
@@ -107,8 +119,17 @@ if ipy:
 from potoo.ipython import *
 gc_on_ipy_post_run_cell()
 
-##
+#
+# Mimic api.app.create_app
+#
+
+from api.app import *
+check_deps()
+# init_logging()  # TODO After migrating log.log to real logging
+
+#
 # TODO Move these up into potoo or ~/.pythonrc
+#
 
 if ipy:
     ipy.run_cell_magic('capture', '', '%xmode plain')

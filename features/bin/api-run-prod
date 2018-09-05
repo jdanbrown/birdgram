@@ -1,0 +1,24 @@
+#!/bin/bash -eux
+#
+# http://flask.pocoo.org/docs/1.0/deploying/wsgi-standalone/#gunicorn
+# http://docs.gunicorn.org/en/stable/deploy.html
+#   - TODO Run gunicorn behind nginx, as recommended by gunicorn docs
+# http://docs.gunicorn.org/en/stable/settings.html
+
+bin="`dirname "$0"`"
+
+# export CONFIG_YAML=config-prod.yaml
+export FLASK_SKIP_DOTENV=1
+export FLASK_ENV=production
+
+cmd=(
+  gunicorn
+    --workers    4
+    # --bind       0.0.0.0:8000
+    --bind       0.0.0.0:80
+    --timeout    60
+    --log-config logging.conf
+    api.main:app
+    "$@"
+)
+exec "${cmd[@]}"

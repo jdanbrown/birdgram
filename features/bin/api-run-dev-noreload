@@ -1,0 +1,23 @@
+#!/bin/bash -eux
+#
+# http://flask.pocoo.org/docs/1.0/cli/
+# http://flask.pocoo.org/docs/1.0/server/
+
+bin="`dirname "$0"`"
+
+# export CONFIG_YAML=config-dev.yaml
+export FLASK_SKIP_DOTENV=1
+export FLASK_ENV=development
+export FLASK_DEBUG=true # Can't get DEBUG:True to work from config
+export FLASK_APP=api/main
+# export EXPLAIN_TEMPLATE_LOADING=True  # [XXX No effect, set in create_app]
+
+cmd=(
+  flask run
+    --host=0.0.0.0
+    --port=8000
+    --no-reload # Use entr instead of flask/werkzeug reloaders (see bin/api-run-dev)
+    # --no-debugger
+    "$@"
+)
+exec "${cmd[@]}"

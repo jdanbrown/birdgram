@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+</head>
+
+<body>
+
+  <div>
+    <h1>
+      <a href="http://192.168.0.195:8000{{ request.full_path }}">local</a> |
+      <a href="http://35.230.68.91{{ request.full_path }}">remote</a>
+    </h1>
+  </div>
+
+  {% block body %}
+  {% endblock %}
+
+</body>
+
+</html>

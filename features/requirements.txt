@@ -4,8 +4,8 @@
 # TODO TODO Reconcile local vs. github
 # -e /Users/danb/hack/potoo
 # -e /Users/danb/hack/joblib
-git+https://github.com/jdanbrown/potoo.git@008e9f6#egg=potoo
-git+https://github.com/jdanbrown/joblib.git@2855948#egg=joblib
+git+https://github.com/jdanbrown/potoo.git@6854ec9#egg=potoo
+git+https://github.com/jdanbrown/joblib.git@9f7b8b8#egg=joblib
 
 attrdict==2.0.0
 attrs==18.1.0
@@ -28,6 +28,7 @@ glances==2.11.1
 google-cloud==0.33.1
 graphviz==0.8.4
 httpie==0.9.9
+ipykernel==4.9.0 # Includes fix for https://github.com/plotly/dash/issues/257#issuecomment-395610889
 joypy==0.1.8
 jupyter==1.0.0
 jupyter-nbextensions-configurator==0.4.0
@@ -69,6 +70,10 @@ stringcase==1.2.0
 structlog==18.1.0
 toolz==0.9.0
 tqdm==4.23.4
+
+# flask
+flask==1.0.2
+gunicorn==19.9.0
 
 # pydub
 pydub==0.22.0

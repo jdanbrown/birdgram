@@ -1,0 +1,20 @@
+#!/bin/bash -eux
+#
+# Use entr for reload instead of flask/werkzeug reloaders
+# - Reloaders get slow with many files (e.g. .env/), and neither (watchdog/stat) exposes paths as config
+# - entr docs: http://www.entrproject.org/
+# - NOTE pdb.set_trace() will not work because entr does not transfer its tty to the child proc (see manpage)
+
+bin="`dirname "$0"`"
+
+# Force exit on ^C, to distinguish from entr key `q`
+on_sigint() { exit 1; }
+trap on_sigint INT
+
+while true; do
+  # Use entr to handle reload
+  # - Treat exit 2 as success (entr 'directory altered', with -d)
+  # - Treat exit 130 as success (entr key `q`)
+  # - ^C apparently also causes exit 130, so set a trap above to force-exit in that case
+  "$bin"/entr-project-files -dr "$bin"/api-run-dev-noreload "$@" || [ $? -eq 2 -o $? -eq 130 ]
+done

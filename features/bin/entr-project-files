@@ -1,0 +1,12 @@
+#!/bin/bash -eux
+
+find_args=(
+  -type f
+  -name '*.py' -o
+  -name '*.j2' -o
+  -name '*.html' -o
+  -name '*.js' -o
+  -name '*.css' -o
+  -name 'xxx-trailing-comma'
+)
+exec find "${find_args[@]}" | entr "$@"
