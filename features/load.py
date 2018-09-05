@@ -126,8 +126,8 @@ class Load(DataclassConfig):
         # Performance (600 peterson recs):
         #   - Scheduler: [TODO Measure -- 'threads' is like the outcome, like n-1 of the rest]
         #   - Bottlenecks (no_dask): [TODO Measure]
-        #   - TODO TODO Revisiting with ~87k xc recs...
-        metadata = map_progress(self._metadata, df_rows(recs),
+        #   - TODO Revisiting with ~87k xc recs...
+        metadata = map_progress(self._metadata, df_rows(recs), desc='metadata',
             # [Local]
             use='dask', scheduler='threads',    # Optimal for 600 peterson recs on laptop
             # [Remote]
@@ -200,7 +200,7 @@ class Load(DataclassConfig):
         #               1    0.060    0.060    0.845    0.845 <string>:1(<module>)
         #           61176    0.018    0.000    0.039    0.000 {built-in method builtins.isinstance}
         #             600    0.015    0.000    0.015    0.000 {built-in method io.open}
-        audio = map_progress(partial(self._audio, load=load), df_rows(recs), **{
+        audio = map_progress(partial(self._audio, load=load), df_rows(recs), desc='audio', **{
             **dict(
                 # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
                 # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # FIXME Quiet...
