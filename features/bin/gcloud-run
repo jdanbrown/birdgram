@@ -173,7 +173,7 @@ bin_dir = code_dir / 'bin'
 @click.option('--container-image', default='gcr.io/%(project)s/bubo/features:latest')
 @click.option('--container-name', default='%(instance_name)s')
 @click.option('--container-vols', default='-v/mnt/disks/disk-bubo-data:/mnt/disks/disk-bubo-data')
-@click.option('--container-ports', default='-p8888:8888')  # TODO Expose '8888' as an option (here and below)
+@click.option('--container-ports', default='-p80:80 -p8000:8000 -p8888:8888')  # TODO Expose a simpler --ports option (here and below)
 # Send container logs to stackdriver
 #   - Disabled by default, since ncurses stuff like htop/glances produces a ton of noise
 #   - Docs: https://cloud.google.com/community/tutorials/docker-gcplogs-driver
