@@ -9,9 +9,12 @@ dependencies:
 
 # 3rd-party libs
 - feather-format=0.4.0
-- ffmpeg=3.4.1 # For pydub
+# - ffmpeg=3.4.1 # For pydub [XXX Use docker/brew ffmpeg so we can build with libmp3lame. TODO How to ffmpeg+libmp3lame with conda?]
 - lightgbm=2.1.2
 - matplotlib=2.1.1 # TODO How to install 2.2.x without conflicts?
+# HACK Pin ncurses=5.9 to workaround lib error with ncurses=6:
+# - "ImportError: dlopen(.../readline.cpython-36m-darwin.so, 2): Library not loaded: @rpath/libncursesw.5.dylib"
+- ncurses=5.9
 - numpy=1.14.5 # Keep this up to date so that pip deps don't install a newer numpy without openblas
 - pillow=4.3.0 # pillow brings in mkl [TODO How do we want this to work?]
 - pandas=0.23.0 # Duped in pip deps

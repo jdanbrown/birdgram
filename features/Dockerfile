@@ -27,27 +27,35 @@ RUN apt-get update \
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
  && locale-gen
 
-# tini
-ENV TINI_VERSION=0.18.0
-RUN wget --quiet "https://github.com/krallin/tini/releases/download/v$TINI_VERSION/tini" \
- && mv tini /usr/local/bin/tini \
- && chmod +x /usr/local/bin/tini
-
 # env
 ENV SHELL=/bin/bash \
     LC_ALL=en_US.UTF-8 \
     LANG=en_US.UTF-8 \
     LANGUAGE=en_US.UTF-8
 
-# More native deps
-# - TODO Oops, indent these package names (cache bust)
+# Instead of `lsb_release -cs`
+ENV LSB_RELEASE='bionic'
+
+# tini
+ENV TINI_VERSION=0.18.0
+RUN wget --quiet "https://github.com/krallin/tini/releases/download/v$TINI_VERSION/tini" \
+ && mv tini /usr/local/bin/tini \
+ && chmod +x /usr/local/bin/tini
+
+# Native deps/utils (part 1/2, heavyweight)
 RUN apt-get update \
  && apt-get install -yq --no-install-recommends \
-    build-essential \
-    git \
-    netcat \
-    unzip \
-    vim \
+      build-essential \
+      curl \
+      dstat \
+      git \
+      htop \
+      jq \
+      pv \
+      rsync \
+      tree \
+      unzip \
+      vim \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
@@ -65,10 +73,9 @@ RUN cd /tmp \
  && rm -rf "$HOME/.cache/yarn"
 
 # More native deps to workaround issues I couldn't resolve in conda alone
-# - TODO Oops, indent these package names (cache bust)
 RUN apt-get update \
  && apt-get install -yq --no-install-recommends \
-    libreadline-dev \
+      libreadline-dev \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
@@ -76,37 +83,18 @@ RUN apt-get update \
 # - Maybe it's harmless to make a new /app? And let /Users/danb/hack/bubo/features only be used for data/ interactions?
 WORKDIR /app
 
-# conda/pip/R reqs (part 1/2, "headstart")
-# - Use `-n base` to install into the global ("base") conda env instead of the one named in env.yml (bubo-features)
-#
-# The "headstart" files are a rough, laggy approximation to environment.yml/requirements.txt whose purpose is to provide
-# a helpful docker layer to speed up building the `conda env update`/`pip install` docker layers. It's ok for these
-# packages to be too old, too new, and incomplete, since the ones in environment.yml/requirements.txt will override
-# them. Changing the "headstart" files will make the next build take a while.
-#
-COPY _environment-headstart.yml ./
-RUN conda env update -n base -f _environment-headstart.yml
-COPY _requirements-headstart.txt ./
-RUN pip install -U -r _requirements-headstart.txt
-
-# Instead of `lsb_release -cs`
-# - TODO Move this to top (cache bust)
-ENV LSB_RELEASE='bionic'
-
-# Utils
-# - TODO Move these up into "More native deps" (cache bust)
-RUN apt-get update \
- && apt-get install -yq --no-install-recommends \
-      dstat \
-      htop \
-      pv \
-      tree \
+# Install mergerfs
+# - SLOW HEAVY (make install)
+# - https://github.com/trapexit/mergerfs#building
+ENV MERGERFS_VERSION=2.24.2
+RUN curl -sfL "https://github.com/trapexit/mergerfs/releases/download/$MERGERFS_VERSION/mergerfs-$MERGERFS_VERSION.tar.gz" \
+      | tar xzC /tmp \
+ && (cd "/tmp/mergerfs-$MERGERFS_VERSION" && make install-build-pkgs install) \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
 # Install gcloud
 # - Requires py2, so install as native dep instead of conda dep
-# - TODO Move this above conda/pip deps (cache bust)
 RUN export CLOUD_SDK_REPO="cloud-sdk-$LSB_RELEASE" \
  && apt-get update \
  && apt-get install -yq --no-install-recommends \
@@ -122,7 +110,6 @@ RUN export CLOUD_SDK_REPO="cloud-sdk-$LSB_RELEASE" \
  && rm -rf /var/lib/apt/lists/*
 
 # Install gcsfuse
-# - TODO Move this up (cache bust)
 ENV GCSFUSE_REPO="gcsfuse-$LSB_RELEASE"
 RUN echo "deb http://packages.cloud.google.com/apt $GCSFUSE_REPO main" | tee '/etc/apt/sources.list.d/gcsfuse.list' \
  && curl -sf 'https://packages.cloud.google.com/apt/doc/apt-key.gpg' | apt-key add - \
@@ -132,23 +119,33 @@ RUN echo "deb http://packages.cloud.google.com/apt $GCSFUSE_REPO main" | tee '/e
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-# Install mergerfs
-# - SLOW HEAVY (make install)
-# - https://github.com/trapexit/mergerfs#building
-# - TODO Move this up (cache bust)
-ENV MERGERFS_VERSION=2.24.2
-RUN curl -sfL "https://github.com/trapexit/mergerfs/releases/download/$MERGERFS_VERSION/mergerfs-$MERGERFS_VERSION.tar.gz" \
-      | tar xzC /tmp \
- && (cd "/tmp/mergerfs-$MERGERFS_VERSION" && make install-build-pkgs install) \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
-
-# Utils
-# - TODO Move these up into "Utils" (cache bust)
+# Install ffmpeg + libmp3lame
+# - conda-forge has an ffmpeg package, but it doesn't include libmp3lame (for pydub .export(format='mp3'))
 RUN apt-get update \
  && apt-get install -yq --no-install-recommends \
-      rsync \
-      jq \
+      ffmpeg \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/* \
+ && ffmpeg -version 2>&1 | grep libmp3lame
+
+# conda/pip/R reqs (part 1/2, "headstart")
+# - Use `-n base` to install into the global ("base") conda env instead of the one named in env.yml (bubo-features)
+#
+# The "headstart" files are a rough, laggy approximation to environment.yml/requirements.txt whose purpose is to provide
+# a helpful docker layer to speed up building the `conda env update`/`pip install` docker layers. It's ok for these
+# packages to be too old, too new, and incomplete, since the ones in environment.yml/requirements.txt will override
+# them. Changing the "headstart" files will make the next build take a while.
+#
+COPY _environment-headstart.yml ./
+RUN conda env update -n base -f _environment-headstart.yml
+COPY _requirements-headstart.txt ./
+RUN pip install -U -r _requirements-headstart.txt
+
+# Native deps/utils (part 2/2, lightweight)
+# - A lightweight place to add new native deps/utils
+# - Eventually promote new additions to "part 1/2, heavyweight" as their usage stabilizes
+RUN apt-get update \
+ && apt-get install -yq --no-install-recommends \
       entr \
       silversearcher-ag \
  && apt-get clean \
