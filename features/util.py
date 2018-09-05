@@ -1456,83 +1456,93 @@ def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayab
             %(audio_html)s
             <script>
 
-                // WARNING To get a reference to our container, use a hard reference (currentScript.parentNode) instead
-                // of an element selector (e.g. document.querySelectorAll) since something in electron dynamically
-                // hides and reveals dom elements depending on the viewport (i.e. document scroll), and querying by
-                // document.querySelectorAll empirically only returned elements currently in view.
-                //  - HACK document_currentScript emulates document.currentScript (manually provided by hydrogen-extras)
-                const container = document_currentScript.parentNode;
-                const [audio] = container.querySelectorAll(':scope > audio');
+                // Local scope for isolation (e.g. so we can const)
+                (() => {
 
-                // Audio events
-                //  - Ref: https://developer.mozilla.org/en-US/docs/Web/Guide/Events/Media_events
-                const outlineInert = '';
-                container.style.outline = outlineInert;
-                const onAudioEvent = ev => {
-                    if (!audio.paused && !audio.ended) {
-                        // Playing
-                        container.style.outline = '1px solid red';
-                    } else if (!audio.ended && audio.currentTime > 0) {
-                        // Paused but not reset
-                        container.style.outline = '1px solid blue';
-                    } else {
-                        // Finished playing or reset while paused
-                        container.style.outline = outlineInert;
-                    }
-                };
-                audio.onplay   = onAudioEvent;
-                audio.onpause  = onAudioEvent;
-                audio.onended  = onAudioEvent;
-                audio.onseeked = onAudioEvent;
+                    // Get currentScript
+                    const currentScript = (
+                        document.currentScript || // Defined in browsers
+                        document_currentScript    // Defined in notebooks (HACK manually provided by hydrogen-extras)
+                    );
 
-                const forEachAudio = f => {
-                    // (Is this at risk of the same document.querySelectorAll ghost problem described above?)
-                    Array.from(document.getElementsByClassName('bubo-audio')).forEach(audio => {
-                        if (audio.pause) { // Be robust to non-audio elems (does this still happen?)
-                            f(audio);
+                    // WARNING To get a reference to our container, use a hard reference (currentScript.parentNode) instead
+                    // of an element selector (e.g. document.querySelectorAll) since something in electron dynamically
+                    // hides and reveals dom elements depending on the viewport (i.e. document scroll), and querying by
+                    // document.querySelectorAll empirically only returned elements currently in view.
+                    const container = currentScript.parentNode;
+                    const [audio] = container.querySelectorAll(':scope > audio');
+
+                    // Audio events
+                    //  - Ref: https://developer.mozilla.org/en-US/docs/Web/Guide/Events/Media_events
+                    const outlineInert = '';
+                    container.style.outline = outlineInert;
+                    const onAudioEvent = ev => {
+                        if (!audio.paused && !audio.ended) {
+                            // Playing
+                            container.style.outline = '1px solid red';
+                        } else if (!audio.ended && audio.currentTime > 0) {
+                            // Paused but not reset
+                            container.style.outline = '1px solid blue';
+                        } else {
+                            // Finished playing or reset while paused
+                            container.style.outline = outlineInert;
                         }
-                    });
-                };
+                    };
+                    audio.onplay   = onAudioEvent;
+                    audio.onpause  = onAudioEvent;
+                    audio.onended  = onAudioEvent;
+                    audio.onseeked = onAudioEvent;
 
-                // Audio behaviors
-                const resetAllPlayThis = () => {
-                    forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
-                    audio.play();
-                };
-                const resetAll = () => {
-                    forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
-                };
-                const pauseAll = () => {
-                    forEachAudio(audio => { audio.pause(); });
-                };
-                const pauseAllPlayThis = () => {
-                    forEachAudio(audio => { audio.pause(); });
-                    audio.play();
-                };
+                    const forEachAudio = f => {
+                        // (Is this at risk of the same document.querySelectorAll ghost problem described above?)
+                        Array.from(document.getElementsByClassName('bubo-audio')).forEach(audio => {
+                            if (audio.pause) { // Be robust to non-audio elems (does this still happen?)
+                                f(audio);
+                            }
+                        });
+                    };
 
-                // Container events
-                const onContainerMouseEvent = ev => {
-                    if (ev.type === 'click') {
-                        if (!ev.shiftKey && audio.paused) {
+                    // Audio behaviors
+                    const resetAllPlayThis = () => {
+                        forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
+                        audio.play();
+                    };
+                    const resetAll = () => {
+                        forEachAudio(audio => { audio.pause(); audio.currentTime = 0; });
+                    };
+                    const pauseAll = () => {
+                        forEachAudio(audio => { audio.pause(); });
+                    };
+                    const pauseAllPlayThis = () => {
+                        forEachAudio(audio => { audio.pause(); });
+                        audio.play();
+                    };
+
+                    // Container events
+                    const onContainerMouseEvent = ev => {
+                        if (ev.type === 'click') {
+                            if (!ev.shiftKey && audio.paused) {
+                                resetAllPlayThis();
+                            } else if (!ev.shiftKey && !audio.paused) {
+                                resetAll();
+                            } else if (ev.shiftKey && !audio.paused) {
+                                pauseAll();
+                            } else if (ev.shiftKey && audio.paused) {
+                                pauseAllPlayThis();
+                            }
+                        } else if (ev.type === 'mouseover' && !ev.altKey && !ev.ctrlKey && ev.metaKey && !ev.shiftKey) {
+                            // Like click on
                             resetAllPlayThis();
-                        } else if (!ev.shiftKey && !audio.paused) {
+                        } else if (ev.type === 'mouseout' && !ev.altKey && !ev.ctrlKey && ev.metaKey && !ev.shiftKey) {
+                            // Like click off
                             resetAll();
-                        } else if (ev.shiftKey && !audio.paused) {
-                            pauseAll();
-                        } else if (ev.shiftKey && audio.paused) {
-                            pauseAllPlayThis();
                         }
-                    } else if (ev.type === 'mouseover' && !ev.altKey && !ev.ctrlKey && ev.metaKey && !ev.shiftKey) {
-                        // Like click on
-                        resetAllPlayThis();
-                    } else if (ev.type === 'mouseout' && !ev.altKey && !ev.ctrlKey && ev.metaKey && !ev.shiftKey) {
-                        // Like click off
-                        resetAll();
-                    }
-                };
-                container.onclick     = onContainerMouseEvent;
-                container.onmouseover = onContainerMouseEvent;
-                container.onmouseout  = onContainerMouseEvent;
+                    };
+                    container.onclick     = onContainerMouseEvent;
+                    container.onmouseover = onContainerMouseEvent;
+                    container.onmouseout  = onContainerMouseEvent;
+
+                })();
 
             </script>
         </div>
