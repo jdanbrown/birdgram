@@ -208,6 +208,11 @@ class _xc(DataclassUtil):
         )
 
     @property
+    def _metadata_hash(self) -> str:
+        """Fast id intended to be used as a cache key for consumers of self.metadata"""
+        return self._audio_paths_hash  # Close enough
+
+    @property
     @cache(version=3, key=lambda self: self)
     def _metadata(self) -> "pd.DataFrame['id': int, ...]":
         """Load all saved metadata from fs, keeping the latest observed metadata record per XC id"""
@@ -308,6 +313,7 @@ class _xc(DataclassUtil):
     # TODO Clean up along with {xc,ebird}.com_names_to_species
     @property
     @lru_cache()
+    @cache(version=0, key=lambda self: (self, self._metadata_hash))
     def com_name_to_species_dict(self) -> dict:
         return (xc.metadata
             [['com_name', 'species']]
@@ -709,25 +715,29 @@ def load_xc_recs(
     num_species: int,
     num_recs: int,
 ) -> DF:
-    xc_meta, recs_stats = _load_xc_meta(countries_k, com_names_k, recs_at_least, num_species, num_recs)
-    xc_raw_recs = _xc_meta_to_xc_raw_recs(projection.features.load, xc_meta)
+    xc_meta, recs_stats = load_xc_meta(countries_k, com_names_k, recs_at_least, num_species, num_recs)
+    xc_raw_recs = xc_meta_to_xc_raw_recs(xc_meta, projection.features.load)
     _inspect_xc_raw_recs(xc_raw_recs)
-    xc_recs = _xc_raw_recs_to_xc_recs(projection, xc_raw_recs)
+    xc_recs = xc_raw_recs_to_xc_recs(xc_raw_recs, projection)
     _inspect_xc_recs(xc_recs)
     return xc_recs, recs_stats
 
 
-def _load_xc_meta(
+def load_xc_meta(
     countries_k: str,
     com_names_k: str,
     recs_at_least: int,
     num_species: int,
     num_recs: int,
+    drop_recs_lt_2=True,
 ) -> DF:
-    log.info('[1/3 fast] Filtering xc.metadata -> xc_meta...', **{
-        '(countries_k, com_names_k)': (countries_k, com_names_k),
-        '(recs_at_least, num_species, num_recs)': (recs_at_least, num_species, num_recs),
-    })
+    log.info('[1/3 fast] Filtering xc.metadata...',
+        countries_k=countries_k,
+        com_names_k=com_names_k,
+        recs_at_least=recs_at_least,
+        num_species=num_species,
+        num_recs=num_recs,
+    )
     # Load xc_meta (fast)
     #   1. countries: Filter recs to these countries
     #   2. species: Filter recs to these species
@@ -739,10 +749,14 @@ def _load_xc_meta(
     xc_meta = (xc.metadata
         .pipe(puts_stats('all'))
         # 1. countries: Filter recs to these countries
-        [lambda df: df.country.isin(constants.countries[countries_k])]
+        .pipe(lambda df: df if countries_k is None else (df
+            [df.country.isin(constants.countries[countries_k])]
+        ))
         .pipe(puts_stats('countries'))
         # 2. species: Filter recs to these species
-        [lambda df: df.species.isin(com_names_to_species(*com_names[com_names_k]))]
+        .pipe(lambda df: df if com_names_k is None else (df
+            [df.species.isin(com_names_to_species(*com_names[com_names_k]))]
+        ))
         .pipe(puts_stats('species'))
         # Omit not-downloaded recs (should be few within the selected countries)
         [lambda df: df.downloaded]
@@ -750,18 +764,26 @@ def _load_xc_meta(
         # Remove empty cats for perf
         .pipe(df_remove_unused_categories)
         # 3. recs_at_least: Filter species to those with at least this many recs
-        [lambda df: df.species.isin(df.species.value_counts()[lambda s: s >= recs_at_least].index)]
+        .pipe(lambda df: df if recs_at_least is None else (df
+            [df.species.isin(df.species.value_counts()[lambda s: s >= recs_at_least].index)]
+        ))
         .pipe(puts_stats('recs_at_least'))
         # 4. num_species: Sample this many of the species
-        [lambda df: df.species.isin(df.species.drop_duplicates().pipe(lambda s: s.sample(n=min(len(s), num_species), random_state=0)))]
+        .pipe(lambda df: df if num_species is None else (df
+            [df.species.isin(df.species.drop_duplicates().pipe(lambda s: s.sample(n=min(len(s), num_species), random_state=0)))]
+        ))
         .pipe(puts_stats('num_species'))
         # 5. num_recs: Sample this many recs per species
         #   - Remove empty cats else .groupby fails on empty groups
-        .pipe(df_remove_unused_categories)
-        .groupby('species').apply(lambda g: g.sample(n=min(len(g), num_recs), random_state=0))
+        .pipe(lambda df: df if num_recs is None else (df
+            .pipe(df_remove_unused_categories)
+            .groupby('species').apply(lambda g: g.sample(n=min(len(g), num_recs), random_state=0))
+        ))
         .pipe(puts_stats('num_recs'))
         # Drop species with <2 recs, else StratifiedShuffleSplit complains (e.g. 'TUVU')
-        [lambda df: df.species.isin(df.species.value_counts()[lambda s: s >= 2].index)]
+        .pipe(lambda df: df if not drop_recs_lt_2 else (df
+            [df.species.isin(df.species.value_counts()[lambda s: s >= 2].index)]
+        ))
         .pipe(puts_stats('recs ≥ 2'))
         # Clean up for downstream
         .pipe(df_remove_unused_categories)
@@ -771,12 +793,12 @@ def _load_xc_meta(
     return (xc_meta, recs_stats)
 
 
-def _xc_meta_to_xc_raw_recs(
-    load: 'Load',
+def xc_meta_to_xc_raw_recs(
     xc_meta: DF,
-    xc_paths_dump_path='/tmp/xc_paths',  # When uncached, helpful to run load.recs in a terminal (long running and verbose)
+    load: 'Load',
+    xc_paths_dump_path=None,  # When uncached, helpful to run load.recs in a terminal (long running and verbose)
 ) -> DF:
-    log.info('[2/3 slower] Loading xc_meta -> xc_raw_recs (.audio, more metadata)...')
+    log.info('[2/3 slower] Loading xc.metadata -> xc_raw_recs (.audio, more metadata)...')
     xc_paths = [
         ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
         for row in df_rows(xc_meta)
@@ -874,9 +896,9 @@ def _inspect_xc_raw_recs(xc_raw_recs: DF) -> DF:
     )
 
 
-def _xc_raw_recs_to_xc_recs(
-    projection: 'Projection',
+def xc_raw_recs_to_xc_recs(
     xc_raw_recs: DF,
+    projection: 'Projection',
 ) -> DF:
     log.info('[3/3 slowest] Featurizing xc_raw_recs -> xc_recs (.audio, .feat, .spectro)...')
     # Featurize: .audio, .feat, .spectro (slowest)
