@@ -718,8 +718,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
         search_params_str,
         classifier_str,
         random_state=0,
+        fix_missing_skm_projection_id=None,
     ) -> 'cls':
-        return joblib.load('/'.join([
+        search = joblib.load('/'.join([
             f'{artifact_dir}',
             experiment_id,
             "%s,estimator=Search(%s,classifier='%s',random_state=%s)" % (
@@ -730,6 +731,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
             ),
             'estimator.pkl',
         ]))
+        if fix_missing_skm_projection_id:
+            search = search.fix_missing_projection_skm(fix_missing_skm_projection_id)
+        return search
 
     def fix_missing_projection_skm(self, projection_id: str) -> 'self':
         # HACK FIXME Why doesn't search.projection.skm_ exist after unpickle?
