@@ -37,7 +37,14 @@ def _with_many(plot_f):
         key=lambda recs, *args, **kwargs: (recs.id, args, kwargs),
         nocache=lambda *args, show=True, **kwargs: show,  # No cache iff side effects iff show
     )
-    def plot_many(recs, *args, show=True, raw=True, **kwargs):
+    def plot_many(
+        recs,
+        *args,
+        show=True,
+        raw=True,
+        progress=dict(use='dask', scheduler='threads'),  # Faster than sync and processes (measured on plot_thumbs)
+        **kwargs,
+    ):
         xs = list(df_rows(recs))
         f = lambda rec: first([
             plot_f(rec, *args, show=show, raw=raw, **kwargs),
@@ -49,8 +56,8 @@ def _with_many(plot_f):
         else:
             # No side effects, safe to par with map_progress
             return map_progress(f, xs,
-                use='dask', scheduler='threads',  # Faster than sync and processes (measured on plot_thumbs)
                 desc=plot_f.many.__qualname__,
+                **progress,
             )
 
     plot_f.many = plot_many
