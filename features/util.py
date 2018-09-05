@@ -736,6 +736,7 @@ def _df_map_rows_progress_joblib(
 def _map_progress_joblib(
     f: Callable[[X], X],
     xs: Iterable[X],
+    desc: str = None,  # TODO Display somewhere (like dask + tqdm)
     use_joblib=True,
     backend='threading',  # 'threading' | 'multiprocessing' [FIXME 'multiprocessing' is slow/dead with timeout errors]
     **kwargs,
@@ -797,13 +798,15 @@ def dask_progress(**kwargs):
             super().__init__(**kwargs)
             self._terminal_cols = get_cols()
             self._desc = desc
-            self._desc_pad = '%s ' % self._desc if self._desc else ''
+            self._desc_pad = '%s: ' % self._desc if self._desc else ''
+            # self._desc_pad = '%s:' % self._desc if self._desc else ''
 
         def _draw_bar(self, frac, elapsed):
             # (Mostly copy/pasted from ProgressBar)
             percent = int(100 * frac)
             elapsed = format_time(elapsed)
             msg_prefix = '\r%s[' % self._desc_pad
+            # msg_prefix = '\r[%s' % self._desc_pad
             msg_suffix = '] | %3s%% Completed | %s' % (percent, elapsed)
             width = self._terminal_cols - len(msg_prefix) - len(msg_suffix)
             bar = '#' * int(width * frac)
@@ -835,8 +838,8 @@ def _df_map_rows_progress_dask(
 def _map_progress_dask(
     f: Callable[[X], X],
     xs: Iterable[X],
+    desc: str = None,
     use_dask=True,
-    desc=None,
     scheduler='threads',  # 'processes' | 'threads' | 'synchronous' [FIXME 'processes' hangs before forking]
     partition_size=None,
     npartitions=None,
@@ -1063,11 +1066,12 @@ def _map_progress_sync(
 
 def iter_progress(
     xs: Iterator[X],
+    desc: str = None,
     n: int = None,
     use_tqdm=True,
 ) -> Iterator[X]:
     if use_tqdm:
-        return tqdm(xs, total=n)
+        return tqdm(xs, total=n, desc=desc)
     else:
         return xs
 
