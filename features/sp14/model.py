@@ -1233,8 +1233,8 @@ def _print_config(config):
 # HACK TODO Hastily factored out of notebooks; merge into Search/SearchEvals above, after evaluating further and cleaning up
 #
 
-# TODO TODO Did I forget pca for all of app_ideas_5!? (And it worked decently well?)
-# TODO TODO Crap, I forgot dist(probs) altogether! Just dist(feat) -- wow...!
+# TODO Did I forget pca for all of app_ideas_5!? (And it worked decently well?)
+# TODO Crap, I forgot dist(probs) altogether! Just dist(feat) -- wow...!
 
 
 QueryRec = Union['ix', Recording, Callable[[pd.DataFrame], Recording]]

@@ -1,4 +1,4 @@
-# TODO TODO Is this helpful?
+# TODO Is this helpful?
 # """
 # Warm various caches at build time to speed up app startup at runtime
 # """
