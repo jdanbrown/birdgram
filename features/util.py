@@ -1202,11 +1202,13 @@ def audio_bandpass_filter(audio: audiosegment.AudioSegment, **kwargs) -> audiose
 # bubo-features
 #
 
+import base64
 import platform
 import secrets
 import textwrap
 import types
 from typing import Union
+import urllib.parse
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -1217,6 +1219,7 @@ import pydub
 import scipy
 import yaml
 
+from config import config
 from constants import *
 from log import log  # For export [TODO Update callers]
 
@@ -1399,22 +1402,23 @@ def text_bar(
 
 
 def audio_to_url(audio) -> str:
-    import urllib.parse
-    # Render as file:// instead of data:, since files are way faster (~instant) and more lightweight (~0 mem) than
-    # inline data urls for displaying many audios at once (>>10)
     abs_path = Path(data_dir) / audio_ensure_persisted(audio).path
-    # Quote for url
-    #   - Manually exclude chars known to be safe, for cosmetics (at least '?' is unsafe, not sure what else...)
-    return "file://%s" % urllib.parse.quote(str(abs_path), safe='/,:()[] ')
+    if config.audio_to_url.url_type == 'file':
+        return 'file://%s' % urllib.parse.quote(str(abs_path),
+            safe='/,:()[] ',  # Cosmetic: exclude known-safe chars ('?' is definitely _not_ safe, not sure what else...)
+        )
+    elif config.audio_to_url.url_type == 'data':
+        with open(abs_path, 'rb') as f:
+            return 'data:%(mimetype)s;base64,%(base64)s' % dict(
+                mimetype=audio_mimetype_for_path(abs_path),
+                base64=base64.b64encode(f.read()).decode('ascii'),
+            )
+    else:
+        raise ValueError('Unexpected config.audio_to_url.url_type: %s' % config.audio_to_url.url_type)
 
 
 def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='') -> str:
     audio = audio_ensure_persisted(audio)
-    mimetype = {
-        '.mp3': 'audio/mpeg',
-        '.wav': 'audio/wav',
-        # Add more as needed...
-    }[Path(audio.path).suffix]
     return dedent_and_strip('''
         <audio class="bubo-audio" %(controls)s preload="%(preload)s" %(more_audio_attrs)s>
             <source type="%(type)s" src="%(src)s" />
@@ -1423,9 +1427,17 @@ def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='') -> 
         controls='controls' if controls else '',
         preload=preload,
         more_audio_attrs=more_audio_attrs,
-        type=mimetype,
+        type=audio_mimetype_for_path(audio.path),
         src=audio_to_url(audio),
     )
+
+
+def audio_mimetype_for_path(path) -> str:
+    return {
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        # Add more as needed...
+    }[Path(path).suffix]
 
 
 def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayable':
