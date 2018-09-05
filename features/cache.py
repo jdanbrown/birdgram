@@ -52,8 +52,9 @@ memory = Memory(
     cachedir=cache_dir,  # It adds its own joblib/ subdir
     invalidate_on_code_change=False,
     log=log.replace(
-        # level='debug',  # Log '.'/'!' on hit/miss [HACK HACK HACK]
-        level='info',  # Log nothing [FIXME -1 (log.char) is causing the 'IOStream.flush timed out' errors in remote kernels]
+        # level='debug',  # Log '.'/'!' line on hit/miss [HACK HACK HACK]
+        # level='info',  # Log '.'/'!' char on hit/miss [HACK HACK HACK]
+        level='warn',  # Log nothing [FIXME -1 (log.char) is causing the 'IOStream.flush timed out' errors in remote kernels]
     ),
     verbose=0,  # Log nothing
     # verbose=1,  # Log cache miss
