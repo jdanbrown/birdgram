@@ -12,27 +12,10 @@
 
   <div id="top-controls">
     <form onsubmit="topControlsSubmit(event)">
-      <table>
+      <table class="controls-table">
 
-        <tr>
-          <td>host</td>
-          <td>species</td>
-          <td>limit</td>
-          <td>scale</td>
-          <td>thumb_s</td>
-          <td>audio_s</td>
-        </tr>
-
-        <tr>
-          <td><a class="control" href="//{{ go_local_remote_host() }}{{ request.full_path }}">{{ go_local_remote_text() }}</a></td>
-          <td><input type="text" class="control text species" value="{{ query_get('species') }}"
-            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-          /></td>
-          <td><input type="text" class="control num limit" value="{{ query_get('limit', 10) }}" /></td>
-          <td><input type="text" class="control num scale" value="{{ query_get('scale', 2) }}" /></td>
-          <td><input type="text" class="control num thumb_s" value="{{ query_get('thumb_s', 1.5) }}" /></td>
-          <td><input type="text" class="control num audio_s" value="{{ query_get('audio_s', 10) }}" /></td>
-        </tr>
+        {% block controls_table %}
+        {% endblock %}
 
       </table>
 
@@ -43,8 +26,10 @@
     </form>
   </div>
 
-  {% block body %}
-  {% endblock %}
+  <div id="main">
+    {% block body %}
+    {% endblock %}
+  </div>
 
   <script>
 
@@ -56,21 +41,10 @@
     window.topControlsGo = () => {
       const controls = document.getElementById('top-controls');
       const query = new URLSearchParams(window.location.search);
-      [
-        'species',
-        'limit',
-        'scale',
-        'thumb_s',
-        'audio_s',
-      ].forEach(k => {
-        query.set(k, document.querySelector(`#top-controls .${k}`).value.trim());
+      Array.from(document.querySelectorAll('#top-controls input.control')).forEach(input => {
+        query.set(input.dataset.arg, input.value.trim());
       });
       window.location.search = query.toString();
-    };
-
-    window.isIOS = () => {
-      // https://stackoverflow.com/a/9039885/397334
-      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     };
 
     document.addEventListener('DOMContentLoaded', ev => {
@@ -98,6 +72,10 @@
 
     });
 
+    window.isIOS = () => {
+      // https://stackoverflow.com/a/9039885/397334
+      return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    };
 
   </script>
 

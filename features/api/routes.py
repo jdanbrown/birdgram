@@ -1,4 +1,5 @@
 import inspect
+import numbers
 import pdb
 import traceback
 from typing import Callable, Sequence
@@ -94,7 +95,7 @@ def query_get(k: str, default: any = None) -> dict:
 
 
 @bp.app_template_global()
-def go_local_remote_host() -> dict:
+def switch_host_host() -> dict:
     if urlparse(request.url).netloc == config.hosts.prod:
         return config.hosts.local
     else:
@@ -102,11 +103,11 @@ def go_local_remote_host() -> dict:
 
 
 @bp.app_template_global()
-def go_local_remote_text() -> dict:
+def switch_host_text() -> dict:
     if urlparse(request.url).netloc == config.hosts.prod:
-        return 'L'
-    else:
         return 'R'
+    else:
+        return 'L'
 
 
 @bp.errorhandler(Exception)
@@ -115,6 +116,9 @@ def handle_exception(e):
     # Break into debugger if $PDB is truthy
     if app.config['PDB']:
         pdb.post_mortem(e.__traceback__)
+
+    log.debug('handle_exception', e=e)
+    traceback.print_exception(None, e, e.__traceback__)
 
     # Translate all exceptions to an http response
     if not isinstance(e, ApiError):
@@ -192,12 +196,14 @@ def _parse_request_arg(func, k: str, v: str) -> any:
     typ = inspect.getfullargspec(func).annotations.get(k)
     if typ is None:
         parse = lambda x: x
-    elif typ == Sequence[str]:
-        parse = lambda x: x.split(',')
+    elif typ == Sequence[str]:  # TODO Sequence[X], generically
+        parse = lambda x: x.split(',') if x else []
+    elif issubclass(typ, numbers.Number):
+        parse = lambda x: None if x == '' else typ(x)
     # elif typ == ...
     #    ...
     else:
-        parse = typ
+        parse = lambda x: typ(x)
     return parse(v)
 
 
@@ -228,7 +234,7 @@ def htmlify_df(template: str, df) -> str:
     # disp_html = ipy_formats_to_html(df)  # XXX This doesn't know df_cell's
     disp_html = ipy_formats._format_df(df, mimetype='text/html',  # HACK Promote this from private (and rename?)
         index=False,
-        header=False,
+        # header=False,  # Keep: helpful to include headers on the table, for now
     )
     return htmlify_html(
         template=template,

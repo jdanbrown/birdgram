@@ -17,20 +17,20 @@
     outline: none;
   }
 
-  input.species { width: 5ex; }
-  input.num { width: 2ex; }
+  input.num       { width: 2ex; }
+  input.species   { width: 5ex; }
+  input.quality   { width: 2ex; }
+  input.num.xc_id { width: 6ex; }
 
 }
 
-table {
-  border-collapse: collapse;
-  border-spacing: 0;
-
-  tr {
+#main {
+  table {
+    border: 0;
 
     th, td {
-      padding: 0;
-      text-align: center;
+      border: 0px solid black;
+      border-width: 1px 0;
 
       img {
         display: block; // Else 4px extra height from display:inline
@@ -38,6 +38,19 @@ table {
 
     }
 
+  }
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+
+  tr {
+    th, td {
+      padding: 0 5px;
+      text-align: center;
+      white-space: nowrap;
+    }
   }
 
 }

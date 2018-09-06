@@ -899,17 +899,26 @@ def _inspect_xc_raw_recs(xc_raw_recs: DF) -> DF:
 def xc_raw_recs_to_xc_recs(
     xc_raw_recs: DF,
     projection: 'Projection',
+    audio=True,
+    feat=True,
+    spectro=True,
 ) -> DF:
     log.info('[3/3 slowest] Featurizing xc_raw_recs -> xc_recs (.audio, .feat, .spectro)...')
     # Featurize: .audio, .feat, .spectro (slowest)
     #   - NOTE .spectro is heavy: 3.1gb for 2167 dan4 recs
     xc_recs = (xc_raw_recs
         # .audio
-        .assign(audio=lambda df: projection.features.load.audio(df, scheduler='threads'))
+        .pipe(lambda df: df if not audio else (df
+            .assign(audio=lambda df: projection.features.load.audio(df, scheduler='threads'))
+        ))
         # .feat
-        .pipe(projection.transform)
+        .pipe(lambda df: df if not feat else (df
+            .pipe(projection.transform)
+        ))
         # .spectro
-        .pipe(_recs_add_spectro, projection.features, cache=True)
+        .pipe(lambda df: df if not spectro else (df
+            .pipe(_recs_add_spectro, projection.features, cache=True)
+        ))
         .pipe(df_reorder_cols, last=['audio', 'feat', 'spectro'])
     )
     assert {'audio', 'feat', 'spectro'} <= set(xc_recs.columns)

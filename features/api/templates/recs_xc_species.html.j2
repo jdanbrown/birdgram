@@ -1,5 +1,35 @@
 {% extends "recs.html.j2" %}
 
+{% block controls_table %}
+
+  <tr>
+    <td>host</td>
+    <td>species</td>
+    <td>quality</td>
+    <td>n_recs</td>
+    <td>scale</td>
+    <td>thumb_s</td>
+    <td>audio_s</td>
+  </tr>
+
+  <tr>
+    <td><a class="control" href="//{{ switch_host_host() }}{{ request.full_path }}">{{ switch_host_text() }}</a></td>
+    <td><input type="text" data-arg="species" class="control text species" value="{{ query_get('species', '') }}"
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+    /></td>
+    <td><input type="text" data-arg="quality" class="control text quality" value="{{ query_get('quality', 'ab') }}"
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+    /></td>
+    <td><input type="text" data-arg="n_recs"  class="control num n_recs"   value="{{ query_get('n_recs', 10) }}" /></td>
+    <td><input type="text" data-arg="scale"   class="control num scale"    value="{{ query_get('scale', 2) }}" /></td>
+    <td><input type="text" data-arg="thumb_s" class="control num thumb_s"  value="{{ query_get('thumb_s', 0) }}" /></td>
+    <td><input type="text" data-arg="audio_s" class="control num audio_s"  value="{{ query_get('audio_s', 5) }}" /></td>
+  </tr>
+
+{% endblock %}
+
 {% block body %}
+
   {{ body_html | safe }}
+
 {% endblock %}
