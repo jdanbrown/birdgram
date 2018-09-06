@@ -1,14 +1,20 @@
 import inspect
+import pdb
 import traceback
 from typing import Callable, Sequence
+from urllib.parse import urlparse
 
+import flask
+from flask import current_app as app  # How to access app in a blueprint [https://stackoverflow.com/a/38262792/397334]
 from flask import Blueprint, redirect, render_template, request, Response
 from flask.json import jsonify
 from potoo.ipython import ipy_formats, ipy_formats_to_html
 from potoo.util import ensure_endswith
 import structlog
+import werkzeug
 
 import api.recs
+from api.util import *
 from util import *
 
 log = structlog.get_logger(__name__)
@@ -57,6 +63,66 @@ def recs_xc_similar():
         api.recs.xc_similar_html,
         request.args,
     ))
+
+
+#
+# Cross cutting
+#
+
+
+# Disable caching for computed responses
+#   - For /static, see config['SEND_FILE_MAX_AGE_DEFAULT'] in create_app
+@bp.after_request
+def add_headers_no_caching(rep):
+    rep.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    rep.headers['Pragma'] = 'no-cache'
+    rep.headers['Expires'] = '0'
+    return rep
+
+
+@bp.app_template_global()
+def query_with(**kwargs) -> str:
+    return werkzeug.urls.url_encode({
+        **request.args,
+        **kwargs,
+    })
+
+
+@bp.app_template_global()
+def query_get(k: str, default: any = None) -> dict:
+    return request.args.get(k, default)
+
+
+@bp.app_template_global()
+def go_local_remote_host() -> dict:
+    if urlparse(request.url).netloc == config.hosts.prod:
+        return config.hosts.local
+    else:
+        return config.hosts.prod
+
+
+@bp.app_template_global()
+def go_local_remote_text() -> dict:
+    if urlparse(request.url).netloc == config.hosts.prod:
+        return 'L'
+    else:
+        return 'R'
+
+
+@bp.errorhandler(Exception)
+def handle_exception(e):
+
+    # Break into debugger if $PDB is truthy
+    if app.config['PDB']:
+        pdb.post_mortem(e.__traceback__)
+
+    # Translate all exceptions to an http response
+    if not isinstance(e, ApiError):
+        e = ApiError(status_code=500, msg=str(e))
+    rep = jsonify(dict(error=e.msg, **e.kwargs))
+    rep.status_code = e.status_code
+
+    return rep
 
 
 #
@@ -160,7 +226,10 @@ def jsonify_df(df) -> Response:
 
 def htmlify_df(template: str, df) -> str:
     # disp_html = ipy_formats_to_html(df)  # XXX This doesn't know df_cell's
-    disp_html = ipy_formats._format_df(df, mimetype='text/html')  # HACK Promote this from private (and rename?)
+    disp_html = ipy_formats._format_df(df, mimetype='text/html',  # HACK Promote this from private (and rename?)
+        index=False,
+        header=False,
+    )
     return htmlify_html(
         template=template,
         body_html=disp_html,

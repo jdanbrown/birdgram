@@ -9,6 +9,11 @@ config = AttrDict(
 
     role=role,
 
+    hosts=dict(
+        prod='35.230.68.91',
+        local='192.168.0.195:8000',
+    ),
+
     audio_to_url = dict(
         url_type={
             # Tradeoffs:

@@ -13,9 +13,8 @@ export FLASK_ENV=production
 
 cmd=(
   gunicorn
-    --workers    4
-    # --bind       0.0.0.0:8000
-    --bind       0.0.0.0:80
+    --workers    "${WORKERS:-4}"
+    --bind       0.0.0.0:"${PORT:-80}"
     --timeout    60
     --log-config logging.conf
     api.main:app

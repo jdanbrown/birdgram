@@ -24,9 +24,11 @@ log = structlog.get_logger(__name__)
 class _sg:
 
     def init(self, app):
-        log.info('init')
-        self.__dict__.update(sg_load.load())
-        log.info('init:done')
+        if not hasattr(self, '_init_done'):
+            log.info('init')
+            self.__dict__.update(sg_load.load())
+            log.info('init:done')
+            self._init_done = True
 
 
 # WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:

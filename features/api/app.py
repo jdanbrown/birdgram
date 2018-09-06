@@ -30,6 +30,8 @@ def create_app(
 
     # Config [TODO -> config-*.yaml]
     # app.config['EXPLAIN_TEMPLATE_LOADING'] = True  # Debug
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for /static (for computed responses, see api.routes)
+    app.config['PDB'] = os.environ.get('PDB')
 
     # log.info('load_config', config_yaml=config_yaml)
     # with open(config_yaml) as f:

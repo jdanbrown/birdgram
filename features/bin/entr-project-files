@@ -3,10 +3,12 @@
 find_args=(
   -type f
   -name '*.py' -o
-  -name '*.j2' -o
-  -name '*.html' -o
-  -name '*.js' -o
-  -name '*.css' -o
-  -name 'xxx-trailing-comma'
+  # Don't restart server on changes in /static
+  # -name '*.j2' -o
+  # -name '*.html' -o
+  # -name '*.js' -o
+  # -name '*.css' -o
+  # -name '*.less' -o
+  -name 'dummy-trailing-comma'
 )
 exec find "${find_args[@]}" | entr "$@"
