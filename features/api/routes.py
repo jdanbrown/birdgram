@@ -117,16 +117,21 @@ def handle_exception(e):
     if app.config['PDB']:
         pdb.post_mortem(e.__traceback__)
 
-    log.debug('handle_exception', e=e)
-    traceback.print_exception(None, e, e.__traceback__)
-
     # Translate all exceptions to an http response
-    if not isinstance(e, ApiError):
-        e = ApiError(status_code=500, msg=str(e))
-    rep = jsonify(dict(error=e.msg, **e.kwargs))
-    rep.status_code = e.status_code
+    #   - XXX Disables the flask browser debugger, which seems to be the best way to debug
+    # log.debug('handle_exception', e=e)
+    # traceback.print_exception(None, e, e.__traceback__)
+    # if not isinstance(e, ApiError):
+    #     e = ApiError(status_code=500, msg=str(e))
 
-    return rep
+    # Translate ApiError's into http responses
+    #   - TODO Merge ResponseStatusException (old style, below) with ApiError (new style, used e.g. in api.recs)
+    if isinstance(e, ApiError):
+        rep = jsonify(dict(error=e.msg, **e.kwargs))
+        rep.status_code = e.status_code
+        return rep
+    else:
+        raise e
 
 
 #

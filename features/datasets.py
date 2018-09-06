@@ -815,6 +815,14 @@ def xc_meta_to_xc_raw_recs(
         .join(how='left', other=(xc_meta
             .set_index('id')
             .drop(columns=['species', 'sci_name', 'com_name'])
+            # Clean (e.g. nan's from empty page.html files, of which there are only ~2/130K)
+            #   - TODO Seems like a generic concern, push upstream?
+            .fillna({
+                'remarks': '',
+            })
+            .pipe(df_col_map,
+                background=lambda xs: [] if not can_iter(xs) and pd.isnull(xs) else xs,
+            )
             # TODO Push upstream
             .assign(
                 state_only=lambda df: df.locality.str.split(', ').str[-1],

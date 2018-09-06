@@ -48,13 +48,14 @@ def xc_species_html(
         [lambda df: df.quality.isin(quality)]
         .sort_index(ascending=True)  # This is actually descending... [why?]
         [:n_recs]
-        .pipe(recs_featurize, thumb_s=thumb_s, audio_s=audio_s, scale=scale)
         .reset_index()
+        .pipe(recs_featurize, thumb_s=thumb_s, audio_s=audio_s, scale=scale)
         .pipe(recs_view)
-        [lambda df: [
-            'xc_id', 'similar', 'species', 'quality',
-            *[c for c in ['thumb', 'micro'] if c in df]
-        ]]
+        [lambda df: [c for c in [
+            'xc_id', 'similar', 'com_name', 'species', 'quality',
+            'thumb', 'micro',
+            'duration_s', 'month_day', 'background_species', 'place', 'remarks',
+        ] if c in df]]
     )
 
 
@@ -73,9 +74,9 @@ def xc_similar_html(
     quality  = quality or 'ab'
     quality  = [q.upper() for q in quality]
     quality  = [{'N': 'no score'}.get(q, q) for q in quality]
-    n_sp     = n_sp     and np.clip(n_sp,     0,  50)
-    n_recs_r = n_recs_r and np.clip(n_recs_r, 0,  1000)
-    n_total  = n_total  and np.clip(n_total,  0,  100)
+    n_sp     = n_sp     and np.clip(n_sp,     0,  None)  # TODO Try unlimited (was: 50)
+    n_recs_r = n_recs_r and np.clip(n_recs_r, 0,  None)  # TODO Try unlimited (was: 1000)
+    n_total  = n_total  and np.clip(n_total,  0,  None)  # TODO Try unlimited (was: 100)
     thumb_s  = thumb_s  and np.clip(thumb_s,  0,  10)
     audio_s  = audio_s  and np.clip(audio_s,  0,  30)
     scale    = scale    and np.clip(scale,    .5, 10)
@@ -102,8 +103,10 @@ def xc_similar_html(
         [lambda df: df.quality.isin(quality)]
         .pipe(df_remove_unused_categories)
         # Sample n_recs_r per species
-        .groupby('species').apply(lambda g: (g
-            .sample(n=n_recs_r)  # TODO HACK Sample to make go faster, until we build up a full cache
+        .pipe(lambda df: df if n_recs_r is None else (df
+            .groupby('species').apply(lambda g: (g
+                .sample(n=n_recs_r, random_state=0)  # TODO HACK Sample to make go faster, until we build up a full cache
+            ))
         ))
         .reset_index(level=0, drop=True)  # species, from groupby
         # Featurize
@@ -140,14 +143,12 @@ def xc_similar_html(
         .reset_index()
         .pipe(recs_featurize, thumb_s=thumb_s, audio_s=audio_s, scale=scale)
         .pipe(recs_view)
-        [lambda df: [
-            'dist', 'xc_id', 'similar', 'species', 'quality',
-            *[c for c in ['thumb', 'micro'] if c in df],
-            'month_day', 'background_species', 'place', 'remarks',
-        ]]
-        .pipe(df_col_map,
-            background_species=lambda xs: ', '.join(xs),
-        )
+        [lambda df: [c for c in [
+            'dist',
+            'xc_id', 'similar', 'com_name', 'species', 'quality',
+            'thumb', 'micro',
+            'duration_s', 'month_day', 'background_species', 'place', 'remarks',
+        ] if c in df]]
     )
 
 
@@ -198,12 +199,12 @@ def recs_view(
     return (recs
         .pipe(lambda df: df if 'xc_id' not in df else (df
             .assign(
-                # [TODO Clean up: Have to do .similar before .xc_id, since we mutate .xc_id]
+                # TODO Simplify: Have to do .similar before .xc_id, since we mutate .xc_id
                 similar=lambda df: df_map_rows(df, lambda row: f'''
                     <a href="/recs/xc/similar?xc_id={row.xc_id}">similar</a>
                 '''),
                 xc_id=lambda df: df_map_rows(df, lambda row: f'''
-                    <a href="https://www.xeno-canto.org/{row.xc_id}">XC</a>
+                    <a href="https://www.xeno-canto.org/{row.xc_id}">{row.xc_id}</a>
                 '''),
             )
         ))
@@ -212,10 +213,22 @@ def recs_view(
                 'species_com_name': 'com_name',
             })
             .assign(
+                # species=lambda df: df_map_rows(df, lambda row: f'''
+                #     <a href="/recs/xc/species?species={row.species}">{row.species}</a> <br/>
+                #     <a href="/recs/xc/species?species={row.species}">{row.com_name}</a>
+                # '''),
+                # TODO Simplify: Have to do .com_name before .species, since we mutate .species
+                com_name=lambda df: df_map_rows(df, lambda row: f'''
+                    <a href="/recs/xc/species?species={row.species}">{row.com_name}</a>
+                '''),
                 species=lambda df: df_map_rows(df, lambda row: f'''
-                    <a href="/recs/xc/species?species={row.species}">{row.com_name}</a> <br/>
                     <a href="/recs/xc/species?species={row.species}">{row.species}</a>
                 '''),
+            )
+        ))
+        .pipe(lambda df: df if 'background_species' not in df else (df
+            .pipe(df_col_map,
+                background_species=lambda xs: ', '.join(xs),
             )
         ))
     )
