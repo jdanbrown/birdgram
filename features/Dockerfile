@@ -23,6 +23,15 @@ RUN apt-get update \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
+# Install add-apt-repository
+# - TODO Merge into previous apt-get install
+# - TODO Tested, but ended up not needing yet
+# RUN apt-get update \
+#  && apt-get install -yq --no-install-recommends \
+#       software-properties-common \
+#  && apt-get clean \
+#  && rm -rf /var/lib/apt/lists/*
+
 # locale
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
  && locale-gen
@@ -119,14 +128,49 @@ RUN echo "deb http://packages.cloud.google.com/apt $GCSFUSE_REPO main" | tee '/e
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-# Install ffmpeg + libmp3lame
-# - conda-forge has an ffmpeg package, but it doesn't include libmp3lame (for pydub .export(format='mp3'))
+# Install ffmpeg with: mp3, aac/mp4/m4a, opus, vorbis/ogg
+# - TODO Move up to right above "headstart" [after our ffmpeg needs stabilize]
+# - Docs
+#   - https://trac.ffmpeg.org/wiki/CompilationGuide
+#   - https://trac.ffmpeg.org/wiki/CompilationGuide/Generic
+#   - https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu
+# - Example Dockerfile's
+#   - https://github.com/jrottenberg/ffmpeg
+# - Reference for ./configure flags
+#   - https://github.com/FFmpeg/FFmpeg/blob/master/configure
+ENV FFMPEG_VERSION=4.0.2
+RUN mkdir -p /usr/local/src \
+ && wget "http://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.gz" -P /tmp \
+ && tar xzvf "/tmp/ffmpeg-$FFMPEG_VERSION.tar.gz" -C /usr/local/src
 RUN apt-get update \
  && apt-get install -yq --no-install-recommends \
-      ffmpeg \
+      yasm \
+      libmp3lame-dev \
+      libfdk-aac-dev \
+      libopus-dev \
+      libvorbis-dev \
  && apt-get clean \
- && rm -rf /var/lib/apt/lists/* \
- && ffmpeg -version 2>&1 | grep libmp3lame
+ && rm -rf /var/lib/apt/lists/*
+RUN cd "/usr/local/src/ffmpeg-$FFMPEG_VERSION" \
+ && PKG_CONFIG_PATH="/usr/local/src/ffmpeg-$FFMPEG_VERSION/lib/pkgconfig" ./configure \
+      --prefix="/usr/local" \
+      --pkg-config-flags="--static" \
+      --extra-cflags="-I$/usr/local/include" \
+      --extra-ldflags="-L/usr/local/lib" \
+      --bindir="/usr/local/bin" \
+      --enable-pthreads \
+      --enable-hardcoded-tables \
+      --enable-gpl \
+      --enable-version3 \
+      --enable-nonfree \
+      --disable-libxcb \
+      --enable-libmp3lame \
+      --enable-libfdk-aac \
+      --enable-libopus \
+      --enable-libvorbis \
+ && make -j all \
+ && make -j install \
+ && make -j distclean
 
 # conda/pip/R reqs (part 1/2, "headstart")
 # - Use `-n base` to install into the global ("base") conda env instead of the one named in env.yml (bubo-features)
@@ -173,6 +217,11 @@ ENV MATPLOTLIBRC="/root/.matplotlib"
 # - TODO Do this manually when running anything `jupyter ...`
 # ENTRYPOINT ["tini", "-g", "--"]
 
+# XXX Too noisy when we run `docker build` in the inner dev loop
+# Show the /app files we've packaged (e.g. in case we omitted any)
+# - `-I data` so we don't unroll all of s3://bubo-data via gcsfuse... [XXX which isn't mounted in Dockerfile anymore]
+# RUN tree -Fa -I data
+
 # App code
 # - Do this last for fast dev cycle
 # - (See .dockerignore for exclusions)
@@ -182,8 +231,3 @@ COPY . ./
 
 # Warm various caches at build time to speed up app startup at runtime
 RUN python buildtime_warm_caches.py
-
-# XXX Too noisy when we run `docker build` in the inner dev loop
-# Show the /app files we've packaged (e.g. in case we omitted any)
-# - `-I data` so we don't unroll all of s3://bubo-data via gcsfuse... [XXX which isn't mounted in Dockerfile anymore]
-# RUN tree -Fa -I data
