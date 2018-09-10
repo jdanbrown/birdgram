@@ -68,6 +68,7 @@ def xc_similar_html(
     thumb_s: float = 0,
     audio_s: float = 5,
     scale: float = 2,
+    **plot_many_kwargs,
 ) -> pd.DataFrame:
 
     # Params
@@ -84,7 +85,8 @@ def xc_similar_html(
     # Lookup query_rec from xc_meta
     query_rec = (sg.xc_meta
         [lambda df: df.id == xc_id]
-        .pipe(recs_featurize, spectro=False, thumb_s=None, audio_s=None, scale=1)
+        .pipe(recs_featurize_audio_meta)
+        .pipe(recs_featurize_audio_feat_spectro, audio=True, feat=True, spectro=False)
         .pipe(lambda df: one(df_rows(df)))
     )
 
@@ -105,12 +107,13 @@ def xc_similar_html(
         # Sample n_recs_r per species
         .pipe(lambda df: df if n_recs_r is None else (df
             .groupby('species').apply(lambda g: (g
-                .sample(n=n_recs_r, random_state=0)  # TODO HACK Sample to make go faster, until we build up a full cache
+                .sample(n=min(n_recs_r, len(g)), random_state=0)  # TODO HACK Sample to make go faster, until we build up a full cache
             ))
         ))
         .reset_index(level=0, drop=True)  # species, from groupby
         # Featurize
-        .pipe(recs_featurize, spectro=False, thumb_s=None, audio_s=None, scale=1)
+        .pipe(recs_featurize_audio_meta)
+        .pipe(recs_featurize_audio_feat_spectro, audio=True, feat=True, spectro=False)
         # Include query_rec in results (already featurized)
         .pipe(lambda df: df if query_rec.name in df.index else pd.concat([
             DF([query_rec]).pipe(df_set_index_name, 'xc_id'),  # Restore index name, lost by df->series->df
@@ -141,7 +144,8 @@ def xc_similar_html(
     # Featurize result_recs (.spectro) + view
     return (result_recs
         .reset_index()
-        .pipe(recs_featurize, thumb_s=thumb_s, audio_s=audio_s, scale=scale)
+        .pipe(recs_featurize_audio_feat_spectro, audio=False, feat=False, spectro=True)
+        .pipe(recs_featurize_thumb_micro, thumb_s=thumb_s, audio_s=audio_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view)
         [lambda df: [c for c in [
             'dist',
@@ -152,43 +156,101 @@ def xc_similar_html(
     )
 
 
+# TODO Sort out "audio metadata" vs. "xc_meta"
+#   - How about unify by folding audio metadata into xc_meta like page metadata?
+
+def _scratch():
+    # TODO Simplify: squash these duplicated abstractions
+
+    def recs_featurize(thumb_s, audio_s, scale):
+        def recs_featurize_audio_meta():
+            xc_meta_to_xc_raw_recs(sg.load)
+        def recs_featurize_audio_feat_spectro(audio=True, feat=True, spectro=True):
+            xc_raw_recs_to_xc_recs(sg.projection, audio, feat, spectro)
+        def recs_featurize_thumb_micro(thumb_s, audio_s, scale, **plot_many_kwargs):
+            df_cell_spectros(plot_thumb.many, sg.features, thumb_s, scale, **plot_many_kwargs)
+            df_cell_spectros(plot_spectro_micro.many, sg.features, audio_s, scale, **plot_many_kwargs)
+
+    def load_xc_recs(projection, **filters):
+        def load_xc_meta(**filters):
+            xc_meta = xc.metadata[filters]
+        def xc_meta_to_xc_raw_recs(load):
+            xc_paths = xc_meta.map(...)
+            xc_raw_recs = (
+                load.recs(xc_paths)
+                .join(xc_meta.pipe(clean))
+            )
+        def xc_raw_recs_to_xc_recs(projection):
+            xc_recs = xc_raw_recs.assign(
+                audio=load.audio(...),
+                feat=projection.transform,
+                spectro=features.spectro,
+            )
+
 def recs_featurize(
     recs: pd.DataFrame,
     thumb_s: float,
     audio_s: float,
     scale: float,
+    **plot_many_kwargs,
+) -> pd.DataFrame:
+    return (recs
+        .pipe(recs_featurize_audio_meta)
+        .pipe(recs_featurize_audio_feat_spectro)
+        .pipe(recs_featurize_thumb_micro, thumb_s=thumb_s, audio_s=audio_s, scale=scale, **plot_many_kwargs)
+    )
+
+
+# TODO How to make more lightweight?
+def recs_featurize_audio_meta(recs: pd.DataFrame) -> pd.DataFrame:
+    """Featurize: Add audio metadata (not .audio) <- xc_meta"""
+    return (recs
+        .pipe(xc_meta_to_xc_raw_recs, load=sg.load)
+    )
+
+
+# TODO How to make more lightweight?
+def recs_featurize_audio_feat_spectro(
+    recs: pd.DataFrame,
     audio=True,
     feat=True,
     spectro=True,
 ) -> pd.DataFrame:
-    plot_many_kwargs = dict(
-        scale=dict(h=int(40 * scale)),  # Best if h is multiple of 40 (because of low-level f=40 in Melspectro)
-        progress=dict(use='dask', scheduler='threads'),  # threads > sync, threads >> processes
-        _nocache=True,  # Dev: disable plot_many cache since it's blind to most of our sub-many code changes [TODO Revisit]
-    )
+    """Featurize: Add .spectro, .feat <- .audio"""
     return (recs
-        # Heavy: .audio, .spectro, .feat [How to make these more lightweight?]
-        .pipe(lambda df: df if df.get('audio', pd.Series()).notnull().any() else (df
-            .pipe(xc_meta_to_xc_raw_recs, load=sg.load)
-        ))
-        # TODO Complexify: feat,spectro = False,False / True,False / True,True
-        .pipe(lambda df: df if df.get('spectro', pd.Series()).notnull().any() else (df
-            # TODO HACK Workaround bug
-            #   - In server, .spectro column is present but all nan, which breaks downstream
-            #   - In notebook, works fine
-            #   - Workaround: force-drop a .spectro column if present
-            #   - Tech debt: Not general, very error prone -- e.g. does this affect .feat? .audio?
-            .drop(columns=['spectro'], errors='ignore')
-            .pipe(xc_raw_recs_to_xc_recs, projection=sg.projection, audio=audio, feat=feat, spectro=spectro)
-        ))
+        # TODO HACK Workaround bug
+        #   - In server, .spectro column is present but all nan, which breaks downstream
+        #   - In notebook, works fine
+        #   - Workaround: force-drop a .spectro column if present
+        #   - Tech debt: Not general, very error prone -- e.g. does this affect .feat? .audio?
+        .drop(columns=['spectro'], errors='ignore')
+        .pipe(xc_raw_recs_to_xc_recs, projection=sg.projection, audio=audio, feat=feat, spectro=spectro)
+    )
+
+
+def recs_featurize_thumb_micro(
+    recs: pd.DataFrame,
+    thumb_s: float,
+    audio_s: float,
+    scale: float,
+    **plot_many_kwargs,
+) -> pd.DataFrame:
+    """Featurize: Add .thumb, .micro <- .spectro, .audio"""
+    plot_many_kwargs = {
+        **plot_many_kwargs,
+        'scale': dict(h=int(40 * scale)),  # Best if h is multiple of 40 (because of low-level f=40 in Melspectro)
+        'progress': dict(use='dask', scheduler='threads'),  # threads > sync, threads >> processes
+        '_nocache': True,  # Dev: disable plot_many cache since it's blind to most of our sub-many code changes [TODO Revisit]
+    }
+    return (recs
         # Clip .audio/.spectro to thumb_s/audio_s
         .pipe(df_assign_first, **{
-            **({} if not thumb_s else {
-                'thumb': df_cell_spectros(plot_thumb.many, sg.features, thumb_s=thumb_s, **plot_many_kwargs),
-            }),
-            **({} if not audio_s else {
-                'micro': df_cell_spectros(plot_spectro_micro.many, sg.features, wrap_s=audio_s, **plot_many_kwargs),
-            }),
+            **({} if not thumb_s else dict(
+                thumb=df_cell_spectros(plot_thumb.many, sg.features, thumb_s=thumb_s, **plot_many_kwargs),
+            )),
+            **({} if not audio_s else dict(
+                micro=df_cell_spectros(plot_spectro_micro.many, sg.features, wrap_s=audio_s, **plot_many_kwargs),
+            )),
         })
     )
 

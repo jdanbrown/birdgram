@@ -42,6 +42,7 @@ import numpy as np
 import pandas as pd
 import PIL
 import potoo
+from potoo.debug_print import *
 from potoo.ipython import *
 from potoo.numpy import *
 from potoo.pandas import *

@@ -799,6 +799,7 @@ def xc_meta_to_xc_raw_recs(
     xc_paths_dump_path=None,  # When uncached, helpful to run load.recs in a terminal (long running and verbose)
 ) -> DF:
     log.info('[2/3 slower] Loading xc.metadata -> xc_raw_recs (.audio, more metadata)...')
+    assert 'duration_s' not in xc_meta  # TODO Make this function idempotent (currently, barfs on non-obvious errors)
     xc_paths = [
         ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
         for row in df_rows(xc_meta)
@@ -917,7 +918,7 @@ def xc_raw_recs_to_xc_recs(
     xc_recs = (xc_raw_recs
         # .audio
         .pipe(lambda df: df if not audio else (df
-            .assign(audio=lambda df: projection.features.load.audio(df, scheduler='threads'))
+            .assign(audio=lambda df: projection.features.load.audio(df, scheduler='threads'))  # (procs barfs on serdes error)
         ))
         # .feat
         .pipe(lambda df: df if not feat else (df

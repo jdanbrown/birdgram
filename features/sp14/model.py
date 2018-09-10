@@ -264,14 +264,6 @@ class Features(DataclassConfig):
     # Util
     #
 
-    def with_audio(self, rec: Row, f: Callable[[Audio], Audio], id=None, **kwargs) -> Row:
-        """Transforms .audio, recomputes .spectro (with denoise)"""
-        return self._edit(rec,
-            audio_f=lambda rec, audio: f(audio),
-            spectro_f=lambda rec, spectro: self._spectro(rec, **kwargs),
-            id=id,
-        )
-
     def slice_audio(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
         """Slices .audio, recomputes .spectro (with denoise)"""
         start_ms = None if start_s is None else int(start_s * 1000)
@@ -295,6 +287,14 @@ class Features(DataclassConfig):
             # Stable rec.id (e.g. for caching)
             #   - Add '[start:end]' to mark the slice
             id='%s[%s:%s]' % (rec.id, start_ms, end_ms),
+        )
+
+    def with_audio(self, rec: Row, f: Callable[[Audio], Audio], id=None, **kwargs) -> Row:
+        """Transforms .audio, recomputes .spectro (with denoise)"""
+        return self._edit(rec,
+            audio_f=lambda rec, audio: f(audio),
+            spectro_f=lambda rec, spectro: self._spectro(rec, **kwargs),
+            id=id,
         )
 
     def _edit(
@@ -612,11 +612,6 @@ class Projection(DataclassConfig):
     # Util
     #
 
-    def with_audio(self, rec: Row, *args, **kwargs) -> Row:
-        """Transforms .audio, recomputes .spectro (with denoise), recomputes .feat"""
-        rec = self.features.with_audio(rec, *args, **kwargs)
-        return self._recompute_downstream_features(rec)
-
     def slice_audio(self, rec: Row, *args, **kwargs) -> Row:
         """Slices .audio, recomputes .spectro (with denoise), recomputes .feat"""
         rec = self.features.slice_audio(rec, *args, **kwargs)
@@ -625,6 +620,11 @@ class Projection(DataclassConfig):
     def slice_spectro(self, rec: Row, *args, **kwargs) -> Row:
         """Slices .spectro and .audio (as is, no new denoise), recomputes .feat"""
         rec = self.features.slice_spectro(rec, *args, **kwargs)
+        return self._recompute_downstream_features(rec)
+
+    def with_audio(self, rec: Row, *args, **kwargs) -> Row:
+        """Transforms .audio, recomputes .spectro (with denoise), recomputes .feat"""
+        rec = self.features.with_audio(rec, *args, **kwargs)
         return self._recompute_downstream_features(rec)
 
     def _recompute_downstream_features(self, rec: Row) -> Row:

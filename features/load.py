@@ -127,7 +127,7 @@ class Load(DataclassConfig):
         #   - Scheduler: [TODO Measure -- 'threads' is like the outcome, like n-1 of the rest]
         #   - Bottlenecks (no_dask): [TODO Measure]
         #   - TODO Revisiting with ~87k xc recs...
-        metadata = map_progress(self._metadata, df_rows(recs), desc='metadata',
+        metadata = map_progress(self._metadata, df_rows(recs), desc='audio_metadata',
             # [Local]
             use='dask', scheduler='threads',    # Optimal for 600 peterson recs on laptop
             # [Remote]
@@ -165,16 +165,16 @@ class Load(DataclassConfig):
             samples_n=len(samples),
         )
 
-    def audio_to_wav(self, recs: RecordingDF):
-        """Compute and save .wav files for recs (return nothing)"""
-        log('Load.audio_to_wav:in', **{
+    def audio_transcode(self, recs: RecordingDF, **audio_export_kwargs):
+        """Compute and transcode cache audio files for recs (return nothing)"""
+        log('Load.audio_transcode:in', **{
             'len(recs)': len(recs),
             'len(recs) per dataset': recs.dataset.value_counts().to_dict(),
         })
         # Precompute and filter out exists=True so we get a more accurate estimate of progress on the exists=False set
         recs = (recs
             .pipe(df_map_rows_progress, use='dask', scheduler='processes', f=lambda row: (
-                row.set_value('cache_path', self._cache_path(row.path))
+                row.set_value('cache_path', self._cache_path(row.path, **audio_export_kwargs))
             ))
             .pipe(df_map_rows_progress, use='dask', scheduler='threads', f=lambda row: (
                 row.set_value('exists', (Path(data_dir) / row.cache_path).exists())
@@ -182,10 +182,10 @@ class Load(DataclassConfig):
             [lambda df: ~df.exists]
         )
         # Convert recs to .wav (and return nothing)
-        self.audio(recs, load=False)
+        self.audio(recs, load=False, **audio_export_kwargs)
 
     @short_circuit(lambda self, recs, **kwargs: recs.get('audio'))
-    def audio(self, recs: RecordingDF, load=True, **kwargs) -> Column['Box[Optional[Audio]]']:
+    def audio(self, recs: RecordingDF, load=True, audio_export_kwargs=None, **progress_kwargs) -> Column['Box[Optional[Audio]]']:
         """.audio <- .path"""
         log('Load.audio:in', **{
             'len(recs)': len(recs),
@@ -200,27 +200,41 @@ class Load(DataclassConfig):
         #               1    0.060    0.060    0.845    0.845 <string>:1(<module>)
         #           61176    0.018    0.000    0.039    0.000 {built-in method builtins.isinstance}
         #             600    0.015    0.000    0.015    0.000 {built-in method io.open}
-        audio = map_progress(partial(self._audio, load=load), df_rows(recs), desc='audio', **{
-            **dict(
-                # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
-                # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # FIXME Quiet...
-                use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,
-            ),
-            **kwargs,
-        })
+        audio = map_progress(
+            partial(self._audio, load=load, **(audio_export_kwargs or {})),
+            df_rows(recs),
+            desc='audio',
+            **{
+                **dict(
+                    # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
+                    # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # FIXME Quiet...
+                    use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,
+                ),
+                **progress_kwargs,
+            },
+        )
         log('Load.audio:out', **{
             'len(audio)': len(audio),
         })
         return audio
 
-    @short_circuit(lambda self, rec, **kwargs: rec.get('audio'))
+    @short_circuit(lambda self, rec, **audio_export_kwargs: rec.get('audio'))
     # Caching doesn't help here, since our bottleneck is file read (.wav), which is also cache hit's bottleneck
     def _audio(
         self,
         rec: Row,  # .path is only required attr
+        cache=True,  # cache=False to skip caching a standardized .wav
         load=True,  # load=False if you just want to trigger lots of wav encodings
+        **audio_export_kwargs,
     ) -> 'Box[Optional[Audio]]':
         """audio <- .path, and (optionally) cache a standardized .wav for faster subsequent loads"""
+
+        audio_export_kwargs = audio_export_kwargs or dict(
+            format='wav',
+            # format='mp3', bitrate='32k',
+            # format='mp4', bitrate='32k', codec='aac',
+            # format='mp4', bitrate='32k', codec='libfdk_aac',
+        )
 
         path = rec.path
         c = self.audio_config
@@ -234,10 +248,11 @@ class Load(DataclassConfig):
         try:
 
             # Cache transcribed audio, if requested
-            if not c.cache_audio:
+            #   - (NOTE If you later want cache_path, it will be available as audio.path / rec.audio.unbox.path)
+            if not cache or not c.cache_audio:
                 cache_path = None
             else:
-                cache_path = self._cache_path(path)
+                cache_path = self._cache_path(path, **audio_export_kwargs)
                 if os.path.exists(cache_path):
                     # FIXME log.char might cause 'IOStream.flush timed out' errors in remote kernels (see cache.py)
                     # log.char('info', '•')
@@ -251,7 +266,7 @@ class Load(DataclassConfig):
                         sample_rate_Hz=c.sample_rate,
                         sample_width=c.sample_width_bit // 8,
                     )
-                    std_audio.export(ensure_parent_dir(cache_path), 'wav')
+                    std_audio.export(ensure_parent_dir(cache_path), **audio_export_kwargs)
                 path = cache_path
 
             # Caching aside, always load from disk for consistency
@@ -289,11 +304,16 @@ class Load(DataclassConfig):
 
             return audio
 
-    def _cache_path(self, path: str) -> str:
+    def _cache_path(self, path: str, **audio_export_kwargs) -> str:
         c = self.audio_config
-        rel_path_noext, _ext = os.path.splitext(os.path.relpath(path, data_dir))
-        params_id = f'{c.sample_rate}hz-{c.channels}ch-{c.sample_width_bit}bit'
-        return f'{cache_dir}/{params_id}/{rel_path_noext}.wav'
+        name, _ext = os.path.splitext(os.path.relpath(path, data_dir))
+        return audio_cache_path_for_params(
+            name=name,
+            frame_rate=c.sample_rate,
+            channels=c.channels,
+            sample_width=c.sample_width_bit // 8,
+            **audio_export_kwargs,
+        )
 
     # TODO Make our own Audio class to own .path (e.g. see gnarliness in util.audio_* and their tests)
     #   - TODO Dedupe vs. audio_ensure_persisted

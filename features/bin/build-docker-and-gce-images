@@ -76,7 +76,7 @@ atexit() {
     import pandas as pd
     print(
       pd.read_json(sys.stdin)
-      .sort_values('creationTimestamp')
+      .sort_values('creationTimestamp', ascending=False)
       [['diskSizeGb', 'creationTimestamp', 'name', 'family', 'status']]
       .to_string(index=False)
     )

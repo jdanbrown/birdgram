@@ -17,6 +17,7 @@ from typing import Iterable, Iterator, List, Mapping, Tuple, TypeVar, Union
 
 from attrdict import AttrDict
 import PIL
+from potoo import debug_print
 from potoo.pandas import df_ensure, df_summary
 from potoo.util import puts, singleton, strip_startswith, tap
 import tqdm
@@ -100,7 +101,7 @@ def touch_file(path):
 
 
 def mkdir_p(path):
-    os.system('mkdir -p %s' % shlex.quote(path))
+    os.system('mkdir -p %s' % shlex.quote(str(path)))
 
 
 def timed(f):
@@ -1221,6 +1222,7 @@ import yaml
 
 from config import config
 from constants import *
+from datatypes import Audio
 from log import log  # For export [TODO Update callers]
 
 
@@ -1283,6 +1285,28 @@ def xc_rec_str_line(rec, *_first, first=[], last=[], default=[
     return rec_str_line(rec, *_first, first=first, last=last, default=default)
 
 
+def text_bar(
+    size: float,
+    max: float = None,
+    norm: float = None,
+    side: Union['left', 'right'] = 'left',
+    full: str = '■',  # Good for drawing unbroken boxes
+    empty: str = '—',
+) -> str:
+    """Draw a text bar (motivated by rendering distances in dfs)"""
+    max = max or size
+    if norm:
+        size = size / max * norm
+        max = norm
+    fulls = full * int(round(size))
+    empties = empty * int(round(max - size))
+    if side == 'left':
+        return fulls + empties
+    else:
+        return empties + fulls
+
+
+# TODO Dedupe vs. Load._ergonomic_audio
 def rec_audio_ensure_persisted(rec: 'Recording', **kwargs) -> 'Recording':
     assert rec.id == rec.audio.unbox.name  # TODO Is this actually always true? (Load._ergonomic_audio, ...where else?)
     rec = rec.copy()  # Copy so we can mutate
@@ -1291,24 +1315,68 @@ def rec_audio_ensure_persisted(rec: 'Recording', **kwargs) -> 'Recording':
     return rec
 
 
-# TODO Dedupe here vs. Load._ergonomic_audio
-def audio_ensure_persisted(
-    audio: audiosegment.AudioSegment,
-    # Save as .mp3 instead of .wav for ~10x reduction in space
-    #   - Based on audio channels=1,sample_rate=22050 -> format='mp3',bitrate='128'
-    #   - The output .mp3 file reports bitrate=32, which I guess is because of channels=1,sample_rate=22050 vs. the
-    #     more typical channels=2,sample_rate=44100
-    # format='wav',
-    format='mp3', bitrate='128',
-    **kwargs,
-) -> audiosegment.AudioSegment:
-    if not getattr(audio, 'path', None):
-        path = (Path(audio_edits_dir) / audio.name).with_suffix('.' + format).relative_to(data_dir)
-        abs_path = Path(data_dir) / path
-        if not abs_path.exists():
-            audio.export(ensure_parent_dir(abs_path), format=format, bitrate=bitrate, **kwargs)
-        audio = audio_replace(audio, path=path)
+# TODO Dedupe vs. Load._ergonomic_audio
+def audio_ensure_persisted(audio, **audio_export_kwargs) -> Audio:
+
+    # TODO TODO Update defaults based on empirical measurements
+    #   - [x] Measure sizes
+    #   - [ ] Eval quality of the smaller sizes -- is 32k aac good enough quality for our needs?
+    audio_export_kwargs = audio_export_kwargs or dict(
+        # format='wav',
+        # format='mp3', bitrate='32k',
+        format='mp4', bitrate='32k', codec='aac',
+        # format='mp4', bitrate='32k', codec='libfdk_aac',
+    )
+
+    abs_path = Path(audio_cache_path(audio, **audio_export_kwargs))
+    audio = audio_replace(audio,
+        path=str(abs_path.relative_to(data_dir)),
+    )
+    if not abs_path.exists():
+        log.info(f'Persisting: {abs_path}')
+        audio.export(ensure_parent_dir(abs_path), **audio_export_kwargs)
+
     return audio
+
+
+def audio_cache_path(audio, **kwargs) -> str:
+    return audio_cache_path_for_params(
+        name=audio.name,
+        frame_rate=audio.frame_rate,
+        channels=audio.channels,
+        sample_width=audio.sample_width,
+        **kwargs,
+    )
+
+
+def audio_cache_path_for_params(
+    name: str,  # (Assume: audio.name same as rec.id)
+    frame_rate: int,
+    channels: int,
+    sample_width: int,
+    # **audio_export_kwargs: Single point of control that enforces the subset of audio.export(**kwargs) we accept
+    format: str,
+    bitrate: str = None,
+    codec: str = None,
+) -> str:
+    assert {
+        'wav': not bitrate and not codec,
+        'mp3': bitrate and not codec,
+        'mp4': bitrate and codec,
+    }[format], f'Invalid **audio_export_kwargs: {dict(format=format, bitrate=bitrate, codec=codec)}'
+    params_id = '-'.join([
+        f'{frame_rate}hz',
+        f'{channels}ch',
+        f'{sample_width * 8}bit',
+        *({
+            'wav': [],  # XXX Back compat
+            # 'wav': [format],  # TODO After renaming cache dirs on local + remote
+            'mp3': [format, bitrate],
+            'mp4': [format, codec, bitrate],
+        }[format]),
+    ])
+    ext = format  # Redundant, but helpful to external programs
+    return f'{cache_dir}/{params_id}/{name}.{ext}'
 
 
 # NOTE Thumbs are complete recs, so we can't just add a .thumb col to an existing recs...
@@ -1380,45 +1448,29 @@ def rec_thumb_with_start(
     return (thumb_start_s, thumb)
 
 
-def text_bar(
-    size: float,
-    max: float = None,
-    norm: float = None,
-    side: Union['left', 'right'] = 'left',
-    full: str = '■',  # Good for drawing unbroken boxes
-    empty: str = '—',
-) -> str:
-    """Draw a text bar (motivated by rendering distances in dfs)"""
-    max = max or size
-    if norm:
-        size = size / max * norm
-        max = norm
-    fulls = full * int(round(size))
-    empties = empty * int(round(max - size))
-    if side == 'left':
-        return fulls + empties
-    else:
-        return empties + fulls
+def audio_to_bytes(audio, **kwargs) -> bytes:
+    abs_path = Path(data_dir) / audio_ensure_persisted(audio, **kwargs).path
+    with open(abs_path, 'rb') as f:
+        return f.read()
 
 
-def audio_to_url(audio) -> str:
-    abs_path = Path(data_dir) / audio_ensure_persisted(audio).path
-    if config.audio_to_url.url_type == 'file':
+def audio_to_url(audio, url_type=None, **kwargs) -> str:
+    abs_path = Path(data_dir) / audio_ensure_persisted(audio, **kwargs).path
+    if (url_type or config.audio_to_url.url_type) == 'file':
         return 'file://%s' % urllib.parse.quote(str(abs_path),
             safe='/,:()[] ',  # Cosmetic: exclude known-safe chars ('?' is definitely _not_ safe, not sure what else...)
         )
-    elif config.audio_to_url.url_type == 'data':
-        with open(abs_path, 'rb') as f:
-            return 'data:%(mimetype)s;base64,%(base64)s' % dict(
-                mimetype=audio_mimetype_for_path(abs_path),
-                base64=base64.b64encode(f.read()).decode('ascii'),
-            )
+    elif (url_type or config.audio_to_url.url_type) == 'data':
+        return 'data:%(mimetype)s;base64,%(base64)s' % dict(
+            mimetype=audio_mimetype_for_path(abs_path),
+            base64=base64.b64encode(audio_to_bytes(audio, **kwargs)).decode('ascii'),
+        )
     else:
         raise ValueError('Unexpected config.audio_to_url.url_type: %s' % config.audio_to_url.url_type)
 
 
-def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='') -> str:
-    audio = audio_ensure_persisted(audio)
+def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='', **kwargs) -> str:
+    audio = audio_ensure_persisted(audio, **kwargs)
     return dedent_and_strip('''
         <audio class="bubo-audio" %(controls)s preload="%(preload)s" %(more_audio_attrs)s>
             <source type="%(type)s" src="%(src)s" />
@@ -1428,7 +1480,7 @@ def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='') -> 
         preload=preload,
         more_audio_attrs=more_audio_attrs,
         type=audio_mimetype_for_path(audio.path),
-        src=audio_to_url(audio),
+        src=audio_to_url(audio, **kwargs),
     )
 
 
@@ -1436,6 +1488,7 @@ def audio_mimetype_for_path(path) -> str:
     return {
         '.mp3': 'audio/mpeg',
         '.wav': 'audio/wav',
+        '.mp4': 'audio/mp4',
         # Add more as needed...
     }[Path(path).suffix]
 

@@ -4,7 +4,7 @@
 # TODO TODO Reconcile local vs. github
 # -e /Users/danb/hack/potoo
 # -e /Users/danb/hack/joblib
-git+https://github.com/jdanbrown/potoo.git@38c914f#egg=potoo
+git+https://github.com/jdanbrown/potoo.git@a9ec743#egg=potoo
 git+https://github.com/jdanbrown/joblib.git@9f7b8b8#egg=joblib
 
 attrdict==2.0.0
@@ -46,6 +46,7 @@ pp-ez==0.2.0
 pprintpp==0.3.0
 pprofile==1.11.0
 prettyprinter==0.14.0
+py-spy==0.1.4
 pyinstrument==2.0.2
 pytest==3.6.0
 pytest-watch==4.2.0
@@ -74,6 +75,9 @@ tqdm==4.23.4
 # flask
 flask==1.0.2
 gunicorn==19.9.0
+
+# sql
+sqlalchemy==1.2.11
 
 # pydub
 pydub==0.22.0
