@@ -26,6 +26,7 @@ import numpy as np
 from potoo.util import timed
 from scipy.stats import rankdata
 import sh
+import structlog
 import yaml
 
 from sklearn.base import BaseEstimator, clone, is_classifier
@@ -42,10 +43,11 @@ from sklearn.utils.deprecation import DeprecationDict
 from sklearn.metrics.scorer import _check_multimetric_scoring
 
 from cache import cache
-from log import log
 from proc_stats import ProcStats
 from sk_util import joblib_dumps
 from util import box, ensure_parent_dir, enumerate_with_n, model_stats, sha1hex
+
+log = structlog.get_logger(__name__)
 
 
 @cache(version=4)

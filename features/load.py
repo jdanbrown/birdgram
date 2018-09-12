@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import pandas as pd
 from potoo.pandas import requires_cols
 from potoo.util import or_else, round_sig, strip_startswith
+import structlog
 import tqdm
 
 from cache import cache
@@ -19,6 +20,8 @@ from datasets import audio_path_files, DATASETS, metadata_from_dataset
 from datatypes import Audio, Recording, RecordingDF
 import metadata
 from util import *
+
+log = structlog.get_logger(__name__)
 
 
 @dataclass

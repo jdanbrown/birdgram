@@ -9,7 +9,10 @@ import crayons
 from dataclasses import dataclass
 from potoo.dataclasses import DataclassUtil
 from potoo.util import AttrContext, singleton
+import structlog
 import yaml
+
+_log = structlog.get_logger(__name__)
 
 
 # WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
@@ -28,12 +31,16 @@ import yaml
 #
 @dataclass
 class Log(DataclassUtil, AttrContext):
-    """Simple, ad-hoc logging specialized for interactive usage"""
+    """
+    Simple, ad-hoc logging specialized for interactive usage
+    - Now slightly less ad-hoc! -- routing through our structlog logger (named _log).
+    """
 
     # TODO Throw this away and migrate to real logging! (e.g. structlog)
-    #   - Features I hesitate to throw away:
-    #       - Human-readable one-kwargs-per-line formatting -- should be able to replicate in structlog
-    #       - log.char -- might have to give this up one...
+    #   - Features to maintain in the migration:
+    #       - [x] Human-readable one-kwargs-per-line formatting -- should be able to replicate in structlog
+    #       - [ ] log.char (might have to give this one up...?)
+    #       - [ ] A context manager as a simple, local control for log level
 
     Level = int
     LevelLike = Union[str, Level]
@@ -55,16 +62,9 @@ class Log(DataclassUtil, AttrContext):
         if self._to_level(level) >= self._to_level(self.level):
             with self._lock:
                 self._to_state('line')
-                t = datetime.utcnow().isoformat()
-                t = t[:23]  # Trim micros, keep millis
-                t = t.split('T')[-1]  # Trim date for now, since we're primarily interactive usage
-                # Display timestamp + event on first line
-                print('[%s] %-5s  %s' % (t, self._format_level(level), event))
-                # Display each (k,v) pair on its own line, indented
-                for k, v in kwargs.items():
-                    v_yaml = yaml.safe_dump(json.loads(json.dumps(v)), default_flow_style=True, width=1e9)
-                    v_yaml = v_yaml.split('\n')[0]  # Handle documents ([1] -> '[1]\n') and scalars (1 -> '1\n...\n')
-                    print('  %s: %s' % (k, v_yaml))
+                if isinstance(level, str):
+                    level = getattr(logging, level.upper())
+                _log.log(level, event, **kwargs)
 
     # HACK HACK HACK Motivated by the '•'/'!' logging in our hacky fork of joblib.memory.MemorizedFunc
     def char(self, level: LevelLike, char: str):
@@ -106,3 +106,7 @@ class Log(DataclassUtil, AttrContext):
 
 # Workaround for @singleton (above)
 log = Log()
+
+
+# Expose old-style `char_log.char` for module that make their own new-style `log` and can't do `log.char` anymore
+char_log = log

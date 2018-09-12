@@ -16,6 +16,7 @@ from potoo.pandas import as_ordered_cat, df_ordered_cat, df_reorder_cols
 from potoo.util import or_else, strip_startswith
 import requests
 import requests_html
+import structlog
 from tqdm import tqdm
 
 from cache import cache
@@ -24,10 +25,11 @@ from constants import code_dir, data_dir, mul_species, no_species, unk_species, 
 from dataset.birdclef2015 import *  # For export
 from dataset.mlsp2013 import *  # For export
 from datatypes import Recording, RecordingDF
-from log import log
 import metadata
 from metadata import ebird  # For export
 from util import *
+
+log = structlog.get_logger(__name__)
 
 DATASETS = {
     'recordings': dict(

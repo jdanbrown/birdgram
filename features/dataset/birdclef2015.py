@@ -3,7 +3,6 @@ import pandas as pd
 
 from constants import *
 from datatypes import Recording, RecordingDF
-from log import log
 from util import *
 
 

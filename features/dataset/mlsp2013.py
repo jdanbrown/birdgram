@@ -4,7 +4,6 @@ import pandas as pd
 from potoo.pandas import df_reorder_cols
 
 from constants import *
-from log import log
 from util import *
 
 

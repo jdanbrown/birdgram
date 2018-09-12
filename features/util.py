@@ -764,8 +764,9 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from potoo.util import AttrContext, get_cols
+import structlog
 
-from log import log
+log = structlog.get_logger(__name__)
 
 X = TypeVar('X')
 

@@ -18,12 +18,15 @@ from potoo.pandas import df_reverse_cat, requires_cols
 from potoo.plot import *
 from potoo.util import timed
 import sklearn as sk
+import structlog
 from tqdm import tqdm
 
 from constants import artifact_dir, data_dir
 import geoh
 import metadata
 from util import *
+
+log = structlog.get_logger(__name__)
 
 
 # https://help.ebird.org/customer/portal/articles/1010553-understanding-the-ebird-bar-charts

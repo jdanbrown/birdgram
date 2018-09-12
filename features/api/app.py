@@ -44,6 +44,13 @@ def create_app(
     return app
 
 
+def check_deps():
+    """Raise if any deps aren't found"""
+    shell = lambda cmd: subprocess.check_call(cmd, shell=True)
+    shell('ffmpeg -version >/dev/null 2>&1')  # Is ffmpeg installed?
+    shell('ffmpeg -version 2>&1 | grep libmp3lame >/dev/null')  # Was ffmpeg built with libmp3lame?
+
+
 def init_potoo():
     """cf. notebooks/__init__.py"""
 
@@ -77,7 +84,8 @@ def init_logging(
             # structlog.processors.TimeStamper(fmt="iso"),  # In logging.conf
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer(serializer=json.dumps),
+            # structlog.processors.JSONRenderer(serializer=json.dumps),
+            BasicRenderer(),
         ],
         context_class             = structlog.threadlocal.wrap_dict(OrderedDict),
         logger_factory            = structlog.stdlib.LoggerFactory(),
@@ -89,8 +97,22 @@ def init_logging(
     log.info('init_logging', logging_conf=logging_conf)  # (Can't log before logging is configured)
 
 
-def check_deps():
-    """Raise if any deps aren't found"""
-    shell = lambda cmd: subprocess.check_call(cmd, shell=True)
-    shell('ffmpeg -version >/dev/null 2>&1')  # Is ffmpeg installed?
-    shell('ffmpeg -version 2>&1 | grep libmp3lame >/dev/null')  # Was ffmpeg built with libmp3lame?
+class BasicRenderer:
+    """
+    A basic alternative to structlog.processors.JSONRenderer/KeyValueRenderer
+    - Good for human readability
+    - Less good for structured processing
+    """
+
+    def __call__(self, logger, name, event_dict):
+        event = event_dict.pop('event', None)
+        data = None if not event_dict else (
+            # json.dumps(event_dict)
+            yaml.safe_dump(json.loads(json.dumps(event_dict)), default_flow_style=True, width=1e9).rstrip()
+            # *['%s=%s' % (k, v) for k, v in event_dict.items()]
+            # *['%s:%s' % (k, json.dumps(v)) for k, v in event_dict.items()]
+        )
+        return (
+            '%s %s' % (event, data) if data else
+            '%s' % event
+        )

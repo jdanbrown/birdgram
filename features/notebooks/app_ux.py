@@ -1,6 +1,10 @@
+import structlog
+
 from constants import *
 from datasets import _recs_add_spectro  # TODO Clean up this abstraction (and make it not private)
 from util import *
+
+log = structlog.get_logger(__name__)
 
 
 def load_app_recs(

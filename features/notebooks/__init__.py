@@ -1,5 +1,13 @@
+#
 # Before `import config`
-import os; os.environ['BUBO_ROLE'] = 'notebook'
+#
+
+import os
+os.environ['BUBO_ROLE'] = 'notebook'
+
+#
+# Imports (for export)
+#
 
 import calendar
 from collections import *
@@ -128,7 +136,7 @@ gc_on_ipy_post_run_cell()
 
 from api.app import *
 check_deps()
-# init_logging()  # TODO After migrating log.log to real logging
+init_logging()
 
 #
 # TODO Move these up into potoo or ~/.pythonrc
@@ -136,3 +144,11 @@ check_deps()
 
 if ipy:
     ipy.run_cell_magic('capture', '', '%xmode plain')
+
+#
+# Export the default log/char_log
+#   - WARNING Do this after all the other imports so that we don't export some other module's log
+#
+
+from log import char_log
+log = structlog.get_logger('notebooks')

@@ -54,6 +54,7 @@ import sklearn.ensemble
 import sklearn.multiclass
 import sklearn.pipeline
 import sklearn.naive_bayes
+import structlog
 import yaml
 import xgboost as xgb
 
@@ -70,6 +71,8 @@ from sp14.skm import SKM
 from util import *
 from viz import *
 import xgb_sklearn_hack
+
+log = structlog.get_logger(__name__)
 
 
 @dataclass
