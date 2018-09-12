@@ -4,6 +4,7 @@ import logging.config
 import os.path
 import subprocess
 
+from dataclasses import dataclass
 from flask import Flask
 from potoo.ipython import ipy_install_mock_get_ipython
 import structlog
@@ -94,9 +95,10 @@ def init_logging(
     )
 
     logging.config.fileConfig(logging_conf)
-    log.info('init_logging', logging_conf=logging_conf)  # (Can't log before logging is configured)
+    log.info(logging_conf=logging_conf)  # (Can't log before logging is configured)
 
 
+@dataclass
 class BasicRenderer:
     """
     A basic alternative to structlog.processors.JSONRenderer/KeyValueRenderer
@@ -104,7 +106,9 @@ class BasicRenderer:
     - Less good for structured processing
     """
 
+    # TODO Tightly coupled to the format string in logging.conf -- decouple these (will require lots of slog work)
     def __call__(self, logger, name, event_dict):
+
         event = event_dict.pop('event', None)
         data = None if not event_dict else (
             # json.dumps(event_dict)
@@ -112,7 +116,7 @@ class BasicRenderer:
             # *['%s=%s' % (k, v) for k, v in event_dict.items()]
             # *['%s:%s' % (k, json.dumps(v)) for k, v in event_dict.items()]
         )
-        return (
-            '%s %s' % (event, data) if data else
-            '%s' % event
-        )
+        msg = ' '.join(x for x in [event, data] if x is not None)
+        if msg:
+            msg = ': %s' % msg
+        return msg

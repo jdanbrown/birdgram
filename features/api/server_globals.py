@@ -25,9 +25,9 @@ class _sg:
 
     def init(self, app):
         if not hasattr(self, '_init_done'):
-            log.info('init')
+            log.info()
             self.__dict__.update(sg_load.load())
-            log.info('init:done')
+            log.info('done')
             self._init_done = True
 
 
@@ -67,7 +67,7 @@ class _sg_load(DataclassUtil):
     @classmethod
     @cache(version=0)
     def load_search(self):
-        log.info('load:search')
+        log.info()
         x = AttrDict()
         x.search = Search.load_v0(
             experiment_id=self.experiment_id,
@@ -85,7 +85,7 @@ class _sg_load(DataclassUtil):
     @classmethod
     @cache(version=0)
     def load_xc_meta(self):
-        log.info('load:xc_meta')
+        log.info()
         x = AttrDict()
         x.xc_meta, _recs_stats = load_xc_meta(
             countries_k=self.countries_k,
