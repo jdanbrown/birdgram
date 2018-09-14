@@ -9,13 +9,14 @@ from attrdict import AttrDict
 import audiosegment
 from dataclasses import dataclass
 import pandas as pd
+import parse
 from potoo.pandas import requires_cols
-from potoo.util import or_else, round_sig, strip_startswith
+from potoo.util import or_else, path_is_contained_by, round_sig, strip_startswith
 import structlog
 import tqdm
 
 from cache import cache
-from constants import cache_dir, data_dir, standard_sample_rate_hz
+from constants import cache_audio_dir, cache_dir, data_dir, standard_sample_rate_hz
 from datasets import audio_path_files, DATASETS, metadata_from_dataset
 from datatypes import Audio, Recording, RecordingDF
 import metadata
@@ -27,10 +28,22 @@ log = structlog.get_logger(__name__)
 @dataclass
 class Load(DataclassConfig):
 
-    channels: int = 1
+    should_transcode: bool = True
+    # Relevant iff should_transcode
     sample_rate: int = standard_sample_rate_hz
+    channels: int = 1
     sample_width_bit: int = 16
-    cache_audio: bool = True
+    # TODO Change default to something more space efficient?
+    #   - Goal: ~10x space savings with e.g. mp4 32k vs. wav (see notebooks/audio_codecs_data_volume)
+    #   - [ ] QA: Run a model comp for e.g. mp4 vs. wav, to ensure e.g. high-freq species aren't getting junked
+    #   - [ ] QA: Run a perf comp to ensure that loading metadata from e.g. mp4 vs. wav doesn't create a cpu bottleneck
+    format: str = 'wav'
+    bitrate: str = None
+    codec: str = None
+
+    # Disable if you want to be able to resample (hz,ch,bit) for files that we've already cached
+    #   - See usage below for details
+    fail_if_resample_cached_audio: bool = True
 
     @property
     def deps(self) -> AttrDict:
@@ -39,13 +52,16 @@ class Load(DataclassConfig):
     @property
     def audio_config(self) -> AttrDict:
         return AttrDict({k: v for k, v in self.config.items() if k in [
+            'should_transcode',
             'channels',
             'sample_rate',
             'sample_width_bit',
-            'cache_audio',
+            'format',
+            'bitrate',
+            'codec',
         ]})
 
-    @cache(version=1, key=lambda self, datasets=None, paths=None, *args, **kwargs: (
+    @cache(version=2, key=lambda self, datasets=None, paths=None, *args, **kwargs: (
         {k: DATASETS[k] for k in (datasets or [])},
         paths or self.recs_paths(datasets=datasets),
         args,
@@ -93,8 +109,7 @@ class Load(DataclassConfig):
         return RecordingDF([
             # Recording(...).asdict()  # XXX Bottleneck (xc)
             dict(
-                # id=os.path.splitext(path)[0],
-                id=path.rsplit('.', 1)[0],
+                id=path,
                 dataset=dataset,
                 path=path,
                 # filesize_b=os.path.getsize(path),  # XXX Bottleneck (xc) -- O(n) stat calls
@@ -117,14 +132,16 @@ class Load(DataclassConfig):
         'duration_s',
         'samples_mb',
         'samples_n',
+        'sample_rate',
+        'channels',
+        'sample_width_bit',
     ]
 
     @short_circuit(lambda self, recs: recs.get(self.METADATA))
     def metadata(self, recs: RecordingDF) -> RecordingDF:
         """.metadata <- .audio"""
-        log('Load.metadata:in', **{
+        log.info('in', **{
             'len(recs)': len(recs),
-            'len(recs) per dataset': recs.dataset.value_counts().to_dict(),
         })
         # Performance (600 peterson recs):
         #   - Scheduler: [TODO Measure -- 'threads' is like the outcome, like n-1 of the rest]
@@ -143,7 +160,7 @@ class Load(DataclassConfig):
         metadata = [x for x in metadata if x is not None]
         # Convert to df
         metadata = RecordingDF(metadata)
-        log('Load.metadata:out', **{
+        log.info('out', **{
             'sum(duration_h)': round_sig(metadata.duration_s.sum() / 3600, 3),
             'sum(samples_mb)': round_sig(metadata.samples_mb.sum(), 3),
             'sum(samples_n)': int(metadata.samples_n.sum()),
@@ -154,11 +171,11 @@ class Load(DataclassConfig):
     # Cache hit avoids loading audio (~1000x bigger: ~1MB audio vs. ~1KB metadata)
     # Avoid Series.get(cols): it returns nan for unknown cols instead of None overall (df.get(cols) gives None overall)
     @short_circuit(lambda self, rec: AttrDict(rec[self.METADATA]) if set(self.METADATA).issubset(rec.index) else None)
-    @cache(version=0, key=lambda self, rec: rec.id)
+    @cache(version=5, key=lambda self, rec: rec.id)
     def _metadata(self, rec: Row) -> AttrDict:
         """metadata <- .audio"""
-        audio = self._audio(rec)
-        audio = audio.unbox
+        # _audio_no_transcode because we want the metadata from the raw input file, not the standardized version
+        audio = self._audio_no_transcode(rec)  # Pull
         samples = audio.to_numpy_array()
         return AttrDict(
             **metadata_from_dataset(rec.id, rec.dataset),
@@ -166,178 +183,301 @@ class Load(DataclassConfig):
             duration_s=audio.duration_seconds,
             samples_mb=len(samples) * audio.sample_width / 1024**2,
             samples_n=len(samples),
+            sample_rate=audio.frame_rate,
+            channels=audio.channels,
+            sample_width_bit=audio.sample_width * 8,
         )
 
-    def audio_transcode(self, recs: RecordingDF, **audio_export_kwargs):
-        """Compute and transcode cache audio files for recs (return nothing)"""
-        log('Load.audio_transcode:in', **{
-            'len(recs)': len(recs),
-            'len(recs) per dataset': recs.dataset.value_counts().to_dict(),
-        })
-        # Precompute and filter out exists=True so we get a more accurate estimate of progress on the exists=False set
-        recs = (recs
-            .pipe(df_map_rows_progress, use='dask', scheduler='processes', f=lambda row: (
-                row.set_value('cache_path', self._cache_path(row.path, **audio_export_kwargs))
-            ))
-            .pipe(df_map_rows_progress, use='dask', scheduler='threads', f=lambda row: (
-                row.set_value('exists', (Path(data_dir) / row.cache_path).exists())
-            ))
-            [lambda df: ~df.exists]
-        )
-        # Convert recs to .wav (and return nothing)
-        self.audio(recs, load=False, **audio_export_kwargs)
+    # Performance (measured with .audio on 600 peterson recs):
+    #   - Scheduler: no_dask[.85s], synchronous[.93s], threads[.74s], processes[25s]
+    #   - Bottlenecks (no_dask):
+    #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    #             600    0.303    0.001    0.312    0.001 audio_segment.py:108(read_wav_audio)
+    #             600    0.170    0.000    0.170    0.000 {method 'read' of '_io.BufferedReader' objects}
+    #               1    0.060    0.060    0.845    0.845 <string>:1(<module>)
+    #           61176    0.018    0.000    0.039    0.000 {built-in method builtins.isinstance}
+    #             600    0.015    0.000    0.015    0.000 {built-in method io.open}
+    _audio_progress_kwargs = dict(
+        # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
+        # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # FIXME Too quiet...
+        use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,
+    )
 
     @short_circuit(lambda self, recs, **kwargs: recs.get('audio'))
-    def audio(self, recs: RecordingDF, load=True, audio_export_kwargs=None, **progress_kwargs) -> Column['Box[Optional[Audio]]']:
-        """.audio <- .path"""
-        log('Load.audio:in', **{
+    def audio(self, recs: RecordingDF, load=True, **progress_kwargs) -> RecordingDF:
+        """
+        .audio <- .path + metadata(hz,ch,bit)
+        - Returns rec where rec.id = rec.audio.unbox.name
+        """
+        log.info('in', **{
             'len(recs)': len(recs),
-            'len(recs) per dataset': recs.dataset.value_counts().to_dict(),
         })
-        # Performance (600 peterson recs):
-        #   - Scheduler: no_dask[.85s], synchronous[.93s], threads[.74s], processes[25s]
-        #   - Bottlenecks (no_dask):
-        #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-        #             600    0.303    0.001    0.312    0.001 audio_segment.py:108(read_wav_audio)
-        #             600    0.170    0.000    0.170    0.000 {method 'read' of '_io.BufferedReader' objects}
-        #               1    0.060    0.060    0.845    0.845 <string>:1(<module>)
-        #           61176    0.018    0.000    0.039    0.000 {built-in method builtins.isinstance}
-        #             600    0.015    0.000    0.015    0.000 {built-in method io.open}
         audio = map_progress(
-            partial(self._audio, load=load, **(audio_export_kwargs or {})),
+            partial(self._audio, load=load),
             df_rows(recs),
             desc='audio',
-            **{
-                **dict(
-                    # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
-                    # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # FIXME Quiet...
-                    use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,
-                ),
-                **progress_kwargs,
-            },
+            **(progress_kwargs or self._audio_progress_kwargs),
         )
-        log('Load.audio:out', **{
+        if load:
+            # Don't return recs.audio to the caller if load=False since it would be all None and recs.id would be stale
+            recs = recs.assign(
+                audio=box.many(audio),  # Box: AudioSegment is iterable so pd.Series/np.array try to flatten it
+            )
+            # Propagate audio.name (= path) to rec.id
+            recs = recs.assign(
+                id=lambda df: df.audio.map(lambda audio: audio.unbox.name),
+            )
+        log.info('out', **{
             'len(audio)': len(audio),
         })
-        return audio
+        return recs
 
-    @short_circuit(lambda self, rec, **audio_export_kwargs: rec.get('audio'))
-    # Caching doesn't help here, since our bottleneck is file read (.wav), which is also cache hit's bottleneck
+    @requires_cols('audio')  # No @short_circuit (our purpose is to re-encode the existing .audio)
+    def transcode_audio(self, recs: RecordingDF, load=True, **progress_kwargs) -> RecordingDF:
+        """
+        .audio <- .audio
+        - Returns recs where rec.id = rec.audio.unbox.name
+        - Returns recs.audio that have .name and ._data reflecting the transcoding
+        - Returns recs.audio that are persisted to file
+        """
+        log.info('in', **{
+            'len(recs)': len(recs),
+            'audio_config': self.audio_config,
+        })
+        audio = map_progress(
+            partial(self._transcode_audio, load=load),
+            recs.audio.map(unbox),
+            desc='transcode_audio',
+            **(progress_kwargs or self._audio_progress_kwargs),
+        )
+        if load:
+            # Don't return recs.audio to the caller if load=False since it would be all None and recs.id would be stale
+            recs = recs.assign(
+                audio=box.many(audio),  # Box: AudioSegment is iterable so pd.Series/np.array try to flatten it
+            )
+            # Propagate audio.name (= path) to rec.id
+            recs = recs.assign(
+                id=lambda df: df.audio.map(lambda audio: audio.unbox.name),
+            )
+        log.info('out', **{
+            'len(audio)': len(audio),
+            'audio_config': self.audio_config,
+        })
+        return recs
+
+    def _audio_no_transcode(self, rec: Row) -> Audio:
+        """
+        audio <- .path
+        - Load the raw, unstandardized input file at rec.path, instead of the usual standardized transcoded file
+        """
+        return self.replace(should_transcode=False)._audio(rec, load=True)
+
+    @short_circuit(lambda self, rec, **kwargs: rec.get('audio') and rec.audio.unbox)
+    # @cache-ing doesn't help here, since our bottleneck is file read (.wav), which is also cache hit's bottleneck [+ pkl!]
+    # @requires_cols('path', 'sample_rate', 'channels', 'sample_width_bit')  # TODO [Nope, see below]
     def _audio(
         self,
-        rec: Row,  # .path is only required attr
-        cache=True,  # cache=False to skip caching a standardized .wav
-        load=True,  # load=False if you just want to trigger lots of wav encodings
-        **audio_export_kwargs,
-    ) -> 'Box[Optional[Audio]]':
-        """audio <- .path, and (optionally) cache a standardized .wav for faster subsequent loads"""
-
-        audio_export_kwargs = audio_export_kwargs or dict(
-            format='wav',
-            # format='mp3', bitrate='32k',
-            # format='mp4', bitrate='32k', codec='aac',
-            # format='mp4', bitrate='32k', codec='libfdk_aac',
-        )
-
-        path = rec.path
+        rec: Row,
+        load=True,  # load=False if you just want to trigger lots of wav encodings and skip O(n) read ops
+    ) -> Optional[Audio]:
+        """
+        audio <- .path
+        - If self.should_transcode, also requires rec.{sample_rate,channels,sample_width_bit}
+        - If self.should_transcode, cache a standardized audio file for faster subsequent loads
+        - If load, returns audio where .name is both a stable id and path (relative to data_dir)
+        """
         c = self.audio_config
 
-        # Interpret relative paths as relative to data_dir (leave absolute paths as is)
-        if not os.path.isabs(path):
-            path = os.path.join(data_dir, path)
+        # Require path to be under data_dir
+        #   - Back compat: allow abs paths, and convert them to rel paths [XXX]
+        if Path(rec.path).is_absolute():
+            raise ValueError(f"rec.path[{rec.path}] must be relative to data_dir[{data_dir}]")
+        rec_abs_path = str(Path(data_dir) / rec.path)
+
+        # Audio: transcode + cache + load (if requested)
+        audio = None
+        try:
+            if c.should_transcode:
+                audio = self._transcode_path(rec, load=load)  # (Returns None if load=False)
+                # NOTE If load=False then audio is now None, which also means rec.id won't update in the caller
+            elif load:
+                audio = audio_from_file_in_data_dir(rec.path)
 
         # "Drop" audio files that fail during either transcription or normal load
         #   - TODO Find a way to minimize the surface area of exceptions that we swallow here. Currently huge and bad.
-        try:
-
-            # Cache transcribed audio, if requested
-            #   - (NOTE If you later want cache_path, it will be available as audio.path / rec.audio.unbox.path)
-            if not cache or not c.cache_audio:
-                cache_path = None
-            else:
-                cache_path = self._cache_path(path, **audio_export_kwargs)
-                if os.path.exists(cache_path):
-                    # FIXME log.char might cause 'IOStream.flush timed out' errors in remote kernels (see cache.py)
-                    # log.char('info', '•')
-                    pass
-                else:
-                    # log.char('info', '!')
-                    log(f'Caching: {cache_path}')
-                    in_audio = audiosegment.from_file(path)
-                    std_audio = in_audio.resample(
-                        channels=c.channels,
-                        sample_rate_Hz=c.sample_rate,
-                        sample_width=c.sample_width_bit // 8,
-                    )
-                    std_audio.export(ensure_parent_dir(cache_path), **audio_export_kwargs)
-                path = cache_path
-
-            # Caching aside, always load from disk for consistency
-            if load:
-                audio = audiosegment.from_file(path)
-            else:
-                audio = None
-
         except Exception as e:
             # "Drop" invalid audio files by replacing them with a 0s audio, so we can detect and filter out downstream
-            log('Load._audio: WARNING: Dropping invalid audio file', **dict(
+            log.warn('Dropping invalid audio file', **dict(
                 error=str(e),
                 dataset=rec.get('dataset'),
                 id=rec.get('id'),
-                path=rec.get('path'),
-                # filesize_b=rec.get('filesize_b'),
-                cache_in_path=path,
-                cache_in_path_exists=os.path.exists(path),
-                cache_in_filesize_b=or_else(None, lambda: os.path.getsize(path)),
-                cache_out_path=cache_path,
-                cache_out_path_exists=or_else(None, lambda: os.path.exists(cache_path)),
-                cache_out_filesize_b=or_else(None, lambda: os.path.getsize(cache_path)),
+                path=rec.path,
+                abs_path=rec_abs_path,
+                exists=Path(rec_abs_path).exists(),
+                filesize_b=or_else(None, lambda: Path(rec_abs_path).stat().st_size),
             ))
-            audio = audiosegment.empty()
-            audio.name = path
-            audio.seg.frame_rate = c.sample_rate
+            if load:
+                audio = audiosegment.empty()
+                audio.name = rec.path
+                audio.seg.frame_rate = c.sample_rate
 
-        if load:
+        # Integrity checks
+        if audio is not None:
+            assert audio_abs_path(audio).exists()
 
-            # Make audiosegment.AudioSegment attrs more ergonomic
-            audio = self._ergonomic_audio(audio)
+        return audio
 
-            # Box to avoid downstream pd.Series errors, since AudioSegment is iterable and np.array tries to flatten it
-            audio = box(audio)
-
-            return audio
-
-    def _cache_path(self, path: str, **audio_export_kwargs) -> str:
+    def _transcode_path(self, rec: Row, load=True) -> Optional[Audio]:
+        """
+        Transcode an audio path to a new file, as per our audio_config
+        - Minimize r/w ops, e.g. for efficient bulk usage
+        """
         c = self.audio_config
-        name, _ext = os.path.splitext(os.path.relpath(path, data_dir))
-        return audio_cache_path_for_params(
-            name=name,
-            frame_rate=c.sample_rate,
-            channels=c.channels,
-            sample_width=c.sample_width_bit // 8,
-            **audio_export_kwargs,
+        assert not Path(rec.path).is_absolute()
+
+        # HACK Mock an audio to detect cache hit vs. miss inside _transcode_audio, so we can skip the audio read
+        if 'sample_rate' in rec:
+            mock_audio = AttrDict(
+                name=rec.path,
+                frame_rate=rec.sample_rate,
+                channels=rec.channels,
+                sample_width=rec.sample_width_bit // 8,
+            )
+            (would_noop, audio_id) = self._transcode_audio(
+                audio=mock_audio,
+                dry_run=True,  # Return True if would do work, and don't actually do any work
+                # load=load,  # (No effect when dry_run)
+            )
+            if would_noop:
+                if not load:
+                    # Skip the audio read because load=False means return None (and the caller isn't expecting a new id)
+                    return None
+                else:
+                    log.debug(f'Read: {audio_id}')
+                    # debug_print(audio_id=audio_id); import traceback; traceback.print_stack(limit=12)
+                    return audio_from_file_in_data_dir(audio_id)
+
+        # Else we incur an audio read + _transcode_audio
+        log.debug(f'Read: {rec.path}')
+        # debug_print(); import traceback; traceback.print_stack(limit=11)
+        return self._transcode_audio(
+            audio_from_file_in_data_dir(rec.path),
+            load=load,
         )
 
-    # TODO Make our own Audio class to own .path (e.g. see gnarliness in util.audio_* and their tests)
-    #   - TODO Dedupe vs. audio_ensure_persisted
-    def _ergonomic_audio(self, audio: audiosegment.AudioSegment) -> audiosegment.AudioSegment:
-        """Make audiosegment.AudioSegment attrs more ergonomic"""
-        # Copy so we can mutate
-        audio = audio_copy(audio)
-        # Save the full path
-        audio.path = audio.name
-        # More ergonomic .name (which is never used as a path)
-        #   - WARNING Careful with how this interacts with audiosegment_content_id! Here, we're only making the content
-        #     id _more_ stable because we're replacing and abs path with a rel path, but it'd be easy for small changes
-        #     here to violate audiosegment_content_id assumptions -- we are heavily crossing ownership boundaries here,
-        #     after all.
-        if audio.path.startswith(cache_dir):
-            # Relative cache path, excluding the leading 'hz=...,ch=...,bit=.../' dir
-            name = os.path.relpath(audio.path, cache_dir).split('/', 1)[1]
+    def _transcode_audio(
+        self,
+        audio: Audio,
+        load=True,
+        dry_run=False,
+        unsafe_fs=False,  # For tests only (until we have a mock fs)
+    ) -> Union[
+        Optional[Audio],        # If not dry_run
+        Tuple[bool, 'AudioId'], # If dry_run
+    ]:
+        """
+        Transcode an audio to a file, as per our audio_config
+        - Returns audio where .name is both a stable id and path (relative to data_dir)
+        - Returns audio with .name and ._data reflecting the transcoding
+        - Returns audio that is persisted to file
+        """
+        c = self.audio_config
+
+        # WARNING This was a huge time sink to debug last time I refactored it (the rec.id overhaul)
+        #   - TODO Add tests [requires mocking fs for audio.export + Path.exists]
+
+        # FIXME char_log.char '•'/'!' on hit/miss might have caused, a long time ago, some 'IOStream.flush timed out' errors
+        # in remote kernels (see cache.py)
+
+        # Input expectations
+        #   - If dry_run, ok to mock just audio.name
+        #   - If not dry_run, audio must be a real Audio
+        id = audio.name
+        input_id = id
+
+        # Plan all ops by adding them to the audio id
+        #   - Execute the pipeline of ops only if the final audio file doesn't already exist in cache
+        #   - Always return the new audio id, to reflect the transcoded audio
+
+        # Do we need to resample?
+        #   - Not if the input audio's (hz,ch,bit) match our audio_config
+        #   - [Smeared concerns between here and _audio_id_simplify_ops, but we can't detect (hz,ch,bit) there...]
+        (c_hz, c_ch, c_bit) = (c.sample_rate, c.channels, c.sample_width_bit)
+        (a_hz, a_ch, a_bit) = (audio.frame_rate, audio.channels, audio.sample_width * 8)
+        do_resample = (c_hz, c_ch, c_bit) != (a_hz, a_ch, a_bit)
+        if do_resample:
+            id = audio_id_add_ops(id, 'resample(%s,%s,%s)' % (c_hz, c_ch, c_bit))
+
+            # Regression check: fail if we try to resample cache/audio/ files
+            #   - Our typical usage resamples raw audio files once only upon copying into cache/audio/
+            #   - This check guards against a subtle bug in pydub.AudioSegment.from_file(format=None), where you'll
+            #     always resample mp3/mp4 files read from cache/audio/ because they have nonstandard file exts. The
+            #     solution is to always pass a valid format, which util.audio_from_file now does. (More details there.)
+            #   - TODO Turn this into a regression test [requires a mock fs]
+            if self.fail_if_resample_cached_audio and path_is_contained_by(Path(data_dir) / input_id, cache_audio_dir):
+                raise AssertionError('Refusing to resample a cache/audio/ file (%s): %s -> %s for %s' % (
+                    'fail_if_resample_cached_audio=True', (a_hz, a_ch, a_bit), (c_hz, c_ch, c_bit), input_id,
+                ))
+
+        # Do we need to change the encoding?
+        #   - audio_id_add_ops will determine this for us, by returning the id we pass it if not
+        id = audio_id_add_ops(id, 'enc(%s)' % ','.join({
+            'wav': [self.format],
+            'mp3': [self.format, self.bitrate],
+            'mp4': [self.format, self.codec, self.bitrate],
+        }[self.format]))
+
+        # Do we need to write the output file?
+        #   - Not if it already exists, which can happen for two different reasons:
+        #       1. The output id is the same as the input id (i.e. no resample and no encoding change)
+        #       2. The output id is different (resample or encoding change), but the cache/audio/ file already exists
+        do_write = (
+            not unsafe_fs and  # HACK Don't Path.exists() in tests, where we don't yet have a mock fs
+            not (Path(data_dir) / id).exists()
+        )
+        if do_write:
+            assert path_is_contained_by(Path(data_dir) / id, cache_audio_dir), \
+                f"Refusing to (plan to) write outside of our cache_audio_dir: {id}"
+
+        if not dry_run:
+            # Execute the pipeline only if the output file doesn't already exist
+            if do_write:
+                # Resample
+                #   - Log as input_id since id already has all the ops in it
+                if do_resample:
+                    log.debug(f'Resample ({a_hz},{a_ch},{a_bit})->({c_hz},{c_ch},{c_bit}): {input_id}')
+                    audio = audio.resample(sample_rate_Hz=c_hz, channels=c_ch, sample_width=c_bit // 8)
+                # Write (which does the encoding)
+                #   - Export with final id, since that determines the output file path
+                log.info(f'Write: {id}')
+                f = audio.export(
+                    ensure_parent_dir(audio_abs_path(audio_replace(audio, name=id))),
+                    format=self.format,
+                    bitrate=self.bitrate,
+                    codec=self.codec,
+                )
+                f.close()  # Don't leak fd's
+
+        if dry_run:
+            # Return whether the caller can skip calling us for real because there's no work to do
+            would_noop = (
+                id == input_id if unsafe_fs else  # HACK For tests
+                not do_write
+            )
+            return (would_noop, id)
+        elif not load:
+            # Skip read operation
+            #   - e.g. for bulk-transcode cache warming, where we don't need the return
+            return None
+        elif id == input_id:
+            # Skip read operation, since we'd just be re-reading the input audio from disk again
+            #   - This assumes we didn't change audio anywhere along the way
+            assert not do_write  # The only branch above where we change audio
+            return audio
         else:
-            # Else relative data path
-            name = os.path.relpath(audio.path, data_dir)
-        # Extensions are boring
-        name, _ext = os.path.splitext(name)
-        audio.name = name
-        return audio
+            # Else re-read audio from file so that audio._data reflects the transcoding
+            #   - Property: audio._data always reflects audio.name
+            #   - e.g. if audio.name is 'foo.enc(mp3,64k)', then audio._data should be the bytes given by a 64k mp3 encoding
+            log.debug(f'Read: {id}')
+            # debug_print(); import traceback; traceback.print_stack(limit=12)
+            return audio_from_file_in_data_dir(id)

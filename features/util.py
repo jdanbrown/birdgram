@@ -1030,10 +1030,11 @@ def df_map_rows_progress(
 
 def map_progress(
     *args,
-    use='sync',  # 'sync' | 'dask' | 'joblib'
+    use='sync',  # None | 'sync' | 'dask' | 'joblib'
     **kwargs,
 ) -> Iterable[X]:
     return ({
+        None: partial(_map_progress_sync, use_tqdm=False),
         'sync': _map_progress_sync,
         'dask': _map_progress_dask,
         'joblib': _map_progress_joblib,
@@ -1118,7 +1119,8 @@ def audio_copy(audio: audiosegment.AudioSegment) -> audiosegment.AudioSegment:
     # (Surpringly hard to get right)
     audio_dict = audio.__dict__
     audio = copy.copy(audio)
-    audio.__dict__.update(audio_dict)  # Copy non-standard attrs (e.g. .path) [TODO Make our own Audio class to own .path]
+    # [XXX No more nonstandard attrs woo! They never pickled correctly anyway!]
+    # audio.__dict__.update(audio_dict)  # Copy non-standard attrs
     audio.seg = copy.copy(audio.seg)
     return audio
 
@@ -1209,13 +1211,15 @@ import platform
 import secrets
 import textwrap
 import types
-from typing import Union
+from typing import List, Optional, Tuple, Union
 import urllib.parse
 
 import numpy as np
 import matplotlib.pyplot as plt
+import parse
 from potoo.ipython import *
 from potoo.pandas import *
+from potoo.util import path_is_contained_by
 import psutil
 import pydub
 import scipy
@@ -1224,7 +1228,6 @@ import yaml
 from config import config
 from constants import *
 from datatypes import Audio
-from log import log  # For export [TODO Update callers]
 
 
 def print_sys_info():
@@ -1307,79 +1310,6 @@ def text_bar(
         return empties + fulls
 
 
-# TODO Dedupe vs. Load._ergonomic_audio
-def rec_audio_ensure_persisted(rec: 'Recording', **kwargs) -> 'Recording':
-    assert rec.id == rec.audio.unbox.name  # TODO Is this actually always true? (Load._ergonomic_audio, ...where else?)
-    rec = rec.copy()  # Copy so we can mutate
-    rec.audio = box(audio_ensure_persisted(rec.audio.unbox, **kwargs))
-    rec.path = rec.audio.unbox.path
-    return rec
-
-
-# TODO Dedupe vs. Load._ergonomic_audio
-def audio_ensure_persisted(audio, **audio_export_kwargs) -> Audio:
-
-    # TODO TODO Update defaults based on empirical measurements
-    #   - [x] Measure sizes
-    #   - [ ] Eval quality of the smaller sizes -- is 32k aac good enough quality for our needs?
-    audio_export_kwargs = audio_export_kwargs or dict(
-        # format='wav',
-        # format='mp3', bitrate='32k',
-        format='mp4', bitrate='32k', codec='aac',
-        # format='mp4', bitrate='32k', codec='libfdk_aac',
-    )
-
-    abs_path = Path(audio_cache_path(audio, **audio_export_kwargs))
-    audio = audio_replace(audio,
-        path=str(abs_path.relative_to(data_dir)),
-    )
-    if not abs_path.exists():
-        log.info(f'Persisting: {abs_path}')
-        audio.export(ensure_parent_dir(abs_path), **audio_export_kwargs)
-
-    return audio
-
-
-def audio_cache_path(audio, **kwargs) -> str:
-    return audio_cache_path_for_params(
-        name=audio.name,
-        frame_rate=audio.frame_rate,
-        channels=audio.channels,
-        sample_width=audio.sample_width,
-        **kwargs,
-    )
-
-
-def audio_cache_path_for_params(
-    name: str,  # (Assume: audio.name same as rec.id)
-    frame_rate: int,
-    channels: int,
-    sample_width: int,
-    # **audio_export_kwargs: Single point of control that enforces the subset of audio.export(**kwargs) we accept
-    format: str,
-    bitrate: str = None,
-    codec: str = None,
-) -> str:
-    assert {
-        'wav': not bitrate and not codec,
-        'mp3': bitrate and not codec,
-        'mp4': bitrate and codec,
-    }[format], f'Invalid **audio_export_kwargs: {dict(format=format, bitrate=bitrate, codec=codec)}'
-    params_id = '-'.join([
-        f'{frame_rate}hz',
-        f'{channels}ch',
-        f'{sample_width * 8}bit',
-        *({
-            'wav': [],  # XXX Back compat
-            # 'wav': [format],  # TODO After renaming cache dirs on local + remote
-            'mp3': [format, bitrate],
-            'mp4': [format, codec, bitrate],
-        }[format]),
-    ])
-    ext = format  # Redundant, but helpful to external programs
-    return f'{cache_dir}/{params_id}/{name}.{ext}'
-
-
 # NOTE Thumbs are complete recs, so we can't just add a .thumb col to an existing recs...
 def recs_thumb(recs, features, **kwargs) -> 'recs':
     return (recs
@@ -1449,21 +1379,201 @@ def rec_thumb_with_start(
     return (thumb_start_s, thumb)
 
 
+def audio_rel_path(audio: Audio) -> Path:
+    """An Audio's path is its name relative to data_dir"""
+    assert not Path(audio.name).is_absolute()
+    return Path(audio.name)
+
+
+def audio_abs_path(audio: Audio) -> Path:
+    """An Audio's path is its name relative to data_dir"""
+    return Path(data_dir) / audio_rel_path(audio)
+
+
+def strip_leading_cache_audio_dir(path: str) -> str:
+    """Strip leading 'cache/audio/', if present"""
+    rel_cache_audio_dir = Path(cache_audio_dir).relative_to(data_dir)
+    if path_is_contained_by(path, rel_cache_audio_dir):
+        path = str(Path(path).relative_to(rel_cache_audio_dir))
+    return path
+
+
+def audio_from_file_in_data_dir(path: str) -> Audio:
+    """
+    Like audio_from_file, except:
+    - Allow input path to be relative to data_dir
+    - Require input path to be under data_dir
+    - Ensure output audio.name is relative to data, which all downstreams expect
+    """
+    if Path(path).is_absolute():
+        assert path_is_contained_by(path, data_dir), f"path_is_contained_by({path!r}, {data_dir!r})"
+    else:
+        path = Path(data_dir) / path
+    audio = audio_from_file(path)
+    audio.name = str(Path(audio.name).relative_to(data_dir))
+    assert not Path(audio.name).is_absolute()
+    return audio
+
+
+def audio_from_file(path: str, format=None, **kwargs) -> Audio:
+    """
+    Like audiosegment.from_file, except:
+    - Interpret our .enc() audio ops to get the audio format, which we use in place of proper file extensions
+    - WARNING Don't pass format=None to pydub.AudioSegment.from_file if your file extension isn't real: things _mostly_
+      work, e.g. pydub/ffmpeg read the input file metadata to figure out the format, but then in another place pydub
+      uses the file ext to make a decision based on format, which (very quietly!) changes behavior, e.g.
+        - from_file(file='foo.mp3',      format=None) -> sample_fmt='fltp' and     is_format('mp3') -> pcm_s16le -> wav (bit=16)
+        - from_file(file='foo.enc(mp3)', format=None) -> sample_fmt='fltp' and not is_format('mp3') -> pcm_s32le -> wav (bit=32)
+    """
+    if not format:
+        format = audio_id_to_format(path)
+    assert format, f"{format}"
+    seg = pydub.AudioSegment.from_file(path, format=format, **kwargs)
+    return audiosegment.AudioSegment(seg, path)
+
+
+def audio_ensure_has_file(audio, load=None, **audio_kwargs) -> Audio:
+    """
+    Code bottleneck to bridge from global utils (e.g. viz.plot_spectro, util.display_with_audio) into
+    load.transcode_audio, which requires conjuring up a load instance, which we achieve in a hacky-but-acceptable way
+    """
+    # HACK Code smells abound. Probably some productive refactoring to do here, but low prio so far.
+
+    # Conjure up a load instance, accepting overrides from the caller
+    #   - TODO Too decoupled from sg.load?
+    #   - TODO Refactor modules to avoid util importing load, which creates an import cycle
+    from load import Load  # Avoid cyclic imports
+    audio_kwargs = audio_kwargs or config.audio_to_url.audio_kwargs
+    load = (load or Load()).replace(**audio_kwargs)
+
+    # Transcode + persist
+    #   - TODO Make Load._transcode_audio not private
+    audio = load._transcode_audio(audio)
+    assert audio_abs_path(audio).exists()
+    return audio
+
+
+# Unused [TODO or XXX?]
+def rec_audio_ensure_has_file(rec: 'Recording', **kwargs) -> 'Recording':
+    assert rec.id == rec.audio.unbox.name
+    rec = rec.copy()  # Copy so we can mutate
+    rec.audio = box(audio_ensure_has_file(rec.audio.unbox, **kwargs))
+    rec.id = rec.audio.unbox.name  # Propagate audio.name (= path) to rec.id
+    return rec
+
+
+def audio_add_ops(audio: Audio, *ops: str) -> Audio:
+    """Add operation suffixes to the audio's id (= audio.name)"""
+    return audio_replace(audio,
+        name=audio_id_add_ops(audio.name, *ops),
+    )
+
+
+def audio_id_add_ops(id: str, *ops: str) -> str:
+    """Add operation suffixes to an audio id (= audio.name)"""
+    assert not isinstance(id, list), 'Oops, did you mean audio_id_add_ops(*id_ops)?'  # Catch an easy mistake
+
+    # Simplify id (across both id and ops, else even basic simplifications won't work)
+    input_id = id
+    id = _audio_id_simplify(_audio_id_join_ops([id, *ops]))
+
+    # If id changed then some downstream might write to it, so ensure it's properly housed under our cache/audio/ dir
+    #   - If the new cache/audio/ path already exists, then assume it's semantically the same
+    #   - If id == input_id, then assume no downstream will try to overwrite it (since it's semantically the same)
+    if id != input_id:
+        assert not Path(id).is_absolute()
+        rel_cache_audio_dir = Path(cache_audio_dir).relative_to(data_dir)
+        if not path_is_contained_by(id, rel_cache_audio_dir):
+            id = str(rel_cache_audio_dir / id)
+
+    return id
+
+
+def _audio_id_join_ops(ops: List[str]) -> str:
+    assert ops
+    # Simplify the ops to avoid duplicated work
+    ops = _audio_id_simplify_ops(ops)
+    # Join the ops
+    return '.'.join(ops)
+
+
+def audio_id_split_ops(id: str) -> List[str]:
+    """Split an audio id (= audio.name) into its operation parts"""
+    # Simplification: conflate path vs. ext vs. ops, at the benefit of not having to invent a way to distinguish them
+    #   - Property: _audio_id_join_ops(*audio_id_split_ops(id)) == id, if:
+    #       - id ops are already simplified
+    #   - Property: audio_id_add_ops(*audio_id_split_ops(id)) == id, if:
+    #       - path_is_contained_by(id, rel_cache_audio_dir)
+    #       - id ops are already simplified
+    return id.split('.')
+
+
+# XXX Make private, or something (not used)
+def _audio_id_simplify(id: str) -> str:
+    """Simplify an audio id to avoid duplicated work"""
+    return _audio_id_join_ops(_audio_id_simplify_ops([*audio_id_split_ops(id)]))
+
+
+def _audio_id_simplify_ops(ops: List[str]) -> List[str]:
+    """Simplify audio id ops to avoid duplicated work"""
+
+    def simplify_pair(a: 'op', b: 'op', A: 'op_type', B: 'op_type') -> Optional[List['op']]:
+        """[*xs] if can simplify [a,b] -> [*xs], else None"""
+
+        # .wav.enc(wav) -> .wav
+        #   - Can't do this with most input encodings, since we don't know the encoding params from the filename
+        #   - But .wav's only encoding params are (hz,ch,bit), which we already control for
+        if [a, b] == ['wav', 'enc(wav)']:
+            return [a]
+
+        # .enc(x).enc(x) -> .enc(x)
+        #   - Assumes that all encodings are idempotent
+        if [A, B] == ['enc', 'enc'] and a == b:
+            return [a]
+
+        # .resample(x).resample(x) -> .resample(x)
+        if [A, B] == ['resample', 'resample'] and a == b:
+            return [a]
+
+        # .slice(p,q).slice(x,y) -> .slice(min(p+x,q),min(p+y,q))
+        if [A, B] == ['slice', 'slice']:
+            (p, q) = parse.parse('slice({:d},{:d})', a).fixed
+            (x, y) = parse.parse('slice({:d},{:d})', b).fixed
+            return ['slice(%d,%d)' % (min(p + x, q), min(p + y, q))]
+
+    # Iterate until convergence
+    ops = list(ops)
+    prev_ops = None
+    while ops != prev_ops:
+        prev_ops = ops
+
+        # Scan over each (contiguous) pair, delegating to simplify_pair
+        #   - On first match, break and continue outer loop
+        ops_with_types = list(zip(ops, (op.split('(')[0] for op in ops)))
+        for i, ((a, A), (b, B)) in enumerate(zip(ops_with_types, ops_with_types[1:])):
+            xs = simplify_pair(a, b, A, B)
+            if xs is not None:
+                ops = [*ops[:i], *xs, *ops[i + 2:]]  # Simplify [...,a,b,...] -> [...,*xs,...]
+                break
+
+    return ops
+
+
 def audio_to_bytes(audio, **kwargs) -> bytes:
-    abs_path = Path(data_dir) / audio_ensure_persisted(audio, **kwargs).path
-    with open(abs_path, 'rb') as f:
+    audio = audio_ensure_has_file(audio, **kwargs)
+    with open(audio_abs_path(audio), 'rb') as f:
         return f.read()
 
 
 def audio_to_url(audio, url_type=None, **kwargs) -> str:
-    abs_path = Path(data_dir) / audio_ensure_persisted(audio, **kwargs).path
+    audio = audio_ensure_has_file(audio, **kwargs)
     if (url_type or config.audio_to_url.url_type) == 'file':
-        return 'file://%s' % urllib.parse.quote(str(abs_path),
+        return 'file://%s' % urllib.parse.quote(str(audio_abs_path(audio)),
             safe='/,:()[] ',  # Cosmetic: exclude known-safe chars ('?' is definitely _not_ safe, not sure what else...)
         )
     elif (url_type or config.audio_to_url.url_type) == 'data':
         return 'data:%(mimetype)s;base64,%(base64)s' % dict(
-            mimetype=audio_mimetype_for_path(abs_path),
+            mimetype=audio_to_mimetype(audio),
             base64=base64.b64encode(audio_to_bytes(audio, **kwargs)).decode('ascii'),
         )
     else:
@@ -1471,7 +1581,7 @@ def audio_to_url(audio, url_type=None, **kwargs) -> str:
 
 
 def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='', **kwargs) -> str:
-    audio = audio_ensure_persisted(audio, **kwargs)
+    audio = audio_ensure_has_file(audio, **kwargs)
     return dedent_and_strip('''
         <audio class="bubo-audio" %(controls)s preload="%(preload)s" %(more_audio_attrs)s>
             <source type="%(type)s" src="%(src)s" />
@@ -1480,18 +1590,39 @@ def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='', **k
         controls='controls' if controls else '',
         preload=preload,
         more_audio_attrs=more_audio_attrs,
-        type=audio_mimetype_for_path(audio.path),
+        type=audio_to_mimetype(audio),
         src=audio_to_url(audio, **kwargs),
     )
 
 
-def audio_mimetype_for_path(path) -> str:
+def audio_to_mimetype(audio: Audio) -> str:
+    if not Path(audio_abs_path(audio)).exists():
+        raise ValueError(f"audio must be persisted: {audio_abs_path(audio)}")
+    return audio_id_to_mimetype(audio.name)
+
+
+def audio_id_to_mimetype(id: str) -> str:
+    # Let unknown formats fail with an informative KeyError
+    format = audio_id_to_format(id)
     return {
-        '.mp3': 'audio/mpeg',
-        '.wav': 'audio/wav',
-        '.mp4': 'audio/mp4',
-        # Add more as needed...
-    }[Path(path).suffix]
+        'mp3': 'audio/mpeg',
+        'wav': 'audio/wav',
+        'mp4': 'audio/mp4',
+        # Add more as needed
+    }[format]
+
+
+def audio_id_to_format(id: str) -> str:
+    id = str(id)  # In case id:Path
+    last_op = audio_id_split_ops(id)[-1]
+    # Convert e.g. 'enc(mp3,64k)' -> 'mp3', 'enc(wav)' -> 'wav'
+    m = re.match(r'enc\(([^,]+)[^)]*\)', last_op)
+    if m:
+        (format,) = m.groups()
+    else:
+        # Else assume last_op is a file extension that we know
+        format = last_op
+    return format
 
 
 def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayable':

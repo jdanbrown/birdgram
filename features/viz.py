@@ -147,6 +147,7 @@ def plot_spectro_wrap(
     pad=True,  # Pad to wrap_s if there's only one line (for consistent sizing)
     raw=True,
     audio=True,
+    audio_kwargs=None,
     **kwargs,
 ):
     limit_s = min(limit_s or np.inf, rec.duration_s)
@@ -165,7 +166,7 @@ def plot_spectro_wrap(
         **kwargs,
     )
     if audio and ret:
-        ret = display_with_audio(ret, audio=rec.audio.unbox)
+        ret = display_with_audio(ret, audio=rec.audio.unbox, **(audio_kwargs or {}))
     return ret
 
 
@@ -173,11 +174,12 @@ def plot_spectro(
     rec,
     raw=False,
     audio=True,
+    audio_kwargs=None,
     **kwargs,
 ):
     ret = plot_spectros(rec, raw=raw, **kwargs)
     if audio and ret:
-        ret = display_with_audio(ret, audio=rec.audio.unbox)
+        ret = display_with_audio(ret, audio=rec.audio.unbox, **(audio_kwargs or {}))
     return ret
 
 

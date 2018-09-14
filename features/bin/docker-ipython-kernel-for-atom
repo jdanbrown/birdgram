@@ -1,6 +1,6 @@
 #!/bin/bash -eux
 
-# TODO TODO WIP Untested (see "WIP" in Dockerfile)
+# TODO WIP Untested (see "WIP" in Dockerfile)
 
 bin="`dirname "$0"`"
 bin="`"$bin"/normpath "$bin"`"

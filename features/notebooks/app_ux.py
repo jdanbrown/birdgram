@@ -25,7 +25,7 @@ def load_app_recs(
     # Featurize: .audio, .feat
     recs = (recs
         # Add .audio
-        .assign(audio=lambda df: projection.features.load.audio(df, scheduler='threads'))
+        .pipe(projection.features.load.audio, scheduler='threads')
         # Add .recorded_at, .audio_sha, .audio_id
         #   - TODO Move these upstream into Load._metadata
         #       - Careful: Adding .stat into Load._metadata might add a bottleneck

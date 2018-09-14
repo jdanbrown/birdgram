@@ -83,7 +83,7 @@ class _sg_load(DataclassUtil):
         return dict(x)
 
     @classmethod
-    @cache(version=0)
+    @cache(version=1)
     def load_xc_meta(self):
         log.info()
         x = AttrDict()

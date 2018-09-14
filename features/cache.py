@@ -95,10 +95,13 @@ def cache(
         @wraps_workaround(func)
         def func_cached(cache_key, ignore):
             return func(*ignore['args'], **ignore['kwargs'])
+        func_cached._cache_version = version  # HACK HACK HACK Smuggle to MemorizedFunc.call, to include in dir name
         func_cached = memory.cache(func_cached, **kwargs, ignore=['ignore'])
 
         @wraps_workaround(func_cached)
-        def g(*args, _nocache=False, **kwargs):
+        def g(*args, **kwargs):
+            # WARNING Do _nocache here i/o arg list, else nonsensical errors with dask processes (but not threads/sync)
+            _nocache = kwargs.pop('_nocache', False)
             ignore = dict(args=args, kwargs=kwargs)
             if not cache_control.enabled or nocache(*args, **kwargs) or _nocache:
                 cache_key = None

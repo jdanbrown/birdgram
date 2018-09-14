@@ -128,6 +128,7 @@ audio_path_files = _audio_path_files()
 
 
 def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
+    id = strip_leading_cache_audio_dir(id)
     id_parts = id.split('/')
     basename = id_parts[-1]
     species_query = None
@@ -197,7 +198,7 @@ class _xc(DataclassUtil):
 
     @property
     @lru_cache()
-    @cache(version=7, key=lambda self: (self, self._audio_paths_hash))
+    @cache(version=8, key=lambda self: (self, self._audio_paths_hash))
     def metadata(self) -> 'XCDF':
         """Make a full XCDF by joining _metadata + downloaded_ids"""
         return (self._metadata
@@ -335,30 +336,41 @@ class _xc(DataclassUtil):
             for species in [self.com_name_to_species_dict.get(com_name)]
         ]
 
+    # Slow, but only used in self.metadata which is @cache-d
     @property
     def downloaded_page_metadata(self) -> "pd.DataFrame['id': int, ...]":
-        return self.downloaded_page_metadata_full[[
-            'id',
-            # "Remarks from the Recordist"
-            'remarks',
-            'bird_seen',
-            'playback_used',
-            # "Recording data"
-            'elevation',
-            'background',
-            # "Sound characteristics"
-            'volume',
-            'speed',
-            'pitch',
-            'length',
-            'number_of_notes',
-            'variable',
-            # "Audio file properties"
-            # 'length',  # FIXME Oops, during parsing this field gets overwritten by 'length' from "Sound characteristics"
-            'channels',
-            'sampling_rate',
-            'bitrate_of_mp3',
-        ]]
+        return (
+            self.downloaded_page_metadata_full[[
+                'id',
+                # "Remarks from the Recordist"
+                'remarks',
+                'bird_seen',
+                'playback_used',
+                # "Recording data"
+                'elevation',
+                'background',
+                # "Sound characteristics"
+                'volume',
+                'speed',
+                'pitch',
+                'length',
+                'number_of_notes',
+                'variable',
+                # "Audio file properties"
+                # 'length',  # FIXME Oops, during parsing this field gets overwritten by 'length' from "Sound characteristics"
+                'channels',
+                'sampling_rate',
+                'bitrate_of_mp3',
+            ]]
+            # Rename cols to avoid downstream collisions
+            .rename(columns={
+                # "Audio file properties"
+                # 'length': 'xc_length',  # FIXME (above)
+                'channels': 'xc_channels',
+                'sampling_rate': 'xc_sampling_rate',
+                'bitrate_of_mp3': 'xc_bitrate_of_mp3',
+            })
+        )
 
     @property
     @cache(version=0, key=lambda self: (self, self._audio_paths_hash))
@@ -367,12 +379,10 @@ class _xc(DataclassUtil):
         page_paths = [p.parent / 'page.html' for p in audio_paths]
         return (
             pd.DataFrame(
-                map_progress(self._parse_page_metadata, page_paths,
-                    use='dask',
-                    partition_size=100,
-                    scheduler='processes',      # For 2000 recs: uncached[10s], cached[1.6s]
-                    # scheduler='threads',      # For 2000 recs: uncached[22s], cached[2.7s]
-                    # scheduler='synchronous',  # For 2000 recs: uncached[30s], cached[2.4s]
+                map_progress(self._parse_page_metadata, page_paths, desc='_parse_page_metadata',
+                    use='dask', partition_size=100, scheduler='processes',      # For 2000 recs: uncached[10s], cached[1.6s]
+                    # use='dask', partition_size=100, scheduler='threads',      # For 2000 recs: uncached[22s], cached[2.7s]
+                    # use='dask', partition_size=100, scheduler='synchronous',  # For 2000 recs: uncached[30s], cached[2.4s]
                 ),
             )
             [lambda df: sorted(df.columns)]
@@ -812,7 +822,7 @@ def xc_meta_to_xc_raw_recs(
         load.recs(paths=xc_paths)
         .assign(
             # TODO Push upstream
-            xc_id=lambda df: df.id.str.split('/').str[3].astype(int),
+            xc_id=lambda df: df.id.map(strip_leading_cache_audio_dir).str.split('/').str[3].astype(int),
         )
         .set_index('xc_id')
         .join(how='left', other=(xc_meta
@@ -920,7 +930,7 @@ def xc_raw_recs_to_xc_recs(
     xc_recs = (xc_raw_recs
         # .audio
         .pipe(lambda df: df if not audio else (df
-            .assign(audio=lambda df: projection.features.load.audio(df, scheduler='threads'))  # (procs barfs on serdes error)
+            .pipe(projection.features.load.audio, scheduler='threads')  # (procs barfs on serdes error)
         ))
         # .feat
         .pipe(lambda df: df if not feat else (df

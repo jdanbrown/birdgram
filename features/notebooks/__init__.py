@@ -65,6 +65,7 @@ import rpy2.robjects as robjects
 import scipy
 import scipy.stats as stats
 import sklearn as sk
+import sqlalchemy as sqla
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 import toolz
@@ -124,8 +125,12 @@ from potoo.plot import *
 plot_set_defaults()
 
 if ipy:
+
     import potoo.default_magic_magic
     ipy.magic('load_ext potoo.default_magic_magic')
+
+    import potoo.lprun_cell_magic
+    ipy.magic('load_ext potoo.lprun_cell_magic')
 
 from potoo.ipython import *
 gc_on_ipy_post_run_cell()
@@ -136,7 +141,9 @@ gc_on_ipy_post_run_cell()
 
 from api.app import *
 check_deps()
+init_cloudpickle()
 init_logging()
+# init_potoo()  # TODO To break the dependency on my local ~/.pythonrc
 
 #
 # TODO Move these up into potoo or ~/.pythonrc

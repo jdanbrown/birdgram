@@ -1,6 +1,6 @@
 #!/bin/bash -eu
 
-# TODO TODO WIP Untested (see "WIP" in Dockerfile)
+# TODO WIP Untested (see "WIP" in Dockerfile)
 
 if tty -s; then
   it='-it'

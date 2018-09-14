@@ -2,8 +2,10 @@ import audiosegment
 import numpy as np
 import pydub
 import pytest
+from pytest import raises
 
 from util import *
+from util import _audio_id_simplify, _audio_id_simplify_ops
 
 
 @pytest.fixture
@@ -39,7 +41,6 @@ def test_audio_copy():
     a = audio(random_state=0)
     a.name = 'a-name'
     a.seg.frame_rate = 44100
-    a.nonstandard_attr = 'a-nonstandard_attr'
     b = audio_copy(a)
     # Copies are the same, structurally
     assert audio_eq(a, b)
@@ -49,21 +50,15 @@ def test_audio_copy():
     assert a.name == 'a-name'
     assert a.seg.frame_rate == 44100
     assert not audio_eq(a, b)
-    # Copies preserve nonstandard attrs
-    assert b.nonstandard_attr == 'a-nonstandard_attr'
 
 
 def test_audio_replace():
     a = audio(random_state=0)
     a.name = 'a-name'
-    a.path = 'a-path'
-    b = audio_replace(a,
-        name='b-name',  # Standard attr
-        path='b-path',  # Nonstandard attr
-    )
+    b = audio_replace(a, name='b-name')
     assert a.seg == b.seg
-    assert (a.name, a.path) == ('a-name', 'a-path')
-    assert (b.name, b.path) == ('b-name', 'b-path')
+    assert a.name == 'a-name'
+    assert b.name == 'b-name'
 
 
 def test_audio_concat_doesnt_mutate():
@@ -148,3 +143,96 @@ def test_audio_hash(audio):
         for k, audios in expects.items()
         for a in audios
     ]
+
+
+def test_audio_id_to_mimetype():
+    for id, mimetype in [
+        ('cache/audio/recs/foo.wav',                  'audio/wav'),
+        ('recs/foo.wav',                              'audio/wav'),
+        ('recs/foo.mp3',                              'audio/mpeg'),
+        ('recs/foo.mp4',                              'audio/mp4'),
+        ('recs/foo.xxx',                              raises(Exception)),
+        ('recs/foo.wav.resample(22050,1,16)',         raises(Exception)),
+        ('recs/foo.wav.slice(1,2).enc(wav)',          'audio/wav'),
+        ('recs/foo.mp3.slice(1,2).enc(wav)',          'audio/wav'),
+        ('recs/foo.wav.slice(1,2).enc(mp3,64k)',      'audio/mpeg'),
+        ('recs/foo.mp3.slice(1,2).enc(mp3,64k)',      'audio/mpeg'),
+        ('recs/foo.mp3.slice(1,2).enc(mp4,aac,64k)',  'audio/mp4'),
+    ]:
+        if type(mimetype).__name__ == 'RaisesContext':
+            with mimetype:
+                audio_id_to_mimetype(id)
+        else:
+            assert audio_id_to_mimetype(id) == mimetype
+
+
+def test_audio_id_add_ops():
+    for [id, *ops], out_id in [
+
+        # No simplifications
+        (['path.wav'],                           'path.wav'),
+        (['path.wav',             'f()'],        'cache/audio/path.wav.f()'),
+        (['path.wav',             'f()', 'g()'], 'cache/audio/path.wav.f().g()'),
+        (['cache/audio/path.wav'],               'cache/audio/path.wav'),
+        (['cache/audio/path.wav', 'f()'],        'cache/audio/path.wav.f()'),
+        (['cache/audio/path.wav', 'f()', 'g()'], 'cache/audio/path.wav.f().g()'),
+
+        # Simplifications
+        (['cache/audio/path.wav', 'enc(wav)'],             'cache/audio/path.wav'),
+        (['cache/audio/path.wav', 'enc(wav)', 'enc(wav)'], 'cache/audio/path.wav'),
+
+    ]:
+        assert audio_id_add_ops(id, *ops) == out_id
+
+
+def test_audio_id_split_ops():
+    for id, ops in [
+        ('path.wav',                     ['path', 'wav']),
+        ('cache/audio/path.wav',         ['cache/audio/path', 'wav']),
+        ('cache/audio/path.wav.f()',     ['cache/audio/path', 'wav', 'f()']),
+        ('cache/audio/path.wav.f().g()', ['cache/audio/path', 'wav', 'f()', 'g()']),
+    ]:
+        assert audio_id_split_ops(id) == ops
+        if path_is_contained_by(id, 'cache/audio'):
+            assert audio_id_add_ops(*audio_id_split_ops(id)) == id  # TODO Add pytest-quickcheck and do more of this
+
+
+def test_audio_id_simplify():
+    for x in [
+
+        # No simplifications
+        'recs/foo.wav',
+        'recs/foo.wav.enc(mp3)',
+        'recs/foo.mp3.enc(wav)',
+        'recs/foo.mp3.enc(mp3)',
+        'recs/foo.mp3.enc(mp3,64k)',
+        'recs/foo.wav.enc(mp3,64k).enc(mp3,128k)',
+        'recs/foo.wav.enc(mp3).enc(mp4)',
+        'recs/foo.wav.enc(mp4,aac,32k).enc(mp4,libfdk_aac,32k)',
+        'recs/foo.wav.resample(22050,1,16).enc(wav)',
+        'recs/foo.wav.slice(0,10000).spectro_denoise().slice(1000,5000)',
+
+        # Single simplification
+        ('recs/foo.wav.enc(wav)',                                          'recs/foo.wav'),
+        ('recs/foo.mp3.enc(wav).enc(wav)',                                 'recs/foo.mp3.enc(wav)'),
+        ('recs/foo.wav.enc(mp3,64k).enc(mp3,64k)',                         'recs/foo.wav.enc(mp3,64k)'),
+        ('recs/foo.wav.enc(mp4,aac,32k).enc(mp4,aac,32k)',                 'recs/foo.wav.enc(mp4,aac,32k)'),
+        ('recs/foo.wav.resample(22050,1,16).resample(22050,1,16)',         'recs/foo.wav.resample(22050,1,16)'),
+        ('recs/foo.wav.slice(1000,5000).slice(1000,2000)',                 'recs/foo.wav.slice(2000,3000)'),
+        ('recs/foo.wav.slice(1000,5000).slice(1000,9000)',                 'recs/foo.wav.slice(2000,5000)'),
+        ('recs/foo.wav.slice(1000,5000).slice(9000,9000)',                 'recs/foo.wav.slice(5000,5000)'),
+        ('recs/foo.wav.slice(0,10000).slice(1000,5000).spectro_denoise()', 'recs/foo.wav.slice(1000,5000).spectro_denoise()'),
+
+        # Multiple simplifications: toy cases
+        ('f().enc(x).enc(x).enc(x).g()', 'f().enc(x).g()'),  # In the middle
+        ('f().enc(x).enc(x).enc(x)',     'f().enc(x)'),      # At the end
+        ('enc(x).enc(x).enc(x).g()',     'enc(x).g()'),      # At the beginning (not a real-world case)
+        ('enc(x).enc(x).enc(x)',         'enc(x)'),          # At the beginning and end (not a real-world case)
+
+        # Multiple simplifications: real cases
+        ('recs/foo.wav.enc(wav).enc(wav)', 'recs/foo.wav'),
+
+    ]:
+        (a, b) = (x, x) if isinstance(x, str) else x
+        assert _audio_id_simplify_ops(audio_id_split_ops(a)) == audio_id_split_ops(b)
+        assert _audio_id_simplify(a) == b

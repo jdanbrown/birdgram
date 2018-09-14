@@ -188,9 +188,9 @@ class Features(DataclassConfig):
         #             100    0.285    0.003    3.228    0.032 spectral.py:563(spectrogram)
         #             100    0.284    0.003    0.381    0.004 signaltools.py:2464(detrend)
         spectros = map_progress(partial(self._spectro, cache=cache), df_rows(recs), desc='spectro', **{
-            **dict(
+            **(dict() if 'use' in kwargs else dict(
                 use='dask', scheduler='threads',
-            ),
+            )),
             **kwargs,
         })
         log.debug('Features.spectros:out', **{
@@ -229,7 +229,7 @@ class Features(DataclassConfig):
           - t: time indexes (s)
           - S: log power (f x t): log(X**2) where X is the (energy) unit of the audio signal
         """
-        audio = self.load._audio(rec).unbox  # Pull
+        audio = self.load._audio(rec)  # Pull
         c = self.spectro_config
         assert audio.frame_rate == c.sample_rate, 'Unsupported sample_rate[%s != %s] for audio[%s]' % (
             audio.frame_rate, c.sample_rate, audio,
@@ -240,7 +240,7 @@ class Features(DataclassConfig):
             # Pass rec instead of just audio so that Melspectro can lazy-load audio from disk (it doesn't store it)
             Recording(
                 dataset=None,  # HACK Required arg that spectro doesn't rely on (maybe dataset shouldn't be a required arg?)
-                path=rec.path,
+                path=rec.path,  # FIXME Update after rec.id overhaul (rec.id = audio.name = rec.path)
                 duration_s=rec.duration_s,
                 audio=audio,
             ),
@@ -269,27 +269,28 @@ class Features(DataclassConfig):
 
     def slice_audio(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
         """Slices .audio, recomputes .spectro (with denoise)"""
-        start_ms = None if start_s is None else int(start_s * 1000)
-        end_ms   = None if end_s   is None else int(end_s   * 1000)
+        # Ensure no None's in slice() ops: convert None/None -> 0/len (like pydub.AudioSegment.__getitem__)
+        start_ms = 1000 * int(0                    if start_s is None else start_s)
+        end_ms   = 1000 * int(len(rec.audio.unbox) if end_s   is None else end_s)
         return self.with_audio(rec,
             lambda audio: audio[start_ms:end_ms],
             # Stable rec.id (e.g. for caching)
-            #   - Add '[start:end]' to mark the slice
-            #   - Add '.spectro_denoise' to mark that .spectro was transformed by _spectro_denoise
-            #   - TODO How to track these ids more simply and robustly?
-            id='%s[%s:%s].spectro_denoise' % (rec.id, start_ms, end_ms),
+            #   - Extend id with 'slice()' op
+            #   - Extend id with 'spectro_denoise()' op to mark that .spectro was transformed by _spectro_denoise
+            id=audio_id_add_ops(rec.id, 'slice(%s,%s)' % (start_ms, end_ms), 'spectro_denoise()')
         )
 
     def slice_spectro(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
         """Slices .spectro and .audio (as is, no new denoise)"""
-        start_ms = None if start_s is None else int(start_s * 1000)
-        end_ms   = None if end_s   is None else int(end_s   * 1000)
+        # Ensure no None's in slice() ops: convert None/None -> 0/len (like pydub.AudioSegment.__getitem__)
+        start_ms = 1000 * int(0                    if start_s is None else start_s)
+        end_ms   = 1000 * int(len(rec.audio.unbox) if end_s   is None else end_s)
         return self._edit(rec,
             audio_f=lambda rec, audio: audio[start_ms:end_ms],
             spectro_f=lambda rec, spectro: spectro.slice(start_s, end_s),
             # Stable rec.id (e.g. for caching)
-            #   - Add '[start:end]' to mark the slice
-            id='%s[%s:%s]' % (rec.id, start_ms, end_ms),
+            #   - Extend id with 'slice()' op
+            id=audio_id_add_ops(rec.id, 'slice(%s,%s)' % (start_ms, end_ms))
         )
 
     def with_audio(self, rec: Row, f: Callable[[Audio], Audio], id=None, **kwargs) -> Row:
@@ -313,9 +314,12 @@ class Features(DataclassConfig):
         #   - Convert series -> dict to avoid bottlenecks from lots of pd.Series.__setitem__ (determined by profiling)
         rec = rec.to_dict()
 
-        # Generate fresh id to separate from new edited rec from input rec (e.g. for cache correctness)
+        # Integrity checks (burden on caller)
+        assert rec['id'] == rec['audio'].unbox.name
+
+        # Ensure new id is different from input id (else cache-key conflation)
         if not id:
-            id = '%s+%s' % (rec['id'], secrets.token_hex(4))
+            id = audio_id_add_ops(rec['id'], 'unk(%s)' % secrets.token_hex(4))
         assert id != rec['id']
 
         # Edit .audio
@@ -323,10 +327,14 @@ class Features(DataclassConfig):
         rec['audio'] = box(audio_f(rec, audio))
         rec['audio'].unbox.name = id
 
+        # debug_print(id=id)
+
         # Recompute/invalidate attrs coupled to .audio + downstream features
         #   - TODO Replace rec.id with rec.audio_id (which will require rebuilding feat/_feat caches...)
+        #       - TODO Nope, after rec.id overhaul rec.audio_id needs to stay separate from rec.id...
         rec['id'] = id
         rec['path'] = None  # No meaningful .path for an in-mem .audio
+        #   - FIXME Update after rec.id overhaul (rec.id = audio.name = rec.path)
         rec['basename'] = None  # No meaningful .basename for an in-mem .audio
         # Recompute .duration_s, .samples_*, basename, species, etc.
         del rec['duration_s']  # Bust short-circuit
@@ -346,6 +354,9 @@ class Features(DataclassConfig):
         for k in ['patches', 'proj', 'agg', 'feat']:
             if k in rec:
                 del rec[k]
+
+        # Integrity checks (burden on us)
+        assert rec['id'] == rec['audio'].unbox.name
 
         # Convert dict -> series for caller
         return pd.Series(rec)
