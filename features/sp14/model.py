@@ -270,8 +270,8 @@ class Features(DataclassConfig):
     def slice_audio(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
         """Slices .audio, recomputes .spectro (with denoise)"""
         # Ensure no None's in slice() ops: convert None/None -> 0/len (like pydub.AudioSegment.__getitem__)
-        start_ms = 1000 * int(0                    if start_s is None else start_s)
-        end_ms   = 1000 * int(len(rec.audio.unbox) if end_s   is None else end_s)
+        start_ms = int(1000 * (0                    if start_s is None else start_s))
+        end_ms   = int(1000 * (len(rec.audio.unbox) if end_s   is None else end_s))
         return self.with_audio(rec,
             lambda audio: audio[start_ms:end_ms],
             # Stable rec.id (e.g. for caching)
@@ -283,8 +283,8 @@ class Features(DataclassConfig):
     def slice_spectro(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
         """Slices .spectro and .audio (as is, no new denoise)"""
         # Ensure no None's in slice() ops: convert None/None -> 0/len (like pydub.AudioSegment.__getitem__)
-        start_ms = 1000 * int(0                    if start_s is None else start_s)
-        end_ms   = 1000 * int(len(rec.audio.unbox) if end_s   is None else end_s)
+        start_ms = int(1000 * (0                    if start_s is None else start_s))
+        end_ms   = int(1000 * (len(rec.audio.unbox) if end_s   is None else end_s))
         return self._edit(rec,
             audio_f=lambda rec, audio: audio[start_ms:end_ms],
             spectro_f=lambda rec, spectro: spectro.slice(start_s, end_s),
