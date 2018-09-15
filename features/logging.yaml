@@ -1,0 +1,57 @@
+# A yaml format for logging.dictConfig that's shared between:
+# - api.app.init_logging, which parses this into a dict (using yaml.safe_load) for logging.dictConfig
+# - gunicorn --log-config-dict (in bin/api-run-prod), which parses this into a json string (using jq)
+
+# Default level
+root:
+  level:    DEBUG
+  handlers: [console]
+
+# Per-logger levels
+loggers:
+
+  # bubo
+  load:       {level: INFO} # File r/w ops at debug
+  sp14.model: {level: INFO} # call/done at debug
+
+  # deps
+  PIL:                    {level: INFO} # Noisy at debug
+  boto:                   {level: WARN} # Noisy at info
+  urllib3.connectionpool: {level: INFO} # Conn logging at debug -- and you have to set debug, even with root:debug [why?]
+
+  # gunicorn does something weird with its logging such that we _have_ to specify [qualname, handlers, propagate]:
+  # - handlers, else loggers use their own default handler and formatter, somehow
+  #   - [This is definitely true]
+  # - propagate, else once you add handlers you'll print each log event twice (this logger + the root logger)
+  #   - [This might not be true...]
+  # - qualname, else logs just don't show up
+  #   - [This might not be true...]
+  # gunicorn.error:  {level: DEBUG, qualname: gunicorn.error,  handlers: [console], propagate: 0} # Request logging at debug
+  # gunicorn.access: {level: DEBUG, qualname: gunicorn.access, handlers: [console], propagate: 0} # Response logging at info
+  gunicorn.error:  {level: DEBUG, handlers: [console], propagate: 0} # Request logging at debug
+  gunicorn.access: {level: DEBUG, handlers: [console], propagate: 0} # Response logging at info
+
+formatters:
+  bubo_formatter:
+
+    # TODO Decouple from api.app.{BuboRenderer,BuboFilter} [by writing a BuboFormatter]
+    # - WARNING Even though we can %(module)s here, maintain the per-module get_logger() idiom else we can't control log levels!
+    format: '%(levelname)-8s [%(asctime)s.%(msecs)03d] [%(process)5d]%(lineno)4d %(name_funcName_message)s'
+
+    # TODO Add a way to switch datefmt on $BUBO_ROLE: show date for 'api', hide date for 'notebook' [write a BuboFormatter]
+    # datefmt: '%Y-%m-%dT%H:%M:%S'
+    datefmt: '%H:%M:%S'
+
+filters:
+  bubo_filter:
+    '()': api.app.BuboFilter
+
+handlers:
+  console:
+    class:     logging.StreamHandler
+    stream:    ext://sys.stdout
+    filters:   [bubo_filter]
+    formatter: bubo_formatter
+
+# Boilerplate [https://docs.python.org/3/library/logging.config.html#logging-config-dictschema]
+version: 1

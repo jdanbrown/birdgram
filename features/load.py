@@ -140,7 +140,7 @@ class Load(DataclassConfig):
     @short_circuit(lambda self, recs: recs.get(self.METADATA))
     def metadata(self, recs: RecordingDF) -> RecordingDF:
         """.metadata <- .audio"""
-        log.info('in', **{
+        log.info(**{
             'len(recs)': len(recs),
         })
         # Performance (600 peterson recs):
@@ -160,7 +160,7 @@ class Load(DataclassConfig):
         metadata = [x for x in metadata if x is not None]
         # Convert to df
         metadata = RecordingDF(metadata)
-        log.info('out', **{
+        log.info('done', **{
             'sum(duration_h)': round_sig(metadata.duration_s.sum() / 3600, 3),
             'sum(samples_mb)': round_sig(metadata.samples_mb.sum(), 3),
             'sum(samples_n)': int(metadata.samples_n.sum()),
@@ -209,7 +209,7 @@ class Load(DataclassConfig):
         .audio <- .path + metadata(hz,ch,bit)
         - Returns rec where rec.id = rec.audio.unbox.name
         """
-        log.info('in', **{
+        log.info(**{
             'len(recs)': len(recs),
         })
         audio = map_progress(
@@ -227,7 +227,7 @@ class Load(DataclassConfig):
             recs = recs.assign(
                 id=lambda df: df.audio.map(lambda audio: audio.unbox.name),
             )
-        log.info('out', **{
+        log.info('done', **{
             'len(audio)': len(audio),
         })
         return recs
@@ -240,7 +240,7 @@ class Load(DataclassConfig):
         - Returns recs.audio that have .name and ._data reflecting the transcoding
         - Returns recs.audio that are persisted to file
         """
-        log.info('in', **{
+        log.info(**{
             'len(recs)': len(recs),
             'audio_config': self.audio_config,
         })
@@ -259,7 +259,7 @@ class Load(DataclassConfig):
             recs = recs.assign(
                 id=lambda df: df.audio.map(lambda audio: audio.unbox.name),
             )
-        log.info('out', **{
+        log.info('done', **{
             'len(audio)': len(audio),
             'audio_config': self.audio_config,
         })
@@ -354,12 +354,10 @@ class Load(DataclassConfig):
                     return None
                 else:
                     log.debug(f'Read: {audio_id}')
-                    # debug_print(audio_id=audio_id); import traceback; traceback.print_stack(limit=12)
                     return audio_from_file_in_data_dir(audio_id)
 
         # Else we incur an audio read + _transcode_audio
         log.debug(f'Read: {rec.path}')
-        # debug_print(); import traceback; traceback.print_stack(limit=11)
         return self._transcode_audio(
             audio_from_file_in_data_dir(rec.path),
             load=load,
@@ -371,10 +369,10 @@ class Load(DataclassConfig):
         load=True,
         dry_run=False,
         unsafe_fs=False,  # For tests only (until we have a mock fs)
-    ) -> Union[
+    ) -> """Union[  # (Quote return type to avoid weird cloudpickle error...)
         Optional[Audio],        # If not dry_run
         Tuple[bool, 'AudioId'], # If dry_run
-    ]:
+    ]""":
         """
         Transcode an audio to a file, as per our audio_config
         - Returns audio where .name is both a stable id and path (relative to data_dir)
@@ -479,5 +477,4 @@ class Load(DataclassConfig):
             #   - Property: audio._data always reflects audio.name
             #   - e.g. if audio.name is 'foo.enc(mp3,64k)', then audio._data should be the bytes given by a 64k mp3 encoding
             log.debug(f'Read: {id}')
-            # debug_print(); import traceback; traceback.print_stack(limit=12)
             return audio_from_file_in_data_dir(id)

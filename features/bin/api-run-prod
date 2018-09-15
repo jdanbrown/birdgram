@@ -9,14 +9,14 @@ bin="`dirname "$0"`"
 
 # export CONFIG_YAML=config-prod.yaml
 export FLASK_SKIP_DOTENV=1
-export FLASK_ENV=production
+export FLASK_ENV="${FLASK_ENV:-production}"
 
 cmd=(
   gunicorn
-    --workers    "${WORKERS:-4}"
-    --bind       0.0.0.0:"${PORT:-80}"
-    --timeout    60
-    --log-config logging.conf
+    --config  gunicorn_config.py
+    --workers "${WORKERS:-4}"
+    --bind    "${HOST:-0.0.0.0}":"${PORT:-80}"
+    --timeout "${TIMEOUT:-60}"
     api.main:app
     "$@"
 )

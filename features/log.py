@@ -12,7 +12,8 @@ from potoo.util import AttrContext, singleton
 import structlog
 import yaml
 
-_log = structlog.get_logger(__name__)
+# _log = structlog.get_logger()  # WARNING This sometimes finds '?' instead of __name__ (maybe with threads or procs?)
+_log = structlog.get_logger(__name__)  # This appears to work more reliably
 
 
 # WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:

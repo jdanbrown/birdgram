@@ -142,13 +142,13 @@ class Features(DataclassConfig):
     @short_circuit(lambda self, recs: recs.get('patches'))
     def patches(self, recs: RecordingDF) -> Column['np.ndarray[(f*p,t)]']:
         """.patches (f*p,t) <- .spectro (f,t)"""
-        log.debug('Features.patches:in', **{
+        log.debug(**{
             'len(recs)': len(recs),
             'len(recs) per dataset': recs.get('dataset', pd.Series()).value_counts().to_dict(),
             'sum(duration_h)': round_sig(sum(recs.get('duration_s', [])) / 3600, 3),
             'sum(samples_mb)': round_sig(sum(recs.get('samples_mb', [])), 3),
             'sum(samples_n)': int(sum(recs.get('samples_n', []))),
-            '(f, sum(t))': recs.get('spectro', pd.Series()).pipe(lambda xs: (
+            '(f,sum(t))': recs.get('spectro', pd.Series()).pipe(lambda xs: (
                 list({x.S.shape[0] for x in xs}),
                 sum(x.S.shape[1] for x in xs),
             ))
@@ -163,15 +163,15 @@ class Features(DataclassConfig):
         #             100    0.069    0.001    0.862    0.009 model.py:163(_patches)
         #               1    0.042    0.042    0.944    0.944 <string>:1(<module>)
         patches = map_progress(self._patches, df_rows(recs), desc='patches', use='dask', scheduler='synchronous')
-        log.debug('Features.patches:out', **{
-            '(f*p, sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
+        log.debug('done', **{
+            '(f*p,sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
         return patches
 
     @short_circuit(lambda self, recs, **kwargs: recs.get('spectro'))
     def spectro(self, recs: RecordingDF, cache=None, **kwargs) -> Column[Melspectro]:
         """.spectro (f,t) <- .audio (samples,)"""
-        log.debug('Features.spectros:in', **{
+        log.debug(**{
             'len(recs)': len(recs),
             'len(recs) per dataset': recs.get('dataset', pd.Series()).value_counts().to_dict(),
             'sum(duration_h)': round_sig(sum(recs.get('duration_s', [])) / 3600, 3),
@@ -193,8 +193,8 @@ class Features(DataclassConfig):
             )),
             **kwargs,
         })
-        log.debug('Features.spectros:out', **{
-            '(f, sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
+        log.debug('done', **{
+            '(f,sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
         })
         return spectros
 
@@ -327,8 +327,6 @@ class Features(DataclassConfig):
         rec['audio'] = box(audio_f(rec, audio))
         rec['audio'].unbox.name = id
 
-        # debug_print(id=id)
-
         # Recompute/invalidate attrs coupled to .audio + downstream features
         #   - TODO Replace rec.id with rec.audio_id (which will require rebuilding feat/_feat caches...)
         #       - TODO Nope, after rec.id overhaul rec.audio_id needs to stay separate from rec.id...
@@ -411,7 +409,7 @@ class Projection(DataclassConfig):
 
     @classmethod
     def load(cls, id: str, **override_attrs) -> 'cls':
-        log.debug('Projection.load', path=cls._save_path(id))
+        log.debug(path=cls._save_path(id))
         # Save/load the attrs, not the instance, so we don't preserve class objects with outdated code
         saved_attrs = joblib.load(cls._save_path(id))
         projection = Projection()
@@ -427,7 +425,7 @@ class Projection(DataclassConfig):
         return model_id
 
     def _save(self, id: str):
-        log.debug('Projection.save', path=self._save_path(id))
+        log.debug(path=self._save_path(id))
         # Save/load the attrs, not the instance, so we don't preserve class objects with outdated code
         joblib.dump(self.__dict__, self._save_path(id))
 
@@ -438,7 +436,7 @@ class Projection(DataclassConfig):
     def fit(self, recs: RecordingDF) -> 'self':
         """skm_ <- .patch (f*p,t)"""
         recs = self.features.transform(recs)  # Pull
-        log.debug('Projection.fit:in', **{
+        log.debug(**{
             'patches': (
                 len(recs.patches),
                 one(set(p.shape[0] for p in recs.patches)),
@@ -446,7 +444,7 @@ class Projection(DataclassConfig):
             ),
         })
         self.skm_ = self._fit(recs)
-        log.debug('Projection.fit:out', **{
+        log.debug('done', **{
             'skm.pca.components_': self.skm_.pca.components_.shape,
             'skm.D': self.skm_.D.shape,
         })
@@ -457,7 +455,7 @@ class Projection(DataclassConfig):
         """skm <- .patch (f*p,t)"""
         skm = SKM(**self.skm_config)
         skm_X = np.concatenate(list(recs.patches), axis=1)  # (Entirely an skm.fit concern)
-        log.debug('Projection._fit:in', **{
+        log.debug(**{
             'skm_X.shape': skm_X.shape,
         })
         if skm_X.shape[1] > self.safety_config.skm_fit_max_t:
@@ -768,7 +766,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
 
     def fit(self, X, y) -> 'self':
         """feat (k*a,) -> ()"""
-        # log.info(f'Search.fit... classifier[{self.classifier}]')
+        # log.info(classifier=self.classifier)
         if self.n_species is not None:
             orig_classes = sk.utils.multiclass.unique_labels(y)
             sub_classes = np_sample(
@@ -793,17 +791,17 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
         self.X_ = X
         self.y_ = y
         self.classes_ = sk.utils.multiclass.unique_labels(y)
-        log.debug('Search.fit:in', **{
+        log.debug(**{
             'recs': len(X),
-            '(n, f*p)': X.shape,
+            '(n,f*p)': X.shape,
         })
         self.classifier_ = self._fit_pure(X, y, self.classes_)
-        log.debug('Search.fit:out', **{
+        log.debug('done', **{
             'classifier.get_params': self.classifier_.get_params(),
             'classifier.classes_': sorted_species(self.classifier_.classes_.tolist()),
             'classifier.classes_.len': len(self.classifier_.classes_),
         })
-        # log.info(f'Search.fit. classifier[{self.classifier}]')
+        # log.info('done', classifier=self.classifier)
         return self
 
     @cache(version=4, key=lambda self, X, y, classes: (
@@ -974,9 +972,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
         species = pd.DataFrame(index=recs.index, data={
             'species_pred': classifier_.predict(X),
         })
-        # log.debug('Search.species', **{
+        # log.debug(**{
         #     'recs': len(recs),
-        #     '(n, k*a)': X.shape,
+        #     '(n,k*a)': X.shape,
         #     'species': len(species),
         # })
 
@@ -1003,9 +1001,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
             {i: [p, c] for i, (c, p) in enumerate(sorted(dict(row).items(), key=lambda x: (-x[1], x[0])))}
             for i, row in pd.DataFrame(proba, columns=classifier_.classes_).iterrows()
         ])
-        # log.debug('Search.species_probs', **{
+        # log.debug(**{
         #     'recs': len(recs),
-        #     '(n, k*a)': X.shape,
+        #     '(n,k*a)': X.shape,
         #     # 'knn.n_neighbors': knn_.n_neighbors,
         #     'species_probs': species_probs.shape,
         # })
@@ -1047,9 +1045,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
             ]
             for i in range(len(fit_is))
         ])
-        # log.debug('Search.similar_recs', **{
+        # log.debug(**{
         #     'recs': len(recs),
-        #     '(n, k*a)': X.shape,
+        #     '(n,k*a)': X.shape,
         #     'similar_recs': similar_recs.shape,
         # })
 
@@ -1066,9 +1064,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
     # For sk: score(X, y)
     def score(self, X, y) -> float:
         """Goodness-of-fit measure (higher is better)"""
-        # log.info(f'Search.score... classifier[{self.classifier}]')
+        # log.info(classifier=self.classifier)
         score = SearchEvals(search=self, X=X, y=y).score()
-        # log.info(f'Search.score. classifier[{self.classifier}]')
+        # log.info('done', classifier=self.classifier)
         return score
 
 

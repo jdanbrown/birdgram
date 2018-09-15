@@ -2,7 +2,6 @@ from collections import OrderedDict
 import contextlib
 import copy
 from functools import lru_cache
-import logging
 import os.path
 import re
 import sys
@@ -20,6 +19,7 @@ import potoo.plot
 from potoo.plot import show_img
 import pydub
 import scipy
+import structlog
 from typing import List
 
 from constants import cache_dir, data_dir, default_log_ylim_min_hz, standard_sample_rate_hz
@@ -27,7 +27,7 @@ from datatypes import Audio, Recording, RecOrAudioOrSignal
 import metadata
 from util import *
 
-logger = logging.getLogger(__name__)
+log = structlog.get_logger(__name__)
 
 
 def df_to_recs(df: pd.DataFrame) -> List[Recording]:
@@ -89,7 +89,7 @@ def unpack_rec(rec_or_audio_or_signal: RecOrAudioOrSignal) -> (
     sample_rate = audio.frame_rate
 
     if sample_rate != standard_sample_rate_hz:
-        logger.warn(f'Nonstandard sample_rate[{sample_rate}] != standard[{standard_sample_rate_hz}] for audio[{audio}]')
+        log.warn(f'Nonstandard sample_rate[{sample_rate}] != standard[{standard_sample_rate_hz}] for audio[{audio}]')
 
     return (rec, audio, x, sample_rate)
 
@@ -352,7 +352,7 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
 
         # TODO Why do we match librosa.feature.melspectrogram when overlap>=.5 but not <.5?
         if overlap < .5:
-            logger.warn(f"Melspectro gives questionable output when overlap[{overlap}] < .5 (doesn't match librosa)")
+            log.warn(f"Melspectro gives questionable output when overlap[{overlap}] < .5 (doesn't match librosa)")
 
         self.melspectro_kwargs = {
             'nperseg': nperseg,
