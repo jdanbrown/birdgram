@@ -141,8 +141,8 @@ gc_on_ipy_post_run_cell()
 # Mimic api.app.create_app
 #
 
-from api.app import *
-check_deps()
+from inits import *
+init_check_deps()
 init_cloudpickle()
 init_logging()
 # init_potoo()  # TODO To break the dependency on my local ~/.pythonrc

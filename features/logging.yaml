@@ -44,7 +44,7 @@ formatters:
 
 filters:
   bubo_filter:
-    '()': api.app.BuboFilter
+    '()': logging_.BuboFilter
 
 handlers:
   console:
