@@ -24,6 +24,9 @@ from util import *
 
 log = structlog.get_logger(__name__)
 
+# TODO Can we load a slice, instead of the whole input file?
+#   - Maybe way faster for large inputs when we know we only want 10/5/3s in the end
+
 
 @dataclass
 class Load(DataclassConfig):

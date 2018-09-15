@@ -16,12 +16,12 @@ config = AttrDict(
 
     audio_to_url = dict(
 
-        # TODO TODO WIP tuning (notebooks/audio_codecs_data_volume)
+        # Tuned in notebooks/audio_codecs_data_volume
         audio_kwargs=dict(
-            # format='wav',
-            # format='mp3', bitrate='32k',
-            # format='mp4', bitrate='32k', codec='aac',
-            format='mp4', bitrate='32k', codec='libfdk_aac',
+            # format='mp3', bitrate='32k',                    # Clips hi freqs (just barely)
+            # format='mp4', bitrate='32k', codec='aac',       # Worse than libfdk_aac(32k)
+            format='mp4', bitrate='32k', codec='libfdk_aac',  # Very hard to distinguish from wav, and 10x smaller (!)
+            # format='wav',                                   # Baseline quality, excessive size
         ),
 
         url_type={
