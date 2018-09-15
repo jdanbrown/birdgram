@@ -1520,6 +1520,30 @@ def _audio_id_simplify_ops(ops: List[str]) -> List[str]:
     def simplify_pair(a: 'op', b: 'op', A: 'op_type', B: 'op_type') -> Optional[List['op']]:
         """[*xs] if can simplify [a,b] -> [*xs], else None"""
 
+        # PUNT Simplify .op().enc(wav) -> .op(), since Audio._data bytes in mem are always implicitly pcm/wav
+        #   - Have
+        #       - .enc(wav) anytime we write to file with format=wav
+        #       - This is weird because .resample().enc(wav) "means" the same thing as .resample(), i.e. disk writes
+        #         aren't semantically meaningful
+        #   - Want
+        #       - Add .enc(wav) only when it's semantically meaningful, i.e. only after reading a non-wav input
+        #       - Simplification is currently the mechanism for rewriting id ops, and it doesn't currently know whether
+        #         it's being used to construct the output file path or the input audio id, so achieving this would
+        #         require introducing a way to distinguish those two uses
+        #       - And we'd need to split audio id into two separate notions:
+        #           - "File ids" like .enc(mp3) if load(format=mp3), and also .enc(wav) if load(format=wav)
+        #           - "Memory ids" like .enc(mp3).enc(wav)
+        #           - [Not totally clear to me...]
+        #       - Any of which would require updating the various callers, which we don't have great test coverage for,
+        #         so let's definitely, definitely punt on this for a while, because changing that area of the code is a
+        #         pretty reliable way to burn up most of your week
+        #   - Examples (have -> want)
+        #       .wav                                      -> .wav
+        #       .mp3.enc(wav)                             -> .mp3.enc(wav)
+        #       .mp3.resample().enc(wav)                  -> .mp3.resample()
+        #       .mp3.resample().enc(wav).slice().enc(wav) -> .mp3.resample().slice()
+        #       .mp3.resample().enc(wav).slice().enc(mp3) -> .mp3.resample().slice().enc(mp3).enc(wav)
+
         # .wav.enc(wav) -> .wav
         #   - Can't do this with most input encodings, since we don't know the encoding params from the filename
         #   - But .wav's only encoding params are (hz,ch,bit), which we already control for
@@ -1536,10 +1560,15 @@ def _audio_id_simplify_ops(ops: List[str]) -> List[str]:
             return [a]
 
         # .slice(p,q).slice(x,y) -> .slice(min(p+x,q),min(p+y,q))
-        if [A, B] == ['slice', 'slice']:
-            (p, q) = parse.parse('slice({:d},{:d})', a).fixed
-            (x, y) = parse.parse('slice({:d},{:d})', b).fixed
-            return ['slice(%d,%d)' % (min(p + x, q), min(p + y, q))]
+        #   - Potentially unsafe because .slice().slice() means two slice operations have actually happeneded, different
+        #     than e.g. .resample().resample() -> .resample() where our simplification informs the caller to skip the
+        #     second resample, so let's omit this simplification until we have robust testing to validate that two slice
+        #     operations actually produce the same output data as one combined slice operation
+        #   - cf. the assert in Features._edit for another place affected by this decision
+        # if [A, B] == ['slice', 'slice']:
+        #     (p, q) = parse.parse('slice({:d},{:d})', a).fixed
+        #     (x, y) = parse.parse('slice({:d},{:d})', b).fixed
+        #     return ['slice(%d,%d)' % (min(p + x, q), min(p + y, q))]
 
     # Iterate until convergence
     ops = list(ops)

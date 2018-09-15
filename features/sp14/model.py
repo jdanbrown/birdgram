@@ -317,10 +317,14 @@ class Features(DataclassConfig):
         # Integrity checks (burden on caller)
         assert rec['id'] == rec['audio'].unbox.name
 
-        # Ensure new id is different from input id (else cache-key conflation)
+        # Ensure new id is different from input id, else we risk cache-key conflation
+        #   - (An example where we maybe don't want this assert is being able to simplify slice(x).slice(y) -> slice(z),
+        #     but that would assume that mechanically performing two slice operations produces the same output data as
+        #     the one combined slice operation, which probably isn't a reliable assumption until we have a decent amount
+        #     of testing to validate it)
         if not id:
             id = audio_id_add_ops(rec['id'], 'unk(%s)' % secrets.token_hex(4))
-        assert id != rec['id']
+        assert id != rec['id'], f"{id} != {rec['id']}"
 
         # Edit .audio
         audio = rec.pop('audio').unbox

@@ -166,6 +166,8 @@ def plot_spectro_wrap(
         **kwargs,
     )
     if audio and ret:
+        # WARNING config.audio_to_url.audio_kwargs will lossily compress audio without changing the spectro (above)
+        #   - If you want to visualize lossy audio encoding via spectros, don't rely on this
         ret = display_with_audio(ret, audio=rec.audio.unbox, **(audio_kwargs or {}))
     return ret
 
@@ -179,6 +181,8 @@ def plot_spectro(
 ):
     ret = plot_spectros(rec, raw=raw, **kwargs)
     if audio and ret:
+        # WARNING config.audio_to_url.audio_kwargs will lossily compress audio without changing the spectro (above)
+        #   - If you want to visualize lossy audio encoding via spectros, don't rely on this
         ret = display_with_audio(ret, audio=rec.audio.unbox, **(audio_kwargs or {}))
     return ret
 
