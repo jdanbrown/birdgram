@@ -304,18 +304,55 @@ class Load(DataclassConfig):
                 audio = audio_from_file_in_data_dir(rec.path)
 
         # "Drop" audio files that fail during either transcription or normal load
+        #   - One common source of these is "restricted" xc recs where audio.mp3 downloads as html instead of mp3, e.g.
+        #       - https://www.xeno-canto.org/308503 -> https://www.xeno-canto.org/308503/download
         #   - TODO Find a way to minimize the surface area of exceptions that we swallow here. Currently huge and bad.
         except Exception as e:
-            # "Drop" invalid audio files by replacing them with a 0s audio, so we can detect and filter out downstream
-            log.warn('Dropping invalid audio file', **dict(
-                error=str(e),
+            filesize_b = or_else(None, lambda: Path(rec_abs_path).stat().st_size)
+
+            # Parse ffmpeg error msgs out of pydub error msgs, else you're stuck with one big line of b'ffmpeg...\n...'
+            if isinstance(e, pydub.exceptions.CouldntDecodeError):
+                try:
+                    pydub_msg = e.args[0]
+                    ffmpeg_msg_as_bytes_repr = pydub_msg.split('\n')[-1]
+                    ffmpeg_msg = eval(ffmpeg_msg_as_bytes_repr).decode()
+                    e_msg = f'{type(e).__name__}(...)'  # Abbreviate error msg, since it's huge and noisy
+                except:
+                    ffmpeg_msg = None
+                    e_msg = str(e)
+
+            # Try to detect "Download disabled for this species" pages (which we naively download as audio.mp3), e.g.
+            #   - https://www.xeno-canto.org/308503 -> https://www.xeno-canto.org/308503/download
+            download_disabled_msg = 'Download disabled for this species'
+            download_restricted_msg = 'restricted due to conservation concerns'
+            download_disabled = False
+            download_restricted = False
+            try:
+                if filesize_b < 1024**2:  # Don't bother on large files
+                    with open(rec_abs_path, 'rt') as f:
+                        audio_data = f.read()
+                    download_disabled = download_disabled_msg in audio_data
+                    download_restricted = download_restricted_msg in audio_data
+            except Exception as e:
+                pass
+
+            # Give an informative warning
+            log_msg = (
+                f'Dropping restricted xc recording ({download_restricted_msg!r})' if download_restricted else
+                f'Dropping disabled xc recording ({download_disabled_msg!r})' if download_disabled else
+                f'Dropping invalid audio file:\n{ffmpeg_msg}\n' if ffmpeg_msg else
+                f'Dropping invalid audio file'
+            )
+            log.warn(log_msg, **dict(
+                error=e_msg,
                 dataset=rec.get('dataset'),
                 id=rec.get('id'),
                 path=rec.path,
-                abs_path=rec_abs_path,
                 exists=Path(rec_abs_path).exists(),
-                filesize_b=or_else(None, lambda: Path(rec_abs_path).stat().st_size),
+                filesize_b=filesize_b,
             ))
+
+            # "Drop" invalid audio files by replacing them with a 0s audio, so we can detect and filter out downstream
             if load:
                 audio = audiosegment.empty()
                 audio.name = rec.path
