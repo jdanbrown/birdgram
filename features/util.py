@@ -1453,7 +1453,6 @@ def audio_ensure_has_file(audio, load=None, **audio_kwargs) -> Audio:
     return audio
 
 
-# Unused [TODO or XXX?]
 def rec_audio_ensure_has_file(rec: 'Recording', **kwargs) -> 'Recording':
     assert rec.id == rec.audio.unbox.name
     rec = rec.copy()  # Copy so we can mutate
