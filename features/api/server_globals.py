@@ -6,6 +6,7 @@ import structlog
 
 from attrdict import AttrDict
 from cache import cache
+from config import config
 from datasets import load_xc_meta
 from sp14.model import Search
 
@@ -39,23 +40,21 @@ class _sg_load(DataclassUtil):
     # Config:
 
     # search
-    experiment_id = 'comp-l1-l2-na-ca'
-    cv_str = 'split_i=0,train=34875,test=331,classes=331'
-    search_params_str = 'n_species=331,n_recs=1.0'
-    classifier_str = 'cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced'
-    random_state = 0
-    fix_missing_skm_projection_id = 'peterson-v0-26bae1c'
+    experiment_id                 : str = config.server_globals.sg_load.experiment_id
+    cv_str                        : str = config.server_globals.sg_load.cv_str
+    search_params_str             : str = config.server_globals.sg_load.search_params_str
+    classifier_str                : str = config.server_globals.sg_load.classifier_str
+    random_state                  : str = config.server_globals.sg_load.random_state
+    fix_missing_skm_projection_id : str = config.server_globals.sg_load.fix_missing_skm_projection_id
 
     # xc_meta
-    (countries_k, com_names_k, num_recs) = (None, None,   None)  # All xc.metadata
-    # (countries_k, com_names_k, num_recs) = (None, None,   10)    # XXX Faster dev
-    # (countries_k, com_names_k, num_recs) = (None, 'dan5', None)  # XXX Faster dev
-    # (countries_k, com_names_k, num_recs) = (None, 'dan5', 10)    # XXX Faster dev
+    countries_k : str = config.server_globals.sg_load.countries_k
+    com_names_k : str = config.server_globals.sg_load.com_names_k
+    num_recs    : int = config.server_globals.sg_load.num_recs
 
     # load*: Maintain tight and well-defined input/output relationships so we can cache (without headaches)
     #   - e.g. any app config we depend on should be explicitly surfaced as function params
 
-    @classmethod
     def load(self):
         # Split load* by method so we can easily inspect data volume from @cache dir sizes
         #   - Also helps isolate cache refresh
@@ -64,8 +63,7 @@ class _sg_load(DataclassUtil):
             **self.load_xc_meta(),
         )
 
-    @classmethod
-    @cache(version=0)
+    @cache(version=2, key=lambda self: self)
     def load_search(self):
         log.info()
         x = AttrDict()
@@ -82,8 +80,7 @@ class _sg_load(DataclassUtil):
         x.load = x.features.load
         return dict(x)
 
-    @classmethod
-    @cache(version=1)
+    @cache(version=3, key=lambda self: self)
     def load_xc_meta(self):
         log.info()
         x = AttrDict()

@@ -14,7 +14,28 @@ config = AttrDict(
         local='192.168.0.195:8000',
     ),
 
-    audio_to_url = dict(
+    server_globals=dict(
+        sg_load=dict(
+
+            # search
+            experiment_id='comp-l1-l2-na-ca',
+            cv_str='split_i=0,train=34875,test=331,classes=331',
+            search_params_str='n_species=331,n_recs=1.0',
+            classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
+            random_state=0,
+            fix_missing_skm_projection_id='peterson-v0-26bae1c',
+
+            # xc_meta
+            # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
+            # countries_k='na', com_names_k='ca',   num_recs=None,  # US+CA+MX/CA
+            # countries_k=None, com_names_k=None,   num_recs=10,    # XXX Faster dev
+            # countries_k=None, com_names_k='dan5', num_recs=None,  # XXX Faster dev
+            countries_k=None, com_names_k='dan5', num_recs=10,    # XXX Faster dev
+
+        )
+    ),
+
+    audio_to_url=dict(
 
         # Tuned in notebooks/audio_codecs_data_volume
         audio_kwargs=dict(
