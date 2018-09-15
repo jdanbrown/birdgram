@@ -99,8 +99,10 @@ from xgb_util import *
 #   - cf. api.app.init_potoo
 #
 
+from potoo.ipython import ipy_load_ext_no_warnings
+
 if ipy:
-    ipy.magic('load_ext autoreload')
+    ipy_load_ext_no_warnings('autoreload')
     ipy.magic('autoreload 2')
 
 if ipy:
@@ -127,10 +129,10 @@ plot_set_defaults()
 if ipy:
 
     import potoo.default_magic_magic
-    ipy.magic('load_ext potoo.default_magic_magic')
+    ipy_load_ext_no_warnings('potoo.default_magic_magic')
 
     import potoo.lprun_cell_magic
-    ipy.magic('load_ext potoo.lprun_cell_magic')
+    ipy_load_ext_no_warnings('potoo.lprun_cell_magic')
 
 from potoo.ipython import *
 gc_on_ipy_post_run_cell()
