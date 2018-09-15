@@ -805,7 +805,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
             'classifier.classes_': sorted_species(self.classifier_.classes_.tolist()),
             'classifier.classes_.len': len(self.classifier_.classes_),
         })
-        # log.info('done', classifier=self.classifier)
+        # log.debug('done', classifier=self.classifier)
         return self
 
     @cache(version=4, key=lambda self, X, y, classes: (
@@ -1070,7 +1070,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
         """Goodness-of-fit measure (higher is better)"""
         # log.info(classifier=self.classifier)
         score = SearchEvals(search=self, X=X, y=y).score()
-        # log.info('done', classifier=self.classifier)
+        # log.debug('done', classifier=self.classifier)
         return score
 
 

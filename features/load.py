@@ -160,7 +160,7 @@ class Load(DataclassConfig):
         metadata = [x for x in metadata if x is not None]
         # Convert to df
         metadata = RecordingDF(metadata)
-        log.info('done', **{
+        log.debug('done', **{
             'sum(duration_h)': round_sig(metadata.duration_s.sum() / 3600, 3),
             'sum(samples_mb)': round_sig(metadata.samples_mb.sum(), 3),
             'sum(samples_n)': int(metadata.samples_n.sum()),
@@ -227,7 +227,7 @@ class Load(DataclassConfig):
             recs = recs.assign(
                 id=lambda df: df.audio.map(lambda audio: audio.unbox.name),
             )
-        log.info('done', **{
+        log.debug('done', **{
             'len(audio)': len(audio),
         })
         return recs
@@ -259,7 +259,7 @@ class Load(DataclassConfig):
             recs = recs.assign(
                 id=lambda df: df.audio.map(lambda audio: audio.unbox.name),
             )
-        log.info('done', **{
+        log.debug('done', **{
             'len(audio)': len(audio),
             'audio_config': self.audio_config,
         })
