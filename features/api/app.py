@@ -135,7 +135,7 @@ class BuboFilter(logging.Filter):
 
     def filter(self, record):
 
-        # HACK Find the caller's funcName
+        # HACK Find the caller's pathname/lineno/funcName (mimic logging.Logger.{_log,findCaller,makeRecord})
         #   - The builtin logging library supports `funcName` in LogRecord format strings, but it stops working when you
         #     use structlog _and_ set a log level via logging config (e.g. fileConfig('logging.yaml')), because in that
         #     case funcName always reports `_proxy_to_logger` (from structlog.stdlib) instead of the actual caller
@@ -150,7 +150,11 @@ class BuboFilter(logging.Filter):
             if module is not None and module.__name__.split('.')[0] in ['logging', 'structlog']:
                 continue
             break
-        record.funcName = caller.function
+
+        record.pathname = caller.frame.f_code.co_filename
+        record.lineno = caller.frame.f_lineno
+        record.funcName = caller.frame.f_code.co_name
+        record.stack_info = None  # TODO Capture this (mimic logging.Logger.findCaller) [high complexity, low prio]
 
         # HACK `msg % args` is done downstream by Formatter, but we do it in advance to compute name_funcName_message
         #   - https://docs.python.org/3/library/logging.html
