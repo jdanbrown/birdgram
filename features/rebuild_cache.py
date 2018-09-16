@@ -16,20 +16,14 @@ recs = (sg.xc_meta
 audio_evals = (
     (recs
 
-        # .sample(random_state=0,
-        #     # n=1,
-        #     # n=3,
-        #     n=100,
-        # )
-
         # Load .audio
         .pipe(sg.load.audio, use='dask', scheduler='threads')
 
-        # Add .feat, .spectro from transcoded .audio
+        # Add .feat, .spectro from .audio
         .pipe(sg.projection.transform)  # .feat
         .assign(spectro=lambda df: sg.features.spectro(df,
             scheduler='threads',
-            cache=True,
+            cache=True,  # Do cache .spectro calls (unlike model training where we only need them for caching .feat)
         ))
 
     )
