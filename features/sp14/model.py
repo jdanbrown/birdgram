@@ -169,7 +169,7 @@ class Features(DataclassConfig):
         return patches
 
     @short_circuit(lambda self, recs, **kwargs: recs.get('spectro'))
-    def spectro(self, recs: RecordingDF, cache=None, **kwargs) -> Column[Melspectro]:
+    def spectro(self, recs: RecordingDF, cache=None, load=True, **kwargs) -> Column[Melspectro]:
         """.spectro (f,t) <- .audio (samples,)"""
         log.debug(**{
             'len(recs)': len(recs),
@@ -187,15 +187,15 @@ class Features(DataclassConfig):
         #       3843/3839    0.333    0.000    0.334    0.000 {built-in method numpy.core.multiarray.array}
         #             100    0.285    0.003    3.228    0.032 spectral.py:563(spectrogram)
         #             100    0.284    0.003    0.381    0.004 signaltools.py:2464(detrend)
-        spectros = map_progress(partial(self._spectro, cache=cache), df_rows(recs), desc='spectro', **{
+        spectros = map_progress(partial(self._spectro, cache=cache, load=load), df_rows(recs), desc='spectro', **{
             **(dict() if 'use' in kwargs else dict(
                 use='dask', scheduler='threads',
             )),
             **kwargs,
         })
-        log.debug('done', **{
+        log.debug('done', **({} if not load else {
             '(f,sum(t))': (one({x.S.shape[0] for x in spectros}), sum(x.S.shape[1] for x in spectros)),
-        })
+        }))
         return spectros
 
     @short_circuit(lambda self, rec: rec.get('patches'))
@@ -211,12 +211,17 @@ class Features(DataclassConfig):
 
     @short_circuit(lambda self, rec, **kwargs: rec.get('spectro'))
     # TODO @cache(nocache=...) to kill _spectro_cache/_spectro_nocache [code merge is easy, testing takes time (and don't skip it!)]
-    def _spectro(self, rec: Row, cache=None, **kwargs) -> Melspectro:
+    def _spectro(self, rec: Row, cache=None, load=True, **kwargs) -> Melspectro:
         cache = coalesce(cache, False)
         if cache:
-            return self._spectro_cache(rec, **kwargs)
+            spectro = self._spectro_cache(rec, **kwargs)
         else:
-            return self._spectro_nocache(rec, **kwargs)
+            spectro = self._spectro_nocache(rec, **kwargs)
+        if load:
+            return spectro
+        else:
+            # A mem-safe way to run a large .spectro
+            return None
 
     @cache(version=0, key=lambda self, rec, **kwargs: (rec.id, kwargs, self.spectro_config, self.deps))
     def _spectro_cache(self, rec: Row, **kwargs) -> Melspectro:
