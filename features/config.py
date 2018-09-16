@@ -27,7 +27,7 @@ config = AttrDict(
 
             # xc_meta
             # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
-            countries_k='na', com_names_k='ca',   num_recs=None,  # US+CA+MX/CA
+            countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
             # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
 
         )
