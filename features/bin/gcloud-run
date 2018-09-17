@@ -127,11 +127,16 @@ bin_dir = code_dir / 'bin'
 #   - https://cloud.google.com/compute/docs/disks/
 #   - pd-standard
 #       - $.04/gb/mo
-#       - Throughput r  = max(180, 12*size/100gb) mb/s [max at 1500gb, $60/mo]
-#       - Throughput w  = max(120, 12*size/100gb) mb/s [max at 1000gb, $40/mo]
+#       - Throughput r  = max(  180,  12*size/100gb) mb/s [max at  1500gb, $ 60/mo]
+#       - Throughput w  = max(  120,  12*size/100gb) mb/s [max at  1000gb, $ 40/mo]
+#       - Ops        r  = max( 3000,  75*size/100gb)  r/s [max at  4000gb, $160/mo]
+#       - Ops        w  = max(15000, 150*size/100gb)  w/s [max at 10000gb, $400/mo]
 #   - pd-ssd
 #       - $.17/gb/mo
-#       - Throughput rw = max(240, 48*size/100gb) mb/s
+#       - Throughput r = max(  240 –  1200,   48*size/100gb) mb/s [max at 500 – 2500 gb, $ 85 – 425 /mo]
+#       - Throughput w = max(  240 –   400,   48*size/100gb) mb/s [max at 500 –  833 gb, $ 85 – 142 /mo]
+#       - Ops        r = max(15000 – 60000, 3000*size/100gb) mb/s [max at 500 – 2000 gb, $ 85 – 340 /mo]
+#       - Ops        w = max(15000 – 30000, 3000*size/100gb) mb/s [max at 500 – 1000 gb, $ 85 – 170 /mo]
 #   - Examples
 #       - pd-standard  100gb:  $4/mo,  12mb/s r,  12mb/s w
 #       - pd-standard  200gb:  $8/mo,  24mb/s r,  24mb/s w
