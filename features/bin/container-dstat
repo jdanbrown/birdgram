@@ -1,0 +1,4 @@
+#!/bin/bash -eux
+
+exec "`dirname "$0"`"/ssh-container "$@" \
+  dstat --cpu --mem --disk --io --net --proc --sys --top-cpu
