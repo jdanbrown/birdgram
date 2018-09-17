@@ -272,7 +272,7 @@ class Features(DataclassConfig):
     # Util
     #
 
-    def slice_audio(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
+    def slice_audio(self, rec: Row, start_s: float = None, end_s: float = None, **with_audio_kwargs) -> Row:
         """Slices .audio, recomputes .spectro (with denoise)"""
         # Ensure no None's in slice() ops: convert None/None -> 0/len (like pydub.AudioSegment.__getitem__)
         start_ms = int(1000 * (0                    if start_s is None else start_s))
@@ -282,7 +282,8 @@ class Features(DataclassConfig):
             # Stable rec.id (e.g. for caching)
             #   - Extend id with 'slice()' op
             #   - Extend id with 'spectro_denoise()' op to mark that .spectro was transformed by _spectro_denoise
-            id=audio_id_add_ops(rec.id, 'slice(%s,%s)' % (start_ms, end_ms), 'spectro_denoise()')
+            id=audio_id_add_ops(rec.id, 'slice(%s,%s)' % (start_ms, end_ms), 'spectro_denoise()'),
+            **with_audio_kwargs,
         )
 
     def slice_spectro(self, rec: Row, start_s: float = None, end_s: float = None) -> Row:
@@ -298,11 +299,11 @@ class Features(DataclassConfig):
             id=audio_id_add_ops(rec.id, 'slice(%s,%s)' % (start_ms, end_ms))
         )
 
-    def with_audio(self, rec: Row, f: Callable[[Audio], Audio], id=None, **kwargs) -> Row:
+    def with_audio(self, rec: Row, f: Callable[[Audio], Audio], id=None, recompute_spectro=True, **kwargs) -> Row:
         """Transforms .audio, recomputes .spectro (with denoise)"""
         return self._edit(rec,
             audio_f=lambda rec, audio: f(audio),
-            spectro_f=lambda rec, spectro: self._spectro(rec, **kwargs),
+            spectro_f=None if not recompute_spectro else lambda rec, spectro: self._spectro(rec, **kwargs),
             id=id,
         )
 
@@ -353,8 +354,11 @@ class Features(DataclassConfig):
                 del rec[k]
 
         # Edit .spectro
-        spectro = rec.pop('spectro')  # Pop to avoid short-circuits on rec.spectro (e.g. self._spectro(rec))
-        rec['spectro'] = spectro_f(pd.Series(rec), spectro)  # Convert dict -> series for spectro_f
+        if spectro_f:
+            spectro = rec.pop('spectro')  # Pop to avoid short-circuits on rec.spectro (e.g. self._spectro(rec))
+            rec['spectro'] = spectro_f(pd.Series(rec), spectro)  # Convert dict -> series for spectro_f
+        else:
+            rec.pop('spectro', None)
 
         # Recompute/invalidate attrs coupled to .spectro + downstream features
         #   - HACK Very brittle; how to avoid maintaining an explicit list? Any easier to whitelist upstreams instead?
@@ -493,7 +497,7 @@ class Projection(DataclassConfig):
             **dict(
                 # FIXME Threading causes hangs during heavy (xc 13k) cache hits, going with processes to work around
                 # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)  # Fastest for cache hits, by a lot
-                # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs)
+                # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs)  # FIXME Hangs during heavy (xc 13k) cache hits
                 # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO Commented while debugging learning_curve
                 # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO thread -> proc after encountering hangs again
                 override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)  # FIXME proc -> sync after reeaallly slow proc event

@@ -1432,7 +1432,7 @@ def audio_from_file(path: str, format=None, **kwargs) -> Audio:
     return audiosegment.AudioSegment(seg, path)
 
 
-def audio_ensure_has_file(audio, load=None, **audio_kwargs) -> Audio:
+def audio_ensure_has_file(audio, load=None, load_audio=True, **audio_kwargs) -> Audio:
     """
     Code bottleneck to bridge from global utils (e.g. viz.plot_spectro, util.display_with_audio) into
     load.transcode_audio, which requires conjuring up a load instance, which we achieve in a hacky-but-acceptable way
@@ -1444,20 +1444,34 @@ def audio_ensure_has_file(audio, load=None, **audio_kwargs) -> Audio:
     #   - TODO Refactor modules to avoid util importing load, which creates an import cycle
     from load import Load  # Avoid cyclic imports
     audio_kwargs = audio_kwargs or config.audio_to_url.audio_kwargs
+    assert load not in [True, False],  "Oops, did you mean load_audio?"  # Confusing name collision
     load = (load or Load()).replace(**audio_kwargs)
 
     # Transcode + persist
     #   - TODO Make Load._transcode_audio not private
-    audio = load._transcode_audio(audio)
-    assert audio_abs_path(audio).exists()
+    #   - FIXME This sometimes (^C?) creates (ffmpeg) and then barfs on (final audio_from_file_in_data_dir) empty files
+    audio = load._transcode_audio(audio, load=load_audio)  # Confusing name collision
+    if audio:  # Skip if load_audio=False
+        assert audio_abs_path(audio).exists()
     return audio
+
+
+def recs_audio_ensure_has_file(recs: 'RecordingDF', progress_kwargs=None, **kwargs) -> 'RecordingDF':
+    return (recs
+        .pipe(df_map_rows_progress, desc='rec_audio_ensure_has_file',
+            use='dask', scheduler='threads',
+            f=partial(rec_audio_ensure_has_file, **kwargs),
+            **(progress_kwargs or {}),
+        )
+    )
 
 
 def rec_audio_ensure_has_file(rec: 'Recording', **kwargs) -> 'Recording':
     assert rec.id == rec.audio.unbox.name
     rec = rec.copy()  # Copy so we can mutate
     rec.audio = box(audio_ensure_has_file(rec.audio.unbox, **kwargs))
-    rec.id = rec.audio.unbox.name  # Propagate audio.name (= path) to rec.id
+    if rec.audio.unbox:  # Skip if load_audio=False
+        rec.id = rec.audio.unbox.name  # Propagate audio.name (= path) to rec.id
     return rec
 
 
