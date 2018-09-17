@@ -165,7 +165,7 @@ bin_dir = code_dir / 'bin'
 #   - TODO Clean up --disk / --vm-init: tight coupling, wouldn't use one without the other
 #   - HACK Need bash because cos mounts are noexec (ugh) [https://stackoverflow.com/a/50279396/397334]
 @click.option('--vm/--no-vm', default=False, help='--vm is an alias for --no-container')
-@click.option('--vm-init', default='sudo bash vm-bin/mount-disk-bubo-data')
+@click.option('--vm-init', default='sudo bash vm-bin/mount-disk-bubo-data %(disk_name)s')
 @click.option('--container/--no-container', default=True, help='Run command in container, else run in instance')
 @click.option('--container-init', default='vm-bin/mount-bubo-data-%(disk_mode)s')
 @click.option('--container-pull/--no-container-pull', default=False, help='True if creating an instance, else false')
@@ -285,6 +285,8 @@ def main(
     container_init = container_init % dict(disk_mode=disk_mode)
     if vm:
         container = False
+    if vm_init:
+        vm_init = vm_init % dict(disk_name=disk_name)
     container_pull = container_pull or create_instance  # Always pull if the instance is fresh
     container_image = container_image % dict(project=project)
     container_name = container_name % dict(instance_name=instance_name)
