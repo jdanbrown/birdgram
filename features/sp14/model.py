@@ -341,10 +341,8 @@ class Features(DataclassConfig):
         #   - TODO Replace rec.id with rec.audio_id (which will require rebuilding feat/_feat caches...)
         #       - TODO Nope, after rec.id overhaul rec.audio_id needs to stay separate from rec.id...
         rec['id'] = id
-        rec['path'] = None  # No meaningful .path for an in-mem .audio
-        #   - FIXME Update after rec.id overhaul (rec.id = audio.name = rec.path)
-        rec['basename'] = None  # No meaningful .basename for an in-mem .audio
-        # Recompute .duration_s, .samples_*, basename, species, etc.
+        rec['path'] = id  # XXX rec.path, after fully replacing with rec.id
+        # Recompute .duration_s, .samples_*, species, etc.
         del rec['duration_s']  # Bust short-circuit
         for k, v in self.load._metadata(pd.Series(rec)).items():  # Convert dict -> series for load._metadata
             rec[k] = v

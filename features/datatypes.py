@@ -46,7 +46,7 @@ class Recording(DataclassUtil, DataclassAsDict):
     duration_s: float = None
     samples_mb: float = None
     samples_n: int = None
-    basename: str = None
+    basename: str = None  # XXX Defunct [safe to remove? maybe need to keep compat with pkl's from joblib cache?]
     species_longhand: str = None
 
     # More recently added metadata, from notebooks/app_ideas_*

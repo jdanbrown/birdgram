@@ -1267,7 +1267,6 @@ def rec_str_line(rec, *_first, first=[], last=[], default=[
     ('recorded_at', lambda x: x.isoformat()),
     'species',
     ('duration_s', '%.1fs'),
-    'basename',
 ]) -> str:
     """Interactive shorthand"""
     rec = rec.copy()

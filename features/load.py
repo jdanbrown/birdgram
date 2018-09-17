@@ -114,7 +114,7 @@ class Load(DataclassConfig):
             dict(
                 id=path,
                 dataset=dataset,
-                path=path,
+                path=path,  # XXX rec.path, slowly being replaced by rec.id
                 # filesize_b=os.path.getsize(path),  # XXX Bottleneck (xc) -- O(n) stat calls
             )
             for dataset, path in tqdm(disable=True, desc='_recs_paths', unit=' paths', iterable=(
@@ -130,7 +130,6 @@ class Load(DataclassConfig):
         'species_longhand',
         'species_com_name',
         'species_query',
-        'basename',
         # TODO De-dupe these with self._metadata
         'duration_s',
         'samples_mb',
@@ -271,7 +270,7 @@ class Load(DataclassConfig):
     def _audio_no_transcode(self, rec: Row) -> Audio:
         """
         audio <- .path
-        - Load the raw, unstandardized input file at rec.path, instead of the usual standardized transcoded file
+        - Load the raw, unstandardized input file at rec.id, instead of the usual standardized transcoded file
         """
         return self.replace(should_transcode=False)._audio(rec, load=True)
 
@@ -291,11 +290,10 @@ class Load(DataclassConfig):
         """
         c = self.audio_config
 
-        # Require path to be under data_dir
-        #   - Back compat: allow abs paths, and convert them to rel paths [XXX]
-        if Path(rec.path).is_absolute():
-            raise ValueError(f"rec.path[{rec.path}] must be relative to data_dir[{data_dir}]")
-        rec_abs_path = str(Path(data_dir) / rec.path)
+        # Require rec.id (= path) to be under data_dir
+        if Path(rec.id).is_absolute():
+            raise ValueError(f"rec.id[{rec.id}] must be relative to data_dir[{data_dir}]")
+        rec_abs_path = Path(data_dir) / rec.id
 
         # Audio: transcode + cache + load (if requested)
         audio = None
@@ -304,25 +302,28 @@ class Load(DataclassConfig):
                 audio = self._transcode_path(rec, load=load)  # (Returns None if load=False)
                 # NOTE If load=False then audio is now None, which also means rec.id won't update in the caller
             elif load:
-                audio = audio_from_file_in_data_dir(rec.path)
+                audio = audio_from_file_in_data_dir(rec.id)
 
         # "Drop" audio files that fail during either transcription or normal load
         #   - One common source of these is "restricted" xc recs where audio.mp3 downloads as html instead of mp3, e.g.
         #       - https://www.xeno-canto.org/308503 -> https://www.xeno-canto.org/308503/download
         #   - TODO Find a way to minimize the surface area of exceptions that we swallow here. Currently huge and bad.
         except Exception as e:
-            filesize_b = or_else(None, lambda: Path(rec_abs_path).stat().st_size)
+            filesize_b = or_else(None, lambda: rec_abs_path.stat().st_size)
 
             # Parse ffmpeg error msgs out of pydub error msgs, else you're stuck with one big line of b'ffmpeg...\n...'
+            e_msg = str(e)
+            ffmpeg_msg = None
             if isinstance(e, pydub.exceptions.CouldntDecodeError):
                 try:
                     pydub_msg = e.args[0]
                     ffmpeg_msg_as_bytes_repr = pydub_msg.split('\n')[-1]
                     ffmpeg_msg = eval(ffmpeg_msg_as_bytes_repr).decode()
-                    e_msg = f'{type(e).__name__}(...)'  # Abbreviate error msg, since it's huge and noisy
+                    # If ffmpeg eval succeeded, stop skipping over exceptions
                 except:
-                    ffmpeg_msg = None
-                    e_msg = str(e)
+                    pass
+                else:
+                    e_msg = f'{type(e).__name__}(...)'  # Abbreviate error msg, since it's huge and noisy
 
             # Try to detect "Download disabled for this species" pages (which we naively download as audio.mp3), e.g.
             #   - https://www.xeno-canto.org/308503 -> https://www.xeno-canto.org/308503/download
@@ -350,20 +351,19 @@ class Load(DataclassConfig):
                 error=e_msg,
                 dataset=rec.get('dataset'),
                 id=rec.get('id'),
-                path=rec.path,
-                exists=Path(rec_abs_path).exists(),
+                exists=rec_abs_path.exists(),
                 filesize_b=filesize_b,
             ))
 
             # "Drop" invalid audio files by replacing them with a 0s audio, so we can detect and filter out downstream
             if load:
                 audio = audiosegment.empty()
-                audio.name = rec.path
+                audio.name = rec.id
                 audio.seg.frame_rate = c.sample_rate
 
         # Integrity checks
         if audio is not None:
-            assert audio_abs_path(audio).exists()
+            assert audio_abs_path(audio).exists(), f"{audio.name}"
 
         return audio
 
@@ -373,12 +373,12 @@ class Load(DataclassConfig):
         - Minimize r/w ops, e.g. for efficient bulk usage
         """
         c = self.audio_config
-        assert not Path(rec.path).is_absolute()
+        assert not Path(rec.id).is_absolute()
 
         # HACK Mock an audio to detect cache hit vs. miss inside _transcode_audio, so we can skip the audio read
         if 'sample_rate' in rec:
             mock_audio = AttrDict(
-                name=rec.path,
+                name=rec.id,
                 frame_rate=rec.sample_rate,
                 channels=rec.channels,
                 sample_width=rec.sample_width_bit // 8,
@@ -397,9 +397,9 @@ class Load(DataclassConfig):
                     return audio_from_file_in_data_dir(audio_id)
 
         # Else we incur an audio read + _transcode_audio
-        log.debug(f'Read: {rec.path}')
+        log.debug(f'Read: {rec.id}')
         return self._transcode_audio(
-            audio_from_file_in_data_dir(rec.path),
+            audio_from_file_in_data_dir(rec.id),
             load=load,
         )
 
