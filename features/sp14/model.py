@@ -320,8 +320,15 @@ class Features(DataclassConfig):
         #   - Convert series -> dict to avoid bottlenecks from lots of pd.Series.__setitem__ (determined by profiling)
         rec = rec.to_dict()
 
+        # Allow no audio: just edit the id and let downstreams fail if no (cached) audio exists for new edited id
+        #   - This allows lazy-loaded .audio during pipelined operations with cache hits (e.g. rebuild_cache)
+        #   - FIXME Not fully working, but safely fails if you try to use it. Would need (a lot) more complexity in load._audio...
+        # has_audio = rec.get('audio') is not None  # Bypass for now, to avoid zero-ROI bug risk (since this currently does nothing)
+        has_audio = True
+
         # Integrity checks (burden on caller)
-        assert rec['id'] == rec['audio'].unbox.name
+        if has_audio:
+            assert rec['id'] == rec['audio'].unbox.name
 
         # Ensure new id is different from input id, else we risk cache-key conflation
         #   - (An example where we maybe don't want this assert is being able to simplify slice(x).slice(y) -> slice(z),
@@ -333,9 +340,10 @@ class Features(DataclassConfig):
         assert id != rec['id'], f"{id} != {rec['id']}"
 
         # Edit .audio
-        audio = rec.pop('audio').unbox
-        rec['audio'] = box(audio_f(rec, audio))
-        rec['audio'].unbox.name = id
+        if has_audio:
+            audio = rec.pop('audio').unbox
+            rec['audio'] = box(audio_f(rec, audio))
+            rec['audio'].unbox.name = id
 
         # Recompute/invalidate attrs coupled to .audio + downstream features
         #   - TODO Replace rec.id with rec.audio_id (which will require rebuilding feat/_feat caches...)
@@ -365,7 +373,8 @@ class Features(DataclassConfig):
                 del rec[k]
 
         # Integrity checks (burden on us)
-        assert rec['id'] == rec['audio'].unbox.name
+        if has_audio:
+            assert rec['id'] == rec['audio'].unbox.name
 
         # Convert dict -> series for caller
         return pd.Series(rec)
