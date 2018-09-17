@@ -11,8 +11,10 @@ root:
 loggers:
 
   # bubo
-  load:       {level: INFO} # File r/w ops at debug
-  sp14.model: {level: INFO} # call/done at debug
+  # load:       {level: DEBUG} # File reads at debug
+  # load:       {level: INFO}  # File writes at info
+  load:       {level: WARN}  # Quiet (e.g. for bulk rebuild_cache.py)
+  sp14.model: {level: INFO}  # call/done at debug
 
   # deps
   PIL:                    {level: INFO} # Noisy at debug
