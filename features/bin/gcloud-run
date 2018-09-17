@@ -149,7 +149,7 @@ bin_dir = code_dir / 'bin'
 #       - pd-ssd       500gb: $85/mo, 240mb/s rw
 @click.option('--boot-disk-size', default='200g')
 @click.option('--boot-disk-type', default='pd-standard', help='pd-standard | pd-ssd')
-@click.option('--disk-name', default='bubo-data-standard')
+@click.option('--disk-name', default='bubo-data-standard-1')
 @click.option('--disk-mode', default='ro')
 @click.option('--disk', default='name=%(disk_name)s,device-name=%(disk_name)s,boot=no,auto-delete=no,mode=%(disk_mode)s')
 # Network tier
