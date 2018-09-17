@@ -31,10 +31,24 @@ class _sg:
             log.info('done')
             self._init_done = True
 
+    # WARNING Dask pickles funcs even when scheduler != 'processes'
+    #   - Huge bottleneck if you reference large objects, e.g. sg.*
+    #   - e.g. dask.bag.map -> bag_map -> dask.base.tokenize -> normalize_function -> _normalize_function -> pickle.dumps(func)
+    #   - Looks like it does it to compute the task id, so it's probably essential behavior that's hard to change
+
+    # To avoid this, we define custom pickling so that we aren't a ~250mb bottleneck for callers who try to pickle us
+    #   - TODO Be robust to changes in sg_load: e.g. write out its params and reconstruct from those params
+    #       - I've deferred this just because I recall the sg/sg_load singleton dance being tricky and subtle wrt. flask
+    #         app initialization, and I don't remember the pitfalls that I was dancing around at the time. Buyer beware.
+    def __getstate__(self):
+        return {}
+    def __setstate__(self, state):
+        self.init()
+
 
 # WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
 #   - See details in util.Log
-@dataclass
+@dataclass(frozen=True)  # Mutation isn't intended, and it isn't safe for client code that pickles/unpickles sg
 class _sg_load(DataclassUtil):
 
     # Config:
