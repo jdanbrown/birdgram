@@ -1412,7 +1412,7 @@ def strip_leading_cache_audio_dir(path: str) -> str:
     return path
 
 
-def audio_from_file_in_data_dir(path: str) -> Audio:
+def audio_from_file_in_data_dir(path: str, **kwargs) -> Audio:
     """
     Like audio_from_file, except:
     - Allow input path to be relative to data_dir
@@ -1423,7 +1423,7 @@ def audio_from_file_in_data_dir(path: str) -> Audio:
         assert path_is_contained_by(path, data_dir), f"path_is_contained_by({path!r}, {data_dir!r})"
     else:
         path = Path(data_dir) / path
-    audio = audio_from_file(path)
+    audio = audio_from_file(path, **kwargs)
     audio.name = str(Path(audio.name).relative_to(data_dir))
     assert not Path(audio.name).is_absolute()
     return audio
