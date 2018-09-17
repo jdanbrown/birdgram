@@ -2,12 +2,27 @@
 # Side effects
 #
 
+import re
 import warnings
 
-# Suppress "FutureWarning: 'pandas.core' is private. Use 'pandas.Categorical'"
-#   - https://stackoverflow.com/questions/15777951/how-to-suppress-pandas-future-warning
-warnings.simplefilter(action='ignore', category=FutureWarning)
+# Suppress unhelpful warning
+warnings.filterwarnings('ignore', category=FutureWarning, message=(
+    re.escape("'pandas.core' is private. Use 'pandas.Categorical'")
+))
+import pandas.core.categorical  # If this emits a warning then our filter has bitrotted
 
+# Supress unhelpful warning
+#   - Have to force-disable warnings from sklearn, which obnoxiously force-enables them
+#   - https://stackoverflow.com/a/33616192/397334
+#   - https://github.com/scikit-learn/scikit-learn/blob/0.19.1/sklearn/__init__.py#L97-L99
+import sklearn  # Force-enables warnings for sklearn.*
+warnings.filters = [  # Force-disable the force-enabling filter
+    x for x in warnings.filters for (action, message, category, module, lineno) in [x]
+    if (action, module) not in [
+        ('always', re.compile(r'^sklearn\.'))
+    ]
+]
+import sklearn.ensemble.weight_boosting  # If this emits a warning then our filter has bitrotted
 
 #
 # For export
