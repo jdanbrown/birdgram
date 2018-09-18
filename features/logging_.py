@@ -1,13 +1,18 @@
 from collections import OrderedDict
+from datetime import datetime
 import inspect
 import json
 import logging
 import logging.config
 import os
 from pathlib import Path
+import sys
 
+import crayons
 import structlog
 import oyaml as yaml  # Drop-in replacement that preserves dict ordering (for BuboRenderer)
+
+from config import config
 
 log = structlog.get_logger(__name__)
 
@@ -78,6 +83,11 @@ class BuboRenderer:
 class BuboFilter(logging.Filter):
 
     def filter(self, record):
+        """
+        Format record with conditional stuff and color, in the spirit of:
+            format: '%(levelname)-8s [%(asctime)s.%(msecs)03d] [%(process)5d]%(lineno)4d %(name)s/%(funcName)s: %(msg)s'
+            datefmt: '%Y-%m-%dT%H:%M:%S'
+        """
 
         # HACK Find the caller's pathname/lineno/funcName (mimic logging.Logger.{_log,findCaller,makeRecord})
         #   - The builtin logging library supports `funcName` in LogRecord format strings, but it stops working when you
@@ -100,16 +110,49 @@ class BuboFilter(logging.Filter):
         record.funcName = caller.frame.f_code.co_name
         record.stack_info = None  # TODO Capture this (mimic logging.Logger.findCaller) [high complexity, low prio]
 
-        # HACK `msg % args` is done downstream by Formatter, but we do it in advance to compute name_funcName_message
+        # msg, args
+        #   - HACK `msg % args` is done downstream by Formatter, but we do it in advance to compute name_funcName_message
         #   - https://docs.python.org/3/library/logging.html
         record.msg = record.msg % record.args
         record.args = ()  # Unset args so that Formatter's operation is a noop
 
-        # TODO Omit funcName from deps: add include/exclude args (in logging.yaml) to control when to include funcName
-        # TODO Code org: write a BuboFormatter to own this concern (and also the logging.yaml format string)
+        # name_funcName_message
+        #   - TODO Omit funcName from deps: add include/exclude args (in logging.yaml) to control when to include funcName
+        #   - TODO Code org: write a BuboFormatter to own this concern (and also the logging.yaml format string)
         record.name_funcName_message = (
             '%(name)s/%(funcName)s: %(msg)s' if record.msg else
             '%(name)s/%(funcName)s'
         ) % dict(record.__dict__)
 
+        # levelname
+        record.levelname = color(
+            x='%-8s' % record.levelname,  # Format before color since ansi chars mess up the width adjustment
+            color={
+                'DEBUG':    'blue',
+                'INFO':     'green',
+                'WARN':     'yellow',
+                'ERROR':    'red',
+                'CRITICAL': 'magenta',
+            }.get(record.levelname),
+        )
+
+        # timestamp, asctime, datefmt
+        #   - [Why is record.asctime absent here, even though it's present in logging.yaml format?]
+        record.datefmt = config.logging.datefmt  # Switches on $BUBO_ROLE (in config.py)
+        record.asctime = datetime.fromtimestamp(record.created).strftime(record.datefmt)
+        record.timestamp = color('black', '[%s.%03d]' % (record.asctime, record.msecs))
+
+        # process
+        record.process = color('black', '[%5d]' % record.process)
+
+        # lineno
+        record.lineno = color('black', '%4d' % record.lineno)
+
         return True
+
+
+def color(color: str, x: any, bold=True) -> str:
+    s = str(x)
+    if sys.stdout.isatty() and color is not None:
+        s = getattr(crayons, color)(s, bold=bold)
+    return s
