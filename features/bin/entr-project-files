@@ -3,6 +3,7 @@
 find_args=(
   -type f
   -name '*.py' -o
+  -name 'logging.yaml' -o
   # Don't restart server on changes in /static
   # -name '*.j2' -o
   # -name '*.html' -o

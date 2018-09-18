@@ -121,6 +121,26 @@ def plot_thumb(
 
 
 @_with_many
+def plot_micro(
+    rec,
+    features,
+    raw=True,
+    limit_s=None,
+    pad_s=None,
+    **kwargs,
+):
+    if limit_s:
+        rec = features.slice_spectro(rec, 0, limit_s)  # Avoid excessive .slice() ops, else cache misses (HACK)
+    return plot_spectro_wrap(rec, features, raw=raw, **kwargs,
+        limit_s=None,  # We did the slice so that we can control whether a .slice() op appears (HACK)
+        pad=pad_s is not None,
+        wrap_s=pad_s if pad_s is not None else rec.duration_s,
+    )
+
+
+# XXX Migrate callers to plot_micro
+#   - wrap/wrap_s/limit_s got too confusing; gave up and started over
+@_with_many
 def plot_spectro_micro(
     rec,
     features,
@@ -135,7 +155,10 @@ def plot_spectro_micro(
         limit_s = wrap_s
     if limit_s:
         rec = features.slice_spectro(rec, 0, limit_s)
-    return plot_spectro_wrap(rec, features, wrap_s=wrap_s, pad=pad, raw=raw, **kwargs)
+    return plot_spectro_wrap(rec, features, raw=raw, **kwargs,
+        wrap_s=wrap_s,
+        pad=pad,
+    )
 
 
 @_with_many
@@ -156,8 +179,8 @@ def plot_spectro_wrap(
     breaks_s = np.linspace(0, n_wraps * wrap_s, n_wraps, endpoint=False)
     ret = plot_spectros(
         pd.DataFrame(
-            features.slice_spectro(rec, b, min(b + wrap_s, limit_s))
-            for b in breaks_s
+            [rec] if list(breaks_s) == [0] else  # Avoid excessive .slice() ops in your ids, else cache misses (HACK)
+            [features.slice_spectro(rec, b, min(b + wrap_s, limit_s)) for b in breaks_s]
         ),
         yticks=['%.0fs' % s for s in breaks_s],
         xformat='+%.0fs',

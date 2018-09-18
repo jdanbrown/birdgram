@@ -83,6 +83,7 @@ from ebird_priors import *
 from features import *
 import geoh
 from load import *
+from logging_ import *
 import metadata
 from notebooks.app_ux import *
 from proc_stats import *

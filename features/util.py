@@ -34,7 +34,7 @@ from attrdict import AttrDict
 import PIL
 from potoo import debug_print
 from potoo.pandas import df_ensure, df_summary
-from potoo.util import puts, singleton, strip_startswith, tap
+from potoo.util import generator_to, puts, singleton, strip_startswith, tap
 import tqdm
 
 # Order for precedence: last import wins (e.g. more_itertools.take shadows toolz.take)
@@ -84,15 +84,6 @@ def shuffled(xs: iter, random=random) -> list:
     xs = list(xs)  # Avoid mutation + unroll iters
     random.shuffle(xs)
     return xs
-
-
-def generator_to(agg):
-    def decorator(f):
-        @wraps(f)
-        def g(*args, **kwargs):
-            return agg(f(*args, **kwargs))
-        return g
-    return decorator
 
 
 def glob_filenames_ensure_parent_dir(pattern: str) -> Iterable[str]:
@@ -1037,6 +1028,7 @@ def df_map_rows_progress(
     **kwargs,
 ) -> pd.DataFrame:
     return ({
+        None: partial(_df_map_rows_progress_sync, use_tqdm=False),
         'sync': _df_map_rows_progress_sync,
         'dask': _df_map_rows_progress_dask,
         'joblib': _df_map_rows_progress_joblib,
@@ -1446,7 +1438,25 @@ def audio_from_file(path: str, format=None, **kwargs) -> Audio:
     return audiosegment.AudioSegment(seg, path)
 
 
-def audio_ensure_has_file(audio, load=None, load_audio=True, **audio_kwargs) -> Audio:
+def recs_audio_persist(recs: 'RecordingDF', progress_kwargs=None, **kwargs) -> 'RecordingDF':
+    return (recs
+        .pipe(df_map_rows_progress, desc='rec_audio_persist',
+            **(progress_kwargs or dict(use='dask', scheduler='threads')),
+            f=partial(rec_audio_persist, **kwargs),
+        )
+    )
+
+
+def rec_audio_persist(rec: 'Recording', **kwargs) -> 'Recording':
+    assert rec.id == rec.audio.unbox.name
+    rec = rec.copy()  # Copy so we can mutate
+    rec.audio = box(audio_persist(rec.audio.unbox, **kwargs))
+    if rec.audio.unbox:  # Skip if load_audio=False
+        rec.id = rec.audio.unbox.name  # Propagate audio.name (= path) to rec.id
+    return rec
+
+
+def audio_persist(audio, load=None, load_audio=True, **audio_kwargs) -> Audio:
     """
     Code bottleneck to bridge from global utils (e.g. viz.plot_spectro, util.display_with_audio) into
     load.transcode_audio, which requires conjuring up a load instance, which we achieve in a hacky-but-acceptable way
@@ -1454,12 +1464,9 @@ def audio_ensure_has_file(audio, load=None, load_audio=True, **audio_kwargs) -> 
     # HACK Code smells abound. Probably some productive refactoring to do here, but low prio so far.
 
     # Conjure up a load instance, accepting overrides from the caller
-    #   - TODO Too decoupled from sg.load?
-    #   - TODO Refactor modules to avoid util importing load, which creates an import cycle
-    from load import Load  # Avoid cyclic imports
-    audio_kwargs = audio_kwargs or config.audio_to_url.audio_kwargs
     assert load not in [True, False],  "Oops, did you mean load_audio?"  # Confusing name collision
-    load = (load or Load()).replace(**audio_kwargs)
+    if load is None:
+        load = load_for_audio_persist(**audio_kwargs)
 
     # Transcode + persist
     #   - TODO Make Load._transcode_audio not private
@@ -1470,23 +1477,12 @@ def audio_ensure_has_file(audio, load=None, load_audio=True, **audio_kwargs) -> 
     return audio
 
 
-def recs_audio_ensure_has_file(recs: 'RecordingDF', progress_kwargs=None, **kwargs) -> 'RecordingDF':
-    return (recs
-        .pipe(df_map_rows_progress, desc='rec_audio_ensure_has_file',
-            use='dask', scheduler='threads',
-            f=partial(rec_audio_ensure_has_file, **kwargs),
-            **(progress_kwargs or {}),
-        )
-    )
-
-
-def rec_audio_ensure_has_file(rec: 'Recording', **kwargs) -> 'Recording':
-    assert rec.id == rec.audio.unbox.name
-    rec = rec.copy()  # Copy so we can mutate
-    rec.audio = box(audio_ensure_has_file(rec.audio.unbox, **kwargs))
-    if rec.audio.unbox:  # Skip if load_audio=False
-        rec.id = rec.audio.unbox.name  # Propagate audio.name (= path) to rec.id
-    return rec
+def load_for_audio_persist(**audio_kwargs) -> 'Load':
+    """The load instance for audio_persist, configured by config.audio_persist"""
+    # TODO Too decoupled from sg.load?
+    #   - TODO Refactor modules to avoid util importing load, which creates an import cycle
+    from load import Load  # Avoid cyclic imports
+    return Load(**(audio_kwargs or config.audio_persist.audio_kwargs))
 
 
 def audio_add_ops(audio: Audio, *ops: str) -> Audio:
@@ -1616,13 +1612,13 @@ def _audio_id_simplify_ops(ops: List[str]) -> List[str]:
 
 
 def audio_to_bytes(audio, **kwargs) -> bytes:
-    audio = audio_ensure_has_file(audio, **kwargs)
+    audio = audio_persist(audio, **kwargs)
     with open(audio_abs_path(audio), 'rb') as f:
         return f.read()
 
 
 def audio_to_url(audio, url_type=None, **kwargs) -> str:
-    audio = audio_ensure_has_file(audio, **kwargs)
+    audio = audio_persist(audio, **kwargs)
     if (url_type or config.audio_to_url.url_type) == 'file':
         return 'file://%s' % urllib.parse.quote(str(audio_abs_path(audio)),
             safe='/,:()[] ',  # Cosmetic: exclude known-safe chars ('?' is definitely _not_ safe, not sure what else...)
@@ -1637,7 +1633,7 @@ def audio_to_url(audio, url_type=None, **kwargs) -> str:
 
 
 def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='', **kwargs) -> str:
-    audio = audio_ensure_has_file(audio, **kwargs)
+    audio = audio_persist(audio, **kwargs)
     return dedent_and_strip('''
         <audio class="bubo-audio" %(controls)s preload="%(preload)s" %(more_audio_attrs)s>
             <source type="%(type)s" src="%(src)s" />

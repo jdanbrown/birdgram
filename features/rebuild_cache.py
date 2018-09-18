@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 ##
 # [defer] Push slice down to ffmpeg moderate speedup (~3x speedup for 10s vs. 50s, which is xc avg)
 #   - WARNING Based on a quick attempt in load/util, it's very nontrivial
@@ -19,27 +21,31 @@
 
 ## {time: 3.726s}
 from notebooks import *
+log_levels({'load': 'WARN'})  # Silence file reads/writes
 # memory.log.level = 'debug'  # XXX Debug
 sg.init(app=None)
 
 ## {time: 1.946s}
 recs = (sg.xc_meta
     # .sample(n=3, random_state=0)  # XXX Debug
-    .pipe(recs_featurize_audio_meta)
+    [lambda df: df.species == 'WIFL']  # XXX Debug
+    .pipe(recs_featurize_metadata)
     .pipe(df_inspect, lambda df: len(df))
 )
 
 ##
 # Cache 10s slices (mp4 .audio + .spectro + .feat)
 #   - [x] local
-#   - [TODO] remote
-#       - QA:
-#           $ find data/cache/audio/xc/data/ -type f | pv -terbl >/tmp/cache-audio-files
-#           $ cat /tmp/cache-audio-files | wc -l
-#           $ cat /tmp/cache-audio-files | ag '.enc\(wav\)$' | wc -l
-#           $ cat /tmp/cache-audio-files | ag '.enc\(mp4,libfdk_aac,32k\)$' | wc -l
-#       - [Overnight: died after 18000/35227 and I wasn't connected to the container to see the error msg...]
-for ix in tqdm(list(chunked(recs.index, 1000))):
+#   - [x] remote
+#   - How to QA
+#       $ find data/cache/audio/xc/data/ -type f | pv -terbl >/tmp/cache-audio-files
+#       $ cat /tmp/cache-audio-files | wc -l
+#       $ cat /tmp/cache-audio-files | ag '.enc\(wav\)$' | wc -l
+#       $ cat /tmp/cache-audio-files | ag '.enc\(mp4,libfdk_aac,32k\)$' | wc -l
+for ix in tqdm(list(chunked(
+    # recs.index, 1000,  # Killed on remote n1-highcpu-16 during 27/36
+    recs.index, 250,  # Mem safe on remote n1-highcpu-16
+))):
     print()  # Preserve tqdm state before progress bars (below) overwrite it
     out = (recs
         .loc[ix]
@@ -53,9 +59,14 @@ for ix in tqdm(list(chunked(recs.index, 1000))):
         #   - .slice_audio i/o .slice_spectro to mark (.spectro_denoise() in id) that .spectro is computed after the slice i/o before
         .pipe(df_map_rows_progress, desc='slice_audio',
             use='dask', scheduler='threads',
-            f=lambda row: sg.features.slice_audio(row, 0, 10,
-                recompute_spectro=False,  # We skipped loading the original .spectro, and we'll compute the sliced .spectro ourselves
-            ),
+            f=lambda row: sg.features.slice_audio(row, 0, 10),
+        )
+        # .pipe(df_inspect, lambda df: df.id[:3])  # Debug
+        # Persist .audio (compressed for app, not uncompressed for model fit)
+        #   - Before .spectro/.feat, to mimic app behavior (it serves .spectro/.feat from .enc(mp4) audio id)
+        .pipe(recs_audio_persist,
+            # load_audio=False,  # Skip lots of audio (ffmpeg) reads we don't need, e.g. on cache hit
+            # TODO Only uses ~15% of n1-highcpu-16 b/c bottlenecked by short ffmpeg fork+exec -- try progress_kwargs(npartitions=8*cores)
         )
         # .pipe(df_inspect, lambda df: df.id[:3])  # Debug
         # Cache + load .spectro (for sliced .audio)
@@ -65,13 +76,6 @@ for ix in tqdm(list(chunked(recs.index, 1000))):
         ))
         # Cache + load .feat (for sliced .spectro)
         .pipe(sg.projection.transform)  # .feat <- .spectro
-        # Persist .audio (compressed for app, not uncompressed for model fit)
-        #   - After .spectro/.feat, to mimic app behavior (it serves .spectro/.feat from audio id before .enc(mp4), not after)
-        .pipe(recs_audio_ensure_has_file,
-            load_audio=False,  # Skip lots of audio (ffmpeg) reads we don't need, e.g. on cache hit
-            # TODO Only uses ~15% of n1-highcpu-16 b/c bottlenecked by short ffmpeg fork+exec -- try progress_kwargs(npartitions=8*cores)
-        )
-        # .pipe(df_inspect, lambda df: df.id[:3])  # Debug
     )
 
 ##
@@ -94,7 +98,7 @@ for ix in tqdm(list(chunked(recs.index, 1000))):
 #         # Persist .audio (compressed for app, not uncompressed for model fit)
 #         #   - After .spectro/.feat, to mimic app behavior (it serves .spectro/.feat from audio id before .enc(mp4), not after)
 #         #   - XXX Only for sliced, not for full
-#         # .pipe(recs_audio_ensure_has_file)
+#         # .pipe(recs_audio_persist)
 #         # .pipe(df_inspect, lambda df: df.id[:3])  # Debug
 #     )
 

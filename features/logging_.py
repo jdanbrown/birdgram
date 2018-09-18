@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from contextlib import contextmanager
 from datetime import datetime
 import inspect
 import json
@@ -9,6 +10,7 @@ from pathlib import Path
 import sys
 
 import crayons
+from potoo.util import context_onexit, generator_to
 import structlog
 import oyaml as yaml  # Drop-in replacement that preserves dict ordering (for BuboRenderer)
 
@@ -47,6 +49,22 @@ def init_logging(logging_yaml=None):
     # Log that logging is configured
     #   - WARNING If you log before logging is configured you'll get a default config that you can't undo
     log.info(logging_yaml=str(logging_yaml))
+
+
+def log_levels(levels: dict):
+    """Set levels when called, and reset if called as a context manager"""
+
+    @generator_to(dict)
+    def set_levels(levels: dict) -> dict:
+        for name, level in levels.items():
+            logger = logging.getLogger(name)
+            yield (name, logger.level)
+            logger.setLevel(level)
+
+    # Set levels when called
+    orig_levels = set_levels(levels)
+    # Reset levels if called as a context manager
+    return context_onexit(set_levels, orig_levels)
 
 
 def load_logging_dict(logging_yaml=None) -> dict:
@@ -131,6 +149,7 @@ class BuboFilter(logging.Filter):
                 'DEBUG':    'blue',
                 'INFO':     'green',
                 'WARN':     'yellow',
+                'WARNING':  'yellow',
                 'ERROR':    'red',
                 'CRITICAL': 'magenta',
             }.get(record.levelname),

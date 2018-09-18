@@ -7,8 +7,9 @@ import structlog
 
 import api.routes
 from api.server_globals import sg
-from logging_ import init_logging
 from cache import memory
+from inits import *
+from logging_ import init_logging
 
 log = structlog.get_logger(__name__)
 

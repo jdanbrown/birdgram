@@ -118,6 +118,7 @@ class Features(DataclassConfig):
     #   - 100% cache hit:  row-major-synchronous[.61s], row-major-threads[.39s], col-major-defaults[1.2s]
     #   - By default we choose col-major-defaults
     #   - When the user wants to assume near-100% cache hits, they can manually `dask_opts`/`features.patches`
+    @requires_nonempty_rows
     @short_circuit(lambda self, recs, **kwargs: recs if 'patches' in recs else None)
     def transform(self, recs: RecordingDF, drop_spectro=True) -> RecordingDF:
         """Adds .patches (f*p,t)"""
@@ -139,6 +140,7 @@ class Features(DataclassConfig):
             .drop(columns=['spectro'] if drop_spectro else [])
         )
 
+    @requires_nonempty_rows
     @short_circuit(lambda self, recs: recs.get('patches'))
     def patches(self, recs: RecordingDF) -> Column['np.ndarray[(f*p,t)]']:
         """.patches (f*p,t) <- .spectro (f,t)"""
@@ -168,6 +170,7 @@ class Features(DataclassConfig):
         })
         return patches
 
+    @requires_nonempty_rows
     @short_circuit(lambda self, recs, **kwargs: recs.get('spectro'))
     def spectro(self, recs: RecordingDF, cache=None, load=True, **kwargs) -> Column[Melspectro]:
         """.spectro (f,t) <- .audio (samples,)"""
@@ -299,11 +302,11 @@ class Features(DataclassConfig):
             id=audio_id_add_ops(rec.id, 'slice(%s,%s)' % (start_ms, end_ms))
         )
 
-    def with_audio(self, rec: Row, f: Callable[[Audio], Audio], id=None, recompute_spectro=True, **kwargs) -> Row:
+    def with_audio(self, rec: Row, f: Callable[[Audio], Audio], id=None, **kwargs) -> Row:
         """Transforms .audio, recomputes .spectro (with denoise)"""
         return self._edit(rec,
             audio_f=lambda rec, audio: f(audio),
-            spectro_f=None if not recompute_spectro else lambda rec, spectro: self._spectro(rec, **kwargs),
+            spectro_f=None if not rec.get('spectro') else lambda rec, spectro: self._spectro(rec, **kwargs),
             id=id,
         )
 
@@ -323,7 +326,7 @@ class Features(DataclassConfig):
         # Allow no audio: just edit the id and let downstreams fail if no (cached) audio exists for new edited id
         #   - This allows lazy-loaded .audio during pipelined operations with cache hits (e.g. rebuild_cache)
         #   - FIXME Not fully working, but safely fails if you try to use it. Would need (a lot) more complexity in load._audio...
-        # has_audio = rec.get('audio') is not None  # Bypass for now, to avoid zero-ROI bug risk (since this currently does nothing)
+        # has_audio = rec.get('audio') is not None  # TODO Bypass for now, to avoid zero-ROI bug risk (since this currently does nothing)
         has_audio = True
 
         # Integrity checks (burden on caller)
@@ -339,11 +342,15 @@ class Features(DataclassConfig):
             id = audio_id_add_ops(rec['id'], 'unk(%s)' % secrets.token_hex(4))
         assert id != rec['id'], f"{id} != {rec['id']}"
 
-        # Edit .audio
         if has_audio:
+            # Edit .audio
             audio = rec.pop('audio').unbox
             rec['audio'] = box(audio_f(rec, audio))
             rec['audio'].unbox.name = id
+        else:
+            # Load post-edit .audio, failing if not already cached
+            rec['audio'] = box(Load.read_audio(id))
+        assert rec['audio'].unbox.name == id
 
         # Recompute/invalidate attrs coupled to .audio + downstream features
         #   - TODO Replace rec.id with rec.audio_id (which will require rebuilding feat/_feat caches...)
@@ -453,6 +460,7 @@ class Projection(DataclassConfig):
     def _save_path(cls, id: str):
         return ensure_parent_dir(f'{data_dir}/models/projection/{id}.pkl')
 
+    @requires_nonempty_rows
     def fit(self, recs: RecordingDF) -> 'self':
         """skm_ <- .patch (f*p,t)"""
         recs = self.features.transform(recs)  # Pull
@@ -470,6 +478,7 @@ class Projection(DataclassConfig):
         })
         return self
 
+    @requires_nonempty_rows
     @cache(version=0, verbose=100, key=lambda self, recs: (recs.id, self.skm_config, self.deps))
     def _fit(self, recs: RecordingDF) -> SKM:
         """skm <- .patch (f*p,t)"""
@@ -487,6 +496,7 @@ class Projection(DataclassConfig):
             skm.pca.components_ = np.eye(skm.D.shape[0])
         return skm
 
+    @requires_nonempty_rows
     @short_circuit(lambda self, recs, **kwargs: recs if 'feat' in recs else None)
     def transform(self, recs: RecordingDF, **kwargs) -> RecordingDF:
         """Adds .feat (k*a,)"""
@@ -518,6 +528,7 @@ class Projection(DataclassConfig):
 
     # Cache to speed up the dev loop in e.g. compare_classifiers_xc
     #   - Low cost to reset the cache since _feat cache hits are fast (~10s for ~13k recs)
+    @requires_nonempty_rows
     @short_circuit(lambda self, recs: recs.get('feat'))
     @cache(version=0, key=lambda self, recs: (recs.id, self.agg_config, self.skm_config, self.deps))
     def feat(self, recs: RecordingDF) -> Column['np.ndarray[(k*a,)]']:
@@ -534,6 +545,7 @@ class Projection(DataclassConfig):
         feat = map_progress(self._feat, df_rows(recs), desc='feat', use='dask', scheduler='threads')
         return feat
 
+    @requires_nonempty_rows
     @short_circuit(lambda self, recs: recs.get('agg'))
     def agg(self, recs: RecordingDF) -> Column['np.ndarray[(k,a)]']:
         """agg (k,a) <- .proj (k,t)"""
@@ -549,6 +561,7 @@ class Projection(DataclassConfig):
         agg = map_progress(self._agg, df_rows(recs), desc='agg', use='dask', scheduler='threads')
         return agg
 
+    @requires_nonempty_rows
     @short_circuit(lambda self, recs: recs.get('proj'))
     def proj(self, recs: RecordingDF) -> Column['np.ndarray[(k,t)]']:
         """proj (k,t) <- .patch (f*p,t)"""
@@ -608,6 +621,7 @@ class Projection(DataclassConfig):
 
     # This is faster than row-at-a-time _proj by ~2x, but isn't mem safe (but would be easy to make mem safe)
     #   - TODO Consider how to allow bulk col-at-a-time operations
+    @requires_nonempty_rows
     @generator_to(list)
     def _proj_bulk(self, recs: RecordingDF) -> Column['np.ndarray[(k,t)]']:
         """proj (k,t) <- .patch (f*p,t)"""
@@ -779,6 +793,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
     # Fit
     #
 
+    @requires_nonempty_rows
     def fit_recs(self, recs: RecordingDF) -> 'self':
         """feat (k*a,) -> ()"""
         recs = self.projection.transform(recs)  # Pull
@@ -979,6 +994,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
     #
 
     @requires_cols('feat')
+    @requires_nonempty_rows
     def species(self, recs: RecordingDF) -> Column['species']:
         """feat (k*a,) -> species (1,)"""
 
@@ -1006,6 +1022,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
 
     # TODO Add args to limit results: top_k, at_least_p
     @requires_cols('feat')
+    @requires_nonempty_rows
     def species_probs(self, recs: RecordingDF) -> pd.DataFrame:
         """feat (k*a,) -> species (len(y_),)"""
 
@@ -1036,6 +1053,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
         return species_probs
 
     @requires_cols('feat')
+    @requires_nonempty_rows
     def species_proba(self, recs: RecordingDF) -> np.ndarray:
         X = self.X(recs)
         classifier_ = self.classifier_
@@ -1046,6 +1064,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
 
     # TODO Rethink this for non-knn classifiers
     @requires_cols('feat')
+    @requires_nonempty_rows
     def similar_recs(self, recs: RecordingDF, similar_n) -> pd.DataFrame:
         """feat (k*a,) -> rec (similar_n,)"""
 
@@ -1179,12 +1198,14 @@ class SearchEvals(DataclassUtil):
 
     @classmethod
     @requires_cols('feat', 'species')
+    @requires_nonempty_rows
     def coverage_errors_recs(cls, search, recs: RecordingDF) -> RecordingDF:
         """.coverage_errors + assign to a col in recs"""
         return recs.assign(coverage_error=cls(search=search, recs=recs).coverage_errors())
 
     @classmethod
     @requires_cols('feat', 'species')
+    @requires_nonempty_rows
     def coverage_error_by(cls, search, recs: RecordingDF, by: str, **kwargs) -> "pd.DataFrame[by, 'coverage_error']":
         """Predict and measure coverage error, grouped by recs[by]"""
         if recs[by].dtype.name == 'category':

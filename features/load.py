@@ -139,6 +139,7 @@ class Load(DataclassConfig):
         'sample_width_bit',
     ]
 
+    @requires_nonempty_rows
     @short_circuit(lambda self, recs: recs.get(self.METADATA))
     def metadata(self, recs: RecordingDF) -> RecordingDF:
         """.metadata <- .audio"""
@@ -206,6 +207,7 @@ class Load(DataclassConfig):
         use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,
     )
 
+    @requires_nonempty_rows
     @short_circuit(lambda self, recs, **kwargs: recs.get('audio'))
     def audio(self, recs: RecordingDF, load=True, **progress_kwargs) -> RecordingDF:
         """
@@ -236,6 +238,7 @@ class Load(DataclassConfig):
         return recs
 
     @requires_cols('audio')  # No @short_circuit (our purpose is to re-encode the existing .audio)
+    @requires_nonempty_rows
     def transcode_audio(self, recs: RecordingDF, load=True, **progress_kwargs) -> RecordingDF:
         """
         .audio <- .audio
@@ -296,6 +299,10 @@ class Load(DataclassConfig):
             raise ValueError(f"rec.id[{rec.id}] must be relative to data_dir[{data_dir}]")
         rec_abs_path = Path(data_dir) / rec.id
 
+        # TODO TODO Helpful? For the catch I added somewhere else (I forgot where...)
+        if not rec_abs_path.exists():
+            raise FileNotFoundError(rec_abs_path)
+
         # Audio: transcode + cache + load (if requested)
         audio = None
         try:
@@ -303,14 +310,17 @@ class Load(DataclassConfig):
                 audio = self._transcode_path(rec, load=load)  # (Returns None if load=False)
                 # NOTE If load=False then audio is now None, which also means rec.id won't update in the caller
             elif load:
-                audio = audio_from_file_in_data_dir(rec.id)
+                audio = self.read_audio(rec.id)
 
         # "Drop" audio files that fail during either transcription or normal load
         #   - One common source of these is "restricted" xc recs where audio.mp3 downloads as html instead of mp3, e.g.
         #       - https://www.xeno-canto.org/308503 -> https://www.xeno-canto.org/308503/download
         #   - TODO Find a way to minimize the surface area of exceptions that we swallow here. Currently huge and bad.
         except Exception as e:
-            filesize_b = or_else(None, lambda: rec_abs_path.stat().st_size)
+
+            # Re-raise these errors instead of dropping the audio
+            if isinstance(e, FileNotFoundError):
+                raise
 
             # Parse ffmpeg error msgs out of pydub error msgs, else you're stuck with one big line of b'ffmpeg...\n...'
             e_msg = str(e)
@@ -328,6 +338,7 @@ class Load(DataclassConfig):
 
             # Try to detect "Download disabled for this species" pages (which we naively download as audio.mp3), e.g.
             #   - https://www.xeno-canto.org/308503 -> https://www.xeno-canto.org/308503/download
+            filesize_b = or_else(None, lambda: rec_abs_path.stat().st_size)
             download_disabled_msg = 'Download disabled for this species'
             download_restricted_msg = 'restricted due to conservation concerns'
             download_disabled = False
@@ -394,13 +405,11 @@ class Load(DataclassConfig):
                     # Skip the audio read because load=False means return None (and the caller isn't expecting a new id)
                     return None
                 else:
-                    log.debug(f'Read: {audio_id}')
-                    return audio_from_file_in_data_dir(audio_id)
+                    return self.read_audio(audio_id)
 
         # Else we incur an audio read + _transcode_audio
-        log.debug(f'Read: {rec.id}')
         return self._transcode_audio(
-            audio_from_file_in_data_dir(rec.id),
+            self.read_audio(rec.id),
             load=load,
         )
 
@@ -517,5 +526,10 @@ class Load(DataclassConfig):
             # Else re-read audio from file so that audio._data reflects the transcoding
             #   - Property: audio._data always reflects audio.name
             #   - e.g. if audio.name is 'foo.enc(mp3,64k)', then audio._data should be the bytes given by a 64k mp3 encoding
-            log.debug(f'Read: {id}')
-            return audio_from_file_in_data_dir(id)
+            return self.read_audio(id)
+
+    @classmethod
+    def read_audio(cls, id: str, **kwargs) -> Audio:
+        log.info(f'Read: {id}')
+        audio = audio_from_file_in_data_dir(id, **kwargs)
+        return audio

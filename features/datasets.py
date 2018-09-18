@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Optional, Union
+from typing import Callable, Iterable, Optional, Union
 
 from attrdict import AttrDict
 from dataclasses import dataclass, field
@@ -728,9 +728,9 @@ def load_xc_recs(
     num_recs: int,
 ) -> DF:
     xc_meta, recs_stats = load_xc_meta(countries_k, com_names_k, recs_at_least, num_species, num_recs)
-    xc_raw_recs = xc_meta_to_xc_raw_recs(xc_meta, projection.features.load)
+    xc_raw_recs = xc_meta_to_raw_recs(xc_meta, projection.features.load)
     _inspect_xc_raw_recs(xc_raw_recs)
-    xc_recs = xc_raw_recs_to_xc_recs(xc_raw_recs, projection)
+    xc_recs = xc_raw_recs_to_recs(xc_raw_recs, projection)
     _inspect_xc_recs(xc_recs)
     return xc_recs, recs_stats
 
@@ -743,7 +743,7 @@ def load_xc_meta(
     num_recs: int,
     drop_recs_lt_2=True,
 ) -> DF:
-    log.info('[1/3 fast] Filtering xc.metadata...',
+    log.info('Filtering xc.metadata...',
         countries_k=countries_k,
         com_names_k=com_names_k,
         recs_at_least=recs_at_least,
@@ -805,21 +805,30 @@ def load_xc_meta(
     return (xc_meta, recs_stats)
 
 
-def xc_meta_to_xc_raw_recs(
+def xc_meta_to_paths(
     xc_meta: DF,
-    load: 'Load',
     xc_paths_dump_path=None,  # When uncached, helpful to run load.recs in a terminal (long running and verbose)
-) -> DF:
-    log.info('[2/3 slower] Loading xc.metadata -> xc_raw_recs (.audio, more metadata)...')
-    assert 'duration_s' not in xc_meta  # TODO Make this function idempotent (currently, barfs on non-obvious errors)
+) -> Iterable[str]:
+    log.info('Converting xc_meta -> xc_paths...')
     xc_paths = [
         ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
         for row in df_rows(xc_meta)
     ]
     if xc_paths_dump_path:
         joblib.dump(xc_paths, xc_paths_dump_path)
+    return xc_paths
+
+
+def xc_meta_to_raw_recs(
+    xc_meta: DF,
+    load: 'Load',
+    to_paths: Callable[[DF], Iterable[str]] = None,  # e.g. to override paths to be sliced cache paths instead of raw input paths
+) -> DF:
+    log.info('Loading xc.metadata -> xc_raw_recs (.audio, more metadata)... [slower]')
+    assert 'duration_s' not in xc_meta  # TODO Make this function idempotent (currently, barfs on non-obvious errors)
+    to_paths = to_paths or xc_meta_to_paths
     xc_raw_recs = (
-        load.recs(paths=xc_paths)
+        load.recs(paths=to_paths(xc_meta))
         .assign(
             # TODO Push upstream
             xc_id=lambda df: df.id.map(strip_leading_cache_audio_dir).str.split('/').str[3].astype(int),
@@ -917,20 +926,20 @@ def _inspect_xc_raw_recs(xc_raw_recs: DF) -> DF:
     )
 
 
-def xc_raw_recs_to_xc_recs(
+def xc_raw_recs_to_recs(
     xc_raw_recs: DF,
     projection: 'Projection',
     audio=True,
     feat=True,
     spectro=True,
 ) -> DF:
-    log.info('[3/3 slowest] Featurizing xc_raw_recs -> xc_recs (.audio, .feat, .spectro)...')
+    log.info('Featurizing xc_raw_recs -> xc_recs (.audio, .feat, .spectro)... [slowest]')
     # Featurize: .audio, .feat, .spectro (slowest)
     #   - NOTE .spectro is heavy: 3.1gb for 2167 dan4 recs
     xc_recs = (xc_raw_recs
         # .audio
         .pipe(lambda df: df if not audio else (df
-            .pipe(projection.features.load.audio, scheduler='threads')  # (procs barfs on serdes error)
+            .pipe(projection.features.load.audio, use='dask', scheduler='threads')  # (procs barfs on serdes error)
         ))
         # .feat
         .pipe(lambda df: df if not feat else (df
@@ -948,11 +957,8 @@ def xc_raw_recs_to_xc_recs(
 
 def _recs_add_spectro(recs, features, **kwargs) -> 'recs':
     """Featurize: .spectro (slow)"""
-    # Cache control is knotty here: _spectro @cache is disabled to avoid disk blow up on xc, but we'd benefit from it for recordings
-    #   - But the structure of the code makes it very tricky to enable @cache just for _spectro from one caller and not the other
-    #   - And the app won't have the benefit of caching anyway, so maybe punt and ignore?
     return (recs
-        .assign(spectro=lambda df: features.spectro(df, scheduler='threads', **kwargs))  # threads >> sync, procs
+        .assign(spectro=lambda df: features.spectro(df, use='dask', scheduler='threads', **kwargs))  # threads >> sync, procs
     )
 
 

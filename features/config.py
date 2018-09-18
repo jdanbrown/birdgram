@@ -3,11 +3,19 @@ import os
 from attrdict import AttrDict
 
 role = os.environ.get('BUBO_ROLE')
+env  = os.environ.get('ENV') or os.environ.get('FLASK_ENV')
 
 # Global mutable config (handle with care)
 config = AttrDict(
 
     role=role,
+
+    logging=dict(
+        datefmt=(
+            '%H:%M:%S' if role == 'notebook' or env == 'development' else
+            '%Y-%m-%dT%H:%M:%S'
+        ),
+    ),
 
     hosts=dict(
         prod='35.230.68.91',
@@ -33,8 +41,7 @@ config = AttrDict(
         )
     ),
 
-    audio_to_url=dict(
-
+    audio_persist=dict(
         # Tuned in notebooks/audio_codecs_data_volume
         audio_kwargs=dict(
             # format='mp3', bitrate='32k',                    # Clips hi freqs (just barely)
@@ -42,7 +49,9 @@ config = AttrDict(
             format='mp4', bitrate='32k', codec='libfdk_aac',  # Very hard to distinguish from wav, and 10x smaller (!)
             # format='wav',                                   # Baseline quality, excessive size
         ),
+    ),
 
+    audio_to_url=dict(
         url_type={
             # Tradeoffs:
             #   - notebook: Files are way faster (~instant) and more lightweight (~0 mem) than inline data urls for #
@@ -51,7 +60,6 @@ config = AttrDict(
             'api':      'data',
             'notebook': 'file',
         }[role or 'notebook'],
-
     ),
 
 )
