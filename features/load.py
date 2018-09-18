@@ -177,6 +177,7 @@ class Load(DataclassConfig):
     def _metadata(self, rec: Row) -> AttrDict:
         """metadata <- .audio"""
         # _audio_no_transcode because we want the metadata from the raw input file, not the standardized version
+        #   - TODO Can speed up ~6x via ffprobe/mediainfo_json instead of full ffmpeg read (see notebooks/pydub_ffmpeg_read_perf)
         audio = self._audio_no_transcode(rec)  # Pull
         samples = audio.to_numpy_array()
         return AttrDict(
