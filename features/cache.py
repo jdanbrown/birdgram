@@ -77,7 +77,6 @@ cache_control = _cache_control()
 
 # TODO This is becoming really hacky; consider making a separate api that reuses joblib storage but not joblib.Memory
 # TODO Support @cache in addition to @cache() / @cache(...), like Memory.cache does
-# TODO Include version in the function's dir name so it's easy to clean up old defunct versions that take up space
 def cache(
     version=None,
     key=lambda *args, **kwargs: (args, kwargs),
