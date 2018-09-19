@@ -1421,20 +1421,60 @@ def audio_from_file_in_data_dir(path: str, **kwargs) -> Audio:
     return audio
 
 
-def audio_from_file(path: str, format=None, **kwargs) -> Audio:
+def audio_from_file(path: str, format: str = None, parameters: Iterable[str] = None, **kwargs) -> Audio:
     """
     Like audiosegment.from_file, except:
     - Interpret our .enc() audio ops to get the audio format, which we use in place of proper file extensions
-    - WARNING Don't pass format=None to pydub.AudioSegment.from_file if your file extension isn't real: things _mostly_
-      work, e.g. pydub/ffmpeg read the input file metadata to figure out the format, but then in another place pydub
-      uses the file ext to make a decision based on format, which (very quietly!) changes behavior, e.g.
-        - from_file(file='foo.mp3',      format=None) -> sample_fmt='fltp' and     is_format('mp3') -> pcm_s16le -> wav (bit=16)
-        - from_file(file='foo.enc(mp3)', format=None) -> sample_fmt='fltp' and not is_format('mp3') -> pcm_s32le -> wav (bit=32)
+    - Ensure we aren't passing format=None to pydub from_file (see below)
+    - Ensure we are passing -nostdin to ffmpeg (see below)
+    - Unpack ffmpeg error msgs from pydub exceptions, so that we can read them
     """
-    if not format:
-        format = audio_id_to_format(path)
+
+    # WARNING Don't pass format=None to pydub.AudioSegment.from_file if your file extension isn't real: things _mostly_
+    # work, e.g. pydub/ffmpeg read the input file metadata to figure out the format, but then in another place pydub
+    # uses the file ext to make a decision based on format, which (very quietly!) changes behavior, e.g.
+    #   from_file(file='foo.mp3',      format=None) -> sample_fmt='fltp' and     is_format('mp3') -> pcm_s16le -> wav (bit=16)
+    #   from_file(file='foo.enc(mp3)', format=None) -> sample_fmt='fltp' and not is_format('mp3') -> pcm_s32le -> wav (bit=32)
+    format = format or audio_id_to_format(path)
     assert format, f"{format}"
-    seg = pydub.AudioSegment.from_file(path, format=format, **kwargs)
+
+    # WARNING Ensure `ffmpeg -nostdin` to avoid nondeterministic (!) bugs under `entr -r` (e.g. `bin/api-run-dev`),
+    # where ffmpeg non-wav -> wav conversions return partial or no data, which causes pydub from_file to either
+    # loudly fail, if no data from ffmpeg (the befuddling case), or _silently_ return _truncated_ audio, if partial data
+    # from ffmpeg (the I-hope-you-noticed! case). This was pretty terrible to debug, so be-very-ware if you remove this
+    # safeguard.
+    #   - Docs for `ffmpeg -nostdin`: https://www.ffmpeg.org/ffmpeg-all.html#stdin-option
+    #   - I guess caused by entr closing stdin on `-r`? https://bitbucket.org/eradman/entr/src/ee9e17b/entr.c#entr.c-403
+    #   - ffmpeg error on no data: "Output file is empty, nothing was encoded"
+    #   - pydub error on no data: "pydub.exceptions.CouldntDecodeError: Couldn't find data header in wav data"
+    parameters = [
+        *(parameters or []),
+        '-nostdin',
+    ]
+
+    try:
+        seg = pydub.AudioSegment.from_file(path, format=format, parameters=parameters, **kwargs)
+    except Exception as e:
+
+        # Parse ffmpeg error msgs out of pydub error msgs, else you're stuck with one big line of b'ffmpeg...\n...'
+        if isinstance(e, pydub.exceptions.CouldntDecodeError):
+            try:
+                pydub_msg = e.args[0]
+                (exit_code, ffmpeg_msg_as_bytes_repr) = parse.parse(
+                    # Msg extracted from CouldntDecodeError(...) occurrences in pydub/audio_segment.py
+                    'Decoding failed. ffmpeg returned error code: {:d}\n\nOutput from ffmpeg/avlib:\n\n{}',
+                    pydub_msg,
+                ).fixed
+                ffmpeg_msg = eval(ffmpeg_msg_as_bytes_repr).decode()
+                # Stop ignoring exceptions
+            except:
+                pass
+            else:
+                # Raise parsed exception
+                raise type(e)(ffmpeg_msg)
+        # Or if anything went wrong, re-raise original exception
+        raise
+
     return audiosegment.AudioSegment(seg, path)
 
 
