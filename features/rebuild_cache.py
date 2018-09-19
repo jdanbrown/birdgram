@@ -1,10 +1,24 @@
 #!/usr/bin/env python
 
 ##
+# TODO TODO Rebuild caches after fixing terrible ffmpeg `entr -r` bug
+#   - [x] local: rm some cache/joblib/ dirs: load/ sk_hack/ sp14/ viz/
+#   - [x] local: rebuild_cache [43m audio_metadata + 53m rest]
+#   - [x] remote: rm some cache/joblib/ dirs: load/ sk_hack/ sp14/ viz/
+#   - [.] remote: rebuild_cache [audio_metadata 87% at 100m + ?m rest]
+#       - [ ] Preempted ~8am after overnight -- check to see if it had already finished?
+
+##
+# TODO TODO Still cache misses in api on plot_spectros (any others?)
+#   - Overhaul 'Cache 10s slices' to reuse api.recs functions
+#   - e.g. sliced .audio and .feat are now cached, but plot_slice still isn't, because we're naively caching .spectro here (oops)
+#   - First, make /similar work in case that changes any plans
+
+##
 # [defer] Push slice down to ffmpeg moderate speedup (~3x speedup for 10s vs. 50s, which is xc avg)
 #   - WARNING Based on a quick attempt in load/util, it's very nontrivial
-#       - Add limit_s param to load.audio, et al.
-#       - Pass limit_s down to util.audio_from_file_in_data_dir
+#       - Add slice_s param to load.audio, et al.
+#       - Pass slice_s down to util.audio_from_file_in_data_dir
 #       - But then all the load._transcode_audio resample/write logic gets gnarly...
 #           - Many occurrences of audio_from_file_in_data_dir to update (and reason about / test / risk breaking)
 #           - Adding a new .ffmpeg() op after the file ext will break the "Do we need to change the encoding?" logic...
@@ -21,14 +35,15 @@
 
 ## {time: 3.726s}
 from notebooks import *
-log_levels({'load': 'WARN'})  # Silence file reads/writes
 # memory.log.level = 'debug'  # XXX Debug
+# cache_control(refresh=True)  # XXX Debug
+log_levels({'load': 'WARN'})  # Silence file reads/writes
 sg.init(app=None)
 
 ## {time: 1.946s}
 recs = (sg.xc_meta
     # .sample(n=3, random_state=0)  # XXX Debug
-    [lambda df: df.species == 'WIFL']  # XXX Debug
+    # [lambda df: df.species == 'DOWO']  # XXX Debug
     .pipe(recs_featurize_metadata)
     .pipe(df_inspect, lambda df: len(df))
 )
@@ -106,7 +121,7 @@ for ix in tqdm(list(chunked(
 # # Test 10s slices
 # (out
 #     .pipe(df_assign_first, **dict(
-#         micro=df_cell_spectros(plot_spectro_micro.many, sg.features,
+#         slice=df_cell_spectros(plot_slice.many, sg.features,
 #             wrap_s=10,  # (= audio_s)
 #             # audio=False,  # Don't include <audio> (from display_with_audio)
 #             **{  # (= plot_many_kwargs)

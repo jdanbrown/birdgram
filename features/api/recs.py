@@ -9,6 +9,7 @@ import structlog
 
 from api.server_globals import sg
 from api.util import *
+from cache import *
 from datasets import xc_meta_to_paths, xc_meta_to_raw_recs, xc_raw_recs_to_recs
 from sp14.model import rec_neighbors_by, rec_probs, Search
 from util import *
@@ -17,13 +18,20 @@ from viz import *
 
 def xc_meta(
     species: str,
+    quality: str = None,
     n_recs: int = 10,
 ) -> pd.DataFrame:
+
+    # Params
     species = species_for_query(species)
-    require(n_recs > 0)
+    quality = quality or 'ab'
+    quality = [q.upper() for q in quality]
+    quality = [{'N': 'no score'}.get(q, q) for q in quality]
     n_recs = np.clip(n_recs, 0, 50)
+
     return (sg.xc_meta
         [lambda df: df.species == species]
+        [lambda df: df.quality.isin(quality)]
         [:n_recs]
     )
 
@@ -57,12 +65,13 @@ def xc_species_html(
         .pipe(require_nonempty_df, 'No recs found', species=species, quality=quality)
         .sort_index(ascending=True)  # This is actually descending... [why?]
         [:n_recs]
-        .reset_index()
+        .reset_index(drop=True)  # Drop RangeIndex
         .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale)
+        .reset_index()  # xc_id
         .pipe(recs_view)
         [lambda df: [c for c in [
             'xc_id', 'similar', 'com_name', 'species', 'quality',
-            'thumb', 'micro',
+            'thumb', 'slice',
             'duration_s', 'month_day', 'background_species', 'place', 'remarks',
         ] if c in df]]
     )
@@ -115,9 +124,9 @@ def xc_similar_html(
     search_recs = (sg.xc_meta
         # Filter
         [lambda df: df.species.isin(query_probs.species)]
-        .pipe(require_nonempty_df, 'No recs found', species=species)
+        .pipe(require_nonempty_df, 'No recs found', species=query_probs.species)
         [lambda df: df.quality.isin(quality)]
-        .pipe(require_nonempty_df, 'No recs found', species=species, quality=quality)
+        .pipe(require_nonempty_df, 'No recs found', species=query_probs.species, quality=quality)
         .pipe(df_remove_unused_categories)
         # Sample n_recs_r per species
         .pipe(lambda df: df if n_recs_r is None else (df
@@ -160,13 +169,13 @@ def xc_similar_html(
     # Featurize result_recs (.spectro) + view
     return (result_recs
         .reset_index()
-        .pipe(recs_featurize_spectro)
-        .pipe(recs_featurize_micro_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
+        # .pipe(recs_featurize_spectro)  # XXX Pushed into recs_featurize_slice_thumb
+        .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view)
         [lambda df: [c for c in [
             'dist',
             'xc_id', 'similar', 'com_name', 'species', 'quality',
-            'thumb', 'micro',
+            'thumb', 'slice',
             'duration_s', 'month_day', 'background_species', 'place', 'remarks',
         ] if c in df]]
     )
@@ -181,9 +190,9 @@ def recs_featurize(
 ) -> pd.DataFrame:
     return (recs
         .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
-        .pipe(recs_featurize_spectro)
+        # .pipe(recs_featurize_spectro)  # XXX Pushed into recs_featurize_slice_thumb
         .pipe(recs_featurize_feat)
-        .pipe(recs_featurize_micro_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
+        .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
     )
 
 
@@ -197,6 +206,14 @@ progress_kwargs = dict(
 def recs_featurize_metdata_audio_slice(recs: pd.DataFrame, audio_s: float) -> pd.DataFrame:
     """Featurize: Add .audio with slice"""
     assert audio_s is not None and audio_s > 0, f"{audio_s}"
+    # FIXME "10.09s bug": If you write a 10s-sliced audio to mp4 you get 10.09s in the mp4 file
+    #   - To inspect, use `ffprobe` or `ffprobe -show_packets`
+    #   - This messes up e.g. any spectro/slice/thumb that expects its input to be precisely ≤10s, else it wraps
+    #   - All downstreams currently have to deal with this themselves, e.g. via plot_slice(slice_s=10)
+    #   - Takeaways after further investigation:
+    #       - It's just a fact of life that non-pcm mp4/mp3 encodings don't precisely preserve audio duration
+    #       - We can always precisely slice the pcm samples once they're decoded from mp4/mp3, but as long as we're
+    #         dealing in non-pcm encodings (for compression) we're stuck dealing with imprecise audio durations
     try:
         # Try loading sliced .audio directly
         return (recs
@@ -215,7 +232,6 @@ def recs_featurize_metdata_audio_slice(recs: pd.DataFrame, audio_s: float) -> pd
                 for abs_sliced_path in [str(Path(data_dir) / sliced_id)]
             ])
             .pipe(recs_featurize_audio, load=load_for_audio_persist())
-            # TODO TODO WIP Not working yet... (still 2x "Read:" in the api logs, on cache miss or hit)
         )
     except FileNotFoundError:
         # Fallback to loading full .audio and computing the slice ourselves (which will cache for next time)
@@ -262,19 +278,6 @@ def recs_featurize_slice(recs: pd.DataFrame, audio_s: float) -> pd.DataFrame:
     )
 
 
-def recs_featurize_spectro(recs: pd.DataFrame) -> pd.DataFrame:
-    """Featurize: Add .spectro"""
-    return (recs
-        # TODO HACK Workaround bug
-        #   - In server, .spectro column is present but all nan, which breaks downstream
-        #   - In notebook, works fine
-        #   - Workaround: force-drop .spectro column if present
-        #   - Tech debt: Not general, very error prone -- e.g. does this affect .feat? .audio?
-        .drop(columns=['spectro'], errors='ignore')
-        .assign(spectro=lambda df: sg.features.spectro(df, **progress_kwargs, cache=True))  # threads >> sync, procs
-    )
-
-
 def recs_featurize_feat(recs: pd.DataFrame) -> pd.DataFrame:
     """Featurize: Add .feat"""
     return (recs
@@ -282,14 +285,14 @@ def recs_featurize_feat(recs: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def recs_featurize_micro_thumb(
+def recs_featurize_slice_thumb(
     recs: pd.DataFrame,
     audio_s: float,
     thumb_s: float,
     scale: float,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
-    """Featurize: Add .thumb, .micro <- .spectro, .audio"""
+    """Featurize: Add .thumb, .slice <- .spectro, .audio"""
     plot_many_kwargs = {
         **plot_many_kwargs,
         'scale': dict(h=int(40 * scale)),  # Best if h is multiple of 40 (because of low-level f=40 in Melspectro)
@@ -297,11 +300,12 @@ def recs_featurize_micro_thumb(
         '_nocache': True,  # Dev: disable plot_many cache since it's blind to most of our sub-many code changes [TODO Revisit]
     }
     return (recs
+        .pipe(recs_featurize_spectro)
         # Clip .audio/.spectro to audio_s/thumb_s
         .pipe(df_assign_first, **{
             **({} if not audio_s else dict(
-                micro=df_cell_spectros(plot_micro.many, sg.features, **plot_many_kwargs,
-                    pad_s=audio_s,
+                slice=df_cell_spectros(plot_slice.many, sg.features, **plot_many_kwargs,
+                    pad_s=audio_s,  # Use pad_s instead of slice_s, else excessive writes (slice->mp4->slice->mp4)
                 ),
             )),
             **({} if not thumb_s else dict(
@@ -310,6 +314,19 @@ def recs_featurize_micro_thumb(
                 ),
             )),
         })
+    )
+
+
+def recs_featurize_spectro(recs: pd.DataFrame) -> pd.DataFrame:
+    """Featurize: Add .spectro"""
+    return (recs
+        # HACK Workaround some bug I haven't debugged yet
+        #   - In server, .spectro column is present but all nan, which breaks downstream
+        #   - In notebook, works fine
+        #   - Workaround: force-drop .spectro column if present
+        #   - Tech debt: Not general, very error prone -- e.g. does this affect .feat? .audio?
+        .drop(columns=['spectro'], errors='ignore')
+        .assign(spectro=lambda df: sg.features.spectro(df, **progress_kwargs, cache=True))  # threads >> sync, procs
     )
 
 

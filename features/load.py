@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import pandas as pd
 import parse
 from potoo.pandas import requires_cols
+from potoo.pretty import pp
 from potoo.util import or_else, path_is_contained_by, round_sig, strip_startswith
 import structlog
 import tqdm
@@ -76,16 +77,28 @@ class Load(DataclassConfig):
         paths: Iterable[Tuple[str, str]] = None,
         limit: int = None,
         drop_invalid: bool = True,
+        log_dropped: bool = True,
     ) -> RecordingDF:
         """Load recs.{**metadata} from fs"""
-        return (
+        recs = (
             self.recs_paths(datasets, paths)
             # .sample(n=limit, random_state=0)  # TODO Why does this return empty? More useful than [:limit]
             [:limit]
             .pipe(lambda df: pd.concat(axis=1, objs=[df, self.metadata(df)]))
-            .sort_values('species')
-            [lambda df: ~np.array(drop_invalid) | (df.samples_n != 0)]  # Filter out invalid/empty audios
             .reset_index(drop=True)
+        )
+        if drop_invalid:
+            # Filter out invalid audios
+            drop_ix = recs.samples_n == 0  # samples_n is 0 if input is either empty or couldn't be read
+            dropped = recs[drop_ix]
+            if dropped.size:
+                recs = recs[~drop_ix]
+                if log_dropped:
+                    log.warn(f'Dropping {len(dropped)} invalid audios:')
+                    for _id in dropped.id:
+                        print(f'  {_id}')
+        return (recs
+            .sort_values('species')
             .pipe(RecordingDF)
         )
 
@@ -299,7 +312,7 @@ class Load(DataclassConfig):
             raise ValueError(f"rec.id[{rec.id}] must be relative to data_dir[{data_dir}]")
         rec_abs_path = Path(data_dir) / rec.id
 
-        # TODO TODO Helpful? For the catch I added somewhere else (I forgot where...)
+        # TODO Helpful? For the catch I added somewhere else (I forgot where...)
         if not rec_abs_path.exists():
             raise FileNotFoundError(rec_abs_path)
 
@@ -322,19 +335,13 @@ class Load(DataclassConfig):
             if isinstance(e, FileNotFoundError):
                 raise
 
-            # Parse ffmpeg error msgs out of pydub error msgs, else you're stuck with one big line of b'ffmpeg...\n...'
-            e_msg = str(e)
-            ffmpeg_msg = None
+            # Unpack ffmpeg error msgs from CouldntDecodeError (as already cleaned up by util.audio_from_file)
             if isinstance(e, pydub.exceptions.CouldntDecodeError):
-                try:
-                    pydub_msg = e.args[0]
-                    ffmpeg_msg_as_bytes_repr = pydub_msg.split('\n')[-1]
-                    ffmpeg_msg = eval(ffmpeg_msg_as_bytes_repr).decode()
-                    # If ffmpeg eval succeeded, stop skipping over exceptions
-                except:
-                    pass
-                else:
-                    e_msg = f'{type(e).__name__}(...)'  # Abbreviate error msg, since it's huge and noisy
+                ffmpeg_msg = str(e)
+                e_msg = f'{type(e).__name__}(...)'  # Abbreviate error msg, since it's huge and noisy
+            else:
+                ffmpeg_msg = None
+                e_msg = str(e)
 
             # Try to detect "Download disabled for this species" pages (which we naively download as audio.mp3), e.g.
             #   - https://www.xeno-canto.org/308503 -> https://www.xeno-canto.org/308503/download
