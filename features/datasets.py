@@ -316,7 +316,9 @@ class _xc(DataclassUtil):
     # TODO Clean up along with {xc,ebird}.com_names_to_species
     @property
     @lru_cache()
-    @cache(version=0, key=lambda self: (self, self._metadata_hash))
+    @cache(version=0, key=lambda self: (self, self._metadata_hash),
+        norefresh=True,  # Very slow and rarely worth refreshing
+    )
     def com_name_to_species_dict(self) -> dict:
         return (xc.metadata
             [['com_name', 'species']]
@@ -374,7 +376,7 @@ class _xc(DataclassUtil):
 
     @property
     @cache(version=0, key=lambda self: (self, self._audio_paths_hash),
-        norefresh=True,  # We're really slow and rarely worth refreshing
+        norefresh=True,  # Very slow and rarely worth refreshing
     )
     def downloaded_page_metadata_full(self) -> "pd.DataFrame['id': int, ...]":
         audio_paths = self._audio_paths
