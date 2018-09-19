@@ -111,6 +111,12 @@ def cache(
                 if not cache_control.refresh or norefresh:
                     out = func_cached(cache_key, ignore)
                 else:
+
+                    # HACK Log to match joblib.memory.MemorizeFunc
+                    func_id, _ = func_cached._get_output_identifiers(cache_key, ignore)
+                    memory.log.char('info', '»')
+                    memory.log.char('debug', ' %s\n' % func_id)
+
                     out = func_cached.func(cache_key, ignore)
                     _store_result(out, func_cached, cache_key, ignore)
                 return out
