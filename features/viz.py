@@ -73,92 +73,51 @@ def _with_many(plot_f):
 
 
 @_with_many
-def plot_thumb_micro(
-    rec,
-    features,
-    raw=True,
-    scale=None,
-    pad=True,  # Pad if duration_s < thumb_s (for consistent sizing)
-    audio=True,
-    show=True,
-    plot_kwargs=dict(),
-    **thumb_kwargs,
-):
-    return plot_spectro_micro(
-        rec_thumb(rec, features, **thumb_kwargs),
-        features,
-        raw=raw,
-        scale=scale,
-        pad=pad,
-        audio=audio,
-        show=show,
-        **plot_kwargs,
-    )
-
-
-@_with_many
 def plot_thumb(
     rec,
     features,
     raw=True,
     scale=None,
-    pad=True,  # Pad if duration_s < thumb_s (for consistent sizing)
+    pad=True,  # Pad if duration_s < thumb_s (for consistent img size)
     audio=True,
     show=True,
     plot_kwargs=dict(),
     thumb_s=1,
-    **thumb_kwargs,
+    **thumb_kwargs,  # [Simpler to make (few, stable) thumb_kwargs explicit and let (many, evolving) **plot_kwargs be implicit?]
 ):
-    return plot_spectro(
-        rec_thumb(rec, features, thumb_s=thumb_s, **thumb_kwargs),
-        raw=raw,
-        scale=scale,
-        audio=audio,
-        show=show,
-        limit_s=thumb_s if pad else None,
-        **plot_kwargs,
+    rec = rec_thumb(rec, features, thumb_s=thumb_s, **thumb_kwargs)
+    return plot_spectro(rec, raw=raw, scale=scale, audio=audio, show=show, **plot_kwargs,
+        pad_s=thumb_s if pad else None,
     )
 
 
 @_with_many
-def plot_micro(
+def plot_slice(
     rec,
     features,
-    raw=True,
-    limit_s=None,
+    slice_s=None,
+    **kwargs,
+):
+    if slice_s:  # Avoid excessive .slice() ops, else cache misses [Simpler to make slice_spectro noop/idempotent?]
+        rec = features.slice_spectro(rec, 0, slice_s)
+    return plot_spectro(rec, **kwargs)
+
+
+def plot_spectro(
+    rec,
     pad_s=None,
+    audio=True,
+    audio_kwargs=None,
     **kwargs,
 ):
-    if limit_s:
-        rec = features.slice_spectro(rec, 0, limit_s)  # Avoid excessive .slice() ops, else cache misses (HACK)
-    return plot_spectro_wrap(rec, features, raw=raw, **kwargs,
-        limit_s=None,  # We did the slice so that we can control whether a .slice() op appears (HACK)
-        pad=pad_s is not None,
-        wrap_s=pad_s if pad_s is not None else rec.duration_s,
+    ret = plot_spectros(rec, **kwargs,
+        limit_s=pad_s and max(pad_s, rec.duration_s),  # Pad to pad_s, but don't limit <duration_s (e.g. 10.09s bug)
     )
-
-
-# XXX Migrate callers to plot_micro
-#   - wrap/wrap_s/limit_s got too confusing; gave up and started over
-@_with_many
-def plot_spectro_micro(
-    rec,
-    features,
-    raw=True,
-    pad=True,  # Pad if duration_s < wrap_s (for consistent sizing)
-    wrap=False,  # True to plot the full duration with wrapping
-    wrap_s=10,  # TODO 10 vs. 15 as sane default?
-    limit_s=None,
-    **kwargs,
-):
-    if not wrap and not limit_s:
-        limit_s = wrap_s
-    if limit_s:
-        rec = features.slice_spectro(rec, 0, limit_s)
-    return plot_spectro_wrap(rec, features, raw=raw, **kwargs,
-        wrap_s=wrap_s,
-        pad=pad,
-    )
+    if audio and ret:
+        # NOTE config.audio_to_url.audio_kwargs will lossily compress audio without changing the spectro (above)
+        #   - If you want to visualize lossy audio encoding via spectros, don't rely on this
+        ret = display_with_audio(ret, audio=rec.audio.unbox, **(audio_kwargs or {}))
+    return ret
 
 
 @_with_many
@@ -166,9 +125,8 @@ def plot_spectro_wrap(
     rec,
     features,  # TODO Reimpl so we don't need features: slice up spectro.S instead of re-spectro'ing audio slices
     wrap_s=10,  # Sane default (5 too small, 20 too big, 10/15 both ok)
-    limit_s=None,  # Limit duration of rec
-    pad=True,  # Pad to wrap_s if there's only one line (for consistent sizing)
-    raw=True,
+    limit_s=None,  # Limit[/pad?] spectro duration
+    pad=True,  # Pad to wrap_s if there's only one line (for consistent img size)
     audio=True,
     audio_kwargs=None,
     **kwargs,
@@ -184,27 +142,11 @@ def plot_spectro_wrap(
         ),
         yticks=['%.0fs' % s for s in breaks_s],
         xformat='+%.0fs',
-        raw=raw,
         limit_s=wrap_s if pad else None,
         **kwargs,
     )
     if audio and ret:
-        # WARNING config.audio_to_url.audio_kwargs will lossily compress audio without changing the spectro (above)
-        #   - If you want to visualize lossy audio encoding via spectros, don't rely on this
-        ret = display_with_audio(ret, audio=rec.audio.unbox, **(audio_kwargs or {}))
-    return ret
-
-
-def plot_spectro(
-    rec,
-    raw=False,
-    audio=True,
-    audio_kwargs=None,
-    **kwargs,
-):
-    ret = plot_spectros(rec, raw=raw, **kwargs)
-    if audio and ret:
-        # WARNING config.audio_to_url.audio_kwargs will lossily compress audio without changing the spectro (above)
+        # NOTE config.audio_to_url.audio_kwargs will lossily compress audio without changing the spectro (above)
         #   - If you want to visualize lossy audio encoding via spectros, don't rely on this
         ret = display_with_audio(ret, audio=rec.audio.unbox, **(audio_kwargs or {}))
     return ret
@@ -217,12 +159,12 @@ def plot_spectro(
 )
 def plot_spectros(
     recs: Union[pd.DataFrame, Row],
-    raw=False,
+    raw=True,
     title=None,
     xformat='%.0fs',
     ytick_col=None,  # e.g. 'species_longhand'
     yticks=None,
-    limit_s=None,  # Limit duration of x-axis
+    limit_s=None,  # Limit/pad spectro duration
     verbose=False,
     **kwargs,
 ):
@@ -236,7 +178,7 @@ def plot_spectros(
 
     Ss = [rec.spectro.S for rec in recs]
     ts = [rec.spectro.t for rec in recs]
-    limit_s = limit_s or max([rec.duration_s for rec in recs])  # Allow limit_s > duration_s, to allow padding (for consistent sizing)
+    limit_s = limit_s or max([rec.duration_s for rec in recs])  # Allow limit_s > duration_s, to allow padding (for consistent img size)
     dt = ts[0][1] - ts[0][0]  # Not exactly right, but close enough
     limit_i = int(round(limit_s / dt))
     f_i_len = Ss[0].shape[0]
@@ -294,15 +236,10 @@ def plot_thumb_grid(
     cols=None,
     order='top-down',  # Thumbs are typically longer than tall, so default grid order to top-down instead of left-right
     plot_kwargs=dict(),
-    **thumb_kwargs,
+    **thumb_kwargs,  # [Simpler to make (few, stable) thumb_kwargs explicit and let (many, evolving) **plot_kwargs be implicit?]
 ):
-    return plot_spectro_grid(
-        recs_thumb(recs, features, **thumb_kwargs),
-        raw=raw,
-        cols=cols,
-        order=order,
-        **plot_kwargs,
-    )
+    recs = recs_thumb(recs, features, **thumb_kwargs)
+    return plot_spectro_grid(recs, raw=raw, cols=cols, order=order, **plot_kwargs)
 
 
 def plot_spectro_grid(
