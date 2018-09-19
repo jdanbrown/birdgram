@@ -373,7 +373,9 @@ class _xc(DataclassUtil):
         )
 
     @property
-    @cache(version=0, key=lambda self: (self, self._audio_paths_hash))
+    @cache(version=0, key=lambda self: (self, self._audio_paths_hash),
+        norefresh=True,  # We're really slow and rarely worth refreshing
+    )
     def downloaded_page_metadata_full(self) -> "pd.DataFrame['id': int, ...]":
         audio_paths = self._audio_paths
         page_paths = [p.parent / 'page.html' for p in audio_paths]

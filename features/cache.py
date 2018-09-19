@@ -82,6 +82,7 @@ def cache(
     version=None,
     key=lambda *args, **kwargs: (args, kwargs),
     nocache=lambda *args, **kwargs: False,
+    norefresh=False,  # Don't refresh on cache_control(refresh=True)
     **kwargs,
 ):
     """
@@ -108,12 +109,21 @@ def cache(
                 return func_cached.func(cache_key, ignore)
             else:
                 cache_key = dict(version=version, key=key(*args, **kwargs))
-                if cache_control.refresh:
-                    _clear_result(func_cached, cache_key, ignore)
-                return func_cached(cache_key, ignore)
+                if not cache_control.refresh or norefresh:
+                    out = func_cached(cache_key, ignore)
+                else:
+                    out = func_cached.func(cache_key, ignore)
+                    _store_result(out, func_cached, cache_key, ignore)
+                return out
         return g
 
     return decorator
+
+
+def _store_result(out: any, f: MemorizedFunc, *args, **kwargs):
+    """Clear an individual MemorizedResult for a MemorizedFunc"""
+    func_id, args_id = f._get_output_identifiers(*args, **kwargs)
+    f.store_backend.dump_item([func_id, args_id], out)
 
 
 def _clear_result(f: MemorizedFunc, *args, **kwargs):
