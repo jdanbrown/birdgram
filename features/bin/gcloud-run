@@ -158,6 +158,18 @@ bin_dir = code_dir / 'bin'
 #   - Premium:  Egress NA -> NA[$.105/gb], China[$.46/gb], Oceania[$.19/gb], *[$.12/gb]
 #   - Region us-west1 only supports premium
 @click.option('--network-tier', default='PREMIUM')
+# Access config
+#   - TODO Add default external ip so we don't have to manually attach it everytime we relaunch the bubo-api instance
+#       - Workaround: attach manually after launching instance (which hangs any in-progress ssh conns...)
+#       - https://console.cloud.google.com/networking/addresses
+#   - How to attach address on `gcloud compute instance create` (i.e. which python args to add below):
+#       - https://stackoverflow.com/questions/51475053/assigning-a-reserved-ip-to-instance-from-command-line-google-cloud
+#       - https://cloud.google.com/sdk/gcloud/reference/compute/instances/update-access-config
+# @click.option('--access-config', default='...')  # TODO Default external ip 35.230.68.91 (mutexed resource, like disk)
+# Tags
+#   - Just for network firewall rules, so far
+#   - https://console.cloud.google.com/networking/firewalls
+@click.option('--tags', default='http-server-8000,http-server,https-server')
 # Service account
 #   - By default, gce uses the "Compute Engine default service account" with a limited set of --scopes
 #   - This default overrides --scopes to give full access to all gcloud apis
@@ -255,6 +267,7 @@ def main(
     image_project, image_family, image,
     boot_disk_size, boot_disk_type, disk_name, disk_mode, disk,
     network_tier,
+    tags,
     service_account, scopes,
     vm, vm_init,
     container, container_init, container_pull, container_push,
@@ -363,9 +376,9 @@ def main(
             boot_disk_type=boot_disk_type,
             disk=disk,
             network_tier=network_tier,
+            tags=tags,
             service_account=service_account,
             scopes=scopes,
-            # tags='http-server,https-server',  # For ports 80/443
         )
         assert res['name'] == instance_name
         external_ip = res['networkInterfaces'][0]['accessConfigs'][0]['natIP']
