@@ -1,6 +1,3 @@
-# Before `import config`
-import os; os.environ['BUBO_ROLE'] = 'api'
-
 from api.app import create_app
 
 # To run: `FLASK_APP=main flask run`

@@ -2,8 +2,8 @@ import os
 
 from attrdict import AttrDict
 
-role = os.environ.get('BUBO_ROLE')
 env  = os.environ.get('ENV') or os.environ.get('FLASK_ENV')
+role = os.environ.get('BUBO_ROLE')
 
 # Global mutable config (handle with care)
 config = AttrDict(

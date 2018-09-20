@@ -22,9 +22,9 @@ def create_app(
     # config_yaml=Path(__file__).parent.parent / os.environ.get('CONFIG_YAML', 'config-dev.yaml'),
 ):
 
+    init_logging()
     init_check_deps()
     init_cloudpickle()
-    init_logging()
     init_potoo()
 
     app = Flask(__name__)

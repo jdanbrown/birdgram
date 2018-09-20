@@ -143,9 +143,9 @@ gc_on_ipy_post_run_cell()
 #
 
 from inits import *
+init_logging()
 init_check_deps()
 init_cloudpickle()
-init_logging()
 # init_potoo()  # TODO To break the dependency on my local ~/.pythonrc
 
 #
