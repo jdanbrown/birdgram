@@ -1,13 +1,17 @@
 import os
 from pathlib import Path
+import textwrap
 
 from flask import Flask
+import json
 from potoo.ipython import ipy_install_mock_get_ipython
 import structlog
+import yaml
 
 import api.routes
 from api.server_globals import sg
 from cache import memory
+from config import config
 from inits import *
 from logging_ import init_logging
 
@@ -34,6 +38,15 @@ def create_app(
     # log.info('load_config', config_yaml=config_yaml)
     # with open(config_yaml) as f:
     #     app.config.from_mapping(yaml.load(f).get('flask', {}))
+
+    # Log config (great for api logs, too noisy for notebook)
+    #   - Pretty print so we can actually read it, violating the one-line-per-log-event principle
+    log.info('Config:')
+    print(textwrap.indent(prefix='  ', text=(  # Indent under the log line
+        yaml.safe_dump(default_flow_style=False, width=1e9,  # Yaml for high SNR
+            data=json.loads(json.dumps(config)),  # Json cleanse to strip nonstandard data structures for yaml
+        ).rstrip('\n')
+    )))
 
     app.register_blueprint(api.routes.bp)
     sg.init(app)
