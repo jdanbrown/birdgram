@@ -113,7 +113,7 @@ bin_dir = code_dir / 'bin'
 @click.option('--min-cpu-platform', default='Intel Skylake')
 # Instance lifetime
 @click.option('--keep', default=None, help='Instance name to create and keep (no delete)')
-@click.option('--reuse', default=None, help='Instance name to reuse (no create, delete, await)')
+@click.option('--reuse', default=None, help='Instance name to reuse, creating if needed (no delete)')
 @click.option('--create-instance/--no-create-instance', default=True)
 @click.option('--delete-instance/--no-delete-instance', default=True)
 # Image
@@ -287,16 +287,17 @@ def main(
         instance_name_prefix=instance_name_prefix,
         timestamp=re.sub('[^0-9T]', '-', datetime.utcnow().isoformat()).lower(),
     )
-    # TODO Would we want `--keep=x --reuse=x` to mean "assume x exists" (like `--reuse=x`) or "boot x if not exists"?
     assert not (keep and reuse)
     if keep:
-        delete_instance = False
         instance_name = keep
-    if reuse:
-        create_instance = False
         delete_instance = False
-        await_ready = False
+    if reuse:
         instance_name = reuse
+        instance_exists = gcloud('compute', 'instances', 'describe', instance_name, _mode='status') == 0
+        print(color('blue', 'Instance exists' if instance_exists else 'Instance not found'))
+        create_instance = not instance_exists
+        delete_instance = False
+        await_ready = create_instance
     image_project = image_project % dict(project=project)
     if disk:
         disk = disk % dict(disk_name=disk_name, disk_mode=disk_mode)
@@ -480,7 +481,7 @@ def main(
 @dataclass
 class GCloud:
     """
-    A thin wrapper around the gcloud cli, because it's better documented and easier to figure out than the actual
+    A thin wrapper around the gcloud cli, because the cli is better documented and easier to figure out than the actual
     google-cloud python libs
     """
 
@@ -493,7 +494,7 @@ class GCloud:
         return dataclasses.asdict(self)
 
     def __call__(self, *args, _mode='json', **kwargs):
-        assert _mode in ['json', 'no-json', 'exec', 'async']
+        assert _mode in ['json', 'no-json', 'exec', 'async', 'status']
 
         # Build cmd
         kwargs = {**self.config, **kwargs}  # Silently overwrite duplicate keys with user keys
@@ -530,11 +531,14 @@ class GCloud:
             # Run, wait for completion, parse output (assumes '--format=json', above)
             proc = subprocess.run(
                 real_cmd,
-                stdout=subprocess.PIPE if _mode == 'json' else None,
+                stdout=subprocess.PIPE if _mode in ['status', 'json'] else None,
+                stderr=subprocess.PIPE if _mode in ['status'] else None,
             )
 
             # Handle result
-            if proc.returncode != 0:
+            if _mode == 'status':
+                return proc.returncode
+            elif proc.returncode != 0:
                 msg = 'Process exited %s' % proc.returncode
                 if proc.stdout:
                     msg += ', stdout[%s]' % (
