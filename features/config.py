@@ -17,6 +17,13 @@ config = AttrDict(
         ),
     ),
 
+    cache=dict(
+        log_level={
+            'api':      'debug',  # Verbose cache logging for api
+            'notebook': 'info',   # Keep quiet for notebooks
+        }[role or 'notebook'],
+    ),
+
     hosts=dict(
         prod='35.230.68.91',
         local='192.168.0.195:8000',

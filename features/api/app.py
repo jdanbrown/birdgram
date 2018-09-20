@@ -26,7 +26,6 @@ def create_app(
     init_cloudpickle()
     init_logging()
     init_potoo()
-    memory.log.level = 'debug'  # Verbose cache logging for api (but keep quiet for notebooks)
 
     app = Flask(__name__)
 

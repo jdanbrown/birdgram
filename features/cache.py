@@ -44,6 +44,7 @@ from joblib import Memory
 from joblib.memory import MemorizedFunc
 from potoo.util import AttrContext
 
+from config import config
 from constants import cache_dir
 from log import char_log
 from util import singleton
@@ -54,7 +55,8 @@ memory = Memory(
     log=char_log.replace(
         # level='debug',  # Log '.'/'!' line on hit/miss [HACK HACK HACK]
         # level='info',  # Log '.'/'!' char on hit/miss [HACK HACK HACK]
-        level='warn',  # Log nothing [FIXME -1 (char_log.char) is causing the 'IOStream.flush timed out' errors in remote kernels]
+        # level='warn',  # Log nothing [FIXME -1 (char_log.char) is causing the 'IOStream.flush timed out' errors in remote kernels]
+        level=config.cache.log_level,
     ),
     verbose=0,  # Log nothing
     # verbose=1,  # Log cache miss
