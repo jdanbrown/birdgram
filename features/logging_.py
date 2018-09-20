@@ -131,8 +131,9 @@ class BuboFilter(logging.Filter):
         # msg, args
         #   - HACK `msg % args` is done downstream by Formatter, but we do it in advance to compute name_funcName_message
         #   - https://docs.python.org/3/library/logging.html
-        record.msg = record.msg % record.args
-        record.args = ()  # Unset args so that Formatter's operation is a noop
+        if record.args:
+            record.msg = record.msg % record.args
+            record.args = ()  # Unset args so that Formatter's operation is a noop
 
         # name_funcName_message
         #   - TODO Omit funcName from deps: add include/exclude args (in logging.yaml) to control when to include funcName
