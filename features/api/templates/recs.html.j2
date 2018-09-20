@@ -33,18 +33,21 @@
 
   <script>
 
-    window.topControlsSubmit = (ev) => {
+    //
+    // Bubo
+    //
+
+    window.topControlsSubmit = ev => {
       ev.preventDefault();
       topControlsGo();
     };
 
     window.topControlsGo = () => {
-      const controls = document.getElementById('top-controls');
-      const query = new URLSearchParams(window.location.search);
-      Array.from(document.querySelectorAll('#top-controls input.control')).forEach(input => {
-        query.set(input.dataset.arg, input.value.trim());
-      });
-      window.location.search = query.toString();
+      locationReplaceQueryStringWith(objectFromEntries(
+        Array.from(document.querySelectorAll('#top-controls input.control')).map(input => {
+          return [input.dataset.arg, input.value.trim()];
+        })
+      ))
     };
 
     document.addEventListener('DOMContentLoaded', ev => {
@@ -71,6 +74,41 @@
       });
 
     });
+
+    //
+    // Location
+    //
+
+    window.locationReplace = params => {
+      window.location = locationWith(params);
+    };
+
+    window.locationReplaceQueryStringWith = params => {
+      locationReplace({search: queryStringWith(params)});
+    };
+
+    window.locationWith = params => {
+      const a = document.createElement('a');
+      a.href = window.location;
+      Object.entries(params).forEach(([k, v]) => a[k] = v);
+      return a.href;
+    };
+
+    window.queryStringWith = params => {
+      const query = new URLSearchParams(window.location.search);
+      Object.entries(params).forEach(([k, v]) => query.set(k, v));
+      return query.toString();
+    };
+
+    //
+    // Util
+    //
+
+    window.objectFromEntries = entries => {
+      const x = {};
+      entries.forEach(([k, v]) => { x[k] = v; });
+      return x;
+    };
 
     window.isIOS = () => {
       // https://stackoverflow.com/a/9039885/397334

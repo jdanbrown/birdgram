@@ -15,17 +15,17 @@
   </tr>
 
   <tr>
-    <td><a class="control" href="//{{ switch_host_host() }}{{ request.full_path }}">{{ switch_host_text() }}</a></td>
-    <td><input type="text" data-arg="xc_id"   class="control num xc_id"    value="{{ query_get('xc_id', 5) }}" /></td>
-    <td><input type="text" data-arg="quality" class="control text quality" value="{{ query_get('quality', 'ab') }}"
+    <td><a class="control" href="//{{ req_switch_host_host() }}{{ request.full_path }}">{{ req_switch_host_text() }}</a></td>
+    <td><input type="text" data-arg="xc_id"   class="control num xc_id"     value="{{ req_query_get('xc_id', 5) }}" /></td>
+    <td><input type="text" data-arg="quality" class="control text quality"  value="{{ req_query_get('quality', 'ab') }}"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
     /></td>
-    <td><input type="text" data-arg="n_sp"     class="control num n_sp"     value="{{ query_get('n_sp', 3) }}" /></td>
-    <td><input type="text" data-arg="n_recs_r" class="control num n_recs_r" value="{{ query_get('n_recs_r', 3) }}" /></td>
-    <td><input type="text" data-arg="n_total"  class="control num n_total"  value="{{ query_get('n_total', 9) }}" /></td>
-    <td><input type="text" data-arg="scale"    class="control num scale"    value="{{ query_get('scale', 2) }}" /></td>
-    <td><input type="text" data-arg="audio_s"  class="control num audio_s"  value="{{ query_get('audio_s', 10) }}" /></td>
-    <td><input type="text" data-arg="thumb_s"  class="control num thumb_s"  value="{{ query_get('thumb_s', 0) }}" /></td>
+    <td><input type="text" data-arg="n_sp"     class="control num n_sp"     value="{{ req_query_get('n_sp', 3) }}" /></td>
+    <td><input type="text" data-arg="n_recs_r" class="control num n_recs_r" value="{{ req_query_get('n_recs_r', 3) }}" /></td>
+    <td><input type="text" data-arg="n_total"  class="control num n_total"  value="{{ req_query_get('n_total', 9) }}" /></td>
+    <td><input type="text" data-arg="scale"    class="control num scale"    value="{{ req_query_get('scale', 2) }}" /></td>
+    <td><input type="text" data-arg="audio_s"  class="control num audio_s"  value="{{ req_query_get('audio_s', 10) }}" /></td>
+    <td><input type="text" data-arg="thumb_s"  class="control num thumb_s"  value="{{ req_query_get('thumb_s', 0) }}" /></td>
   </tr>
 
 {% endblock %}

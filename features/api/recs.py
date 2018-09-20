@@ -1,5 +1,6 @@
 import inspect
 import linecache
+import numbers
 from typing import Sequence
 
 from more_itertools import one
@@ -70,14 +71,14 @@ def xc_species_html(
         .reset_index()  # xc_id
         .pipe(recs_view)
         [lambda df: [c for c in [
-            'xc_id', 'similar', 'com_name', 'species', 'quality',
+            'xc', 'xc_id',
+            'com_name', 'species', 'quality',
             'thumb', 'slice',
             'duration_s', 'month_day', 'background_species', 'place', 'remarks',
         ] if c in df]]
     )
 
 
-# TODO TODO Update for .audio/slice/.spectro/.feat (like /species)
 def xc_similar_html(
     xc_id: int,
     quality: str = None,
@@ -87,6 +88,7 @@ def xc_similar_html(
     audio_s: float = 10,
     thumb_s: float = 0,
     scale: float = 2,
+    sort: str = 'dist_p',
     **plot_many_kwargs,
 ) -> pd.DataFrame:
 
@@ -106,16 +108,16 @@ def xc_similar_html(
     query_rec = (sg.xc_meta
         [lambda df: df.id == xc_id]
         .pipe(require_nonempty_df, 'No recs found', xc_id=xc_id)
-        .pipe(recs_featurize_metadata)
-        .pipe(recs_featurize_audio, load=sg.load)
+        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
         .pipe(recs_featurize_feat)
         .pipe(lambda df: one(df_rows(df)))
     )
 
-    # Compute query_probs from search
-    query_probs = (
+    # Compute query_sp_p from search
+    query_sp_p = (
         rec_probs(query_rec, sg.search)
         [:n_sp]
+        .rename(columns={'p': 'sp_p'})
     )
 
     # Compute search_recs from xc_meta, and featurize (.audio, .feat)
@@ -123,10 +125,10 @@ def xc_similar_html(
     # memory.log.level = 'debug'  # TODO Nontrivial number of cache misses slowing us down -- why are there misses?
     search_recs = (sg.xc_meta
         # Filter
-        [lambda df: df.species.isin(query_probs.species)]
-        .pipe(require_nonempty_df, 'No recs found', species=query_probs.species)
+        [lambda df: df.species.isin(query_sp_p.species)]
+        .pipe(require_nonempty_df, 'No recs found', species=query_sp_p.species)
         [lambda df: df.quality.isin(quality)]
-        .pipe(require_nonempty_df, 'No recs found', species=query_probs.species, quality=quality)
+        .pipe(require_nonempty_df, 'No recs found', species=query_sp_p.species, quality=quality)
         .pipe(df_remove_unused_categories)
         # Sample n_recs_r per species
         .pipe(lambda df: df if n_recs_r is None else (df
@@ -136,45 +138,75 @@ def xc_similar_html(
         ))
         .reset_index(level=0, drop=True)  # species, from groupby
         # Featurize
-        .pipe(recs_featurize_metadata)
-        .pipe(recs_featurize_audio, load=sg.load)
+        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
         .pipe(recs_featurize_feat)
         # Include query_rec in results (already featurized)
-        .pipe(lambda df: df if query_rec.name in df.index else pd.concat([
-            DF([query_rec]).pipe(df_set_index_name, 'xc_id'),  # Restore index name, lost by df->series->df
-            df,
-        ]))
+        .pipe(lambda df: df if query_rec.name in df.index else pd.concat(
+            sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
+            objs=[
+                DF([query_rec]).pipe(df_set_index_name, 'xc_id'),  # Restore index name, lost by df->series->df
+                df,
+            ],
+        ))
     )
 
-    # Compute result_recs from (query_rec + search_recs).feat
-    result_recs = (
+    # Compute .dist from (query_rec + search_recs).feat
+    dist_recs = (
         rec_neighbors_by(
             query_rec=query_rec,
-            search_recs=search_recs if query_rec.name in search_recs.index else pd.concat([
-                DF([query_rec]).pipe(df_set_index_name, 'xc_id'),  # HACK Force compat with xc_recs, e.g. if from user_recs
-                search_recs,
-            ]),
+            search_recs=search_recs if query_rec.name in search_recs.index else pd.concat(
+                sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
+                objs=[
+                    DF([query_rec]).pipe(df_set_index_name, 'xc_id'),  # HACK Force compat with xc_recs, e.g. if from user_recs
+                    search_recs,
+                ],
+            ),
             by=Search.X,  # TODO Add user control to toggle dist function
         )
-        # TODO [later] Restore n_recs (maybe after we've built enough cache to no longer need n_recs_r?)
-        # .groupby('species').apply(lambda g: (g
-        #     .sort_values('dist', ascending=True)
-        #     [:n_recs]
-        # ))
-        # .reset_index(level=0, drop=True)  # species, from groupby
-        .sort_values('dist', ascending=True)
+        .reset_index()  # xc_id
+    )
+
+    # [orphaned] [later] TODO Restore n_recs (maybe after we've built enough cache to no longer need n_recs_r?)
+    # .groupby('species').apply(lambda g: (g
+    #     .sort_values('dist', ascending=True)
+    #     [:n_recs]
+    # ))
+    # .reset_index(level=0, drop=True)  # species, from groupby
+
+    # Rank results
+    #   - TODO TODO Make a meaningful score that combines (dist, sp_p)
+    #     - TODO Map dist to a prob, so combining ops can all operate in prob space (e.g. ebird_priors prob, once we add it)
+    #   - [later] TODO Add ebird_priors prob
+    result_recs = (dist_recs
+        .reset_index()  # xc_id
+        # Join in .sp_p for scoring functions
+        #   - [Using sort=True to silence "non-concatenation axis" warning -- not sure what we want, or if it matters]
+        .merge(how='left', on='species', right=query_sp_p[['species', 'sp_p']],
+            sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
+        )
+        # Score(s)
+        .assign(
+            sp_p=lambda df: df.sp_p,
+            dist=lambda df: -df.dist,
+            dist_p=lambda df: df.dist * df.sp_p,
+        )
+        # Sort (by user-chosen scoring function)
+        .sort_values(sort, ascending=False)
+        # Limit
         [:n_total]
     )
 
-    # Featurize result_recs (.spectro) + view
+    # Featurize result_recs: .spectro + recs_view
     return (result_recs
-        .reset_index()
-        # .pipe(recs_featurize_spectro)  # XXX Pushed into recs_featurize_slice_thumb
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view)
         [lambda df: [c for c in [
-            'dist',
-            'xc_id', 'similar', 'com_name', 'species', 'quality',
+            'xc', 'xc_id',
+            *unique_everseen([
+                sort,  # Show sort col first, for feedback to user
+                'sp_p', 'dist', 'dist_p',  # Order by primitive->derived
+            ]),
+            'com_name', 'species', 'quality',
             'thumb', 'slice',
             'duration_s', 'month_day', 'background_species', 'place', 'remarks',
         ] if c in df]]
@@ -190,16 +222,14 @@ def recs_featurize(
 ) -> pd.DataFrame:
     return (recs
         .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
-        # .pipe(recs_featurize_spectro)  # XXX Pushed into recs_featurize_slice_thumb
         .pipe(recs_featurize_feat)
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
     )
 
 
 progress_kwargs = dict(
-    # use='dask', scheduler='threads',  # TODO TODO Restore par
-    # use='sync',
-    use=None,  # Dev: silence progress bars
+    # use='dask', scheduler='threads',
+    use=None,  # XXX Debug: silence progress bars to debug if we're doing excessive read/write ops after rebuild_cache
 )
 
 
@@ -222,7 +252,7 @@ def recs_featurize_metdata_audio_slice(recs: pd.DataFrame, audio_s: float) -> pd
                 for (dataset, abs_path) in xc_meta_to_paths(recs)
                 for id in [str(Path(abs_path).relative_to(data_dir))]
                 for sliced_id in [audio_id_add_ops(id,
-                    # HACK TODO Find a principled way to synthesize id for sliced audio (multiple concerns to untangle...)
+                    # HACK Find a principled way to synthesize id for sliced audio (multiple concerns to untangle...)
                     'resample(%(sample_rate)s,%(channels)s,%(sample_width_bit)s)' % sg.load.audio_config,
                     'enc(wav)',
                     'slice(%s,%s)' % (0, int(1000 * audio_s)),
@@ -330,49 +360,50 @@ def recs_featurize_spectro(recs: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def recs_view(
-    recs: pd.DataFrame,
-) -> pd.DataFrame:
+def recs_view(recs: pd.DataFrame) -> pd.DataFrame:
+    df_if_col = lambda df, col, f: df if col not in df else f(df)
+    df_col_map_if_col = lambda df, **cols: df_col_map(df, **{k: v for k, v in cols.items() if k in df})
     return (recs
-        .pipe(lambda df: df if 'xc_id' not in df else (df
+        .pipe(df_col_map_if_col,
+            dist_p = lambda x: '''<a href="{{ req_query_with(sort='dist_p') }}" >%.1f</a>''' % x,
+            dist   = lambda x: '''<a href="{{ req_query_with(sort='dist')   }}" >%.1f</a>''' % x,
+            sp_p   = lambda x: '''<a href="{{ req_query_with(sort='sp_p')   }}" >%.2f</a>''' % x,
+        )
+        .pipe(df_if_col, 'xc_id', lambda df: (df
             .assign(
-                # TODO Simplify: Have to do .similar before .xc_id, since we mutate .xc_id
-                similar=lambda df: df_map_rows(df, lambda row: f'''
-                    <a href="/recs/xc/similar?xc_id={row.xc_id}">similar</a>
-                '''),
-                xc_id=lambda df: df_map_rows(df, lambda row: f'''
-                    <a href="https://www.xeno-canto.org/{row.xc_id}">{row.xc_id}</a>
-                '''),
+                # TODO Simplify: Have to do .xc before .xc_id, since we mutate .xc_id
+                xc=lambda df: df_map_rows(df, lambda row: f'''
+                    <a href="https://www.xeno-canto.org/%(xc_id)s">XC</a>
+                ''' % row),
+                xc_id=lambda df: df_map_rows(df, lambda row: '''
+                    <a href="{{ req_href('/recs/xc/similar')(xc_id=%(xc_id)r) }}">%(xc_id)s</a>
+                ''' % row),
             )
         ))
-        .pipe(lambda df: df if 'species' not in df else (df
+        .pipe(df_if_col, 'species', lambda df: (df
             .rename(columns={
                 'species_com_name': 'com_name',
             })
             .assign(
-                # species=lambda df: df_map_rows(df, lambda row: f'''
-                #     <a href="/recs/xc/species?species={row.species}">{row.species}</a> <br/>
-                #     <a href="/recs/xc/species?species={row.species}">{row.com_name}</a>
-                # '''),
-                # TODO Simplify: Have to do .com_name before .species, since we mutate .species
-                com_name=lambda df: df_map_rows(df, lambda row: f'''
-                    <a href="/recs/xc/species?species={row.species}">{row.com_name}</a>
-                '''),
-                species=lambda df: df_map_rows(df, lambda row: f'''
-                    <a href="/recs/xc/species?species={row.species}">{row.species}</a>
-                '''),
+                # TODO Simplify: Have to save .species/.com_name, since we mutate both
+                _species=lambda df: df.species,
+                _com_name=lambda df: df.com_name,
+                species=lambda df: df_map_rows(df, lambda row: '''
+                    <a href="{{ req_href('/recs/xc/species')(species=%(_species)r) }}" title="%(_com_name)s" >%(_species)s</a>
+                ''' % row),
+                com_name=lambda df: df_map_rows(df, lambda row: '''
+                    <a href="{{ req_href('/recs/xc/species')(species=%(_species)r) }}" title="%(_species)s"  >%(_com_name)s</a>
+                ''' % row),
             )
         ))
-        .pipe(lambda df: df if 'background_species' not in df else (df
-            .pipe(df_col_map,
-                background_species=lambda xs: ', '.join(xs),
-            )
-        ))
+        .pipe(df_col_map_if_col,
+            background_species=lambda xs: ', '.join(xs),
+        )
     )
 
 
 def species_for_query(species_query: str) -> str:
-    species_query = species_query.strip()
+    species_query = species_query and species_query.strip()
     species = metadata.species[species_query]
     if not species:
         raise ApiError(400, 'No species found', species_query=species_query)

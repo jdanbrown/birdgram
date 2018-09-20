@@ -6,13 +6,15 @@
 #   - [x] local: rebuild_cache [43m audio_metadata + 53m rest]
 #   - [x] remote: rm some cache/joblib/ dirs: load/ sk_hack/ sp14/ viz/
 #   - [.] remote: rebuild_cache [audio_metadata 87% at 100m + ?m rest]
-#       - [ ] Preempted ~8am after overnight -- check to see if it had already finished?
+#       - [.] Preempted ~8am after overnight -- re-running to see if it already finished / make it finish anyway
 
 ##
 # TODO TODO Still cache misses in api on plot_spectros (any others?)
-#   - Overhaul 'Cache 10s slices' to reuse api.recs functions
-#   - e.g. sliced .audio and .feat are now cached, but plot_slice still isn't, because we're naively caching .spectro here (oops)
-#   - First, make /similar work in case that changes any plans
+#   - [x] First, inspect actual read/write ops in /species to look for anything egregiously wrong
+#   - [x] First, make /similar work in case that changes any plans
+#   - [ ] First, inspect actual read/write ops in /similar to look for anything egregiously wrong
+#   - [ ] Then, overhaul 'Cache 10s slices' to reuse api.recs functions
+#       - e.g. sliced .audio and .feat are now cached, but plot_slice still isn't, because we're naively caching .spectro here (oops)
 
 ##
 # [defer] Push slice down to ffmpeg moderate speedup (~3x speedup for 10s vs. 50s, which is xc avg)

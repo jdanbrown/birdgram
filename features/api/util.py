@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+
+
 class ApiError(Exception):
 
     def __init__(self, status_code: int, msg: str, **kwargs):
@@ -16,3 +19,10 @@ class ApiError(Exception):
             self.msg,
             ', '.join('%s=%r' % (k, v) for k, v in self.kwargs.items()),
         )
+
+
+# HACK Signaling redirects via exception is messy and encourages bad code structure; refactor callers and kill this
+@dataclass
+class RedirectError(Exception):
+    status_code: int
+    location: str
