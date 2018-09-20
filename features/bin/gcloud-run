@@ -149,7 +149,7 @@ bin_dir = code_dir / 'bin'
 #       - pd-ssd       500gb: $85/mo, 240mb/s rw
 @click.option('--boot-disk-size', default='200g')
 @click.option('--boot-disk-type', default='pd-standard', help='pd-standard | pd-ssd')
-@click.option('--disk-name', default='bubo-data-standard-1')
+@click.option('--disk-name', default='bubo-data-standard-1', help='Mutexed resource (pass --disk-name= to not use it)')
 @click.option('--disk-mode', default='ro')
 @click.option('--disk', default='name=%(disk_name)s,device-name=%(disk_name)s,boot=no,auto-delete=no,mode=%(disk_mode)s')
 # Network tier
@@ -158,14 +158,8 @@ bin_dir = code_dir / 'bin'
 #   - Premium:  Egress NA -> NA[$.105/gb], China[$.46/gb], Oceania[$.19/gb], *[$.12/gb]
 #   - Region us-west1 only supports premium
 @click.option('--network-tier', default='PREMIUM')
-# Access config
-#   - TODO Add default external ip so we don't have to manually attach it everytime we relaunch the bubo-api instance
-#       - Workaround: attach manually after launching instance (which hangs any in-progress ssh conns...)
-#       - https://console.cloud.google.com/networking/addresses
-#   - How to attach address on `gcloud compute instance create` (i.e. which python args to add below):
-#       - https://stackoverflow.com/questions/51475053/assigning-a-reserved-ip-to-instance-from-command-line-google-cloud
-#       - https://cloud.google.com/sdk/gcloud/reference/compute/instances/update-access-config
-# @click.option('--access-config', default='...')  # TODO Default external ip 35.230.68.91 (mutexed resource, like disk)
+# External IP
+@click.option('--address', default='bubo-api', help='Mutexed resource (pass --address= to not use it)')
 # Tags
 #   - Just for network firewall rules, so far
 #   - https://console.cloud.google.com/networking/firewalls
@@ -266,7 +260,7 @@ def main(
     keep, reuse, create_instance, delete_instance,
     image_project, image_family, image,
     boot_disk_size, boot_disk_type, disk_name, disk_mode, disk,
-    network_tier,
+    network_tier, address,
     tags,
     service_account, scopes,
     vm, vm_init,
@@ -377,6 +371,7 @@ def main(
             boot_disk_type=boot_disk_type,
             disk=disk,
             network_tier=network_tier,
+            address=address,
             tags=tags,
             service_account=service_account,
             scopes=scopes,
