@@ -161,8 +161,9 @@ def add_headers_no_caching(rep):
 @bp.errorhandler(Exception)
 def handle_exception(e):
 
-    # Break into debugger if $PDB is truthy
-    if app.config['PDB']:
+    # Break into debugger if $BUBO_PDB is truthy
+    #   - But not if stdin isn't a tty, e.g. under `entr -r` (which closes stdin for subprocs)
+    if app.config['BUBO_PDB'] and sys.stdin.isatty():
         pdb.post_mortem(e.__traceback__)
 
     # Translate all exceptions to an http response

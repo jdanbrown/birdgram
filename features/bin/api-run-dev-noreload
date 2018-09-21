@@ -11,6 +11,7 @@ export FLASK_ENV=development
 export FLASK_DEBUG=true # Can't get DEBUG:True to work from config
 export FLASK_APP=api/main
 # export EXPLAIN_TEMPLATE_LOADING=True  # [XXX No effect, set in create_app]
+
 export BUBO_ROLE='api'
 
 cmd=(

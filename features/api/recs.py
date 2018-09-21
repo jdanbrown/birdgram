@@ -6,6 +6,8 @@ from typing import Sequence
 from more_itertools import one
 import pandas as pd
 from potoo.pandas import *
+from potoo.util import ensure_startswith
+import sklearn
 import structlog
 
 from api.server_globals import sg
@@ -66,9 +68,8 @@ def xc_species_html(
         .pipe(require_nonempty_df, 'No recs found', species=species, quality=quality)
         .sort_index(ascending=True)  # This is actually descending... [why?]
         [:n_recs]
-        .reset_index(drop=True)  # Drop RangeIndex
+        .reset_index(drop=True)  # Drop RangeIndex (irregular after slice)
         .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale)
-        .reset_index()  # xc_id
         .pipe(recs_view)
         [lambda df: [c for c in [
             'xc', 'xc_id',
@@ -88,7 +89,10 @@ def xc_similar_html(
     audio_s: float = 10,
     thumb_s: float = 0,
     scale: float = 2,
-    sort: str = 'dist_p',
+    # dist: str = 'f',     # TODO dist (d_*) to use to pick closest k recs
+    dists: str = 'fp',     # Also include each of these distances computed on `dist`-closest k recs
+    sort: str = None,      # XXX after making `dist` go
+    d_metric: str = 'l2',  # Maybe also worth experimenting with, e.g. l2 vs. cosine
     **plot_many_kwargs,
 ) -> pd.DataFrame:
 
@@ -103,6 +107,11 @@ def xc_similar_html(
     audio_s  = audio_s  and np.clip(audio_s,  0,  30)
     thumb_s  = thumb_s  and np.clip(thumb_s,  0,  10)
     scale    = scale    and np.clip(scale,    .5, 10)
+    d_       = lambda x: ensure_startswith(x, 'd_')
+    # dist     = d_(dist)
+    dists    = [d_(x) for x in (list(dists) if '_' not in dists else dists.split(','))] or []
+    sort     = d_(sort or (dists and dists[0]) or 'd_slp')
+    d_metric = sklearn.metrics.pairwise.distance_metrics()[d_metric]  # e.g. l2, cosine
 
     # Lookup query_rec from xc_meta
     query_rec = (sg.xc_meta
@@ -141,32 +150,37 @@ def xc_similar_html(
         .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
         .pipe(recs_featurize_feat)
         # Include query_rec in results (already featurized)
-        .pipe(lambda df: df if query_rec.name in df.index else pd.concat(
+        .pipe(lambda df: df if query_rec.xc_id in df.xc_id else pd.concat(
             sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
             objs=[
-                DF([query_rec]).pipe(df_set_index_name, 'xc_id'),  # Restore index name, lost by df->series->df
+                DF([query_rec]),
                 df,
             ],
         ))
     )
 
-    # Compute .dist from (query_rec + search_recs).feat
-    dist_recs = (
-        rec_neighbors_by(
-            query_rec=query_rec,
-            search_recs=search_recs if query_rec.name in search_recs.index else pd.concat(
-                sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
-                objs=[
-                    DF([query_rec]).pipe(df_set_index_name, 'xc_id'),  # HACK Force compat with xc_recs, e.g. if from user_recs
-                    search_recs,
-                ],
-            ),
-            by=Search.X,  # TODO Add user control to toggle dist function
-        )
-        .reset_index()  # xc_id
+    # Compute closest k recs
+    closest_recs = (
+        search_recs  # HACK Keep all search_recs for now, while we iterate on scoring functions
+        # rec_neighbors_by(query_rec=query_rec, search_recs=search_recs, by=..., n=...)  # Eventually
     )
 
-    # [orphaned] [later] TODO Restore n_recs (maybe after we've built enough cache to no longer need n_recs_r?)
+    # Augment closest_recs with all dist metrics, so user can evaluate
+    feat_for_dist = {
+        'd_f': Search.X,
+        'd_p': sg.search.species_proba,  # (Last investigated: notebooks/app_ideas_6_with_pca)
+    }
+    dist_recs = (closest_recs
+        .pipe(lambda df: (df
+            .assign(**{
+                d: d_metric(f(df), f(DF([query_rec])))
+                for d in dists  # (dists from user)
+                for f in [feat_for_dist[d]]
+            })
+        ))
+    )
+
+    # [orphaned] [later] Restore n_recs (maybe after we've built enough cache to no longer need n_recs_r?)
     # .groupby('species').apply(lambda g: (g
     #     .sort_values('dist', ascending=True)
     #     [:n_recs]
@@ -174,43 +188,56 @@ def xc_similar_html(
     # .reset_index(level=0, drop=True)  # species, from groupby
 
     # Rank results
-    #   - TODO TODO Make a meaningful score that combines (dist, sp_p)
-    #     - TODO Map dist to a prob, so combining ops can all operate in prob space (e.g. ebird_priors prob, once we add it)
-    #   - [later] TODO Add ebird_priors prob
+    #   - [later] Add ebird_priors prob
     result_recs = (dist_recs
-        .reset_index()  # xc_id
         # Join in .sp_p for scoring functions
         #   - [Using sort=True to silence "non-concatenation axis" warning -- not sure what we want, or if it matters]
         .merge(how='left', on='species', right=query_sp_p[['species', 'sp_p']],
             sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
         )
-        # Score(s)
-        .assign(
-            sp_p=lambda df: df.sp_p,
-            dist=lambda df: -df.dist,
-            dist_p=lambda df: df.dist * df.sp_p,
-        )
-        # Sort (by user-chosen scoring function)
-        .sort_values(sort, ascending=False)
+        # Scores (d_*)
+        #   - A distance measure in [0,inf), lower is better
+        #   - Examples: -log(p), feat dist (d_f), preds dist (d_p)
+        #   - Can be meaningfully combined by addition, e.g.
+        #       - -log(p) + -log(q) = -log(pq)
+        #       - -log(p) + d_f     = ... [Meaningful? Helpful to rescale?]
+        #       - -log(p) + d_p     = ... [Meaningful? Helpful to rescale?]
+        #       - d_f     + d_p     = ... [Meaningful? Helpful to rescale?]
+        .pipe(lambda df: (df
+            # Mock scores for query_rec so that it always shows at the top
+            .pipe(df_map_rows, lambda row: row if row.xc_id != query_rec.xc_id else series_assign(row,
+                sp_p=1,
+                **{d: 0 for d in dists},
+            ))
+            # Derived scores
+            .assign(
+                d_slp=lambda df: np.abs(-np.log(df.sp_p)),  # d_slp: "species log prob" (abs for 1->0 i/o -0)
+                # [ ] Add score that combines (d,slp)
+            )
+        ))
+        # Sort by score (chosen by user)
+        .sort_values(sort, ascending=True)
         # Limit
         [:n_total]
     )
 
     # Featurize result_recs: .spectro + recs_view
-    return (result_recs
+    view_recs = (result_recs
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view)
         [lambda df: [c for c in [
             'xc', 'xc_id',
             *unique_everseen([
                 sort,  # Show sort col first, for feedback to user
-                'sp_p', 'dist', 'dist_p',  # Order by primitive->derived
+                *[c for c in df if c.startswith('d_')]  # Scores (d_*)
             ]),
             'com_name', 'species', 'quality',
             'thumb', 'slice',
             'duration_s', 'month_day', 'background_species', 'place', 'remarks',
         ] if c in df]]
     )
+
+    return view_recs
 
 
 def recs_featurize(
@@ -228,7 +255,7 @@ def recs_featurize(
 
 
 progress_kwargs = dict(
-    # use='dask', scheduler='threads',
+    # use='dask', scheduler='threads',  # Faster (primarily for remote, for now)
     use=None,  # XXX Debug: silence progress bars to debug if we're doing excessive read/write ops after rebuild_cache
 )
 
@@ -286,6 +313,7 @@ def recs_featurize_metadata(recs: pd.DataFrame, to_paths=None) -> pd.DataFrame:
     """Featurize: Add audio metadata (not .audio) <- xc_meta"""
     return (recs
         .pipe(xc_meta_to_raw_recs, to_paths=to_paths, load=sg.load)
+        .reset_index()  # xc_id
     )
 
 
@@ -361,14 +389,19 @@ def recs_featurize_spectro(recs: pd.DataFrame) -> pd.DataFrame:
 
 
 def recs_view(recs: pd.DataFrame) -> pd.DataFrame:
+    round_pretty = lambda x, n: (
+        round(x) if x >= 10**(n - 1) else
+        round_sig(x, n)
+    )
+    round_sig
     df_if_col = lambda df, col, f: df if col not in df else f(df)
     df_col_map_if_col = lambda df, **cols: df_col_map(df, **{k: v for k, v in cols.items() if k in df})
     return (recs
-        .pipe(df_col_map_if_col,
-            dist_p = lambda x: '''<a href="{{ req_query_with(sort='dist_p') }}" >%.1f</a>''' % x,
-            dist   = lambda x: '''<a href="{{ req_query_with(sort='dist')   }}" >%.1f</a>''' % x,
-            sp_p   = lambda x: '''<a href="{{ req_query_with(sort='sp_p')   }}" >%.2f</a>''' % x,
-        )
+        .pipe(lambda df: df_col_map(df, **{
+            # Scores (d_*)
+            c: lambda x, c=c: '''<a href="{{ req_query_with(sort=%r) }}" >%s</a>''' % (c, round_pretty(x, 2))
+            for c in df if c.startswith('d_')
+        }))
         .pipe(df_if_col, 'xc_id', lambda df: (df
             .assign(
                 # TODO Simplify: Have to do .xc before .xc_id, since we mutate .xc_id

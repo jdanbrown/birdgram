@@ -727,23 +727,11 @@ def cv_results_dfs(cv_results: Mapping[str, list]) -> (pd.DataFrame, pd.DataFram
     )
 
 
-def _df_map_rows_progress_joblib(
-    df: pd.DataFrame,
-    f: Callable[['Row'], 'Row'],
-    use_joblib=True,
-    **kwargs,
-):
-    return pd.DataFrame(_map_progress_joblib(
-        f=lambda row: f(row),
-        xs=[row for i, row in df.iterrows()],
-        **kwargs,
-    ))
-
-
 def _map_progress_joblib(
     f: Callable[[X], X],
     xs: Iterable[X],
     desc: str = None,  # TODO Display somewhere (like dask + tqdm)
+    n=None,  # Unused (required to implement)
     use_joblib=True,
     backend='threading',  # 'threading' | 'multiprocessing' [FIXME 'multiprocessing' is slow/dead with timeout errors]
     **kwargs,
@@ -831,22 +819,11 @@ def dask_progress(**kwargs):
     })
 
 
-def _df_map_rows_progress_dask(
-    df: pd.DataFrame,
-    f: Callable[['Row'], 'Row'],
-    **kwargs,
-):
-    return pd.DataFrame(_map_progress_dask(
-        f=lambda row: f(row),
-        xs=[row for i, row in df.iterrows()],
-        **kwargs,
-    ))
-
-
 def _map_progress_dask(
     f: Callable[[X], X],
     xs: Iterable[X],
     desc: str = None,
+    n=None,  # Unused (required to implement)
     use_dask=True,
     scheduler='threads',  # 'processes' | 'threads' | 'synchronous' [FIXME 'processes' hangs before forking]
     partition_size=None,
@@ -1023,16 +1000,19 @@ X = TypeVar('X')
 
 
 def df_map_rows_progress(
-    *args,
-    use='sync',  # 'sync' | 'dask' | 'joblib'
+    df: pd.DataFrame,
+    f: Callable[['Row'], 'Row'],
     **kwargs,
 ) -> pd.DataFrame:
-    return ({
-        None: partial(_df_map_rows_progress_sync, use_tqdm=False),
-        'sync': _df_map_rows_progress_sync,
-        'dask': _df_map_rows_progress_dask,
-        'joblib': _df_map_rows_progress_joblib,
-    }[use])(*args, **kwargs)
+    return pd.DataFrame(
+        index=df.index,  # Preserve index
+        data=map_progress(
+            f=lambda row: f(row),
+            xs=(row for i, row in df.iterrows()),
+            n=len(df),
+            **kwargs,
+        ),
+    )
 
 
 def map_progress(
@@ -1046,19 +1026,6 @@ def map_progress(
         'dask': _map_progress_dask,
         'joblib': _map_progress_joblib,
     }[use])(*args, **kwargs)
-
-
-def _df_map_rows_progress_sync(
-    df: pd.DataFrame,
-    f: Callable[['Row'], 'Row'],
-    **kwargs,
-) -> pd.DataFrame:
-    return pd.DataFrame(_map_progress_sync(
-        f=lambda row: f(row),
-        xs=(row for i, row in df.iterrows()),
-        n=len(df),
-        **kwargs,
-    ))
 
 
 def _map_progress_sync(

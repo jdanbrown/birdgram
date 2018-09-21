@@ -10,6 +10,7 @@ bin="`dirname "$0"`"
 # export CONFIG_YAML=config-prod.yaml
 export FLASK_SKIP_DOTENV=1
 export FLASK_ENV="${FLASK_ENV:-production}"
+
 export BUBO_ROLE='api'
 
 cmd=(
