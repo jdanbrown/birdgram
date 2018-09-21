@@ -89,29 +89,40 @@ def xc_similar_html(
     audio_s: float = 10,
     thumb_s: float = 0,
     scale: float = 2,
-    # dist: str = 'f',     # TODO dist (d_*) to use to pick closest k recs
-    dists: str = 'fp',     # Also include each of these distances computed on `dist`-closest k recs
-    sort: str = None,      # XXX after making `dist` go
-    d_metric: str = 'l2',  # Maybe also worth experimenting with, e.g. l2 vs. cosine
+    # dist: str = 'f',      # dist (d_*) for picking closest k recs [TODO Not yet used, currently we return all search_recs]
+    d_feats: str = 'fp',    # f (d_f, "feat dist"), p (d_p, "preds dist")
+    d_metrics: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
+    sort: str = None,       # XXX Won't need after making `dist` work
     **plot_many_kwargs,
 ) -> pd.DataFrame:
 
     # Params
     require(audio_s > 0)
-    quality  = quality or 'ab'
-    quality  = [q.upper() for q in quality]
-    quality  = [{'N': 'no score'}.get(q, q) for q in quality]
-    n_sp     = n_sp     and np.clip(n_sp,     0,  None)  # TODO Try unlimited (was: 50)
-    n_recs_r = n_recs_r and np.clip(n_recs_r, 0,  None)  # TODO Try unlimited (was: 1000)
-    n_total  = n_total  and np.clip(n_total,  0,  None)  # TODO Try unlimited (was: 100)
-    audio_s  = audio_s  and np.clip(audio_s,  0,  30)
-    thumb_s  = thumb_s  and np.clip(thumb_s,  0,  10)
-    scale    = scale    and np.clip(scale,    .5, 10)
-    d_       = lambda x: ensure_startswith(x, 'd_')
-    # dist     = d_(dist)
-    dists    = [d_(x) for x in (list(dists) if '_' not in dists else dists.split(','))] or []
-    sort     = d_(sort or (dists and dists[0]) or 'd_slp')
-    d_metric = sklearn.metrics.pairwise.distance_metrics()[d_metric]  # e.g. l2, cosine
+    quality   = quality or 'ab'
+    quality   = [q.upper() for q in quality]
+    quality   = [{'N': 'no score'}.get(q, q) for q in quality]
+    n_sp      = n_sp     and np.clip(n_sp,     0,  None)  # TODO Try unlimited (was: 50)
+    n_recs_r  = n_recs_r and np.clip(n_recs_r, 0,  None)  # TODO Try unlimited (was: 1000)
+    n_total   = n_total  and np.clip(n_total,  0,  None)  # TODO Try unlimited (was: 100)
+    audio_s   = audio_s  and np.clip(audio_s,  0,  30)
+    thumb_s   = thumb_s  and np.clip(thumb_s,  0,  10)
+    scale     = scale    and np.clip(scale,    .5, 10)
+    # d_        = lambda x: ensure_startswith(x, 'd_')  # XXX Unused
+    # dist      = d_(dist)
+    d_feats   = list(d_feats)
+    d_metrics = list(d_metrics)
+    sort      = sort or 'd_slp'  # TODO Default to first 'd_{m}{f}' [these strs get computed below...]
+
+    # Abbrevs
+    d_feats = {f: {
+        'f': Search.X,
+        'p': sg.search.species_proba,  # (Last investigated: notebooks/app_ideas_6_with_pca)
+    }[f] for f in d_feats}
+    d_metrics = {m: sklearn.metrics.pairwise.distance_metrics()[{
+        '2': 'l2',
+        '1': 'l1',
+        'c': 'cosine',
+    }[m]] for m in d_metrics}
 
     # Lookup query_rec from xc_meta
     query_rec = (sg.xc_meta
@@ -166,16 +177,13 @@ def xc_similar_html(
     )
 
     # Augment closest_recs with all dist metrics, so user can evaluate
-    feat_for_dist = {
-        'd_f': Search.X,
-        'd_p': sg.search.species_proba,  # (Last investigated: notebooks/app_ideas_6_with_pca)
-    }
+    d_ = lambda f, m: f'd_{f}{m}'
     dist_recs = (closest_recs
         .pipe(lambda df: (df
             .assign(**{
-                d: d_metric(f(df), f(DF([query_rec])))
-                for d in dists  # (dists from user)
-                for f in [feat_for_dist[d]]
+                d_(f, m): M(F(df), F(DF([query_rec])))
+                for f, F in d_feats.items()
+                for m, M in d_metrics.items()
             })
         ))
     )
@@ -207,7 +215,7 @@ def xc_similar_html(
             # Mock scores for query_rec so that it always shows at the top
             .pipe(df_map_rows, lambda row: row if row.xc_id != query_rec.xc_id else series_assign(row,
                 sp_p=1,
-                **{d: 0 for d in dists},
+                # **{d: 0 for d in d_feats},  # XXX Outdated by d_metrics/d_feats [and apparently don't need anymore?]
             ))
             # Derived scores
             .assign(
@@ -225,10 +233,16 @@ def xc_similar_html(
     view_recs = (result_recs
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view)
+        .pipe(lambda df: (df
+            .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
+                'd_slp',
+                *[c for c in [d_(f, m) for m in '2c' for f in 'fp'] if c in df],
+            ])
+        ))
         [lambda df: [c for c in [
             'xc', 'xc_id',
             *unique_everseen([
-                sort,  # Show sort col first, for feedback to user
+                # sort,  # Show sort col first, for feedback to user  # XXX Nope, confusing to change col order
                 *[c for c in df if c.startswith('d_')]  # Scores (d_*)
             ]),
             'com_name', 'species', 'quality',
@@ -428,6 +442,9 @@ def recs_view(recs: pd.DataFrame) -> pd.DataFrame:
                     <a href="{{ req_href('/recs/xc/species')(species=%(_species)r) }}" title="%(_species)s"  >%(_com_name)s</a>
                 ''' % row),
             )
+            .rename(columns={
+                'species': '_species_hide', 'com_name': 'species',  # Show only com_name (as .species), to save space
+            })
         ))
         .pipe(df_col_map_if_col,
             background_species=lambda xs: ', '.join(xs),
