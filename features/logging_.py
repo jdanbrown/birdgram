@@ -15,6 +15,7 @@ import structlog
 import oyaml as yaml  # Drop-in replacement that preserves dict ordering (for BuboRenderer)
 
 from config import config
+from util import json_dumps_safe
 
 log = structlog.get_logger(__name__)
 
@@ -37,11 +38,12 @@ def init_logging(logging_yaml=None):
             # structlog.stdlib.add_logger_name,             # Done in logging.yaml
             # structlog.stdlib.add_log_level,               # Done in logging.yaml
             # structlog.processors.TimeStamper(fmt="iso"),  # Done in logging.yaml
-            structlog.stdlib.PositionalArgumentsFormatter(),  # Support for e.g. log.info('msg: %s %s', x, y)
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
+            structlog.stdlib.PositionalArgumentsFormatter(),  # Support e.g. log.info('msg: %s %s', x, y)
+            structlog.processors.StackInfoRenderer(),       # If stack_info=True, render caller's stack as 'stack' field (structured)
+            # structlog.processors.format_exc_info,         # If exc_info=(True|e), render as 'exception' field (structured)
+            structlog.processors.ExceptionPrettyPrinter(),  # If exc_info=(True|e), print traceback to stdout (friendly)
             structlog.processors.UnicodeDecoder(),
-            # structlog.processors.JSONRenderer(serializer=json.dumps),  # We use BuboRenderer instead (for now)
+            # structlog.processors.JSONRenderer(serializer=json_dumps_safe),  # We use BuboRenderer instead (for now)
             BuboRenderer(),
         ],
     )
@@ -75,7 +77,7 @@ def load_logging_dict(logging_yaml=None) -> dict:
         logging_yaml_path
     )
     with open(logging_yaml) as f:
-        return json.loads(json.dumps(yaml.safe_load(f.read())))  # json to sanitize whatever wacky stuff yaml gives us
+        return json.loads(json_dumps_safe(yaml.safe_load(f.read())))  # json to sanitize whatever wacky stuff yaml gives us
 
 
 class BuboRenderer:
@@ -90,9 +92,9 @@ class BuboRenderer:
         event = event_dict.pop('event', None)
         data = None if not event_dict else (
             # *['%s=%s' % (k, v) for k, v in event_dict.items()]
-            # *['%s:%s' % (k, json.dumps(v)) for k, v in event_dict.items()]
-            # json.dumps(event_dict)
-            yaml.safe_dump(json.loads(json.dumps(event_dict)), default_flow_style=True, width=1e9).rstrip()
+            # *['%s:%s' % (k, json_dumps_safe(v)) for k, v in event_dict.items()]
+            # json_dumps_safe(event_dict)
+            yaml.safe_dump(json.loads(json_dumps_safe(event_dict)), default_flow_style=True, width=1e9).rstrip()
         )
         msg = ' '.join(x for x in [event, data] if x is not None)
         return msg

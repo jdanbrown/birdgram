@@ -56,7 +56,7 @@ def _with_many(plot_f):
         else:
             # No side effects, safe to par with map_progress
             return map_progress(f, xs,
-                desc=plot_f.many.__qualname__,
+                desc=plot_f.__qualname__,
                 **progress,
             )
 

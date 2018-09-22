@@ -13,6 +13,7 @@ import structlog
 from api.server_globals import sg
 from api.util import *
 from cache import *
+from config import config
 from datasets import xc_meta_to_paths, xc_meta_to_raw_recs, xc_raw_recs_to_recs
 from sp14.model import rec_neighbors_by, rec_probs, Search
 from util import *
@@ -46,6 +47,8 @@ def xc_species_html(
     audio_s: float = 10,
     thumb_s: float = 0,
     scale: float = 2,
+    view: bool = None,
+    sp_cols: str = None,
 ) -> pd.DataFrame:
 
     # Params
@@ -70,7 +73,7 @@ def xc_species_html(
         [:n_recs]
         .reset_index(drop=True)  # Drop RangeIndex (irregular after slice)
         .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale)
-        .pipe(recs_view)
+        .pipe(recs_view, view=view, sp_cols=sp_cols)
         [lambda df: [c for c in [
             'xc', 'xc_id',
             'com_name', 'species', 'quality',
@@ -84,7 +87,7 @@ def xc_similar_html(
     xc_id: int,
     quality: str = None,
     n_sp: int = 3,
-    n_recs_r: int = 3,
+    sample_r: int = 3,
     n_total: int = 9,
     audio_s: float = 10,
     thumb_s: float = 0,
@@ -93,6 +96,9 @@ def xc_similar_html(
     d_feats: str = 'fp',    # f (d_f, "feat dist"), p (d_p, "preds dist")
     d_metrics: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
     sort: str = None,       # XXX Won't need after making `dist` work
+    random_state: int = 0,
+    view: bool = None,
+    sp_cols: str = None,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
 
@@ -102,7 +108,7 @@ def xc_similar_html(
     quality   = [q.upper() for q in quality]
     quality   = [{'N': 'no score'}.get(q, q) for q in quality]
     n_sp      = n_sp     and np.clip(n_sp,     0,  None)  # TODO Try unlimited (was: 50)
-    n_recs_r  = n_recs_r and np.clip(n_recs_r, 0,  None)  # TODO Try unlimited (was: 1000)
+    sample_r  = sample_r and np.clip(sample_r, 0,  None)  # TODO Try unlimited (was: 1000)
     n_total   = n_total  and np.clip(n_total,  0,  None)  # TODO Try unlimited (was: 100)
     audio_s   = audio_s  and np.clip(audio_s,  0,  30)
     thumb_s   = thumb_s  and np.clip(thumb_s,  0,  10)
@@ -150,10 +156,10 @@ def xc_similar_html(
         [lambda df: df.quality.isin(quality)]
         .pipe(require_nonempty_df, 'No recs found', species=query_sp_p.species, quality=quality)
         .pipe(df_remove_unused_categories)
-        # Sample n_recs_r per species
-        .pipe(lambda df: df if n_recs_r is None else (df
+        # HACK Sample sample_r recs per species
+        .pipe(lambda df: df if sample_r is None else (df
             .groupby('species').apply(lambda g: (g
-                .sample(n=min(n_recs_r, len(g)), random_state=0)  # TODO HACK Sample to make go faster, until we build up a full cache
+                .sample(n=min(sample_r, len(g)), random_state=random_state)
             ))
         ))
         .reset_index(level=0, drop=True)  # species, from groupby
@@ -188,7 +194,7 @@ def xc_similar_html(
         ))
     )
 
-    # [orphaned] [later] Restore n_recs (maybe after we've built enough cache to no longer need n_recs_r?)
+    # [orphaned] [later] Restore n_recs (maybe after we've built enough cache to no longer need sample_r?)
     # .groupby('species').apply(lambda g: (g
     #     .sort_values('dist', ascending=True)
     #     [:n_recs]
@@ -225,6 +231,7 @@ def xc_similar_html(
         ))
         # Sort by score (chosen by user)
         .sort_values(sort, ascending=True)
+        .reset_index(drop=True)  # Drop RangeIndex (shuffled after sort)
         # Limit
         [:n_total]
     )
@@ -232,7 +239,7 @@ def xc_similar_html(
     # Featurize result_recs: .spectro + recs_view
     view_recs = (result_recs
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
-        .pipe(recs_view)
+        .pipe(recs_view, view=view, sp_cols=sp_cols)
         .pipe(lambda df: (df
             .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
                 'd_slp',
@@ -268,15 +275,10 @@ def recs_featurize(
     )
 
 
-progress_kwargs = dict(
-    # use='dask', scheduler='threads',  # Faster (primarily for remote, for now)
-    use=None,  # XXX Debug: silence progress bars to debug if we're doing excessive read/write ops after rebuild_cache
-)
-
-
 def recs_featurize_metdata_audio_slice(recs: pd.DataFrame, audio_s: float) -> pd.DataFrame:
     """Featurize: Add .audio with slice"""
     assert audio_s is not None and audio_s > 0, f"{audio_s}"
+
     # FIXME "10.09s bug": If you write a 10s-sliced audio to mp4 you get 10.09s in the mp4 file
     #   - To inspect, use `ffprobe` or `ffprobe -show_packets`
     #   - This messes up e.g. any spectro/slice/thumb that expects its input to be precisely ≤10s, else it wraps
@@ -285,33 +287,49 @@ def recs_featurize_metdata_audio_slice(recs: pd.DataFrame, audio_s: float) -> pd
     #       - It's just a fact of life that non-pcm mp4/mp3 encodings don't precisely preserve audio duration
     #       - We can always precisely slice the pcm samples once they're decoded from mp4/mp3, but as long as we're
     #         dealing in non-pcm encodings (for compression) we're stuck dealing with imprecise audio durations
+
+    # HACK Do O(n) stat() calls else "Falling back" incurs O(n) .audio read+slice if any audio.mp3 didn't need to .resample(...)
+    #   - e.g. cache/audio/xc/data/RIRA/185212/audio.mp3.enc(wav)
+    #   - Repro: xc_similar_html(sort='d_fc', sp_cols='species', xc_id=381417, n_total=5, n_sp=17, sample_r=1)
+    to_paths_sliced = lambda recs: iter_progress(desc='to_paths_sliced', **config.api.recs.progress_kwargs, xs=(
+        (dataset, abs_sliced_path)
+        for (dataset, abs_path) in xc_meta_to_paths(recs)
+        for id in [str(Path(abs_path).relative_to(data_dir))]
+        # Use first sliced id whose cache file exists (O(n) stat() calls)
+        for sliced_id in [first([
+            # HACK Find a principled way to synthesize id for sliced audio (multiple concerns here to untangle...)
+            *[id for id in [audio_id_add_ops(id,
+                'enc(wav)',
+                'slice(%s,%s)' % (0, int(1000 * audio_s)),
+                'spectro_denoise()',
+                'enc(%(format)s,%(codec)s,%(bitrate)s)' % config.audio_persist.audio_kwargs,
+            )] if (Path(data_dir) / id).exists()],
+            audio_id_add_ops(id,
+                'resample(%(sample_rate)s,%(channels)s,%(sample_width_bit)s)' % sg.load.audio_config,
+                'enc(wav)',
+                'slice(%s,%s)' % (0, int(1000 * audio_s)),
+                'spectro_denoise()',
+                'enc(%(format)s,%(codec)s,%(bitrate)s)' % config.audio_persist.audio_kwargs,
+            ),
+        ])]
+        for abs_sliced_path in [str(Path(data_dir) / sliced_id)]
+    ))
+
     try:
-        # Try loading sliced .audio directly
+        # Try loading sliced .audio directly, bailing if any audio file doesn't exist
         return (recs
-            .pipe(recs_featurize_metadata, to_paths=lambda recs: [
-                (dataset, abs_sliced_path)
-                for (dataset, abs_path) in xc_meta_to_paths(recs)
-                for id in [str(Path(abs_path).relative_to(data_dir))]
-                for sliced_id in [audio_id_add_ops(id,
-                    # HACK Find a principled way to synthesize id for sliced audio (multiple concerns to untangle...)
-                    'resample(%(sample_rate)s,%(channels)s,%(sample_width_bit)s)' % sg.load.audio_config,
-                    'enc(wav)',
-                    'slice(%s,%s)' % (0, int(1000 * audio_s)),
-                    'spectro_denoise()',
-                    'enc(%(format)s,%(codec)s,%(bitrate)s)' % config.audio_persist.audio_kwargs,
-                )]
-                for abs_sliced_path in [str(Path(data_dir) / sliced_id)]
-            ])
+            .pipe(recs_featurize_metadata, to_paths=to_paths_sliced)
             .pipe(recs_featurize_audio, load=load_for_audio_persist())
         )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         # Fallback to loading full .audio and computing the slice ourselves (which will cache for next time)
-        log.warn('Falling back to uncached audio slices', audio_s=audio_s, len_recs=len(recs))
+        #   - This is significantly slower (O(n)) than loading sliced .audio directly
+        log.warn('Falling back to uncached audio slices', audio_s=audio_s, len_recs=len(recs), path_not_found=str(e))
         return (recs
             .pipe(recs_featurize_metadata)
             .pipe(recs_featurize_audio, load=sg.load)
             .pipe(recs_featurize_slice, audio_s=audio_s)
-            .pipe(recs_audio_persist, progress_kwargs=progress_kwargs)
+            .pipe(recs_audio_persist, progress_kwargs=config.api.recs.progress_kwargs)
         )
 
 
@@ -337,14 +355,14 @@ def recs_featurize_audio(
 ) -> pd.DataFrame:
     """Featurize: Add .audio"""
     return (recs
-        .pipe(load.audio, **progress_kwargs)  # procs barf on serdes error
+        .pipe(load.audio, **config.api.recs.progress_kwargs)  # procs barf on serdes error
     )
 
 
 def recs_featurize_slice(recs: pd.DataFrame, audio_s: float) -> pd.DataFrame:
     """Featurize: Slice .audio (before .spectro/.feat/.thumb)"""
     return (recs
-        .pipe(df_map_rows_progress, desc='slice_audio', **progress_kwargs, f=lambda row: (
+        .pipe(df_map_rows_progress, desc='slice_audio', **config.api.recs.progress_kwargs, f=lambda row: (
             sg.features.slice_audio(row, 0, audio_s)
         ))
     )
@@ -368,7 +386,7 @@ def recs_featurize_slice_thumb(
     plot_many_kwargs = {
         **plot_many_kwargs,
         'scale': dict(h=int(40 * scale)),  # Best if h is multiple of 40 (because of low-level f=40 in Melspectro)
-        'progress': dict(**progress_kwargs),  # threads > sync, threads >> processes
+        'progress': dict(**config.api.recs.progress_kwargs),  # threads > sync, threads >> processes
         '_nocache': True,  # Dev: disable plot_many cache since it's blind to most of our sub-many code changes [TODO Revisit]
     }
     return (recs
@@ -398,22 +416,35 @@ def recs_featurize_spectro(recs: pd.DataFrame) -> pd.DataFrame:
         #   - Workaround: force-drop .spectro column if present
         #   - Tech debt: Not general, very error prone -- e.g. does this affect .feat? .audio?
         .drop(columns=['spectro'], errors='ignore')
-        .assign(spectro=lambda df: sg.features.spectro(df, **progress_kwargs, cache=True))  # threads >> sync, procs
+        .assign(spectro=lambda df: sg.features.spectro(df, **config.api.recs.progress_kwargs, cache=True))  # threads >> sync, procs
     )
 
 
-def recs_view(recs: pd.DataFrame) -> pd.DataFrame:
-    round_pretty = lambda x, n: (
+def recs_view(
+    recs: pd.DataFrame,
+    view: bool = None,  # Disable the fancy stuff, e.g. in case you want to compute on the output data
+    sp_cols: str = None,
+) -> pd.DataFrame:
+
+    # Params
+    view = view if view is not None else True
+    sp_cols = (sp_cols or 'com_name').split(',')
+
+    # Utils
+    round_sig_frac = lambda x, n: (  # Like round_sig but only on fractional digits
         round(x) if x >= 10**(n - 1) else
         round_sig(x, n)
     )
-    round_sig
     df_if_col = lambda df, col, f: df if col not in df else f(df)
     df_col_map_if_col = lambda df, **cols: df_col_map(df, **{k: v for k, v in cols.items() if k in df})
+
+    if not view:
+        return recs
+
     return (recs
         .pipe(lambda df: df_col_map(df, **{
             # Scores (d_*)
-            c: lambda x, c=c: '''<a href="{{ req_query_with(sort=%r) }}" >%s</a>''' % (c, round_pretty(x, 2))
+            c: lambda x, c=c: '''<a href="{{ req_query_with(sort=%r) }}" >%s</a>''' % (c, round_sig_frac(x, 2))
             for c in df if c.startswith('d_')
         }))
         .pipe(df_if_col, 'xc_id', lambda df: (df
@@ -442,9 +473,8 @@ def recs_view(recs: pd.DataFrame) -> pd.DataFrame:
                     <a href="{{ req_href('/recs/xc/species')(species=%(_species)r) }}" title="%(_species)s"  >%(_com_name)s</a>
                 ''' % row),
             )
-            .rename(columns={
-                'species': '_species_hide', 'com_name': 'species',  # Show only com_name (as .species), to save space
-            })
+            # Keep sp_cols only
+            .drop(columns=[c for c in {'species', 'com_name'} - set(sp_cols)])
         ))
         .pipe(df_col_map_if_col,
             background_species=lambda xs: ', '.join(xs),

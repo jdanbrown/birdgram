@@ -227,6 +227,22 @@ def dedent_and_strip(s: str) -> str:
 
 
 #
+# json
+#
+
+import json
+
+
+def json_dumps_safe(*args, **kwargs):
+    return json.dumps(*args, **kwargs, default=lambda x: (
+        # Unwrap np scalar dtypes (e.g. np.int64 -> int) [https://stackoverflow.com/a/16189952/397334]
+        np.asscalar(x) if isinstance(x, np.generic) else
+        # Else return as is
+        x
+    ))
+
+
+#
 # unix
 #
 
@@ -1035,13 +1051,13 @@ def _map_progress_sync(
 ) -> Iterable[X]:
     if hasattr(xs, '__len__'):
         kwargs.setdefault('n', len(xs))
-    return list(iter_progress(
+    return list(_iter_progress_sync(
         map(f, xs),
         **kwargs,
     ))
 
 
-def iter_progress(
+def _iter_progress_sync(
     xs: Iterator[X],
     desc: str = None,
     n: int = None,
@@ -1051,6 +1067,14 @@ def iter_progress(
         return tqdm(xs, total=n, desc=desc)
     else:
         return xs
+
+
+# TODO Simplify by rewriting map_progress's in terms of iter_progress's?
+def iter_progress(
+    xs: Iterator[X],
+    **kwargs,
+):
+    return map_progress(f=lambda x: x, xs=xs, **kwargs)
 
 
 #
@@ -1129,7 +1153,7 @@ def audio_hash(audio: audiosegment.AudioSegment) -> str:
         # str fields
         #   - 1-1 because json is delimited, and we name each field
         #   - Well defined because we sort the fields by name
-        json.dumps(sort_keys=True, separators=(',', ':'), obj=dict(
+        json_dumps_safe(sort_keys=True, separators=(',', ':'), obj=dict(
             name=audio.name,
             sample_width=audio.seg.sample_width,
             frame_rate=audio.seg.frame_rate,

@@ -1,3 +1,4 @@
+import contextlib
 from datetime import datetime
 import json
 import logging
@@ -61,7 +62,7 @@ class Log(DataclassUtil, AttrContext):
 
     def log(self, level: LevelLike, event: str, **kwargs):
         if self._to_level(level) >= self._to_level(self.level):
-            with self._lock:
+            with self._lock_else_go_for_it():
                 self._to_state('line')
                 if isinstance(level, str):
                     level = getattr(logging, level.upper())
@@ -70,9 +71,21 @@ class Log(DataclassUtil, AttrContext):
     # HACK HACK HACK Motivated by the '•'/'!' logging in our hacky fork of joblib.memory.MemorizedFunc
     def char(self, level: LevelLike, char: str):
         if self._to_level(level) >= self._to_level(self.level):
-            with self._lock:
+            with self._lock_else_go_for_it():
                 self._to_state('char')
                 print(char, end='', flush=True)
+
+    # HACK Workaround hangs in `with self._lock` by adding a timeout, since our locking sync is only best effort anyway
+    @contextlib.contextmanager
+    def _lock_else_go_for_it(self, timeout=.01):
+        acquired = self._lock.acquire(timeout=timeout)
+        # if not acquired:
+        #     _log.warn('Failed to acquire lock, going ahead with logging anyway')
+        try:
+            yield
+        finally:
+            if acquired:
+                self._lock.release()
 
     # WARNING This gets really janky and surprising, e.g.
     #   - Across processes, log instances have separate state

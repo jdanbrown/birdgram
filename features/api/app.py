@@ -14,6 +14,7 @@ from cache import memory
 from config import config
 from inits import *
 from logging_ import init_logging
+from util import *
 
 log = structlog.get_logger(__name__)
 
@@ -43,7 +44,7 @@ def create_app(
     log.info('Config:')
     print(textwrap.indent(prefix='  ', text=(  # Indent under the log line
         yaml.safe_dump(default_flow_style=False, width=1e9,  # Yaml for high SNR
-            data=json.loads(json.dumps(config)),  # Json cleanse to strip nonstandard data structures for yaml
+            data=json.loads(json_dumps_safe(config)),  # Json cleanse to strip nonstandard data structures for yaml
         ).rstrip('\n')
     )))
 

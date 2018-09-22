@@ -19,8 +19,8 @@ config = AttrDict(
 
     cache=dict(
         log_level={
-            'api':      'debug',  # Verbose cache logging for api
-            'notebook': 'info',   # Keep quiet for notebooks
+            'api':      'debug',  # Verbose (line) cache logging for api
+            'notebook': 'info',   # Normal (char) cache logging for notebook
         }[role or 'notebook'],
     ),
 
@@ -46,6 +46,15 @@ config = AttrDict(
             # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
 
         )
+    ),
+
+    api=dict(
+        recs=dict(
+            progress_kwargs = dict(
+                use='dask', scheduler='threads',  # Faster (primarily useful for remote, for now)
+                # use=None,  # TODO TODO XXX Debug: disable par and silence progress bars to more easily see reads/writes
+            )
+        ),
     ),
 
     audio_persist=dict(
