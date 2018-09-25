@@ -1,3 +1,4 @@
+from functools import lru_cache
 import inspect
 import linecache
 import numbers
@@ -68,17 +69,20 @@ def xc_species_html(
 
     return (sg.xc_meta
         [lambda df: df.species == species]
-        .pipe(df_require_nonempty_api, 'No recs found', species=species)
+        .pipe(df_require_nonempty_for_api, 'No recs found', species=species)
         [lambda df: df.quality.isin(quality)]
-        .pipe(df_require_nonempty_api, 'No recs found', species=species, quality=quality)
-        # NOTE Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
-        .sort_values(sort, ascending=False)
-        [:n_recs]
-        .reset_index(drop=True)  # Drop RangeIndex (irregular after slice)
+        .pipe(df_require_nonempty_for_api, 'No recs found', species=species, quality=quality)
+        # Top recs by `sort` (e.g. .date)
+        #   - FIXME Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
+        .sort_values(sort, ascending=False)[:n_recs]
+        .reset_index(drop=True)  # Reset RangeIndex after filter+sort
+        # Featurize
         .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale,
             drop_uncached_slice=False,
             no_audio=False,
         )
+        .pipe(recs_featurize_recs_for_sp)
+        # View
         .pipe(recs_view, view=view, sp_cols=sp_cols)
         [lambda df: [c for c in [
             'xc', 'xc_id',
@@ -86,6 +90,7 @@ def xc_species_html(
             'quality', 'date_time',
             'type', 'subspecies', 'background_species',
             'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
+            'recs_for_sp',
             # 'duration_s',  # TODO Surface the original duration (this is the sliced duration)
         ] if c in df]]
     )
@@ -134,12 +139,13 @@ def xc_similar_html(
     # Lookup query_rec from xc_meta
     query_rec = (sg.xc_meta
         [lambda df: df.id == xc_id]
-        .pipe(df_require_nonempty_api, 'No recs found', xc_id=xc_id)
+        .pipe(df_require_nonempty_for_api, 'No recs found', xc_id=xc_id)
         .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
             drop_uncached_slice=drop_uncached_slice,
             no_audio=True,  # Don't load .audio for pre-rank recs (only for final n_total recs, below)
         )
         .pipe(recs_featurize_feat)
+        .pipe(recs_featurize_recs_for_sp)
         .pipe(lambda df: one(df_rows(df)))
     )
 
@@ -155,17 +161,18 @@ def xc_similar_html(
     search_recs = (sg.xc_meta
         # Filter
         [lambda df: df.species.isin(query_sp_p.species)]
-        .pipe(df_require_nonempty_api, 'No recs found', species=query_sp_p.species)
+        .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species)
         [lambda df: df.quality.isin(quality)]
-        .pipe(df_require_nonempty_api, 'No recs found', species=query_sp_p.species, quality=quality)
+        .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species, quality=quality)
         .pipe(df_remove_unused_categories)
-        .reset_index(drop=True)  # Fragmented RangeIndex after filter
+        .reset_index(drop=True)  # Reset RangeIndex after filter
         # Featurize
         .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
             drop_uncached_slice=drop_uncached_slice,
             no_audio=True,  # Don't load .audio for pre-rank recs (only for final n_total recs, below)
         )
         .pipe(recs_featurize_feat)
+        .pipe(recs_featurize_recs_for_sp)
         # Include query_rec in results (already featurized)
         .pipe(lambda df: df if query_rec.xc_id in df.xc_id.values else pd.concat(
             sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
@@ -250,7 +257,7 @@ def xc_similar_html(
         ))
         # Top recs overall
         .pipe(sort_by_score)[:n_total]
-        .reset_index(drop=True)  # Drop RangeIndex (shuffled after sort)
+        .reset_index(drop=True)  # Reset RangeIndex after sort
     )
 
     # Featurize result_recs: .spectro + recs_view
@@ -274,11 +281,28 @@ def xc_similar_html(
             'quality', 'date_time',
             'type', 'subspecies', 'background_species',
             'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
+            'recs_for_sp',
             # 'duration_s',  # TODO Surface the original duration (this is the sliced duration)
         ] if c in df]]
     )
 
     return view_recs
+
+
+def recs_featurize_recs_for_sp(recs: pd.DataFrame) -> pd.DataFrame:
+    """Add .recs_for_sp, the total num recs (any quality) for each species"""
+    return (recs
+        .merge(how='left', on='species', right=_recs_for_sp())
+    )
+
+
+@lru_cache()  # (Not actually a bottleneck yet: ~0.1s for the 35k CA recs)
+def _recs_for_sp() -> pd.DataFrame:
+    return (sg.xc_meta
+        .assign(recs_for_sp=1).groupby('species').recs_for_sp.sum()
+        .reset_index()  # groupby key
+        [['species', 'recs_for_sp']]
+    )
 
 
 def recs_featurize(
@@ -592,6 +616,6 @@ def require(x: bool, **data):
         raise ApiError(400, require_stmt, **data)
 
 
-def df_require_nonempty_api(df: pd.DataFrame, msg: str, **data) -> pd.DataFrame:
+def df_require_nonempty_for_api(df: pd.DataFrame, msg: str, **data) -> pd.DataFrame:
     """Shorthand to keep error handling concise"""
     return df_require_nonempty(df, ApiError(400, msg, **data))
