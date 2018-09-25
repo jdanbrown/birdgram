@@ -88,7 +88,7 @@ def xc_similar_html(
     xc_id: int,
     quality: str = None,
     n_sp: int = 3,
-    sample_r: int = 3,
+    # sample_r: int = 3,
     n_total: int = 9,
     audio_s: float = 10,
     thumb_s: float = 0,
@@ -100,8 +100,13 @@ def xc_similar_html(
     random_state: int = 0,
     view: bool = None,
     sp_cols: str = None,
-    drop_uncached_slice: bool = None,
-    skip_load_audio: bool = None,
+    # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
+    #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
+    #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
+    #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can more robustly handle this
+    drop_uncached_slice: bool = True,
+    # Don't load audio for intermediate pre-ranking recs, only for the final n_total results
+    skip_load_audio: bool = True,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
 
@@ -111,7 +116,7 @@ def xc_similar_html(
     quality   = [q.upper() for q in quality]
     quality   = [{'N': 'no score'}.get(q, q) for q in quality]
     n_sp      = n_sp     and np.clip(n_sp,     0,  None)  # TODO Try unlimited (was: 50)
-    sample_r  = sample_r and np.clip(sample_r, 0,  None)  # TODO Try unlimited (was: 1000)
+    # sample_r  = sample_r and np.clip(sample_r, 0,  None)  # TODO Try unlimited (was: 1000)
     n_total   = n_total  and np.clip(n_total,  0,  None)  # TODO Try unlimited (was: 100)
     audio_s   = audio_s  and np.clip(audio_s,  0,  30)
     thumb_s   = thumb_s  and np.clip(thumb_s,  0,  10)
@@ -152,12 +157,12 @@ def xc_similar_html(
         [lambda df: df.quality.isin(quality)]
         .pipe(df_require_nonempty_api, 'No recs found', species=query_sp_p.species, quality=quality)
         .pipe(df_remove_unused_categories)
-        # HACK Sample sample_r recs per species
-        .pipe(lambda df: df if sample_r is None else (df
-            .groupby('species').apply(lambda g: (g
-                .sample(n=min(sample_r, len(g)), random_state=random_state)
-            ))
-        ))
+        # # HACK Sample sample_r recs per species
+        # .pipe(lambda df: df if sample_r is None else (df
+        #     .groupby('species').apply(lambda g: (g
+        #         .sample(n=min(sample_r, len(g)), random_state=random_state)
+        #     ))
+        # ))
         .reset_index(level=0, drop=True)  # species, from groupby
         # Featurize
         # TODO TODO FIXME Slow load.read_audio -- can we just cached .feat?
