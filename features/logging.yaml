@@ -11,6 +11,7 @@ root:
 loggers:
 
   # bubo
+  datasets:   {level: INFO}  # Noisy at debug
   # load:       {level: DEBUG} # Noisy
   load:       {level: INFO}  # File reads/writes
   # load:       {level: WARN}  # Quiet

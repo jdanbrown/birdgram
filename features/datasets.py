@@ -747,7 +747,7 @@ def load_xc_meta(
     num_recs: int,
     drop_recs_lt_2=True,
 ) -> DF:
-    log.info('Filtering xc.metadata...',
+    log.debug('Filtering xc.metadata...',
         countries_k=countries_k,
         com_names_k=com_names_k,
         recs_at_least=recs_at_least,
@@ -813,7 +813,7 @@ def xc_meta_to_paths(
     xc_meta: DF,
     xc_paths_dump_path=None,  # When uncached, helpful to run load.recs in a terminal (long running and verbose)
 ) -> Iterable[str]:
-    log.info('Converting xc_meta -> xc_paths...')
+    log.debug('Converting xc_meta -> xc_paths...')
     xc_paths = [
         ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
         for row in df_rows(xc_meta)
@@ -828,7 +828,7 @@ def xc_meta_to_raw_recs(
     load: 'Load',
     to_paths: Callable[[DF], Iterable[str]] = None,  # e.g. to override paths to be sliced cache paths instead of raw input paths
 ) -> DF:
-    log.info('Loading xc.metadata -> xc_raw_recs (.audio, more metadata)... [slower]')
+    log.debug('Loading xc.metadata -> xc_raw_recs (.audio, more metadata)... [slower]')
     assert 'duration_s' not in xc_meta  # TODO Make this function idempotent (currently, barfs on non-obvious errors)
     to_paths = to_paths or xc_meta_to_paths
     paths = list(to_paths(xc_meta))
@@ -855,8 +855,8 @@ def xc_meta_to_raw_recs(
             .assign(
                 state_only=lambda df: df.locality.str.split(', ').str[-1],
                 place_only=lambda df: df.locality.str.split(', ').str[:-1].str.join(', '),
-                state=lambda df: df.state_only.astype(str) + ', ' + df.country.astype(str),
-                place=lambda df: df.place_only.astype(str) + ', ' + df.state.astype(str),
+                state=lambda df: (df.state_only.astype(str) + ', ' + df.country.astype(str)).str.strip(', '),
+                place=lambda df: (df.place_only.astype(str) + ', ' + df.state.astype(str)).str.strip(', '),
                 year=lambda df: df.date.dt.year,
                 month=lambda df: df.date.dt.month,
                 month_day=lambda df: df.date.dt.strftime('%m-%d'),
@@ -886,7 +886,7 @@ def xc_meta_to_raw_recs(
 def _inspect_xc_raw_recs(xc_raw_recs: DF) -> DF:
 
     # TODO Useful enough to keep this in here? Or defer to notebook? -- which means it wouldn't display until after the slow stuff...
-    log.info('Inspect xc_raw_recs')
+    log.debug('Inspect xc_raw_recs')
     display(
         df_summary(xc_raw_recs).T,
         df_value_counts(xc_raw_recs, limit=30, dropna=False, exprs=[
@@ -924,7 +924,7 @@ def _inspect_xc_raw_recs(xc_raw_recs: DF) -> DF:
     )
 
     # Cheap plot: species counts
-    log.info('Inspect xc_raw_recs: species counts (cheap plot)')
+    log.debug('Inspect xc_raw_recs: species counts (cheap plot)')
     display(xc_raw_recs
         .species_longhand.value_counts().sort_index()
         .reset_index().rename(columns={'index': 'species_longhand', 'species_longhand': 'num_recs'})
@@ -939,7 +939,7 @@ def xc_raw_recs_to_recs(
     feat=True,
     spectro=True,
 ) -> DF:
-    log.info('Featurizing xc_raw_recs -> xc_recs (.audio, .feat, .spectro)... [slowest]')
+    log.debug('Featurizing xc_raw_recs -> xc_recs (.audio, .feat, .spectro)... [slowest]')
     # Featurize: .audio, .feat, .spectro (slowest)
     #   - NOTE .spectro is heavy: 3.1gb for 2167 dan4 recs
     xc_recs = (xc_raw_recs
@@ -969,7 +969,7 @@ def _recs_add_spectro(recs, features, **kwargs) -> 'recs':
 
 
 def _inspect_xc_recs(xc_recs: DF):
-    log.info('Inspect xc_recs')
+    log.debug('Inspect xc_recs')
     display(df_value_counts(xc_recs, limit=25, dropna=False, exprs=[
         'species',
         'subspecies',

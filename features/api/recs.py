@@ -44,12 +44,11 @@ def xc_species_html(
     species: str = None,
     quality: str = None,
     n_recs: int = 10,
-    audio_s: float = 10,
+    audio_s: float = 20,
     thumb_s: float = 0,
     scale: float = 2,
     view: bool = None,
     sp_cols: str = None,
-    drop_uncached_slice: bool = None,
 ) -> pd.DataFrame:
 
     # Params
@@ -73,30 +72,35 @@ def xc_species_html(
         .sort_index(ascending=True)  # This is actually descending... [why?]
         [:n_recs]
         .reset_index(drop=True)  # Drop RangeIndex (irregular after slice)
-        .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale, drop_uncached_slice=drop_uncached_slice)
+        .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale,
+            drop_uncached_slice=False,
+            no_audio=False,
+        )
         .pipe(recs_view, view=view, sp_cols=sp_cols)
         [lambda df: [c for c in [
             'xc', 'xc_id',
-            'com_name', 'species', 'quality',
-            'thumb', 'slice',
-            'duration_s', 'month_day', 'background_species', 'place', 'remarks',
+            'com_name', 'species', 'thumb', 'slice',
+            'quality', 'date_time',
+            'type', 'subspecies', 'background_species',
+            'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
+            'duration_s',
         ] if c in df]]
+        .fillna('')
     )
 
 
 def xc_similar_html(
     xc_id: int,
     quality: str = None,
-    n_sp: int = 3,
-    # sample_r: int = 3,
-    n_total: int = 9,
+    n_sp: int = 20,
+    n_total: int = 20,
+    n_sp_recs: int = None,
     audio_s: float = 10,
     thumb_s: float = 0,
     scale: float = 2,
-    # dist: str = 'f',      # dist (d_*) for picking closest k recs [TODO Not yet used, currently we return all search_recs]
     d_feats: str = 'fp',    # f (d_f, "feat dist"), p (d_p, "preds dist")
     d_metrics: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
-    sort: str = None,       # XXX Won't need after making `dist` work
+    sort: str = 'd_pc',
     random_state: int = 0,
     view: bool = None,
     sp_cols: str = None,
@@ -105,8 +109,6 @@ def xc_similar_html(
     #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
     #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can more robustly handle this
     drop_uncached_slice: bool = True,
-    # Don't load audio for intermediate pre-ranking recs, only for the final n_total results
-    skip_load_audio: bool = True,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
 
@@ -115,17 +117,14 @@ def xc_similar_html(
     quality   = quality or 'ab'
     quality   = [q.upper() for q in quality]
     quality   = [{'N': 'no score'}.get(q, q) for q in quality]
-    n_sp      = n_sp     and np.clip(n_sp,     0,  None)  # TODO Try unlimited (was: 50)
-    # sample_r  = sample_r and np.clip(sample_r, 0,  None)  # TODO Try unlimited (was: 1000)
-    n_total   = n_total  and np.clip(n_total,  0,  None)  # TODO Try unlimited (was: 100)
-    audio_s   = audio_s  and np.clip(audio_s,  0,  30)
-    thumb_s   = thumb_s  and np.clip(thumb_s,  0,  10)
-    scale     = scale    and np.clip(scale,    .5, 10)
-    # d_        = lambda x: ensure_startswith(x, 'd_')  # XXX Unused
-    # dist      = d_(dist)
+    n_sp      = n_sp    and np.clip(n_sp,     0,  None)
+    n_total   = n_total and np.clip(n_total,  0,  None)
+    n_sp_recs = (n_sp_recs or None) and np.clip(n_sp_recs, 0, None)
+    audio_s   = audio_s and np.clip(audio_s,  0,  30)
+    thumb_s   = thumb_s and np.clip(thumb_s,  0,  10)
+    scale     = scale   and np.clip(scale,    .5, 10)
     d_feats   = list(d_feats)
     d_metrics = list(d_metrics)
-    sort      = sort or 'd_slp'  # TODO Default to first 'd_{m}{f}' [these strs get computed below...]
 
     # Utils
     d_ = lambda f, m: f'd_{f}{m}'
@@ -135,7 +134,8 @@ def xc_similar_html(
         [lambda df: df.id == xc_id]
         .pipe(df_require_nonempty_api, 'No recs found', xc_id=xc_id)
         .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
-            drop_uncached_slice=drop_uncached_slice, skip_load_audio=skip_load_audio,
+            drop_uncached_slice=drop_uncached_slice,
+            no_audio=True,  # Don't load .audio for pre-rank recs (only for final n_total recs, below)
         )
         .pipe(recs_featurize_feat)
         .pipe(lambda df: one(df_rows(df)))
@@ -157,21 +157,15 @@ def xc_similar_html(
         [lambda df: df.quality.isin(quality)]
         .pipe(df_require_nonempty_api, 'No recs found', species=query_sp_p.species, quality=quality)
         .pipe(df_remove_unused_categories)
-        # # HACK Sample sample_r recs per species
-        # .pipe(lambda df: df if sample_r is None else (df
-        #     .groupby('species').apply(lambda g: (g
-        #         .sample(n=min(sample_r, len(g)), random_state=random_state)
-        #     ))
-        # ))
-        .reset_index(level=0, drop=True)  # species, from groupby
+        .reset_index(drop=True)  # Fragmented RangeIndex after filter
         # Featurize
-        # TODO TODO FIXME Slow load.read_audio -- can we just cached .feat?
         .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
-            drop_uncached_slice=drop_uncached_slice, skip_load_audio=skip_load_audio,
+            drop_uncached_slice=drop_uncached_slice,
+            no_audio=True,  # Don't load .audio for pre-rank recs (only for final n_total recs, below)
         )
         .pipe(recs_featurize_feat)
         # Include query_rec in results (already featurized)
-        .pipe(lambda df: df if query_rec.xc_id in df.xc_id else pd.concat(
+        .pipe(lambda df: df if query_rec.xc_id in df.xc_id.values else pd.concat(
             sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
             objs=[
                 DF([query_rec]),
@@ -207,17 +201,16 @@ def xc_similar_html(
                 for k in [d_(f, m)]
                 for v in [one_progress(desc=k, n=len(df), x=lambda: (
                     M(F_df, F(DF([query_rec])))
+                    .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
                 ))]
             })
         ))
     )
 
-    # [orphaned] [later] Restore n_recs (maybe after we've built enough cache to no longer need sample_r?)
-    # .groupby('species').apply(lambda g: (g
-    #     .sort_values('dist', ascending=True)
-    #     [:n_recs]
-    # ))
-    # .reset_index(level=0, drop=True)  # species, from groupby
+    # Sort by score (chosen by user)
+    sort_by_score = lambda df: df.sort_values(ascending=True,
+        by=sort if sort in df else 'd_slp',
+    )
 
     # Rank results
     #   - [later] Add ebird_priors prob
@@ -239,24 +232,28 @@ def xc_similar_html(
             # Mock scores for query_rec so that it always shows at the top
             .pipe(df_map_rows, lambda row: row if row.xc_id != query_rec.xc_id else series_assign(row,
                 sp_p=1,
-                # **{d: 0 for d in d_feats},  # XXX Outdated by d_metrics/d_feats [and apparently don't need anymore?]
             ))
             # Derived scores
             .assign(
                 d_slp=lambda df: np.abs(-np.log(df.sp_p)),  # d_slp: "species log prob" (abs for 1->0 i/o -0)
-                # [ ] Add score that combines (d,slp)
             )
         ))
-        # Sort by score (chosen by user)
-        .sort_values(sort, ascending=True)
+        # Top recs per sp
+        .pipe(lambda df: df if n_sp_recs is None else (df
+            .groupby('species').apply(lambda g: (g
+                .pipe(sort_by_score)[:n_sp_recs + (
+                    1 if g.name == query_rec.species else 0  # Adjust +1 for query_rec.species
+                )]
+            )).reset_index(level=0, drop=True)  # Drop groupby key
+        ))
+        # Top recs overall
+        .pipe(sort_by_score)[:n_total]
         .reset_index(drop=True)  # Drop RangeIndex (shuffled after sort)
-        # Limit
-        [:n_total]
     )
 
     # Featurize result_recs: .spectro + recs_view
     view_recs = (result_recs
-        .pipe(recs_featurize_audio, load=load_for_audio_persist())  # TODO TODO FIXME Slow load.read_audio
+        .pipe(recs_featurize_audio, load=load_for_audio_persist())
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view, view=view, sp_cols=sp_cols)
         .pipe(lambda df: (df
@@ -271,10 +268,13 @@ def xc_similar_html(
                 # sort,  # Show sort col first, for feedback to user  # XXX Nope, confusing to change col order
                 *[c for c in df if c.startswith('d_')]  # Scores (d_*)
             ]),
-            'com_name', 'species', 'quality',
-            'thumb', 'slice',
-            'duration_s', 'month_day', 'background_species', 'place', 'remarks',
+            'com_name', 'species', 'thumb', 'slice',
+            'quality', 'date_time',
+            'type', 'subspecies', 'background_species',
+            'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
+            'duration_s',
         ] if c in df]]
+        .fillna('')
     )
 
     return view_recs
@@ -286,11 +286,12 @@ def recs_featurize(
     thumb_s: float,
     scale: float,
     drop_uncached_slice: bool = None,
+    no_audio: bool = None,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
     return (recs
         .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
-            drop_uncached_slice=drop_uncached_slice, skip_load_audio=skip_load_audio,
+            drop_uncached_slice=drop_uncached_slice, no_audio=no_audio,
         )
         .pipe(recs_featurize_feat)
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
@@ -303,16 +304,16 @@ def recs_featurize_metdata_audio_slice(
     # HACK Drop audios with no cache/audio/ slice file instead of recomputing ("Falling back") (which warms cache)
     #   - Invalid input audios don't produce a cache/audio/ file, so if you get one then you're stuck always falling back
     drop_uncached_slice: bool = None,
-    # TODO TODO FIXME SLow load.read_audio
-    skip_load_audio: bool = None,
+    # Skip loading .audio (e.g. for intermediate stages of xc_similar_html)
+    no_audio: bool = None,
 ) -> pd.DataFrame:
     """Featurize: Add .audio with slice"""
 
     # Params
     assert audio_s is not None and audio_s > 0, f"{audio_s}"
     drop_uncached_slice = False if drop_uncached_slice is None else drop_uncached_slice
-    skip_load_audio = False if skip_load_audio is None else skip_load_audio
-    assert not (not drop_uncached_slice and skip_load_audio), "Can't skip load audio and compute uncache slice"
+    no_audio = False if no_audio is None else no_audio
+    assert not (not drop_uncached_slice and no_audio), "Can't skip audio and compute uncached slices"
 
     # FIXME "10.09s bug": If you write a 10s-sliced audio to mp4 you get 10.09s in the mp4 file
     #   - To inspect, use `ffprobe` or `ffprobe -show_packets`
@@ -355,7 +356,7 @@ def recs_featurize_metdata_audio_slice(
 
     # HACK Do O(n) stat() calls else "Falling back" incurs O(n) .audio read+slice if any audio.mp3 didn't need to .resample(...)
     #   - e.g. cache/audio/xc/data/RIRA/185212/audio.mp3.enc(wav)
-    #   - Repro: xc_similar_html(sort='d_fc', sp_cols='species', xc_id=381417, n_total=5, n_sp=17, sample_r=1)
+    #   - Repro: xc_similar_html(sort='d_fc', sp_cols='species', xc_id=381417, n_total=5, n_sp=17)
     to_paths_sliced = lambda recs: iter_progress(desc='to_paths_sliced', n=len(recs), **config.api.recs.progress_kwargs, xs=(
         (dataset, abs_sliced_path)
         for (dataset, abs_path) in xc_meta_to_paths(recs)
@@ -369,8 +370,8 @@ def recs_featurize_metdata_audio_slice(
         # Try loading sliced .audio directly, bailing if any audio file doesn't exist
         return (recs
             .pipe(recs_featurize_metadata, to_paths=to_paths_sliced)
-            .pipe(lambda df: df if skip_load_audio else (df
-                .pipe(recs_featurize_audio, load=load_for_audio_persist())  # TODO TODO FIXME Slow load.read_audio
+            .pipe(lambda df: df if no_audio else (df
+                .pipe(recs_featurize_audio, load=load_for_audio_persist())
             ))
         )
     except FileNotFoundError as e:
@@ -487,7 +488,7 @@ def recs_view(
         round(x) if x >= 10**(n - 1) else
         round_sig(x, n)
     )
-    df_if_col = lambda df, col, f: df if col not in df else f(df)
+    df_if_cols = lambda df, cols, f: f(df) if set([cols] if isinstance(cols, str) else cols) <= set(df.columns) else df
     df_col_map_if_col = lambda df, **cols: df_col_map(df, **{k: v for k, v in cols.items() if k in df})
 
     if not view:
@@ -499,7 +500,7 @@ def recs_view(
             c: lambda x, c=c: '''<a href="{{ req_query_with(sort=%r) }}" >%s</a>''' % (c, round_sig_frac(x, 2))
             for c in df if c.startswith('d_')
         }))
-        .pipe(df_if_col, 'xc_id', lambda df: (df
+        .pipe(df_if_cols, 'xc_id', lambda df: (df
             .assign(
                 # TODO Simplify: Have to do .xc before .xc_id, since we mutate .xc_id
                 xc=lambda df: df_map_rows(df, lambda row: f'''
@@ -510,7 +511,7 @@ def recs_view(
                 ''' % row),
             )
         ))
-        .pipe(df_if_col, 'species', lambda df: (df
+        .pipe(df_if_cols, 'species', lambda df: (df
             .rename(columns={
                 'species_com_name': 'com_name',
             })
@@ -528,8 +529,44 @@ def recs_view(
             # Keep sp_cols only
             .drop(columns=[c for c in {'species', 'com_name'} - set(sp_cols)])
         ))
+        .pipe(df_if_cols, ['date', 'time'], lambda df: df.assign(
+            date_time=lambda df: df_map_rows(df, lambda row: '''
+                %(year)s-%(month_day)s<br/>
+                %(time)s
+            ''' % row),
+        ))
         .pipe(df_col_map_if_col,
-            background_species=lambda xs: ', '.join(xs),
+            # df_cell_str to prevent df.to_html from truncating long strs
+            type=lambda x: df_cell_str('<br>'.join(textwrap.wrap(x,
+                width=max(20, int(len(x) / 1.8) or np.inf),
+            ))),
+        )
+        .pipe(df_col_map_if_col,
+            background_species=lambda xs: ' '.join(xs),
+        )
+        .pipe(df_col_map_if_col,
+            # df_cell_str to prevent df.to_html from truncating long strs
+            background_species=lambda x: df_cell_str('<br>'.join(line.strip(',') for line in textwrap.wrap(x,
+                width=max((4 + 1) * 3, int(len(x) / 1.5) or np.inf),
+            ))),
+        )
+        .pipe(df_if_cols, ['recordist', 'license_type'], lambda df: df.assign(
+            recordist=lambda df: df_map_rows(df, lambda row: '''
+                %(recordist)s<br/>%(license_type)s
+            ''' % row),
+        ))
+        .pipe(df_if_cols, ['place', 'lat', 'lng'], lambda df: df.assign(
+            # df_cell_str to prevent df.to_html from truncating long strs
+            place=lambda df: df_map_rows(df, lambda row: df_cell_str('''
+                %(place)s<br/>
+                <a href="https://www.google.com/maps/place/%(lat)s,%(lng)s/@%(lat)s,%(lng)s,6z">(%(lat)s, %(lng)s)</a>
+            ''' % row)),
+        ))
+        .pipe(df_col_map_if_col,
+            # df_cell_str to prevent df.to_html from truncating long strs
+            remarks=lambda x: df_cell_str('<br>'.join(textwrap.wrap(x,
+                width=max(80, int(len(x) / 2.8) or np.inf),
+            ))),
         )
     )
 
