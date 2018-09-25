@@ -43,12 +43,13 @@ def xc_meta(
 def xc_species_html(
     species: str = None,
     quality: str = None,
-    n_recs: int = 10,
-    audio_s: float = 20,
+    n_recs: int = 20,
+    audio_s: float = 10,
     thumb_s: float = 0,
     scale: float = 2,
     view: bool = None,
     sp_cols: str = None,
+    sort: str = None,
 ) -> pd.DataFrame:
 
     # Params
@@ -63,13 +64,15 @@ def xc_species_html(
     audio_s = np.clip(audio_s, 0, 30)
     thumb_s = np.clip(thumb_s, 0, 10)
     scale = np.clip(scale, .5, 10)
+    sort = sort or 'date'
 
     return (sg.xc_meta
         [lambda df: df.species == species]
         .pipe(df_require_nonempty_api, 'No recs found', species=species)
         [lambda df: df.quality.isin(quality)]
         .pipe(df_require_nonempty_api, 'No recs found', species=species, quality=quality)
-        .sort_index(ascending=True)  # This is actually descending... [why?]
+        # NOTE Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
+        .sort_values(sort, ascending=False)
         [:n_recs]
         .reset_index(drop=True)  # Drop RangeIndex (irregular after slice)
         .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale,
@@ -83,9 +86,8 @@ def xc_species_html(
             'quality', 'date_time',
             'type', 'subspecies', 'background_species',
             'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
-            'duration_s',
+            # 'duration_s',  # TODO Surface the original duration (this is the sliced duration)
         ] if c in df]]
-        .fillna('')
     )
 
 
@@ -272,9 +274,8 @@ def xc_similar_html(
             'quality', 'date_time',
             'type', 'subspecies', 'background_species',
             'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
-            'duration_s',
+            # 'duration_s',  # TODO Surface the original duration (this is the sliced duration)
         ] if c in df]]
-        .fillna('')
     )
 
     return view_recs
@@ -568,6 +569,10 @@ def recs_view(
                 width=max(80, int(len(x) / 2.8) or np.inf),
             ))),
         )
+        # Fill any remaining nulls with ''
+        #   - Strip cats else they'll reject '' (unless it's a valid cat)
+        .pipe(df_cat_to_str)
+        .fillna('')
     )
 
 
