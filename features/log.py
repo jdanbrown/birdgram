@@ -1,4 +1,4 @@
-import contextlib
+from contextlib import contextmanager
 from datetime import datetime
 import json
 import logging
@@ -76,7 +76,7 @@ class Log(DataclassUtil, AttrContext):
                 print(char, end='', flush=True)
 
     # HACK Workaround hangs in `with self._lock` by adding a timeout, since our locking sync is only best effort anyway
-    @contextlib.contextmanager
+    @contextmanager
     def _lock_else_go_for_it(self, timeout=.01):
         acquired = self._lock.acquire(timeout=timeout)
         # if not acquired:

@@ -28,6 +28,7 @@ import sklearn.ensemble.weight_boosting  # If this emits a warning then our filt
 # For export
 #
 
+from contextlib import contextmanager, ExitStack
 from typing import Iterable, Iterator, List, Mapping, Tuple, TypeVar, Union
 
 from attrdict import AttrDict
@@ -806,12 +807,12 @@ def dask_progress(**kwargs):
         - Optional desc, to print as a prefix so you can distinguish your progress bars
         """
 
-        def __init__(self, desc=None, **kwargs):
+        def __init__(self, desc=None, n=None, **kwargs):
             super().__init__(**kwargs)
             self._terminal_cols = get_cols()
-            self._desc = desc
-            self._desc_pad = '%s: ' % self._desc if self._desc else ''
-            # self._desc_pad = '%s:' % self._desc if self._desc else ''
+            self._n = n
+            self._desc_pad = '%s: ' % desc if desc else ''
+            # self._desc_pad = '%s:' % desc if desc else ''
 
         def _draw_bar(self, frac, elapsed):
             # (Mostly copy/pasted from ProgressBar)
@@ -819,7 +820,8 @@ def dask_progress(**kwargs):
             elapsed = format_time(elapsed)
             msg_prefix = '\r%s[' % self._desc_pad
             # msg_prefix = '\r[%s' % self._desc_pad
-            msg_suffix = '] | %3s%% Completed | %s' % (percent, elapsed)
+            n = '(%s)' % self._n if self._n else ''
+            msg_suffix = '] | %3s%% %s | %s' % (percent, n, elapsed)
             width = self._terminal_cols - len(msg_prefix) - len(msg_suffix)
             bar = '#' * int(width * frac)
             msg_bar = '%%-%ds' % width % bar
@@ -839,7 +841,7 @@ def _map_progress_dask(
     f: Callable[[X], X],
     xs: Iterable[X],
     desc: str = None,
-    n=None,  # Unused (required to implement)
+    n: int = None,
     use_dask=True,
     scheduler='threads',  # 'processes' | 'threads' | 'synchronous' [FIXME 'processes' hangs before forking]
     partition_size=None,
@@ -852,16 +854,27 @@ def _map_progress_dask(
     if not use_dask:
         return list(map(f, xs))
     else:
+        from dask import delayed
         import dask.bag
         # HACK dask.bag.from_sequence([pd.Series(...), ...]) barfs -- workaround by boxing it
         # HACK dask.bag.from_sequence([np.array(...), ...]) flattens the arrays -- workaround by boxing it
         # HACK Avoid other cases we haven't tripped over yet by boxing everything unconditionally
         wrap, unwrap = (lambda x: box(x)), (lambda x: x.unbox)
-        with dask_progress(desc=desc):
+        with dask_progress(desc=desc, n=n):
             if not partition_size and not npartitions:
                 xs = list(xs)
-                (unit_sec, _) = timed(lambda: list(map(f, xs[:1])))
-                npartitions = _npartitions_for_unit_sec(len(xs), unit_sec, **kwargs)
+                if len(xs) == 1:
+                    # Avoid bag.from_sequence for singleton xs (e.g. from one_progress), since if that one element is
+                    # big (e.g. a big df) then bag will pickle it to compute the dask task id, which is often slow
+                    #   - TODO Is delayed still doing tokenize/pickle? Investigate name/dask_key_name (see delayed docstring)
+                    return [delayed(f)(xs[0]).compute(get=dask_get_for_scheduler('synchronous'))]
+                elif len(xs) <= 100:
+                    # Don't probe f(xs[0]) for small inputs, since they might be slow and npartitions=len(xs) is
+                    # unlikely to bottleneck us on dask task-coordination overhead
+                    npartitions = len(xs)
+                else:
+                    (unit_sec, _) = timed(lambda: list(map(f, xs[:1])))
+                    npartitions = _npartitions_for_unit_sec(len(xs), unit_sec, **kwargs)
             return (dask.bag
                 .from_sequence(map(wrap, xs), partition_size=partition_size, npartitions=npartitions)
                 .map(unwrap)
@@ -1003,16 +1016,32 @@ def path_to_sampled_path(path: str, *sample: float) -> str:
 
 
 #
-# sklearn / dask
+# progress (tdqm/dask/joblib)
 #
 
 import types
 from typing import Callable, Iterable, TypeVar, Union
 
+from dataclasses import dataclass, field
 import joblib
+from potoo.util import AttrContext
 from tqdm import tqdm
 
+from config import config
+
 X = TypeVar('X')
+
+
+# WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
+#   - See details in util.Log
+@dataclass
+class _progress_kwargs(AttrContext):
+    default:  Optional[dict] = field(default_factory=lambda: config.progress_kwargs.get('default'))
+    override: Optional[dict] = field(default_factory=lambda: config.progress_kwargs.get('override'))
+
+
+# Workaround for @singleton (above)
+progress_kwargs = _progress_kwargs()
 
 
 def df_map_rows_progress(
@@ -1032,16 +1061,37 @@ def df_map_rows_progress(
 
 
 def map_progress(
-    *args,
-    use='sync',  # None | 'sync' | 'dask' | 'joblib'
-    **kwargs,
+    f: Callable[[X], X],
+    xs: Iterable[X],
+    desc: str = None,
+    n: int = None,
+    **_progress_kwargs,
 ) -> Iterable[X]:
+
+    # Defaults
+    if not n and hasattr(xs, '__len__'):
+        n = len(xs)
+
+    # Resolve progress_kwargs: .override -> **_progress_kwargs -> .default -> fallback default
+    kwargs = (
+        progress_kwargs.override or
+        _progress_kwargs or
+        progress_kwargs.default or
+        dict(use='sync')  # Fallback default
+    )
+    kwargs = dict(kwargs)  # Copy so we can mutate
+
+    # Delegate as per `use`
+    use = kwargs.pop('use')
     return ({
         None: partial(_map_progress_sync, use_tqdm=False),
         'sync': _map_progress_sync,
         'dask': _map_progress_dask,
         'joblib': _map_progress_joblib,
-    }[use])(*args, **kwargs)
+    }[use])(
+        f=f, xs=xs, desc=desc, n=n,
+        **kwargs,
+    )
 
 
 def _map_progress_sync(
@@ -1049,8 +1099,6 @@ def _map_progress_sync(
     xs: Iterable[X],
     **kwargs,
 ) -> Iterable[X]:
-    if hasattr(xs, '__len__'):
-        kwargs.setdefault('n', len(xs))
     return list(_iter_progress_sync(
         map(f, xs),
         **kwargs,
@@ -1075,6 +1123,15 @@ def iter_progress(
     **kwargs,
 ):
     return map_progress(f=lambda x: x, xs=xs, **kwargs)
+
+
+def one_progress(
+    x: Callable[[], X],
+    **kwargs,
+) -> X:
+    """Draw a progress bar for a single item, for consistency with surrounding (many-element) progress bars"""
+    [y] = map_progress(f=lambda _: x(), xs=[None], **kwargs)
+    return y
 
 
 #

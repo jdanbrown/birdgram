@@ -1,7 +1,7 @@
 import inspect
 import linecache
 import numbers
-from typing import Sequence
+from typing import Optional, Sequence
 
 from more_itertools import one
 import pandas as pd
@@ -49,6 +49,7 @@ def xc_species_html(
     scale: float = 2,
     view: bool = None,
     sp_cols: str = None,
+    drop_uncached_slice: bool = None,
 ) -> pd.DataFrame:
 
     # Params
@@ -66,13 +67,13 @@ def xc_species_html(
 
     return (sg.xc_meta
         [lambda df: df.species == species]
-        .pipe(require_nonempty_df, 'No recs found', species=species)
+        .pipe(df_require_nonempty_api, 'No recs found', species=species)
         [lambda df: df.quality.isin(quality)]
-        .pipe(require_nonempty_df, 'No recs found', species=species, quality=quality)
+        .pipe(df_require_nonempty_api, 'No recs found', species=species, quality=quality)
         .sort_index(ascending=True)  # This is actually descending... [why?]
         [:n_recs]
         .reset_index(drop=True)  # Drop RangeIndex (irregular after slice)
-        .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale)
+        .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale, drop_uncached_slice=drop_uncached_slice)
         .pipe(recs_view, view=view, sp_cols=sp_cols)
         [lambda df: [c for c in [
             'xc', 'xc_id',
@@ -99,6 +100,8 @@ def xc_similar_html(
     random_state: int = 0,
     view: bool = None,
     sp_cols: str = None,
+    drop_uncached_slice: bool = None,
+    skip_load_audio: bool = None,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
 
@@ -119,22 +122,16 @@ def xc_similar_html(
     d_metrics = list(d_metrics)
     sort      = sort or 'd_slp'  # TODO Default to first 'd_{m}{f}' [these strs get computed below...]
 
-    # Abbrevs
-    d_feats = {f: {
-        'f': Search.X,
-        'p': sg.search.species_proba,  # (Last investigated: notebooks/app_ideas_6_with_pca)
-    }[f] for f in d_feats}
-    d_metrics = {m: sklearn.metrics.pairwise.distance_metrics()[{
-        '2': 'l2',
-        '1': 'l1',
-        'c': 'cosine',
-    }[m]] for m in d_metrics}
+    # Utils
+    d_ = lambda f, m: f'd_{f}{m}'
 
     # Lookup query_rec from xc_meta
     query_rec = (sg.xc_meta
         [lambda df: df.id == xc_id]
-        .pipe(require_nonempty_df, 'No recs found', xc_id=xc_id)
-        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
+        .pipe(df_require_nonempty_api, 'No recs found', xc_id=xc_id)
+        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
+            drop_uncached_slice=drop_uncached_slice, skip_load_audio=skip_load_audio,
+        )
         .pipe(recs_featurize_feat)
         .pipe(lambda df: one(df_rows(df)))
     )
@@ -148,13 +145,12 @@ def xc_similar_html(
 
     # Compute search_recs from xc_meta, and featurize (.audio, .feat)
     #   - TODO Featurize is slow and heavy, because we can't filter yet until we have .dist, which relies on .feat...
-    # memory.log.level = 'debug'  # TODO Nontrivial number of cache misses slowing us down -- why are there misses?
     search_recs = (sg.xc_meta
         # Filter
         [lambda df: df.species.isin(query_sp_p.species)]
-        .pipe(require_nonempty_df, 'No recs found', species=query_sp_p.species)
+        .pipe(df_require_nonempty_api, 'No recs found', species=query_sp_p.species)
         [lambda df: df.quality.isin(quality)]
-        .pipe(require_nonempty_df, 'No recs found', species=query_sp_p.species, quality=quality)
+        .pipe(df_require_nonempty_api, 'No recs found', species=query_sp_p.species, quality=quality)
         .pipe(df_remove_unused_categories)
         # HACK Sample sample_r recs per species
         .pipe(lambda df: df if sample_r is None else (df
@@ -164,7 +160,10 @@ def xc_similar_html(
         ))
         .reset_index(level=0, drop=True)  # species, from groupby
         # Featurize
-        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
+        # TODO TODO FIXME Slow load.read_audio -- can we just cached .feat?
+        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
+            drop_uncached_slice=drop_uncached_slice, skip_load_audio=skip_load_audio,
+        )
         .pipe(recs_featurize_feat)
         # Include query_rec in results (already featurized)
         .pipe(lambda df: df if query_rec.xc_id in df.xc_id else pd.concat(
@@ -183,13 +182,27 @@ def xc_similar_html(
     )
 
     # Augment closest_recs with all dist metrics, so user can evaluate
-    d_ = lambda f, m: f'd_{f}{m}'
+    d_feats = {f: {
+        'f': Search.X,
+        'p': sg.search.species_proba,  # (Last investigated: notebooks/app_ideas_6_with_pca)
+    }[f] for f in d_feats}
+    d_metrics = {m: sklearn.metrics.pairwise.distance_metrics()[{
+        '2': 'l2',
+        '1': 'l1',
+        'c': 'cosine',
+    }[m]] for m in d_metrics}
     dist_recs = (closest_recs
         .pipe(lambda df: (df
             .assign(**{
-                d_(f, m): M(F(df), F(DF([query_rec])))
+                # Show progress per metric [TODO Clean up messy code]
+                k: v
                 for f, F in d_feats.items()
+                for F_df in [one_progress(desc=f, n=len(df), x=lambda: F(df))]  # Slow: do once, not d_metrics times
                 for m, M in d_metrics.items()
+                for k in [d_(f, m)]
+                for v in [one_progress(desc=k, n=len(df), x=lambda: (
+                    M(F_df, F(DF([query_rec])))
+                ))]
             })
         ))
     )
@@ -238,6 +251,7 @@ def xc_similar_html(
 
     # Featurize result_recs: .spectro + recs_view
     view_recs = (result_recs
+        .pipe(recs_featurize_audio, load=load_for_audio_persist())  # TODO TODO FIXME Slow load.read_audio
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view, view=view, sp_cols=sp_cols)
         .pipe(lambda df: (df
@@ -266,18 +280,34 @@ def recs_featurize(
     audio_s: float,
     thumb_s: float,
     scale: float,
+    drop_uncached_slice: bool = None,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
     return (recs
-        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
+        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
+            drop_uncached_slice=drop_uncached_slice, skip_load_audio=skip_load_audio,
+        )
         .pipe(recs_featurize_feat)
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
     )
 
 
-def recs_featurize_metdata_audio_slice(recs: pd.DataFrame, audio_s: float) -> pd.DataFrame:
+def recs_featurize_metdata_audio_slice(
+    recs: pd.DataFrame,
+    audio_s: float,
+    # HACK Drop audios with no cache/audio/ slice file instead of recomputing ("Falling back") (which warms cache)
+    #   - Invalid input audios don't produce a cache/audio/ file, so if you get one then you're stuck always falling back
+    drop_uncached_slice: bool = None,
+    # TODO TODO FIXME SLow load.read_audio
+    skip_load_audio: bool = None,
+) -> pd.DataFrame:
     """Featurize: Add .audio with slice"""
+
+    # Params
     assert audio_s is not None and audio_s > 0, f"{audio_s}"
+    drop_uncached_slice = False if drop_uncached_slice is None else drop_uncached_slice
+    skip_load_audio = False if skip_load_audio is None else skip_load_audio
+    assert not (not drop_uncached_slice and skip_load_audio), "Can't skip load audio and compute uncache slice"
 
     # FIXME "10.09s bug": If you write a 10s-sliced audio to mp4 you get 10.09s in the mp4 file
     #   - To inspect, use `ffprobe` or `ffprobe -show_packets`
@@ -288,30 +318,45 @@ def recs_featurize_metdata_audio_slice(recs: pd.DataFrame, audio_s: float) -> pd
     #       - We can always precisely slice the pcm samples once they're decoded from mp4/mp3, but as long as we're
     #         dealing in non-pcm encodings (for compression) we're stuck dealing with imprecise audio durations
 
+    def to_sliced_id(id: str) -> Optional[str]:
+        # Use first sliced id whose cache file exists (O(n) stat() calls)
+        #   - HACK Find a principled way to synthesize id for sliced audio (multiple concerns here to untangle...)
+
+        # Return first id whose cache/audio/ file exists
+        resample = [
+            'resample(%(sample_rate)s,%(channels)s,%(sample_width_bit)s)' % sg.load.audio_config,
+        ]
+        slice_enc = [
+            'enc(wav)',
+            'slice(%s,%s)' % (0, int(1000 * audio_s)),
+            'spectro_denoise()',
+            'enc(%(format)s,%(codec)s,%(bitrate)s)' % config.audio_persist.audio_kwargs,
+        ]
+        sliced_ids = [
+            audio_id_add_ops(id, *resample, *slice_enc),
+            audio_id_add_ops(id, *slice_enc),
+        ]
+        for sliced_id in sliced_ids:
+            if (Path(data_dir) / sliced_id).exists():
+                return sliced_id
+
+        if drop_uncached_slice:
+            # Drop and warn
+            log.warn('Dropping id with no cached slice (maybe b/c invalid input audio)', id=id, sliced_ids=sliced_ids)
+            return None
+        else:
+            # Give the caller a representative id (that we know doesn't exist) and let them deal with it
+            return sliced_ids[0]
+
     # HACK Do O(n) stat() calls else "Falling back" incurs O(n) .audio read+slice if any audio.mp3 didn't need to .resample(...)
     #   - e.g. cache/audio/xc/data/RIRA/185212/audio.mp3.enc(wav)
     #   - Repro: xc_similar_html(sort='d_fc', sp_cols='species', xc_id=381417, n_total=5, n_sp=17, sample_r=1)
-    to_paths_sliced = lambda recs: iter_progress(desc='to_paths_sliced', **config.api.recs.progress_kwargs, xs=(
+    to_paths_sliced = lambda recs: iter_progress(desc='to_paths_sliced', n=len(recs), **config.api.recs.progress_kwargs, xs=(
         (dataset, abs_sliced_path)
         for (dataset, abs_path) in xc_meta_to_paths(recs)
         for id in [str(Path(abs_path).relative_to(data_dir))]
-        # Use first sliced id whose cache file exists (O(n) stat() calls)
-        for sliced_id in [first([
-            # HACK Find a principled way to synthesize id for sliced audio (multiple concerns here to untangle...)
-            *[id for id in [audio_id_add_ops(id,
-                'enc(wav)',
-                'slice(%s,%s)' % (0, int(1000 * audio_s)),
-                'spectro_denoise()',
-                'enc(%(format)s,%(codec)s,%(bitrate)s)' % config.audio_persist.audio_kwargs,
-            )] if (Path(data_dir) / id).exists()],
-            audio_id_add_ops(id,
-                'resample(%(sample_rate)s,%(channels)s,%(sample_width_bit)s)' % sg.load.audio_config,
-                'enc(wav)',
-                'slice(%s,%s)' % (0, int(1000 * audio_s)),
-                'spectro_denoise()',
-                'enc(%(format)s,%(codec)s,%(bitrate)s)' % config.audio_persist.audio_kwargs,
-            ),
-        ])]
+        for sliced_id in [to_sliced_id(id)]
+        if sliced_id is not None
         for abs_sliced_path in [str(Path(data_dir) / sliced_id)]
     ))
 
@@ -319,7 +364,9 @@ def recs_featurize_metdata_audio_slice(recs: pd.DataFrame, audio_s: float) -> pd
         # Try loading sliced .audio directly, bailing if any audio file doesn't exist
         return (recs
             .pipe(recs_featurize_metadata, to_paths=to_paths_sliced)
-            .pipe(recs_featurize_audio, load=load_for_audio_persist())
+            .pipe(lambda df: df if skip_load_audio else (df
+                .pipe(recs_featurize_audio, load=load_for_audio_persist())  # TODO TODO FIXME Slow load.read_audio
+            ))
         )
     except FileNotFoundError as e:
         # Fallback to loading full .audio and computing the slice ourselves (which will cache for next time)
@@ -491,13 +538,13 @@ def species_for_query(species_query: str) -> str:
 
 
 def require(x: bool, **data):
+    """Shorthand to keep error handling concise"""
     if not x:
         caller = inspect.stack(context=0)[1]
         require_stmt = linecache.getline(caller.filename, caller.lineno).strip()
         raise ApiError(400, require_stmt, **data)
 
 
-def require_nonempty_df(df: pd.DataFrame, msg: str, **data) -> pd.DataFrame:
-    if df.empty:
-        raise ApiError(400, msg, **data)
-    return df
+def df_require_nonempty_api(df: pd.DataFrame, msg: str, **data) -> pd.DataFrame:
+    """Shorthand to keep error handling concise"""
+    return df_require_nonempty(df, ApiError(400, msg, **data))

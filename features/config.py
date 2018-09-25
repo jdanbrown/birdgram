@@ -19,9 +19,16 @@ config = AttrDict(
 
     cache=dict(
         log_level={
-            'api':      'debug',  # Verbose (line) cache logging for api
-            'notebook': 'info',   # Normal (char) cache logging for notebook
+            'api':      'debug',  # Verbose (line) cache logging
+            # 'notebook': 'info',   # Normal (char) cache logging
+            'notebook': 'warn',   # Silence cache logging
         }[role or 'notebook'],
+    ),
+
+    # Default progress_kwargs (-> util.progress_kwargs.default)
+    progress_kwargs=dict(
+        default=dict(use='dask', scheduler='threads'),  # Sane default
+        # override=dict(use='sync'),  # Debug
     ),
 
     hosts=dict(
@@ -53,7 +60,7 @@ config = AttrDict(
             progress_kwargs = dict(
                 use='dask', scheduler='threads',  # Faster (primarily useful for remote, for now)
                 # use=None,  # TODO TODO XXX Debug: disable par and silence progress bars to more easily see reads/writes
-            )
+            ),
         ),
     ),
 

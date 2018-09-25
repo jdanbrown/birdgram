@@ -12,7 +12,7 @@ import joblib
 from more_itertools import ilen
 import pandas as pd
 import parse
-from potoo.pandas import as_ordered_cat, df_ordered_cat, df_reorder_cols
+from potoo.pandas import as_ordered_cat, df_require_nonempty, df_ordered_cat, df_reorder_cols
 from potoo.util import or_else, strip_startswith
 import requests
 import requests_html
@@ -198,7 +198,7 @@ class _xc(DataclassUtil):
 
     @property
     @lru_cache()
-    @cache(version=8, key=lambda self: (self, self._audio_paths_hash))
+    @cache(version=8, tag='metadata', key=lambda self: (self, self._audio_paths_hash))
     def metadata(self) -> 'XCDF':
         """Make a full XCDF by joining _metadata + downloaded_ids"""
         return (self._metadata
@@ -216,7 +216,7 @@ class _xc(DataclassUtil):
         return self._audio_paths_hash  # Close enough
 
     @property
-    @cache(version=3, key=lambda self: self)
+    @cache(version=3, tag='metadata', key=lambda self: self)
     def _metadata(self) -> "pd.DataFrame['id': int, ...]":
         """Load all saved metadata from fs, keeping the latest observed metadata record per XC id"""
         metadata_paths_best_last = sorted(glob_filenames_ensure_parent_dir(f'{self.metadata_dir}/*.pkl'))
@@ -316,7 +316,7 @@ class _xc(DataclassUtil):
     # TODO Clean up along with {xc,ebird}.com_names_to_species
     @property
     @lru_cache()
-    @cache(version=0, key=lambda self: (self, self._metadata_hash),
+    @cache(version=0, tag='metadata', key=lambda self: (self, self._metadata_hash),
         norefresh=True,  # Very slow and rarely worth refreshing
     )
     def com_name_to_species_dict(self) -> dict:
@@ -375,7 +375,7 @@ class _xc(DataclassUtil):
         )
 
     @property
-    @cache(version=0, key=lambda self: (self, self._audio_paths_hash),
+    @cache(version=0, tag='pages', key=lambda self: (self, self._audio_paths_hash),
         norefresh=True,  # Very slow and rarely worth refreshing
     )
     def downloaded_page_metadata_full(self) -> "pd.DataFrame['id': int, ...]":
@@ -393,7 +393,7 @@ class _xc(DataclassUtil):
             .pipe(df_reorder_cols, first=['id'])
         )
 
-    @cache(version=1, key=lambda self, path: (self, path))
+    @cache(version=1, tag='page', key=lambda self, path: (self, path))
     def _parse_page_metadata(self, path: Path) -> dict:
         assert isinstance(path, Path)  # Avoid messing with str vs. Path to simplify cache key
 
@@ -831,8 +831,10 @@ def xc_meta_to_raw_recs(
     log.info('Loading xc.metadata -> xc_raw_recs (.audio, more metadata)... [slower]')
     assert 'duration_s' not in xc_meta  # TODO Make this function idempotent (currently, barfs on non-obvious errors)
     to_paths = to_paths or xc_meta_to_paths
+    paths = list(to_paths(xc_meta))
     xc_raw_recs = (
-        load.recs(paths=to_paths(xc_meta))
+        load.recs(paths=paths)
+        .pipe(df_require_nonempty, f'No recs from paths: len(xc_meta)[{len(xc_meta)}], len(paths)[{len(paths)}]')
         .assign(
             # TODO Push upstream
             xc_id=lambda df: df.id.map(strip_leading_cache_audio_dir).str.split('/').str[3].astype(int),

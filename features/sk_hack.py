@@ -50,7 +50,7 @@ from util import box, ensure_parent_dir, enumerate_with_n, model_stats, sha1hex
 log = structlog.get_logger(__name__)
 
 
-@cache(version=4)
+@cache(version=4, tag='fit')
 def _fit_and_score_cached(*args, **kwargs):
     """
     Like _fit_and_score except:

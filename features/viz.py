@@ -34,6 +34,7 @@ def _with_many(plot_f):
 
     @cache(
         version=4,
+        tag='recs',
         key=lambda recs, *args, **kwargs: (recs.id, args, kwargs),
         nocache=lambda *args, show=True, **kwargs: show,  # No cache iff side effects iff show
     )
@@ -57,6 +58,7 @@ def _with_many(plot_f):
             # No side effects, safe to par with map_progress
             return map_progress(f, xs,
                 desc=plot_f.__qualname__,
+                n=len(xs),
                 **progress,
             )
 
@@ -154,6 +156,7 @@ def plot_spectro_wrap(
 
 @cache(
     version=0,
+    tag='recs',
     key=lambda recs, *args, **kwargs: (recs.id, args, kwargs),
     nocache=lambda *args, show=True, **kwargs: show,  # No cache iff side effects iff show
 )

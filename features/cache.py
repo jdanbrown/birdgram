@@ -34,12 +34,12 @@ Example usage:
 
 """
 
-from contextlib import contextmanager
 from functools import partial, wraps
+from typing import List
 import uuid
 
 import attr
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from joblib import Memory
 from joblib.memory import MemorizedFunc
 from potoo.util import AttrContext
@@ -71,10 +71,17 @@ memory = Memory(
 class _cache_control(AttrContext):
     enabled: bool = True
     refresh: bool = False
+    tags_refresh: List[str] = field(default_factory=lambda: [])
+    tags_fail_on_miss: List[str] = field(default_factory=lambda: [])
 
 
 # Workaround for @singleton (above)
 cache_control = _cache_control()
+
+
+def tags_match(a: List[str], b: List[str]) -> bool:
+    """Tags match if they overlap (symmetric)"""
+    return set(a) & set(b)
 
 
 # TODO This is becoming really hacky; consider making a separate api that reuses joblib storage but not joblib.Memory
@@ -84,12 +91,20 @@ def cache(
     key=lambda *args, **kwargs: (args, kwargs),
     nocache=lambda *args, **kwargs: False,
     norefresh=False,  # Don't refresh on cache_control(refresh=True)
+    tag: str = None,  # Alias: tag=s -> tags=[s]
+    tags: List[str] = [],
     **kwargs,
 ):
     """
     Wrap Memory.cache to support version=... and key=..., and remove ignore=...
     """
 
+    # Params
+    if tag:
+        assert not tags, f"tag[{tag}], tags[{tags}]"
+        tags = [tag]
+        tag = None
+    assert isinstance(tags, list), f"Expected List[str], got {type(tags).__name__}"
     assert 'ignore' not in kwargs, 'Use key=... instead of ignore=...'
 
     def decorator(func):
@@ -106,29 +121,49 @@ def cache(
             _nocache = kwargs.pop('_nocache', False)
             ignore = dict(args=args, kwargs=kwargs)
             if not cache_control.enabled or nocache(*args, **kwargs) or _nocache:
+                # Bypass cache
                 cache_key = None
                 return func_cached.func(cache_key, ignore)
             else:
                 cache_key = dict(version=version, key=key(*args, **kwargs))
-                if not cache_control.refresh or norefresh:
-                    out = func_cached(cache_key, ignore)
-                else:
+                if (
+                    not norefresh and
+                    (cache_control.refresh or tags_match(tags, cache_control.tags_refresh))
+                ):
+                    # Force refresh (= recompute and store)
 
-                    # HACK Log to match joblib.memory.MemorizeFunc
+                    # HACK HACK HACK Log to match joblib.memory.MemorizeFunc (cf. joblib/memory.py)
                     func_id, _ = func_cached._get_output_identifiers(cache_key, ignore)
                     memory.log.char('info', '»')
                     memory.log.char('debug', ' %s\n' % func_id)
 
                     out = func_cached.func(cache_key, ignore)
                     _store_result(out, func_cached, cache_key, ignore)
+                else:
+                    # Hit/miss as normal (via MemorizedFunc)
+
+                    # Fail if cache miss and any func tags are in tags_fail_on_miss
+                    if (
+                        tags_match(tags, cache_control.tags_fail_on_miss) and
+                        not _is_cached(func_cached, cache_key, ignore)
+                    ):
+                        raise ValueError('func[%s] cache miss (tags_fail_on_miss%s, tags%s)' % (
+                            func.__qualname__, cache_control.tags_fail_on_miss, tags,
+                        ))
+
+                    out = func_cached(cache_key, ignore)
                 return out
         return g
 
     return decorator
 
 
+def _is_cached(f: MemorizedFunc, *args, **kwargs):
+    func_id, args_id = f._get_output_identifiers(*args, **kwargs)
+    return f.store_backend.contains_item([func_id, args_id])
+
+
 def _store_result(out: any, f: MemorizedFunc, *args, **kwargs):
-    """Clear an individual MemorizedResult for a MemorizedFunc"""
     func_id, args_id = f._get_output_identifiers(*args, **kwargs)
     f.store_backend.dump_item([func_id, args_id], out)
 

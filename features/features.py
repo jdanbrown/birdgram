@@ -1,5 +1,5 @@
 from collections import OrderedDict
-import contextlib
+from contextlib import ExitStack
 import copy
 from functools import lru_cache
 import os.path
@@ -127,7 +127,7 @@ class HasPlotAudioTF:
             figsize = None
         assert not (fancy and ax), f"Can't supply both fancy[{fancy}] and ax[{ax}]"
 
-        with contextlib.ExitStack() as stack:
+        with ExitStack() as stack:
             if figsize:
                 stack.enter_context(potoo.plot.figsize(**figsize))
 

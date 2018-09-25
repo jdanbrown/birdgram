@@ -12,6 +12,7 @@ os.environ['BUBO_ROLE'] = 'notebook'
 import calendar
 from collections import *
 import contextlib
+from contextlib import contextmanager, ExitStack
 import copy
 from datetime import datetime, date, timedelta
 import fnmatch
@@ -128,12 +129,11 @@ from potoo.plot import *
 plot_set_defaults()
 
 if ipy:
-
-    import potoo.default_magic_magic
     ipy_load_ext_no_warnings('potoo.default_magic_magic')
-
-    import potoo.lprun_cell_magic
     ipy_load_ext_no_warnings('potoo.lprun_cell_magic')
+    ipy_load_ext_no_warnings('line_profiler')
+    ipy_load_ext_no_warnings('memory_profiler')
+    ipy_load_ext_no_warnings('snakeviz')
 
 from potoo.ipython import *
 gc_on_ipy_post_run_cell()

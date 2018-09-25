@@ -65,7 +65,7 @@ class Load(DataclassConfig):
             'codec',
         ]})
 
-    @cache(version=2, key=lambda self, datasets=None, paths=None, *args, **kwargs: (
+    @cache(version=2, tag='recs', key=lambda self, datasets=None, paths=None, *args, **kwargs: (
         {k: DATASETS[k] for k in (datasets or [])},
         paths or self.recs_paths(datasets=datasets),
         args,
@@ -163,7 +163,7 @@ class Load(DataclassConfig):
         #   - Scheduler: [TODO Measure -- 'threads' is like the outcome, like n-1 of the rest]
         #   - Bottlenecks (no_dask): [TODO Measure]
         #   - TODO Revisiting with ~87k xc recs...
-        metadata = map_progress(self._metadata, df_rows(recs), desc='audio_metadata',
+        metadata = map_progress(self._metadata, df_rows(recs), n=len(recs), desc='audio_metadata',
             # [Local]
             use='dask', scheduler='threads',    # Optimal for 600 peterson recs on laptop
             # [Remote]
@@ -187,7 +187,7 @@ class Load(DataclassConfig):
     # Cache hit avoids loading audio (~1000x bigger: ~1MB audio vs. ~1KB metadata)
     # Avoid Series.get(cols): it returns nan for unknown cols instead of None overall (df.get(cols) gives None overall)
     @short_circuit(lambda self, rec: AttrDict(rec[self.METADATA]) if set(self.METADATA).issubset(rec.index) else None)
-    @cache(version=5, key=lambda self, rec: rec.id)
+    @cache(version=5, tag='rec', key=lambda self, rec: rec.id)
     def _metadata(self, rec: Row) -> AttrDict:
         """metadata <- .audio"""
         # _audio_no_transcode because we want the metadata from the raw input file, not the standardized version
@@ -231,9 +231,7 @@ class Load(DataclassConfig):
             'len(recs)': len(recs),
         })
         audio = map_progress(
-            partial(self._audio, load=load),
-            df_rows(recs),
-            desc='audio',
+            partial(self._audio, load=load), df_rows(recs), n=len(recs), desc='audio',
             **(progress_kwargs or self._audio_progress_kwargs),
         )
         if load:
@@ -264,9 +262,7 @@ class Load(DataclassConfig):
             'audio_config': self.audio_config,
         })
         audio = map_progress(
-            partial(self._transcode_audio, load=load),
-            recs.audio.map(unbox),
-            desc='transcode_audio',
+            partial(self._transcode_audio, load=load), recs.audio.map(unbox), n=len(recs), desc='transcode_audio',
             **(progress_kwargs or self._audio_progress_kwargs),
         )
         if load:

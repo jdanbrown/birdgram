@@ -77,7 +77,7 @@ class _sg_load(DataclassUtil):
             **self.load_xc_meta(),
         )
 
-    @cache(version=2, key=lambda self: self)
+    @cache(version=2, tag='sg', key=lambda self: self)
     def load_search(self):
         log.info()
         x = AttrDict()
@@ -94,7 +94,7 @@ class _sg_load(DataclassUtil):
         x.load = x.features.load
         return dict(x)
 
-    @cache(version=3, key=lambda self: self,
+    @cache(version=3, tag='sg', key=lambda self: self,
         norefresh=True,  # Very slow and rarely worth refreshing [TODO Push this norefresh down closer to the root slowness]
     )
     def load_xc_meta(self):

@@ -164,7 +164,7 @@ class Features(DataclassConfig):
         #             100    0.153    0.002    0.550    0.005 model.py:170(<listcomp>)
         #             100    0.069    0.001    0.862    0.009 model.py:163(_patches)
         #               1    0.042    0.042    0.944    0.944 <string>:1(<module>)
-        patches = map_progress(self._patches, df_rows(recs), desc='patches', use='dask', scheduler='synchronous')
+        patches = map_progress(self._patches, df_rows(recs), n=len(recs), desc='patches', use='dask', scheduler='synchronous')
         log.debug('done', **{
             '(f*p,sum(t))': (one({p.shape[0] for p in patches}), sum(p.shape[1] for p in patches)),
         })
@@ -190,7 +190,7 @@ class Features(DataclassConfig):
         #       3843/3839    0.333    0.000    0.334    0.000 {built-in method numpy.core.multiarray.array}
         #             100    0.285    0.003    3.228    0.032 spectral.py:563(spectrogram)
         #             100    0.284    0.003    0.381    0.004 signaltools.py:2464(detrend)
-        spectros = map_progress(partial(self._spectro, cache=cache, load=load), df_rows(recs), desc='spectro', **{
+        spectros = map_progress(partial(self._spectro, cache=cache, load=load), df_rows(recs), n=len(recs), desc='spectro', **{
             **(dict() if 'use' in kwargs else dict(
                 use='dask', scheduler='threads',
             )),
@@ -202,7 +202,8 @@ class Features(DataclassConfig):
         return spectros
 
     @short_circuit(lambda self, rec: rec.get('patches'))
-    # @cache(version=0, key=lambda self, rec: (rec.id, self.patch_config, self.spectro_config, self.deps))  # TODO After birdclef
+    # TODO Re-enable @cache after birdclef
+    # @cache(version=0, tag='rec', key=lambda self, rec: (rec.id, self.patch_config, self.spectro_config, self.deps))
     def _patches(self, rec: Row) -> 'np.ndarray[(f*p, t)]':
         """spectro (f,t) -> patch (f*p,t)"""
         (f, t, S) = self._spectro(rec)  # Cached
@@ -226,7 +227,7 @@ class Features(DataclassConfig):
             # A mem-safe way to run a large .spectro
             return None
 
-    @cache(version=0, key=lambda self, rec, **kwargs: (rec.id, kwargs, self.spectro_config, self.deps))
+    @cache(version=0, tag='rec', key=lambda self, rec, **kwargs: (rec.id, kwargs, self.spectro_config, self.deps))
     def _spectro_cache(self, rec: Row, **kwargs) -> Melspectro:
         return self._spectro_nocache(rec, **kwargs)
 
@@ -479,7 +480,7 @@ class Projection(DataclassConfig):
         return self
 
     @requires_nonempty_rows
-    @cache(version=0, verbose=100, key=lambda self, recs: (recs.id, self.skm_config, self.deps))
+    @cache(version=0, tag='recs', verbose=100, key=lambda self, recs: (recs.id, self.skm_config, self.deps))
     def _fit(self, recs: RecordingDF) -> SKM:
         """skm <- .patch (f*p,t)"""
         skm = SKM(**self.skm_config)
@@ -530,7 +531,7 @@ class Projection(DataclassConfig):
     #   - Low cost to reset the cache since _feat cache hits are fast (~10s for ~13k recs)
     @requires_nonempty_rows
     @short_circuit(lambda self, recs: recs.get('feat'))
-    @cache(version=0, key=lambda self, recs: (recs.id, self.agg_config, self.skm_config, self.deps))
+    @cache(version=0, tag='recs', key=lambda self, recs: (recs.id, self.agg_config, self.skm_config, self.deps))
     def feat(self, recs: RecordingDF) -> Column['np.ndarray[(k*a,)]']:
         """feat (k*a,) <- .agg (k,a)"""
         # Performance (600 peterson recs):
@@ -542,7 +543,7 @@ class Projection(DataclassConfig):
         #       15000/600    0.026    0.000    0.076    0.000 dataclasses.py:1014(_asdict_inner)
         #           79220    0.020    0.000    0.037    0.000 {built-in method builtins.isinstance}
         #           12600    0.012    0.000    0.018    0.000 copy.py:132(deepcopy)
-        feat = map_progress(self._feat, df_rows(recs), desc='feat', use='dask', scheduler='threads')
+        feat = map_progress(self._feat, df_rows(recs), n=len(recs), desc='feat', use='dask', scheduler='threads')
         return feat
 
     @requires_nonempty_rows
@@ -558,7 +559,7 @@ class Projection(DataclassConfig):
         #             600    0.424    0.001    2.849    0.005 _methods.py:133(_std)
         #       15000/600    0.032    0.000    0.088    0.000 dataclasses.py:1014(_asdict_inner)
         #           82820    0.023    0.000    0.042    0.000 {built-in method builtins.isinstance}
-        agg = map_progress(self._agg, df_rows(recs), desc='agg', use='dask', scheduler='threads')
+        agg = map_progress(self._agg, df_rows(recs), n=len(recs), desc='agg', use='dask', scheduler='threads')
         return agg
 
     @requires_nonempty_rows
@@ -574,11 +575,11 @@ class Projection(DataclassConfig):
         #             100    0.185    0.002    1.052    0.011 base.py:99(transform)
         #               1    0.163    0.163    2.260    2.260 <string>:1(<module>)
         #             100    0.018    0.000    2.056    0.021 skm.py:433(transform)
-        proj = map_progress(self._proj, df_rows(recs), desc='proj', use='dask', scheduler='threads')
+        proj = map_progress(self._proj, df_rows(recs), n=len(recs), desc='proj', use='dask', scheduler='threads')
         return proj
 
     @short_circuit(lambda self, rec: rec.get('feat'))
-    @cache(version=0, key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
+    @cache(version=0, tag='rec', key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
     def _feat(self, rec: Row) -> 'np.ndarray[(k*a,)]':
         """feat (k*a,) <- .agg (k,a)"""
         agg = self._agg(rec)
@@ -591,7 +592,7 @@ class Projection(DataclassConfig):
         return feat
 
     @short_circuit(lambda self, rec: rec.get('agg'))
-    @cache(version=0, key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
+    @cache(version=0, tag='rec', key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
     def _agg(self, rec: Row) -> Mapping['a', 'np.ndarray[(k,)]']:
         """agg (k,a) <- .proj (k,t)"""
         proj = self._proj(rec)
@@ -613,7 +614,8 @@ class Projection(DataclassConfig):
         }
 
     @short_circuit(lambda self, rec: rec.get('proj'))
-    # @cache(version=0, key=lambda self, rec: (rec.id, self.skm_config, self.deps))  # TODO After birdclef
+    # TODO Re-enable @cache after birdclef
+    # @cache(version=0, tag='rec', key=lambda self, rec: (rec.id, self.skm_config, self.deps))
     def _proj(self, rec: Row) -> 'np.ndarray[(k,t)]':
         """proj (k,t) <- .patch (f*p,t)"""
         patches = self.features._patches(rec)  # Pull
@@ -839,7 +841,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
         # log.debug('done', classifier=self.classifier)
         return self
 
-    @cache(version=4, key=lambda self, X, y, classes: (
+    @cache(version=4, tag='fit', key=lambda self, X, y, classes: (
         self.classifier_config, {k: v for k, v in self.config.items() if k != 'classifier'},  # Prefer classifier dict over str
         X, y, classes,
     ))
