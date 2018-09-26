@@ -198,7 +198,7 @@ class _xc(DataclassUtil):
 
     @property
     @lru_cache()
-    @cache(version=8, tag='metadata', key=lambda self: (self, self._audio_paths_hash))
+    @cache(version=8, tags='metadata', key=lambda self: (self, self._audio_paths_hash))
     def metadata(self) -> 'XCDF':
         """Make a full XCDF by joining _metadata + downloaded_ids"""
         return (self._metadata
@@ -216,7 +216,7 @@ class _xc(DataclassUtil):
         return self._audio_paths_hash  # Close enough
 
     @property
-    @cache(version=3, tag='metadata', key=lambda self: self)
+    @cache(version=3, tags='metadata', key=lambda self: self)
     def _metadata(self) -> "pd.DataFrame['id': int, ...]":
         """Load all saved metadata from fs, keeping the latest observed metadata record per XC id"""
         metadata_paths_best_last = sorted(glob_filenames_ensure_parent_dir(f'{self.metadata_dir}/*.pkl'))
@@ -316,7 +316,7 @@ class _xc(DataclassUtil):
     # TODO Clean up along with {xc,ebird}.com_names_to_species
     @property
     @lru_cache()
-    @cache(version=0, tag='metadata', key=lambda self: (self, self._metadata_hash),
+    @cache(version=0, tags='metadata', key=lambda self: (self, self._metadata_hash),
         norefresh=True,  # Very slow and rarely worth refreshing
     )
     def com_name_to_species_dict(self) -> dict:
@@ -375,7 +375,7 @@ class _xc(DataclassUtil):
         )
 
     @property
-    @cache(version=0, tag='pages', key=lambda self: (self, self._audio_paths_hash),
+    @cache(version=0, tags='pages', key=lambda self: (self, self._audio_paths_hash),
         norefresh=True,  # Very slow and rarely worth refreshing
     )
     def downloaded_page_metadata_full(self) -> "pd.DataFrame['id': int, ...]":
@@ -393,7 +393,7 @@ class _xc(DataclassUtil):
             .pipe(df_reorder_cols, first=['id'])
         )
 
-    @cache(version=1, tag='page', key=lambda self, path: (self, path))
+    @cache(version=1, tags='page', key=lambda self, path: (self, path))
     def _parse_page_metadata(self, path: Path) -> dict:
         assert isinstance(path, Path)  # Avoid messing with str vs. Path to simplify cache key
 

@@ -34,7 +34,7 @@ def _with_many(plot_f):
 
     @cache(
         version=4,
-        tag='recs',
+        tags='recs',
         key=lambda recs, *args, **kwargs: (recs.id, args, kwargs),
         nocache=lambda *args, show=True, **kwargs: show,  # No cache iff side effects iff show
     )
@@ -156,7 +156,7 @@ def plot_spectro_wrap(
 
 @cache(
     version=0,
-    tag='recs',
+    tags='recs',
     key=lambda recs, *args, **kwargs: (recs.id, args, kwargs),
     nocache=lambda *args, show=True, **kwargs: show,  # No cache iff side effects iff show
 )

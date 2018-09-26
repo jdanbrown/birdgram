@@ -123,32 +123,13 @@ def xc_similar_html(
     scale     = scale   and np.clip(scale,    .5, 10)
     d_metrics = list(d_metrics)
 
-    # 5. TODO TODO -> global, to reuse across static search_recs + dynamic query_rec
-    d_feats: dict = {
-        'f': Search.X,                 # d_f, "feat dist"
-        'p': sg.search.species_proba,  # d_p, "preds dist" (Last investigated: notebooks/app_ideas_6_with_pca)
-    }
-    def recs_featurize_pre_rank(recs: pd.DataFrame) -> pd.DataFrame:
-        return (recs
-            # Audio metadata
-            .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
-                # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
-                #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
-                #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
-                #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can more robustly handle
-                drop_uncached_slice=True,
-                # Don't load .audio for pre-rank recs (only for final n_total recs, below)
-                no_audio=True,
-            )
-            # .feat
-            .pipe(recs_featurize_feat)
-            # f_*
-            .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-                f_(f): v.tolist()  # (series->list, else errors)
-                for f, F in d_feats.items()
-                for v in [one_progress(desc=f_(f), n=len(df), x=lambda: F(df))]
-            }))
-        )
+    # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
+    assert audio_s == config.api.recs.audio_s, \
+        f"Can't change audio_s for precomputed search_recs: audio_s[{audio_s}] != config[{config.api.recs.audio_s}]"
+
+    # 7. TODO TODO sg.search_recs cache hit is slow (~15s)
+    #   - Usable for now, but will be our next problem to solve
+    #   - Consider e.g. .parquet/.sqlite instead of joblib .pkl
 
     # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
     query_rec = (sg.xc_meta
@@ -167,9 +148,13 @@ def xc_similar_html(
         .rename(columns={'p': 'sp_p'})
     )
 
-    # Compute search_recs from xc_meta, and featurize (audio meta + .feat)
-    #   - 5. TODO TODO Precompute as a static df (-> sg.search_recs)
-    search_recs = (sg.xc_meta
+    # Get precomputed search_recs
+    #   - 5. TODO TODO Why does sg_load.load_d_feats always cache miss? It's very fast, but it's worth debugging in case bigger bugs
+    #   - 5. TODO TODO Test!
+    search_recs = sg.search_recs
+
+    # Filter search_recs for query_sp_p
+    search_recs = (search_recs
         # Filter
         [lambda df: df.species.isin(query_sp_p.species)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species)
@@ -177,9 +162,6 @@ def xc_similar_html(
         .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species, quality=quality)
         .reset_index(drop=True)  # Reset RangeIndex after filter
         .pipe(df_remove_unused_categories)  # Drop unused cats after filter
-        # Featurize
-        #   - 5. TODO TODO Move before filter, in order to precompute the static df
-        .pipe(recs_featurize_pre_rank)
     )
 
     # HACK Include query_rec in results [this is a view concern, but jam it in here as a shortcut]
@@ -190,7 +172,7 @@ def xc_similar_html(
         ))
     )
 
-    # Compute all dist metrics (search_recs + query_rec), so user can interactively compare and evaluate them
+    # Compute dist metrics for query_rec, so user can interactively compare and evaluate them
     #   - O(n)
     d_metrics = {m: sk.metrics.pairwise.distance_metrics()[{
         '2': 'l2',
@@ -206,7 +188,7 @@ def xc_similar_html(
                 )
                 .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
             ))
-            for f, F in d_feats.items()
+            for f, F in sg.d_feats.items()
             for m, M in d_metrics.items()
         }))
     )
@@ -285,6 +267,51 @@ def xc_similar_html(
     )
 
     return view_recs
+
+
+def mk_d_feats() -> dict:
+    """Expose for sg"""
+    return {
+        'f': Search.X,                         # d_f, "feat dist"
+        'p': partial(sg.search.species_proba,  # d_p, "preds dist" (Last investigated: notebooks/app_ideas_6_with_pca)
+            _cache=True,  # Must explicitly request caching (b/c we're avoiding affecting perf of model eval)
+        )
+    }
+
+
+def mk_search_recs() -> pd.DataFrame:
+    """Expose for sg"""
+    return (sg.xc_meta
+        # Featurize (audio meta + .feat)
+        .pipe(recs_featurize_pre_rank)
+    )
+
+
+def recs_featurize_pre_rank(
+    recs: pd.DataFrame,
+    audio_s: int = None,
+) -> pd.DataFrame:
+    return (recs
+        # Audio metadata
+        .pipe(recs_featurize_metdata_audio_slice,
+            audio_s=audio_s or config.api.recs.audio_s,
+            # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
+            #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
+            #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
+            #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can more robustly handle
+            drop_uncached_slice=True,
+            # Don't load .audio for pre-rank recs (only for final n_total recs, below)
+            no_audio=True,
+        )
+        # .feat
+        .pipe(recs_featurize_feat)
+        # f_*
+        .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
+            f_(f): v.tolist()  # (series->list, else errors)
+            for f, F in sg.d_feats.items()
+            for v in [one_progress(desc=f_(f), n=len(df), x=lambda: F(df))]
+        }))
+    )
 
 
 def recs_featurize_recs_for_sp(recs: pd.DataFrame) -> pd.DataFrame:

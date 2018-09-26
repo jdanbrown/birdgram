@@ -35,7 +35,7 @@ Example usage:
 """
 
 from functools import partial, wraps
-from typing import List
+from typing import List, Union
 import uuid
 
 import attr
@@ -91,8 +91,7 @@ def cache(
     key=lambda *args, **kwargs: (args, kwargs),
     nocache=lambda *args, **kwargs: False,
     norefresh=False,  # Don't refresh on cache_control(refresh=True)
-    tag: str = None,  # Alias: tag=s -> tags=[s]
-    tags: List[str] = [],
+    tags: Union[str, List[str]] = [],  # Alias: tags=s -> tags=[s]
     **kwargs,
 ):
     """
@@ -100,10 +99,8 @@ def cache(
     """
 
     # Params
-    if tag:
-        assert not tags, f"tag[{tag}], tags[{tags}]"
-        tags = [tag]
-        tag = None
+    if isinstance(tags, str):
+        tags = [tags]
     assert isinstance(tags, list), f"Expected List[str], got {type(tags).__name__}"
     _outer_tags = tags; del tags  # Grr python scoping
     assert 'ignore' not in kwargs, 'Use key=... instead of ignore=...'

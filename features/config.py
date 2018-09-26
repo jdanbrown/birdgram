@@ -50,6 +50,7 @@ config = AttrDict(
             # xc_meta
             # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
             countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
+            # countries_k='na', com_names_k='dan5', num_recs=None,  # XXX Faster dev
             # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
 
         )
@@ -57,10 +58,16 @@ config = AttrDict(
 
     api=dict(
         recs=dict(
+
+            # Global audio_s for precomputed search_recs
+            #   - TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
+            audio_s=10,
+
             progress_kwargs = dict(
                 use='dask', scheduler='threads',  # Faster (primarily useful for remote, for now)
-                # use=None,  # TODO TODO XXX Debug: disable par and silence progress bars to more easily see reads/writes
+                # use=None,  # XXX Dev (disable par and silence progress bars to more easily see reads/writes)
             ),
+
         ),
     ),
 

@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 import numpy as np
+import pandas as pd
+from potoo import debug_print
 from potoo.dataclasses import DataclassUtil
 from potoo.util import singleton
 import structlog
@@ -27,7 +29,7 @@ class _sg:
     def init(self, app):
         if not hasattr(self, '_init_done'):
             log.info()
-            self.__dict__.update(sg_load.load())
+            sg_load.load(self)
             log.info('done')
             self._init_done = True
 
@@ -69,16 +71,19 @@ class _sg_load(DataclassUtil):
     # load*: Maintain tight and well-defined input/output relationships so we can cache (without headaches)
     #   - e.g. any app config we depend on should be explicitly surfaced as function params
 
-    def load(self):
+    def load(self, sg):
         # Split load* by method so we can easily inspect data volume from @cache dir sizes
         #   - Also helps isolate cache refresh
-        return dict(
-            **self.load_search(),
-            **self.load_xc_meta(),
-        )
+        sg.__dict__.update(self.load_search())
+        sg.__dict__.update(self.load_xc_meta())
+        debug_print()
+        sg.__dict__.update(self.load_d_feats())      # Implicit deps: d_feats     -> sg.search
+        debug_print()
+        sg.__dict__.update(self.load_search_recs())  # Implicit deps: search_recs -> sg.xc_meta, sg.d_feats(->sg.search)
+        debug_print()
 
-    @cache(version=2, tag='sg', key=lambda self: self)
-    def load_search(self):
+    @cache(version=2, tags='sg', key=lambda self: self)
+    def load_search(self) -> dict:
         log.info()
         x = AttrDict()
         x.search = Search.load_v0(
@@ -94,10 +99,10 @@ class _sg_load(DataclassUtil):
         x.load = x.features.load
         return dict(x)
 
-    @cache(version=3, tag='sg', key=lambda self: self,
+    @cache(version=3, tags='sg', key=lambda self: self,
         norefresh=True,  # Very slow and rarely worth refreshing [TODO Push this norefresh down closer to the root slowness]
     )
-    def load_xc_meta(self):
+    def load_xc_meta(self) -> dict:
         log.info()
         x = AttrDict()
         x.xc_meta, _recs_stats = load_xc_meta(
@@ -109,6 +114,33 @@ class _sg_load(DataclassUtil):
             drop_recs_lt_2=False,
         )
         return dict(x)
+
+    @cache(tags='sg', key=lambda self: self,
+        version=sum([2,
+            debug_print(load_search._cache_version),  # Implicitly depends on sg.search
+        ]),
+    )
+    def load_d_feats(self) -> dict:
+        debug_print()
+        from api.recs import mk_d_feats  # Lazy import to avoid cycles [TODO Refactor to avoid cycle]
+        log.info()
+        return dict(
+            d_feats=mk_d_feats(),
+        )
+
+    @cache(tags='sg', key=lambda self: self,
+        version=sum([1,
+            debug_print(load_xc_meta._cache_version),  # Implicitly depends on sg.xc_meta
+            debug_print(load_d_feats._cache_version),  # Implicitly depends on sg.d_feats (which depends on sg.search)
+        ]),
+        norefresh=True,  # Very slow and rarely worth refreshing
+    )
+    def load_search_recs(self) -> dict:
+        from api.recs import mk_search_recs  # Lazy import to avoid cycles [TODO Refactor to avoid cycle]
+        log.info()
+        return dict(
+            search_recs=mk_search_recs(),
+        )
 
 
 # Workaround for @singleton (above)
