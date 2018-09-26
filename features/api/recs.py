@@ -65,16 +65,19 @@ def xc_species_html(
     audio_s = np.clip(audio_s, 0, 30)
     thumb_s = np.clip(thumb_s, 0, 10)
     scale = np.clip(scale, .5, 10)
-    sort = sort or 'date'
 
     return (sg.xc_meta
+        # Filter
         [lambda df: df.species == species]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=species)
         [lambda df: df.quality.isin(quality)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=species, quality=quality)
         # Top recs by `sort` (e.g. .date)
-        #   - FIXME Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
-        .sort_values(sort, ascending=False)[:n_recs]
+        #   - TODO Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
+        .pipe(lambda df: df.sort_values(ascending=True,
+            by=sort if sort in df else 'date',
+        ))
+        [:n_recs]
         .reset_index(drop=True)  # Reset RangeIndex after filter+sort
         # Featurize
         .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale)
@@ -127,9 +130,13 @@ def xc_similar_html(
     assert audio_s == config.api.recs.audio_s, \
         f"Can't change audio_s for precomputed search_recs: audio_s[{audio_s}] != config[{config.api.recs.audio_s}]"
 
-    # 7. TODO TODO sg.search_recs cache hit is slow (~15s)
+    # 7. TODO TODO sg.search_recs cache hit is slow (~15s, 2.4g pkl)
+    #   - Why so big? Isn't .audio not in there yet...?
     #   - Usable for now, but will be our next problem to solve
     #   - Consider e.g. .parquet/.sqlite instead of joblib .pkl
+    # 7. TODO TODO Use gunicorn --preload_app so we load sg.* only once, before forking
+    #   - https://stackoverflow.com/a/27242874/397334
+    #   - http://docs.gunicorn.org/en/latest/settings.html#preload-app
 
     # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
     query_rec = (sg.xc_meta
@@ -149,8 +156,6 @@ def xc_similar_html(
     )
 
     # Get precomputed search_recs
-    #   - 5. TODO TODO Why does sg_load.load_d_feats always cache miss? It's very fast, but it's worth debugging in case bigger bugs
-    #   - 5. TODO TODO Test!
     search_recs = sg.search_recs
 
     # Filter search_recs for query_sp_p
@@ -238,7 +243,8 @@ def xc_similar_html(
 
     # Featurize ranked_recs: .spectro + recs_view
     view_recs = (ranked_recs
-        # 6. TODO TODO Name view fields apart so they commute with computations above
+        # 6. TODO TODO Name view fields apart (_view_k?) so they commute with computations above
+        # 6. TODO TODO df_cell will .pkl but won't .parquet (or .sqlite) -- ensure html strs above and keep df_cell wrappers down here
         # 6. TODO TODO O(n) -> search_recs
         .pipe(recs_featurize_recs_for_sp)
         .pipe(recs_featurize_audio, load=load_for_audio_persist())

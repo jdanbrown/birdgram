@@ -60,6 +60,8 @@ import shlex
 import textwrap
 from typing import Callable, Optional, TypeVar, Union
 
+import humanize
+
 X = TypeVar('X')
 
 
@@ -191,12 +193,17 @@ def print_time_delta(desc='time_delta', print=print):
         print('[%s] %.03fs' % (desc, end - start))
 
 
-# Kind of better than %memit...
+# Sometimes better than %memit...
 @contextmanager
-def print_mem_delta(desc='mem_delta', collect_before=False, collect_after=False, print=print):
+def print_mem_delta(desc='mem_delta', collect_before=False, collect_after=False, print=print, format=None):
     import gc
     import psutil
     from potoo.pretty import pformat
+    format = (
+        lambda x, format=format: format % x if isinstance(format, str) else
+        pformat if format is None else
+        format
+    )
     proc = psutil.Process(os.getpid())
     if collect_before:
         gc.collect()
@@ -207,8 +214,9 @@ def print_mem_delta(desc='mem_delta', collect_before=False, collect_after=False,
         if collect_after:
             gc.collect()
         end = proc.memory_full_info()._asdict()
-        diff = {k: '%s KB' % ((end[k] - start[k]) // 1024) for k in start.keys()}
-        print('[%s] %s' % (desc, pformat(diff)))
+        diff = {k: naturalsize(end[k] - start[k]) for k in start.keys()}
+        desc = '[%s] ' % desc if desc else ''
+        print('%s%s' % (desc, format(diff)))
 
 
 # TODO Does this reject or accept kwargs that are repeated later? (A: Whatever partial does.) Which behavior do we want?
@@ -277,8 +285,28 @@ class DataclassConfig(DataclassUtil):
 
 
 #
+# humanize
+#
+
+import humanize
+
+
+def naturalsize(size: float) -> str:
+    # Workaround bug: negative sizes are always formatted as bytes
+    s = (
+        '-%s' % humanize.naturalsize(-size) if size < 0 else
+        humanize.naturalsize(size)
+    )
+    # Abbrev 'Bytes' -> 'B'
+    s = s.replace(' Bytes', ' B')
+    return s
+
+
+#
 # numpy
 #
+
+import io
 
 import numpy as np
 
@@ -296,6 +324,16 @@ def np_vectorize_asscalar(*args, **kwargs):
     """
     f = np.vectorize(*args, **kwargs)
     return lambda *args, **kwargs: f(*args, **kwargs)[()]
+
+
+def np_to_npy_bytes(x: np.ndarray) -> bytes:
+    # From https://stackoverflow.com/a/18622264/397334
+    #   - np.save docs: https://docs.scipy.org/doc/numpy/reference/generated/numpy.save.html
+    #   - .npy isn't slow or big: https://stackoverflow.com/a/41425878/397334
+    out = io.BytesIO()
+    np.save(out, x)
+    out.seek(0)
+    return out.read()
 
 
 #

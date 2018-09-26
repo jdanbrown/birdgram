@@ -1,9 +1,10 @@
 from dataclasses import dataclass
+from functools import lru_cache
 import numpy as np
 import pandas as pd
 from potoo import debug_print
 from potoo.dataclasses import DataclassUtil
-from potoo.util import singleton
+from potoo.util import singleton, timed
 import structlog
 
 from attrdict import AttrDict
@@ -74,13 +75,17 @@ class _sg_load(DataclassUtil):
     def load(self, sg):
         # Split load* by method so we can easily inspect data volume from @cache dir sizes
         #   - Also helps isolate cache refresh
-        sg.__dict__.update(self.load_search())
-        sg.__dict__.update(self.load_xc_meta())
-        debug_print()
-        sg.__dict__.update(self.load_d_feats())      # Implicit deps: d_feats     -> sg.search
-        debug_print()
-        sg.__dict__.update(self.load_search_recs())  # Implicit deps: search_recs -> sg.xc_meta, sg.d_feats(->sg.search)
-        debug_print()
+        for f in [
+            self.load_search,
+            self.load_xc_meta,
+            self.load_d_feats,      # Implicit deps: d_feats     -> sg.search
+            self.load_search_recs,  # Implicit deps: search_recs -> sg.xc_meta, sg.d_feats(->sg.search)
+        ]:
+            log.debug('%s...' % f.__name__)
+            elapsed_s, _ = timed(lambda: (
+                sg.__dict__.update(f())
+            ))
+            log.info('%s (took %.3fs)' % (f.__name__, elapsed_s))
 
     @cache(version=2, tags='sg', key=lambda self: self)
     def load_search(self) -> dict:
@@ -115,13 +120,10 @@ class _sg_load(DataclassUtil):
         )
         return dict(x)
 
-    @cache(tags='sg', key=lambda self: self,
-        version=sum([2,
-            debug_print(load_search._cache_version),  # Implicitly depends on sg.search
-        ]),
-    )
+    # WARNING Unsafe to @cache since it contains methods and stuff
+    #   - And if you do @cache, joblib.memory will silently cache miss every time, leaving behind partial .pkl writes :/
+    @lru_cache()
     def load_d_feats(self) -> dict:
-        debug_print()
         from api.recs import mk_d_feats  # Lazy import to avoid cycles [TODO Refactor to avoid cycle]
         log.info()
         return dict(
@@ -129,10 +131,17 @@ class _sg_load(DataclassUtil):
         )
 
     @cache(tags='sg', key=lambda self: self,
-        version=sum([1,
-            debug_print(load_xc_meta._cache_version),  # Implicitly depends on sg.xc_meta
-            debug_print(load_d_feats._cache_version),  # Implicitly depends on sg.d_feats (which depends on sg.search)
-        ]),
+        # TODO Extract this as a reusable pattern
+        version=':'.join(map(str, [
+            # Our version
+            9,
+            # Versions of @cache functions we (implicitly) depend on
+            #   - Sort for stable dir name
+            *sorted(['%s=%s' % (f.__qualname__, f._cache_version) for f in [
+                load_xc_meta,
+                # load_d_feats,  # Doesn't @cache
+            ]]),
+        ])),
         norefresh=True,  # Very slow and rarely worth refreshing
     )
     def load_search_recs(self) -> dict:

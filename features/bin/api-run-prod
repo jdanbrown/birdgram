@@ -16,7 +16,8 @@ export BUBO_ROLE='api'
 cmd=(
   gunicorn
     --config  gunicorn_config.py
-    --workers "${WORKERS:-4}"
+    # --workers "${WORKERS:-4}"
+    --workers "${WORKERS:-1}" # TODO TODO WORKERS>1 unsafe with 2.4g search_recs.pkl
     --bind    "${HOST:-0.0.0.0}":"${PORT:-80}"
     --timeout "${TIMEOUT:-60}"
     api.main:app
