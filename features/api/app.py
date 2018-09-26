@@ -28,6 +28,7 @@ def create_app(
     init_cloudpickle()
     init_potoo()
 
+    log.info('Starting...')
     app = Flask(__name__)
 
     # Config [TODO -> config-*.yaml]
@@ -54,4 +55,5 @@ def create_app(
     # HACK Make get_ipython() work, e.g. for potoo.ipython.ipy_formats, which we hijack for api responses 🙈
     ipy_install_mock_get_ipython()
 
+    log.info('Done')
     return app

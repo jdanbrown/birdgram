@@ -15,11 +15,18 @@ export BUBO_ROLE='api'
 
 cmd=(
   gunicorn
+    # gunicorn settings
+    # - http://docs.gunicorn.org/en/stable/settings.html
     --config  gunicorn_config.py
-    # --workers "${WORKERS:-4}"
-    --workers "${WORKERS:-1}" # TODO TODO WORKERS>1 unsafe with 2.4g search_recs.pkl
+    --workers "${WORKERS:-4}"
     --bind    "${HOST:-0.0.0.0}":"${PORT:-80}"
-    --timeout "${TIMEOUT:-60}"
+    --timeout "${TIMEOUT:-60}"  # Seconds (default: 30)
+    # How long to wait for worker procs to gracefully exit before killing them
+    --graceful-timeout "${GRACEFUL_TIMEOUT:-30}"  # Seconds (default: 30)
+    # Load app (app=create_app()) once before forking, instead of of $WORKERS times after forking
+    # - This is important because create_app() -> sg.init() does heavy mem lifting, which isn't mem-safe to duplicate
+    # - http://docs.gunicorn.org/en/latest/settings.html#preload-app
+    --preload
     api.main:app
     "$@"
 )
