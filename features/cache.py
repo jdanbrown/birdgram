@@ -105,6 +105,7 @@ def cache(
         tags = [tag]
         tag = None
     assert isinstance(tags, list), f"Expected List[str], got {type(tags).__name__}"
+    _outer_tags = tags; del tags  # Grr python scoping
     assert 'ignore' not in kwargs, 'Use key=... instead of ignore=...'
 
     def decorator(func):
@@ -126,6 +127,13 @@ def cache(
                 return func_cached.func(cache_key, ignore)
             else:
                 cache_key = dict(version=version, key=key(*args, **kwargs))
+
+                # Include func name as a tag (excluding '(version=...)'), for fine-grained cache control
+                func_id, _args_id = func_cached._get_output_identifiers(cache_key, ignore)
+                func_id_no_version = func_id.split('(version=')[0]
+                tags = _outer_tags  # Grr python scoping
+                tags = [*tags, func_id_no_version]
+
                 if (
                     not norefresh and
                     (cache_control.refresh or tags_match(tags, cache_control.tags_refresh))
@@ -133,7 +141,6 @@ def cache(
                     # Force refresh (= recompute and store)
 
                     # HACK HACK HACK Log to match joblib.memory.MemorizeFunc (cf. joblib/memory.py)
-                    func_id, _ = func_cached._get_output_identifiers(cache_key, ignore)
                     memory.log.char('info', '»')
                     memory.log.char('debug', ' %s\n' % func_id)
 
