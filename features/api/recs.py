@@ -2,7 +2,7 @@ from functools import lru_cache
 import inspect
 import linecache
 import numbers
-from typing import Optional, Sequence
+from typing import Iterable, Optional, Sequence
 
 from more_itertools import one
 import pandas as pd
@@ -77,10 +77,7 @@ def xc_species_html(
         .sort_values(sort, ascending=False)[:n_recs]
         .reset_index(drop=True)  # Reset RangeIndex after filter+sort
         # Featurize
-        .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale,
-            drop_uncached_slice=False,
-            no_audio=False,
-        )
+        .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale)
         .pipe(recs_featurize_recs_for_sp)
         # View
         .pipe(recs_view, view=view, sp_cols=sp_cols)
@@ -105,17 +102,11 @@ def xc_similar_html(
     audio_s: float = 10,
     thumb_s: float = 0,
     scale: float = 2,
-    d_feats: str = 'fp',    # f (d_f, "feat dist"), p (d_p, "preds dist")
     d_metrics: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
     sort: str = 'd_pc',
     random_state: int = 0,
     view: bool = None,
     sp_cols: str = None,
-    # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
-    #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
-    #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
-    #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can more robustly handle this
-    drop_uncached_slice: bool = True,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
 
@@ -130,100 +121,103 @@ def xc_similar_html(
     audio_s   = audio_s and np.clip(audio_s,  0,  30)
     thumb_s   = thumb_s and np.clip(thumb_s,  0,  10)
     scale     = scale   and np.clip(scale,    .5, 10)
-    d_feats   = list(d_feats)
     d_metrics = list(d_metrics)
 
-    # Utils
-    d_ = lambda f, m: f'd_{f}{m}'
+    # 5. TODO TODO -> global, to reuse across static search_recs + dynamic query_rec
+    d_feats: dict = {
+        'f': Search.X,                 # d_f, "feat dist"
+        'p': sg.search.species_proba,  # d_p, "preds dist" (Last investigated: notebooks/app_ideas_6_with_pca)
+    }
+    def recs_featurize_pre_rank(recs: pd.DataFrame) -> pd.DataFrame:
+        return (recs
+            # Audio metadata
+            .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
+                # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
+                #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
+                #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
+                #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can more robustly handle
+                drop_uncached_slice=True,
+                # Don't load .audio for pre-rank recs (only for final n_total recs, below)
+                no_audio=True,
+            )
+            # .feat
+            .pipe(recs_featurize_feat)
+            # f_*
+            .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
+                f_(f): v.tolist()  # (series->list, else errors)
+                for f, F in d_feats.items()
+                for v in [one_progress(desc=f_(f), n=len(df), x=lambda: F(df))]
+            }))
+        )
 
-    # Lookup query_rec from xc_meta
+    # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
     query_rec = (sg.xc_meta
         [lambda df: df.id == xc_id]
         .pipe(df_require_nonempty_for_api, 'No recs found', xc_id=xc_id)
-        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
-            drop_uncached_slice=drop_uncached_slice,
-            no_audio=True,  # Don't load .audio for pre-rank recs (only for final n_total recs, below)
-        )
-        .pipe(recs_featurize_feat)
-        .pipe(recs_featurize_recs_for_sp)
+        .reset_index(drop=True)  # Reset RangeIndex after filter
+        # Featurize
+        .pipe(recs_featurize_pre_rank)
         .pipe(lambda df: one(df_rows(df)))
     )
 
-    # Compute query_sp_p from search
+    # Predict query_sp_p from search model
     query_sp_p = (
         rec_probs(query_rec, sg.search)
         [:n_sp]
         .rename(columns={'p': 'sp_p'})
     )
 
-    # Compute search_recs from xc_meta, and featurize (.audio, .feat)
-    #   - TODO Featurize is slow and heavy, because we can't filter yet until we have .dist, which relies on .feat...
+    # Compute search_recs from xc_meta, and featurize (audio meta + .feat)
+    #   - 5. TODO TODO Precompute as a static df (-> sg.search_recs)
     search_recs = (sg.xc_meta
         # Filter
         [lambda df: df.species.isin(query_sp_p.species)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species)
         [lambda df: df.quality.isin(quality)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species, quality=quality)
-        .pipe(df_remove_unused_categories)
         .reset_index(drop=True)  # Reset RangeIndex after filter
+        .pipe(df_remove_unused_categories)  # Drop unused cats after filter
         # Featurize
-        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
-            drop_uncached_slice=drop_uncached_slice,
-            no_audio=True,  # Don't load .audio for pre-rank recs (only for final n_total recs, below)
-        )
-        .pipe(recs_featurize_feat)
-        .pipe(recs_featurize_recs_for_sp)
-        # Include query_rec in results (already featurized)
+        #   - 5. TODO TODO Move before filter, in order to precompute the static df
+        .pipe(recs_featurize_pre_rank)
+    )
+
+    # HACK Include query_rec in results [this is a view concern, but jam it in here as a shortcut]
+    search_recs = (search_recs
         .pipe(lambda df: df if query_rec.xc_id in df.xc_id.values else pd.concat(
+            [df, DF([query_rec])],
             sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
-            objs=[
-                DF([query_rec]),
-                df,
-            ],
         ))
     )
 
-    # Compute closest k recs
-    closest_recs = (
-        search_recs  # HACK Keep all search_recs for now, while we iterate on scoring functions
-        # rec_neighbors_by(query_rec=query_rec, search_recs=search_recs, by=..., n=...)  # Eventually
-    )
-
-    # Augment closest_recs with all dist metrics, so user can evaluate
-    d_feats = {f: {
-        'f': Search.X,
-        'p': sg.search.species_proba,  # (Last investigated: notebooks/app_ideas_6_with_pca)
-    }[f] for f in d_feats}
-    d_metrics = {m: sklearn.metrics.pairwise.distance_metrics()[{
+    # Compute all dist metrics (search_recs + query_rec), so user can interactively compare and evaluate them
+    #   - O(n)
+    d_metrics = {m: sk.metrics.pairwise.distance_metrics()[{
         '2': 'l2',
         '1': 'l1',
         'c': 'cosine',
     }[m]] for m in d_metrics}
-    dist_recs = (closest_recs
-        .pipe(lambda df: (df
-            .assign(**{
-                # Show progress per metric [TODO Clean up messy code]
-                k: v
-                for f, F in d_feats.items()
-                for F_df in [one_progress(desc=f, n=len(df), x=lambda: F(df))]  # Slow: do once, not d_metrics times
-                for m, M in d_metrics.items()
-                for k in [d_(f, m)]
-                for v in [one_progress(desc=k, n=len(df), x=lambda: (
-                    M(F_df, F(DF([query_rec])))
-                    .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
-                ))]
-            })
-        ))
-    )
-
-    # Sort by score (chosen by user)
-    sort_by_score = lambda df: df.sort_values(ascending=True,
-        by=sort if sort in df else 'd_slp',
+    dist_recs = (search_recs
+        .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
+            d_(f, m): one_progress(desc=d_(f, m), n=len(df), x=lambda: (
+                M(
+                    df[f_(f)].tolist(),  # (series->list, else errors)
+                    [query_rec[f_(f)]],
+                )
+                .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
+            ))
+            for f, F in d_feats.items()
+            for m, M in d_metrics.items()
+        }))
     )
 
     # Rank results
+    #   - O(n log k)
     #   - [later] Add ebird_priors prob
-    result_recs = (dist_recs
+    sort_by_score = lambda df: df.sort_values(ascending=True,
+        by=sort if sort in df else 'd_slp',
+    )
+    ranked_recs = (dist_recs
         # Join in .sp_p for scoring functions
         #   - [Using sort=True to silence "non-concatenation axis" warning -- not sure what we want, or if it matters]
         .merge(how='left', on='species', right=query_sp_p[['species', 'sp_p']],
@@ -260,11 +254,15 @@ def xc_similar_html(
         .reset_index(drop=True)  # Reset RangeIndex after sort
     )
 
-    # Featurize result_recs: .spectro + recs_view
-    view_recs = (result_recs
+    # Featurize ranked_recs: .spectro + recs_view
+    view_recs = (ranked_recs
+        # 6. TODO TODO Name view fields apart so they commute with computations above
+        # 6. TODO TODO O(n) -> search_recs
+        .pipe(recs_featurize_recs_for_sp)
         .pipe(recs_featurize_audio, load=load_for_audio_persist())
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view, view=view, sp_cols=sp_cols)
+        # 6. TODO TODO O(1) -> keep here
         .pipe(lambda df: (df
             .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
                 'd_slp',
@@ -274,7 +272,7 @@ def xc_similar_html(
         [lambda df: [c for c in [
             'xc', 'xc_id',
             *unique_everseen([
-                # sort,  # Show sort col first, for feedback to user  # XXX Nope, confusing to change col order
+                # sort,  # Show sort col first, for feedback to user  # XXX Nope, too confusing to change col order
                 *[c for c in df if c.startswith('d_')]  # Scores (d_*)
             ]),
             'com_name', 'species', 'thumb', 'slice',
@@ -310,14 +308,10 @@ def recs_featurize(
     audio_s: float,
     thumb_s: float,
     scale: float,
-    drop_uncached_slice: bool = None,
-    no_audio: bool = None,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
     return (recs
-        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s,
-            drop_uncached_slice=drop_uncached_slice, no_audio=no_audio,
-        )
+        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
         .pipe(recs_featurize_feat)
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
     )
@@ -598,6 +592,14 @@ def recs_view(
         .pipe(df_cat_to_str)
         .fillna('')
     )
+
+
+def d_(f: str, m: str) -> str:
+    return f'd_{f}{m}'
+
+
+def f_(f: str) -> str:
+    return f'f_{f}'
 
 
 def species_for_query(species_query: str) -> str:
