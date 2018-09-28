@@ -85,7 +85,6 @@ def xc_species_html(
         .reset_index(drop=True)  # Reset RangeIndex after filter+sort
         # Featurize
         .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale)
-        .pipe(recs_featurize_recs_for_sp)
         # View
         .pipe(recs_view, view=view, sp_cols=sp_cols)
         [lambda df: [c for c in [
@@ -133,8 +132,6 @@ def xc_similar_html(
     # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
     assert audio_s == config.api.recs.search_recs.params.audio_s, \
         f"Can't change audio_s for precomputed search_recs: audio_s[{audio_s}] != config[{config.api.recs.search_recs.params.audio_s}]"
-
-    # 7. TODO TODO De-risk bytes serdes for .audio/.spectro
 
     # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
     query_rec = (sg.xc_meta
@@ -243,14 +240,12 @@ def xc_similar_html(
 
     # Featurize ranked_recs: .spectro + recs_view
     view_recs = (ranked_recs
-        # 8. TODO TODO Name view fields apart (_view_k?) so they commute with computations above
-        # 8. TODO TODO df_cell will .pkl but won't .parquet (or .sqlite) -- ensure html strs above and keep df_cell wrappers down here
-        # 8. TODO TODO O(n) -> search_recs
-        .pipe(recs_featurize_recs_for_sp)
+        # 8. TODO TODO
+        #   - [ ] Push .audio/.spectro bytes into payload: split raw mp4/png bytes (payload concern) vs. df_cell (view concern)
+        #   - [ ] QA bytes serdes for .audio/.spectro
         .pipe(recs_featurize_audio, load=load_for_audio_persist())
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view, view=view, sp_cols=sp_cols)
-        # 8. TODO TODO O(1) -> keep here
         .pipe(lambda df: (df
             .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
                 'd_slp',
@@ -384,45 +379,24 @@ def recs_featurize_pre_rank(
     audio_s: int = None,
 ) -> pd.DataFrame:
     return (recs
-        # Audio metadata
+        # Audio metadata, without .audio
         .pipe(recs_featurize_metdata_audio_slice,
             audio_s=audio_s or config.api.recs.search_recs.params.audio_s,
             # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
             #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
             #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
-            #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can more robustly handle
+            #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
             drop_uncached_slice=True,
             # Don't load .audio for pre-rank recs (only for final n_total recs, below)
             no_audio=True,
         )
-        # .feat
         .pipe(recs_featurize_feat)
-        # .f_*
-        .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-            f_col: list(v)  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
-            for f_col, _f, f_compute in sg.feat_info
-            if f_compute  # Skip e.g. .feat, which we already computed above
-            for v in [one_progress(desc=f_col, n=len(df), f=lambda: f_compute(df))]
-        }))
+        .pipe(recs_featurize_f_)
+        .pipe(recs_featurize_recs_for_sp)
     )
 
 
-def recs_featurize_recs_for_sp(recs: pd.DataFrame) -> pd.DataFrame:
-    """Add .recs_for_sp, the total num recs (any quality) for each species"""
-    return (recs
-        .merge(how='left', on='species', right=_recs_for_sp())
-    )
-
-
-@lru_cache()  # (Not actually a bottleneck yet: ~0.1s for the 35k CA recs)
-def _recs_for_sp() -> pd.DataFrame:
-    return (sg.xc_meta
-        .assign(recs_for_sp=1).groupby('species').recs_for_sp.sum()
-        .reset_index()  # groupby key
-        [['species', 'recs_for_sp']]
-    )
-
-
+# TODO Simplify: replace with sg.search_recs lookup (callers: +xc_species_html -xc_similar_html)
 def recs_featurize(
     recs: pd.DataFrame,
     audio_s: float,
@@ -433,6 +407,8 @@ def recs_featurize(
     return (recs
         .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
         .pipe(recs_featurize_feat)
+        .pipe(recs_featurize_f_)
+        .pipe(recs_featurize_recs_for_sp)
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
     )
 
@@ -574,6 +550,17 @@ def recs_featurize_feat(recs: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def recs_featurize_f_(recs: pd.DataFrame) -> pd.DataFrame:
+    return (recs
+        .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
+            f_col: list(v)  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
+            for f_col, _f, f_compute in sg.feat_info
+            if f_compute  # Skip e.g. .feat, which we already computed above
+            for v in [one_progress(desc=f_col, n=len(df), f=lambda: f_compute(df))]
+        }))
+    )
+
+
 def recs_featurize_slice_thumb(
     recs: pd.DataFrame,
     audio_s: float,
@@ -616,6 +603,22 @@ def recs_featurize_spectro(recs: pd.DataFrame) -> pd.DataFrame:
         #   - Tech debt: Not general, very error prone -- e.g. does this affect .feat? .audio?
         .drop(columns=['spectro'], errors='ignore')
         .assign(spectro=lambda df: sg.features.spectro(df, **config.api.recs.progress_kwargs, cache=True))  # threads >> sync, procs
+    )
+
+
+def recs_featurize_recs_for_sp(recs: pd.DataFrame) -> pd.DataFrame:
+    """Add .recs_for_sp, the total num recs (any quality) for each rec's .species"""
+    return (recs
+        .merge(how='left', on='species', right=_recs_for_sp())
+    )
+
+
+@lru_cache()  # (Not actually a bottleneck yet: ~0.1s for the 35k CA recs)
+def _recs_for_sp() -> pd.DataFrame:
+    return (sg.xc_meta
+        .assign(recs_for_sp=1).groupby('species').recs_for_sp.sum()
+        .reset_index()  # groupby key
+        [['species', 'recs_for_sp']]
     )
 
 
