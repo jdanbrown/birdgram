@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 import numpy as np
 import pandas as pd
@@ -27,10 +27,10 @@ log = structlog.get_logger(__name__)
 #   - See details in util.Log
 class _sg:
 
-    def init(self, app):
+    def init(self, app, **kwargs):
         if not hasattr(self, '_init_done'):
             log.info()
-            sg_load.load(self)
+            sg_load.load(self, **kwargs)
             log.info('done')
             self._init_done = True
 
@@ -55,24 +55,12 @@ class _sg:
 class _sg_load(DataclassUtil):
 
     # Config:
-
-    # search
-    experiment_id                 : str = config.server_globals.sg_load.experiment_id
-    cv_str                        : str = config.server_globals.sg_load.cv_str
-    search_params_str             : str = config.server_globals.sg_load.search_params_str
-    classifier_str                : str = config.server_globals.sg_load.classifier_str
-    random_state                  : str = config.server_globals.sg_load.random_state
-    fix_missing_skm_projection_id : str = config.server_globals.sg_load.fix_missing_skm_projection_id
-
-    # xc_meta
-    countries_k : str = config.server_globals.sg_load.countries_k
-    com_names_k : str = config.server_globals.sg_load.com_names_k
-    num_recs    : int = config.server_globals.sg_load.num_recs
+    config: dict = field(default_factory=lambda: config.server_globals.sg_load)
 
     # load*: Maintain tight and well-defined input/output relationships so we can cache (without headaches)
     #   - e.g. any app config we depend on should be explicitly surfaced as function params
 
-    def load(self, sg):
+    def load(self, sg, skip=[]):
         # Split load* by method so we can easily inspect data volume from @cache dir sizes
         #   - Also helps isolate cache refresh
         for f in [
@@ -81,24 +69,20 @@ class _sg_load(DataclassUtil):
             self.load_d_feats,      # Implicit deps: d_feats     -> sg.search
             self.load_search_recs,  # Implicit deps: search_recs -> sg.xc_meta, sg.d_feats(->sg.search)
         ]:
-            log.debug('%s...' % f.__name__)
-            elapsed_s, _ = timed(lambda: (
-                sg.__dict__.update(f())
-            ))
-            log.info('%s (took %.3fs)' % (f.__name__, elapsed_s))
+            if f in skip:
+                log.warn('%s [skipped]' % f.__name__)
+            else:
+                log.debug('%s...' % f.__name__)
+                elapsed_s, _ = timed(lambda: (
+                    sg.__dict__.update(f())
+                ))
+                log.info('%s (took %.3fs)' % (f.__name__, elapsed_s))
 
     @cache(version=2, tags='sg', key=lambda self: self)
     def load_search(self) -> dict:
         log.info()
         x = AttrDict()
-        x.search = Search.load_v0(
-            experiment_id=self.experiment_id,
-            cv_str=self.cv_str,
-            search_params_str=self.search_params_str,
-            classifier_str=self.classifier_str,
-            random_state=self.random_state,
-            fix_missing_skm_projection_id=self.fix_missing_skm_projection_id
-        )
+        x.search = Search.load_v0(**self.config.search)
         x.projection = x.search.projection
         x.features = x.projection.features
         x.load = x.features.load
@@ -111,44 +95,29 @@ class _sg_load(DataclassUtil):
         log.info()
         x = AttrDict()
         x.xc_meta, _recs_stats = load_xc_meta(
-            countries_k=self.countries_k,
-            com_names_k=self.com_names_k,
+            countries_k=self.config.xc_meta.countries_k,
+            com_names_k=self.config.xc_meta.com_names_k,
             recs_at_least=None,
             num_species=None,
-            num_recs=self.num_recs,
+            num_recs=self.config.xc_meta.num_recs,
             drop_recs_lt_2=False,
         )
         return dict(x)
 
-    # WARNING Unsafe to @cache since it contains methods and stuff
-    #   - And if you do @cache, joblib.memory will silently cache miss every time, leaving behind partial .pkl writes :/
-    @lru_cache()
+    # No @cache/@lru_cache here because callers do their own caching
     def load_d_feats(self) -> dict:
-        from api.recs import mk_d_feats  # Lazy import to avoid cycles [TODO Refactor to avoid cycle]
+        from api.recs import get_d_feats  # Lazy import to avoid cycles [TODO Refactor to avoid cycle]
         log.info()
         return dict(
-            d_feats=mk_d_feats(),
+            d_feats=get_d_feats(),  # (Does its own caching)
         )
 
-    @cache(tags='sg', key=lambda self: self,
-        # TODO Extract this as a reusable pattern
-        version=':'.join(map(str, [
-            # Our version
-            9,
-            # Versions of @cache functions we (implicitly) depend on
-            #   - Sort for stable dir name
-            *sorted(['%s=%s' % (f.__qualname__, f._cache_version) for f in [
-                load_xc_meta,
-                # load_d_feats,  # Doesn't @cache
-            ]]),
-        ])),
-        norefresh=True,  # Very slow and rarely worth refreshing
-    )
+    # No @cache/@lru_cache here because callers do their own caching
     def load_search_recs(self) -> dict:
-        from api.recs import mk_search_recs  # Lazy import to avoid cycles [TODO Refactor to avoid cycle]
+        from api.recs import get_search_recs  # Lazy import to avoid cycles [TODO Refactor to avoid cycle]
         log.info()
         return dict(
-            search_recs=mk_search_recs(),
+            search_recs=get_search_recs(),  # (Does its own caching)
         )
 
 

@@ -10,15 +10,18 @@ from potoo.pandas import *
 from potoo.util import ensure_startswith
 import sklearn
 import structlog
+from toolz import compose
 
-from api.server_globals import sg
+from api.server_globals import sg, sg_load
 from api.util import *
 from cache import *
 from config import config
-from datasets import xc_meta_to_paths, xc_meta_to_raw_recs, xc_raw_recs_to_recs
+from datasets import xc_meta_to_path, xc_meta_to_raw_recs, xc_raw_recs_to_recs
 from sp14.model import rec_neighbors_by, rec_probs, Search
 from util import *
 from viz import *
+
+log = structlog.get_logger(__name__)
 
 
 def xc_meta(
@@ -127,16 +130,11 @@ def xc_similar_html(
     d_metrics = list(d_metrics)
 
     # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
-    assert audio_s == config.api.recs.audio_s, \
-        f"Can't change audio_s for precomputed search_recs: audio_s[{audio_s}] != config[{config.api.recs.audio_s}]"
+    assert audio_s == config.api.recs.search_recs.params.audio_s, \
+        f"Can't change audio_s for precomputed search_recs: audio_s[{audio_s}] != config[{config.api.recs.search_recs.params.audio_s}]"
 
-    # 7. TODO TODO sg.search_recs cache hit is slow (~15s, 2.4g pkl)
-    #   - Why so big? Isn't .audio not in there yet...?
-    #   - Usable for now, but will be our next problem to solve
-    #   - Consider e.g. .parquet/.sqlite instead of joblib .pkl
-    # 7. TODO TODO Use gunicorn --preload_app so we load sg.* only once, before forking
-    #   - https://stackoverflow.com/a/27242874/397334
-    #   - http://docs.gunicorn.org/en/latest/settings.html#preload-app
+    # 7. TODO TODO Convert float -> float32 (like notebook)
+    # 7. TODO TODO .f_f = .feat are redundant and big. How can we get rid of one?
 
     # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
     query_rec = (sg.xc_meta
@@ -155,7 +153,7 @@ def xc_similar_html(
         .rename(columns={'p': 'sp_p'})
     )
 
-    # Get precomputed search_recs
+    # Get search_recs (precomputed)
     search_recs = sg.search_recs
 
     # Filter search_recs for query_sp_p
@@ -186,9 +184,9 @@ def xc_similar_html(
     }[m]] for m in d_metrics}
     dist_recs = (search_recs
         .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-            d_(f, m): one_progress(desc=d_(f, m), n=len(df), x=lambda: (
+            d_(f, m): one_progress(desc=d_(f, m), n=len(df), f=lambda: (
                 M(
-                    df[f_(f)].tolist(),  # (series->list, else errors)
+                    list(df[f_(f)]),  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
                     [query_rec[f_(f)]],
                 )
                 .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
@@ -275,8 +273,11 @@ def xc_similar_html(
     return view_recs
 
 
-def mk_d_feats() -> dict:
-    """Expose for sg"""
+# WARNING Unsafe to @cache since it contains methods and stuff
+#   - And if you do @cache, joblib.memory will silently cache miss every time, leaving behind partial .pkl writes :/
+@lru_cache()
+def get_d_feats() -> dict:
+    """For sg.d_feats"""
     return {
         'f': Search.X,                         # d_f, "feat dist"
         'p': partial(sg.search.species_proba,  # d_p, "preds dist" (Last investigated: notebooks/app_ideas_6_with_pca)
@@ -285,11 +286,69 @@ def mk_d_feats() -> dict:
     }
 
 
-def mk_search_recs() -> pd.DataFrame:
-    """Expose for sg"""
+@lru_cache()
+def get_search_recs(
+    refresh=False,
+    cache_type='parquet',  # None | 'parquet' | 'sqlite'
+) -> pd.DataFrame:
+    """For sg.search_recs"""
+    log.info()
+
+    # Compute key
+    key_show = ','.join(
+        '%s[%s]' % (k, v)
+        for expr in config.api.recs.search_recs.cache.key.show
+        for (k, v) in [(expr.split('.')[-1], eval(expr))]
+        for (k, v) in ([(k, v)] if not isinstance(v, dict) else v.items())
+    )
+    key = sha1hex(json_dumps_canonical({expr: eval(expr) for expr in [
+        *config.api.recs.search_recs.cache.key.opaque,  # Stuff that's too big/complex to stuff into the human-visible filename
+        *config.api.recs.search_recs.cache.key.show,  # Include in case we want just the sha key to be usable elsewhere
+    ]}))[:7]
+
+    # Args for df_cache_*
+    compute = _compute_search_recs
+    path = f"payloads/search_recs-{key_show}-{key}"
+    name = 'search_recs',
+
+    # Delegate to parquet/sqlite
+    if not cache_type:
+        return compute()
+    elif cache_type == 'parquet':
+        return df_cache_parquet(compute=compute, path=path, refresh=refresh,
+            desc=name,
+        )
+    elif cache_type == 'sqlite':
+        return df_cache_sqlite(compute=compute, path=path, refresh=refresh,
+            table=name,
+            col_conversions=dict(
+                # Fail if any of the big array cols is list i/o np.array
+                #   - list is ~10x slower to serdes than np.array (and only slightly less compact)
+                feat               = (compose(np_save_to_bytes, require_np_array), np_load_from_bytes),  # np.array <-> npy (bytes)
+                f_f                = (compose(np_save_to_bytes, require_np_array), np_load_from_bytes),  # np.array <-> npy (bytes)
+                f_p                = (compose(np_save_to_bytes, require_np_array), np_load_from_bytes),  # np.array <-> npy (bytes)
+                background         = (json_dumps_canonical, json.loads),  # List[str] <-> json (str)
+                background_species = (json_dumps_canonical, json.loads),  # List[str] <-> json (str)
+            ),
+            # Don't bother specifying a schema
+            #   - sqlite "type affinity" is pretty fluid with types: https://sqlite.org/datatype3.html#type_affinity
+            #   - f_* cols end up as TEXT instead of BLOB, but TEXT accepts and returns BLOB data (python bytes) as is
+            #   - No other cols meaningfully impact size, so the remaining concerns are data fidelity and client compat
+            # dtype={'feat': sqla.BLOB, ...},
+        )
+    else:
+        raise ValueError(f"Unknown cache_type[{cache_type}]")
+
+
+def _compute_search_recs() -> pd.DataFrame:
+    log.info(**{'len(sg.xc_meta)': len(sg.xc_meta), **sg_load.config.xc_meta})
     return (sg.xc_meta
+        # Limit (for faster dev)
+        [:config.api.recs.search_recs.params.get('limit')]
         # Featurize (audio meta + .feat)
         .pipe(recs_featurize_pre_rank)
+        # Drop *_stack cols: for notebook not api, and the df_cell wrappers clog up sqlite serdes
+        [lambda df: [c for c in df if not c.endswith('_stack')]]
     )
 
 
@@ -300,7 +359,7 @@ def recs_featurize_pre_rank(
     return (recs
         # Audio metadata
         .pipe(recs_featurize_metdata_audio_slice,
-            audio_s=audio_s or config.api.recs.audio_s,
+            audio_s=audio_s or config.api.recs.search_recs.params.audio_s,
             # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
             #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
             #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
@@ -313,9 +372,9 @@ def recs_featurize_pre_rank(
         .pipe(recs_featurize_feat)
         # f_*
         .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-            f_(f): v.tolist()  # (series->list, else errors)
+            f_(f): list(v)  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
             for f, F in sg.d_feats.items()
-            for v in [one_progress(desc=f_(f), n=len(df), x=lambda: F(df))]
+            for v in [one_progress(desc=f_(f), n=len(df), f=lambda: F(df))]
         }))
     )
 
@@ -388,7 +447,7 @@ def recs_featurize_metdata_audio_slice(
             'enc(wav)',
             'slice(%s,%s)' % (0, int(1000 * audio_s)),
             'spectro_denoise()',
-            'enc(%(format)s,%(codec)s,%(bitrate)s)' % config.audio_persist.audio_kwargs,
+            'enc(%(format)s,%(codec)s,%(bitrate)s)' % config.audio.audio_persist.audio_kwargs,
         ]
         sliced_ids = [
             audio_id_add_ops(id, *resample, *slice_enc),
@@ -409,14 +468,20 @@ def recs_featurize_metdata_audio_slice(
     # HACK Do O(n) stat() calls else "Falling back" incurs O(n) .audio read+slice if any audio.mp3 didn't need to .resample(...)
     #   - e.g. cache/audio/xc/data/RIRA/185212/audio.mp3.enc(wav)
     #   - Repro: xc_similar_html(sort='d_fc', sp_cols='species', xc_id=381417, n_total=5, n_sp=17)
-    to_paths_sliced = lambda recs: iter_progress(desc='to_paths_sliced', n=len(recs), **config.api.recs.progress_kwargs, xs=(
-        (dataset, abs_sliced_path)
-        for (dataset, abs_path) in xc_meta_to_paths(recs)
-        for id in [str(Path(abs_path).relative_to(data_dir))]
-        for sliced_id in [to_sliced_id(id)]
-        if sliced_id is not None
-        for abs_sliced_path in [str(Path(data_dir) / sliced_id)]
-    ))
+    @cache(version=0, key=lambda recs: recs.id)  # Slow: ~13s for 35k NA-CA recs
+    def to_paths_sliced(recs) -> Iterable[Tuple[str, str]]:
+        return [
+            dataset_path
+            for dataset_path in map_progress_df_rows(recs, desc='to_paths_sliced', **config.api.recs.progress_kwargs,
+                f=lambda rec: one(
+                    sliced_id and (dataset, str(Path(data_dir) / sliced_id))
+                    for (dataset, abs_path) in [xc_meta_to_path(rec)]
+                    for id in [str(Path(abs_path).relative_to(data_dir))]
+                    for sliced_id in [to_sliced_id(id)]
+                ),
+            )
+            if dataset_path  # Filter out None's from dropped sliced_id's
+        ]
 
     try:
         # Try loading sliced .audio directly, bailing if any audio file doesn't exist

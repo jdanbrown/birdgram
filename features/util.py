@@ -61,6 +61,9 @@ import textwrap
 from typing import Callable, Optional, TypeVar, Union
 
 import humanize
+import structlog
+
+log = structlog.get_logger(__name__)
 
 X = TypeVar('X')
 
@@ -158,12 +161,12 @@ def cache_to_file_forever(path):
     return decorator
 
 
-def sha1hex(*xs: Union[bytes, str]) -> str:
+def sha1hex(*xs: Union[bytes, str], **encode_kwargs) -> str:
     """sha1hex(x, y) == sha1hex(x + y)"""
     h = hashlib.sha1()
     for x in xs:
         if isinstance(x, str):
-            x = x.encode()
+            x = x.encode(**encode_kwargs)
         h.update(x)
     return h.hexdigest()
 
@@ -242,13 +245,21 @@ def dedent_and_strip(s: str) -> str:
 import json
 
 
-def json_dumps_safe(*args, **kwargs):
+def json_dumps_safe(*args, **kwargs) -> str:
     return json.dumps(*args, **kwargs, default=lambda x: (
         # Unwrap np scalar dtypes (e.g. np.int64 -> int) [https://stackoverflow.com/a/16189952/397334]
         np.asscalar(x) if isinstance(x, np.generic) else
         # Else return as is
         x
     ))
+
+
+def json_dumps_canonical(obj: any, **kwargs) -> str:
+    """
+    Dump a canonical json representation of obj (e.g. suitable for use as a cache key)
+    - json_dumps_canonical(dict(a=1, b=2)) == json_dumps_canonical(dict(b=2, a=1))
+    """
+    return json_dumps_safe(obj, sort_keys=True, separators=(',', ':'), **kwargs)
 
 
 #
@@ -326,14 +337,25 @@ def np_vectorize_asscalar(*args, **kwargs):
     return lambda *args, **kwargs: f(*args, **kwargs)[()]
 
 
-def np_to_npy_bytes(x: np.ndarray) -> bytes:
+def np_save_to_bytes(x: np.ndarray, **kwargs) -> bytes:
+    """np.save an array to npy bytes"""
     # From https://stackoverflow.com/a/18622264/397334
-    #   - np.save docs: https://docs.scipy.org/doc/numpy/reference/generated/numpy.save.html
-    #   - .npy isn't slow or big: https://stackoverflow.com/a/41425878/397334
+    #   - https://docs.scipy.org/doc/numpy/reference/generated/numpy.save.html
+    #   - .npy shouldn't be slow or big: https://stackoverflow.com/a/41425878/397334
     out = io.BytesIO()
-    np.save(out, x)
+    np.save(out, x, **kwargs)
     out.seek(0)
     return out.read()
+
+
+def np_load_from_bytes(b: bytes) -> np.ndarray:
+    """np.load an array from npy bytes"""
+    return np.load(io.BytesIO(b))
+
+
+def require_np_array(x: any) -> np.ndarray:
+    assert isinstance(x, np.ndarray), f"Expected np.ndarray, got {type(x).__name__}"
+    return x
 
 
 #
@@ -360,16 +382,46 @@ def bandpass_filter(
 
 
 #
+# sqlalchemy
+#
+
+from contextlib import contextmanager
+
+import sqlalchemy as sqla
+
+
+@contextmanager
+def sqla_oneshot_eng_conn_tx(db_url: str, **engine_kwargs):
+    """Create a db engine, a connection to it, and run a single transaction, tearing down everything when done"""
+    eng = sqla.create_engine(db_url, **engine_kwargs)
+    try:
+        # eng.begin() is a tx bracket
+        #   - https://docs.sqlalchemy.org/en/latest/core/connections.html#using-transactions
+        #   - https://docs.sqlalchemy.org/en/latest/core/connections.html#sqlalchemy.engine.Engine.begin
+        #   - (i.e. no autocommit: https://docs.sqlalchemy.org/en/latest/core/connections.html#using-transactions)
+        with eng.begin() as conn:
+            yield conn
+    finally:
+        # Release eng conn pools
+        #   - https://docs.sqlalchemy.org/en/latest/core/connections.html#engine-disposal
+        #   - https://docs.sqlalchemy.org/en/latest/core/connections.html#sqlalchemy.engine.Engine.dispose
+        eng.dispose()
+
+
+#
 # pandas
 #
 
 from collections import OrderedDict
+import pickle
 import tempfile
 import time
-from typing import Iterable, Iterator
+from typing import Callable, Iterable, Iterator, Mapping, Optional, Union
 import uuid
 
 from dataclasses import dataclass
+from frozendict import frozendict
+from more_itertools import one
 import pandas as pd
 from potoo.pandas import df_flatmap
 
@@ -425,8 +477,8 @@ def df_checkpoint(
     df: pd.DataFrame,
     path: str,
     # Manually surface common kwargs
-    engine='auto',  # .to_parquet + .read_parquet
-    compression='default',  # .to_parquet
+    engine='fastparquet',  # .to_parquet + .read_parquet
+    compression='uncompressed',  # .to_parquet
     # And provide a way to pass arbitrary kwargs we didn't handle above
     to_parquet=dict(),
     read_parquet=dict(),
@@ -455,6 +507,187 @@ def unbox(x: 'box[X]') -> 'X':
 
 def unbox_many(xs: Iterable['box[X]']) -> Iterable['X']:
     return [x.unbox for x in xs]
+
+
+def df_cache_parquet(
+    compute: Callable[[], pd.DataFrame],
+    path: str,
+    desc: str,  # Only for logging
+    refresh=False,  # Force cache miss (compute + write)
+    # to_parquet/read_parquet
+    #   - Perf notes in notebooks/api_search_recs_pkl_parquet_sqlite
+    engine='fastparquet',  # 'fastparquet' | 'pyarrow' (not installed)
+    compression='uncompressed',  # 'uncompressed' (fast!) | 'gzip' (slow) | 'snappy' (not installed)
+    read_parquet_kwargs=None,
+    **to_parquet_kwargs,
+) -> pd.DataFrame:
+
+    # Params
+    assert not Path(path).is_absolute(), f"{path}"
+    path = f"{path}.parquet"
+    abs_path = ensure_parent_dir(Path(cache_dir) / path)
+
+    if not abs_path.exists():
+        # Cache miss:
+
+        # Compute
+        #   - use='sync': don't interfere with user's progress bars in compute(), but still show start/end/elapsed
+        df = one_progress(desc=f'df_cache_parquet:compute[{desc}]', use='sync', f=lambda: (
+            compute()
+        ))
+
+        # Write to parquet
+        one_progress(desc=f'df_cache_parquet:df.to_parquet[{desc}]', n=len(df), f=lambda: (
+            df.to_parquet(path, engine=engine, compression=compression, **to_parquet_kwargs)
+        ))
+
+        # Return df
+        #   - Should be the same as the df we will subsequently read on cache hit
+        return df
+
+    else:
+        # Cache hit:
+
+        # Read df from parquet
+        size = abs_path.stat().st_size
+        df = one_progress(desc=f'df_cache_parquet:pd.read_parquet[{desc}]', size=size, f=lambda: (
+            pd.read_parquet(path, engine=engine, compression=compression, **read_parquet_kwargs)
+        ))
+
+        # Return df
+        #   - Should be the same as the df we computed and returned on cache miss
+        #   - TODO Tests (see notebooks/api_dev_search_recs_sqlite)
+        return df
+
+
+# TODO Revist .sqlite i/o .parquet once we have an idea how mobile will use search_recs
+#   - See notes in notebooks/api_dev_search_recs_sqlite
+def df_cache_sqlite(
+    compute: Callable[[], pd.DataFrame],
+    path: Optional[str],  # None for in-mem db
+    table: str,
+    col_conversions: Mapping[str, Tuple[
+        Callable[[any], any],  # to_sql: elem -> elem
+        Callable[[any], any],  # from_sql: elem -> elem
+    ]] = frozendict(),
+    refresh=False,  # Force cache miss (compute + write)
+    read_sql_table_kwargs=None,
+    **to_sql_kwargs,
+) -> pd.DataFrame:
+
+    # Params
+    metadata_table = f'_{table}_bubo_metadata'
+    if not path:
+        db_url = f'sqlite:///'  # In-mem db
+    else:
+        assert not Path(path).is_absolute(), f"{path}"
+        path = f"{path}.sqlite3"
+        abs_path = ensure_parent_dir(Path(cache_dir) / path)
+        db_url = f'sqlite:///{abs_path}'
+
+    # Connect so we can check if table exists
+    #   - (.sqlite3 file is created on eng/conn creation, so checking if file exists isn't as reliable as table exists)
+    log.debug('Connect', db_url=db_url)
+    with sqla_oneshot_eng_conn_tx(db_url) as conn:
+        if refresh or not conn.engine.has_table(table):
+            # Cache miss:
+
+            # Compute
+            #   - use='sync': don't interfere with user's progress bars in compute(), but still show start/end/elapsed
+            real_df = one_progress(desc=f'df_cache_sqlite:compute[{table}]', use='sync', f=lambda: (
+                compute()
+            ))
+            sql_df = real_df
+
+            # Write metadata to sql (so we can reconstruct df on read)
+            #   - real_df, not sql_df
+            #   - Lightweight: do early to fail fast on bugs, before the heavy stuff below
+            #   - use='sync': we should be fast, dask progress bars are slow, still show start/end/elapsed
+            metadata = dict(
+                dtypes=real_df.dtypes,  # Includes categories
+            )
+            one_progress(desc=f'df_cache_sqlite:df.to_sql[{metadata_table}]', use='sync', f=lambda: (
+                pd.DataFrame({k: [v] for k, v in metadata.items()})
+                .applymap(pickle.dumps)  # Pickle since some values unsafe for json (e.g. dtypes, categories)
+                .to_sql(metadata_table, conn,
+                    index=False,  # Don't write `index` col
+                    if_exists='replace' if refresh else 'fail',  # Fail if table exists and not refresh (logic bug)
+                )
+            ))
+
+            # Convert cols to sql representation
+            sql_df = sql_df.assign(**{
+                k: map_progress(desc=f'df_cache_sqlite:col_to_sql[{table}.{k}]', xs=sql_df[k], f=to_sql)
+                for k, (to_sql, _) in col_conversions.items()
+            })
+
+            # Write to sql
+            #   - sql_df, not real_df
+            #   - Fail if nontrivial indexes, since they're error-prone to manage and we don't really benefit from them here
+            df_require_index_is_trivial(sql_df)
+            one_progress(desc=f'df_cache_sqlite:df.to_sql[{table}]', n=len(sql_df), f=lambda: (
+                sql_df.to_sql(table, conn,
+                    index=False,  # Silently drop indexes (we shouldn't have any)
+                    if_exists='replace' if refresh else 'fail',  # Fail if table exists and not refresh (logic bug)
+                    **{**to_sql_kwargs,
+                        'chunksize': 1000,  # Safe default for big writes (pd default writes all rows at once -- mem unsafe)
+                    },
+                )
+            ))
+
+            # Return df
+            #   - real_df, not sql_df
+            #   - Should be the same as the df we will subsequently read on cache hit
+            return real_df
+
+        else:
+            # Cache hit:
+
+            # Read metadata from sql (so we can reconstruct the written df)
+            #   - Lightweight: do early to fail fast on bugs, before the heavy stuff below
+            #   - use='sync': we should be fast, dask progress bars are slow, still show start/end/elapsed
+            metadata = one_progress(desc=f'df_cache_sqlite:pd.read_sql_table[{metadata_table}]', use='sync', f=lambda: (
+                pd.read_sql_table(metadata_table, conn)
+                .applymap(pickle.loads)
+                .pipe(lambda df: dict(one(df_rows(df))))
+            ))
+
+            # Count table's rows, to give user a measure of how heavy the read_sql_table operation will be
+            count_sql = 'select count(*) from %s' % conn.engine.dialect.identifier_preparer.quote(table)
+            log.debug(count_sql)
+            [(n_rows,)] = conn.execute(count_sql).fetchall()
+
+            # Read df from sql
+            #   - (Fast: ~2s for 35k recs)
+            df = one_progress(desc=f'df_cache_sqlite:pd.read_sql_table[{table}]', n=n_rows, f=lambda: (
+                pd.read_sql_table(table, conn,
+                    index_col=None,  # Restore no indexes (we shouldn't have accepted any on write)
+                    **{**(read_sql_table_kwargs or {}),
+                        # (Default opts here)
+                        # chunksize=None (default) is faster than pd.concat(... chunksize=1000 ...)
+                    },
+                )
+            ))
+
+            # Convert cols from sql representation
+            #   - (Slow: each col.map(np_load_from_bytes) takes ~7.5s for 35k recs)
+            #       - TODO No good for server startup, going with parquet for now (see notebooks/api_dev_search_recs_sqlite)
+            df = df.assign(**{
+                k: map_progress(desc=f'df_cache_sqlite:col_from_sql[{table}.{k}]', xs=df[k], f=from_sql)
+                for k, (_, from_sql) in col_conversions.items()
+            })
+
+            # Restore dtypes (after col conversion)
+            #   - Includes categories
+            #   - (Fast: ~0s for 35k recs)
+            df = one_progress(desc='dtypes', f=lambda: (
+                df.astype(metadata['dtypes'])
+            ))
+
+            # Return df
+            #   - Should be the same as the df we computed and returned on cache miss
+            #   - TODO Tests (see notebooks/api_dev_search_recs_sqlite)
+            return df
 
 
 #
@@ -813,9 +1046,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from potoo.util import AttrContext, get_cols
-import structlog
-
-log = structlog.get_logger(__name__)
 
 X = TypeVar('X')
 
@@ -1098,6 +1328,20 @@ def df_map_rows_progress(
     )
 
 
+# TODO Think of a less confusing name?
+def map_progress_df_rows(
+    df: pd.DataFrame,
+    f: Callable[['Row'], X],
+    **kwargs,
+) -> Iterable[X]:
+    return map_progress(
+        f=f,
+        xs=df_rows(df),
+        n=len(df),
+        **kwargs,
+    )
+
+
 def map_progress(
     f: Callable[[X], X],
     xs: Iterable[X],
@@ -1155,21 +1399,18 @@ def _iter_progress_sync(
         return xs
 
 
-# TODO Simplify by rewriting map_progress's in terms of iter_progress's?
-def iter_progress(
-    xs: Iterator[X],
-    **kwargs,
-):
-    return map_progress(f=lambda x: x, xs=xs, **kwargs)
+# XXX iter_progress is incompat with dask-style par, which must eagerly unroll (cheap) xs to compute (heavy) map(f, xs)
+# def iter_progress(xs: Iterator[X], **kwargs) -> Iterable[X]:
+#     return map_progress(f=lambda x: x(), xs=(lambda x=x: x for x in xs), **kwargs)
 
 
 def one_progress(
-    x: Callable[[], X],
+    f: Callable[[], X],
     **kwargs,
 ) -> X:
     """Draw a progress bar for a single item, for consistency with surrounding (many-element) progress bars"""
-    [y] = map_progress(f=lambda _: x(), xs=[None], **kwargs)
-    return y
+    [x] = map_progress(f=lambda _: f(), xs=[None], **kwargs)
+    return x
 
 
 #
@@ -1248,7 +1489,7 @@ def audio_hash(audio: audiosegment.AudioSegment) -> str:
         # str fields
         #   - 1-1 because json is delimited, and we name each field
         #   - Well defined because we sort the fields by name
-        json_dumps_safe(sort_keys=True, separators=(',', ':'), obj=dict(
+        json_dumps_canonical(dict(
             name=audio.name,
             sample_width=audio.seg.sample_width,
             frame_rate=audio.seg.frame_rate,
@@ -1604,11 +1845,11 @@ def audio_persist(audio, load=None, load_audio=True, **audio_kwargs) -> Audio:
 
 
 def load_for_audio_persist(**audio_kwargs) -> 'Load':
-    """The load instance for audio_persist, configured by config.audio_persist"""
+    """The load instance for audio_persist, configured by config.audio.audio_persist"""
     # TODO Too decoupled from sg.load?
     #   - TODO Refactor modules to avoid util importing load, which creates an import cycle
     from load import Load  # Avoid cyclic imports
-    return Load(**(audio_kwargs or config.audio_persist.audio_kwargs))
+    return Load(**(audio_kwargs or config.audio.audio_persist.audio_kwargs))
 
 
 def audio_add_ops(audio: Audio, *ops: str) -> Audio:
@@ -1745,17 +1986,17 @@ def audio_to_bytes(audio, **kwargs) -> bytes:
 
 def audio_to_url(audio, url_type=None, **kwargs) -> str:
     audio = audio_persist(audio, **kwargs)
-    if (url_type or config.audio_to_url.url_type) == 'file':
+    if (url_type or config.audio.audio_to_url.url_type) == 'file':
         return 'file://%s' % urllib.parse.quote(str(audio_abs_path(audio)),
             safe='/,:()[] ',  # Cosmetic: exclude known-safe chars ('?' is definitely _not_ safe, not sure what else...)
         )
-    elif (url_type or config.audio_to_url.url_type) == 'data':
+    elif (url_type or config.audio.audio_to_url.url_type) == 'data':
         return 'data:%(mimetype)s;base64,%(base64)s' % dict(
             mimetype=audio_to_mimetype(audio),
             base64=base64.b64encode(audio_to_bytes(audio, **kwargs)).decode('ascii'),
         )
     else:
-        raise ValueError('Unexpected config.audio_to_url.url_type: %s' % config.audio_to_url.url_type)
+        raise ValueError('Unexpected config.audio.audio_to_url.url_type: %s' % config.audio.audio_to_url.url_type)
 
 
 def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='', **kwargs) -> str:

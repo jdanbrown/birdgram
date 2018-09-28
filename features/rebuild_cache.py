@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 
 ##
-# [defer] Push slice down to ffmpeg moderate speedup (~3x speedup for 10s vs. 50s, which is xc avg)
+# [defer] Push down slice to ffmpeg for moderate speedup (~3x speedup for 10s vs. 50s (xc avg))
 #   - WARNING Based on a quick attempt in load/util, it's very nontrivial
 #       - Add slice_s param to load.audio, et al.
 #       - Pass slice_s down to util.audio_from_file_in_data_dir
 #       - But then all the load._transcode_audio resample/write logic gets gnarly...
-#           - Many occurrences of audio_from_file_in_data_dir to update (and reason about / test / risk breaking)
+#           - Many occurrences of audio_from_file_in_data_dir to update (and reason about / test / break / fix)
 #           - Adding a new .ffmpeg() op after the file ext will break the "Do we need to change the encoding?" logic...
 #           - And likely another couple concerns to wrangle with that I can't forsee yet...
-#       - Feasible only if we're ok with audio ids that aren't shared with features.slice, e.g.
+#       - And we'll have to accept audio ids that aren't shared with features.slice, e.g.
 #           - '.mp3.ffmpeg(atrim=duration=10).resample(...).enc(wav)' vs '.mp3.resample(...).enc(wav).slice(0,10000)'
 #           - And thumbnailing will always be bottlenecked by a full audio load (else e.g. thumbnail 10s within first 30s)
 #   - Working pydub/ffmpeg example

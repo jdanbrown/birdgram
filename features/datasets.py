@@ -809,18 +809,8 @@ def load_xc_meta(
     return (xc_meta, recs_stats)
 
 
-def xc_meta_to_paths(
-    xc_meta: DF,
-    xc_paths_dump_path=None,  # When uncached, helpful to run load.recs in a terminal (long running and verbose)
-) -> Iterable[str]:
-    log.debug('Converting xc_meta -> xc_paths...')
-    xc_paths = [
-        ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
-        for row in df_rows(xc_meta)
-    ]
-    if xc_paths_dump_path:
-        joblib.dump(xc_paths, xc_paths_dump_path)
-    return xc_paths
+def xc_meta_to_path(row: Row) -> (str, str):
+    return ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
 
 
 def xc_meta_to_raw_recs(
@@ -830,7 +820,7 @@ def xc_meta_to_raw_recs(
 ) -> DF:
     log.debug('Loading xc.metadata -> xc_raw_recs (.audio, more metadata)... [slower]')
     assert 'duration_s' not in xc_meta  # TODO Make this function idempotent (currently, barfs on non-obvious errors)
-    to_paths = to_paths or xc_meta_to_paths
+    to_paths = to_paths or (lambda xc_meta: [xc_meta_to_path(row) for row in df_rows(xc_meta)])
     paths = list(to_paths(xc_meta))
     xc_raw_recs = (
         load.recs(paths=paths)
