@@ -544,7 +544,10 @@ def df_cache_hybrid(
     non_feats_path = path / 'non_feats.parquet'
     feat_path = lambda k: path / f"feat-{k}.npy"
     rel = lambda p: str(Path(p).relative_to(cache_dir))
+
+    # Utils
     basename = os.path.basename
+    is_dtype_too_big = lambda t: t in [np.float64]
 
     # Use manifest.json to track completion of writes
     #   - Mark completion of all file writes (else we can incorrectly conclude cache hit vs. miss)
@@ -580,11 +583,16 @@ def df_cache_hybrid(
         # Write feat-*.npy (one col per file)
         for k in feat_cols:
             log.info(f'Write[{basename(rel(feat_path(k)))}]')
-            np.save(feat_path(k), np.array(list(df[k])))
+            x = np.array(list(df[k]))
+            if is_dtype_too_big(x.dtype):
+                log.warn(f'{x.dtype} dtype too big ({basename(rel(feat_path(k)))})')
+            np.save(feat_path(k), x)
 
         # Write manifest to mark completion of writes
         #   - tmp + atomic rename (else empty manifest.pkl -> stuck with cache hit that fails)
-        with tempfile.NamedTemporaryFile(mode='wb', delete=False) as f:
+        #   - Make tmp_path in target dir instead of /tmp else os.rename will fail if dirs are on separate mounts
+        tmp_path = Path(manifest_path).with_suffix('.tmp')
+        with open(tmp_path, mode='wb') as f:
             pickle.dump(file=f, obj=dict(
                 # Record feat_cols so we know which files to read on cache hit
                 #   - Unsafe to assume it's the same as all feat-*.npy files, since who knows what bugs created those...
@@ -594,7 +602,7 @@ def df_cache_hybrid(
                 # Record dtypes so we can restore categories (and maybe other stuff in there too)
                 dtypes=df.dtypes,
             ))
-        os.rename(f.name, manifest_path)
+        os.rename(tmp_path, manifest_path)
 
         # Return df
         #   - Should be the same as the df we will subsequently read on cache hit
@@ -624,7 +632,10 @@ def df_cache_hybrid(
         feats: Mapping[str, np.ndarray] = {}
         for k in feat_cols:
             log.info(f'Read[{basename(rel(feat_path(k)))}] ({feat_size[k]})')
-            feats[k] = np.load(feat_path(k))
+            x = np.load(feat_path(k))
+            if is_dtype_too_big(x.dtype):
+                log.warn(f'{x.dtype} dtype too big ({basename(rel(feat_path(k)))})')
+            feats[k] = x
 
         # Build df
         log.info(f'Read: join non_feats + feats')

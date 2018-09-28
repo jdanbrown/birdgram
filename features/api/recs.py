@@ -133,8 +133,11 @@ def xc_similar_html(
     assert audio_s == config.api.recs.search_recs.params.audio_s, \
         f"Can't change audio_s for precomputed search_recs: audio_s[{audio_s}] != config[{config.api.recs.search_recs.params.audio_s}]"
 
-    # 7. TODO TODO Convert float -> float32 (like notebook)
-    # 7. TODO TODO .f_f = .feat are redundant and big. How can we get rid of one?
+    # 7. TODO TODO f_f = feat is redundant and big. How can we get rid of one?
+    #   - Proposal: .feat + .preds, and hardcode feat_cols = ['feat', 'preds'] somewhere
+    # 7. TODO TODO Switch feat.npy from float64 (423m) to float32, like f_f (211m)
+    #   - How did f_* become float32 in the first place?
+    #   - Proposal: jam this into _compute_search_recs, and think briefly on if there are any other concerns we need to consider
 
     # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
     query_rec = (sg.xc_meta
@@ -241,14 +244,14 @@ def xc_similar_html(
 
     # Featurize ranked_recs: .spectro + recs_view
     view_recs = (ranked_recs
-        # 6. TODO TODO Name view fields apart (_view_k?) so they commute with computations above
-        # 6. TODO TODO df_cell will .pkl but won't .parquet (or .sqlite) -- ensure html strs above and keep df_cell wrappers down here
-        # 6. TODO TODO O(n) -> search_recs
+        # 8. TODO TODO Name view fields apart (_view_k?) so they commute with computations above
+        # 8. TODO TODO df_cell will .pkl but won't .parquet (or .sqlite) -- ensure html strs above and keep df_cell wrappers down here
+        # 8. TODO TODO O(n) -> search_recs
         .pipe(recs_featurize_recs_for_sp)
         .pipe(recs_featurize_audio, load=load_for_audio_persist())
         .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
         .pipe(recs_view, view=view, sp_cols=sp_cols)
-        # 6. TODO TODO O(1) -> keep here
+        # 8. TODO TODO O(1) -> keep here
         .pipe(lambda df: (df
             .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
                 'd_slp',
