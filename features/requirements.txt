@@ -36,7 +36,7 @@ jupyter-kernel-gateway==2.0.2
 librosa==0.6.1
 line-profiler==2.1.2
 memory-profiler==0.52.0
-more-itertools==4.2.0
+more-itertools==4.3.0
 nose==1.3.7 # For sklearn.utils.estimator_checks
 oyaml==0.6
 pandas==0.23.0 # Duped in conda deps; included here to prevent other deps from upgrading/downgrading it

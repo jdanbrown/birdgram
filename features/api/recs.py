@@ -289,7 +289,7 @@ def get_d_feats() -> dict:
 @lru_cache()
 def get_search_recs(
     refresh=False,
-    cache_type='parquet',  # None | 'parquet' | 'sqlite'
+    cache_type='hybrid',  # None | 'hybrid' | 'parquet' | 'sqlite'
 ) -> pd.DataFrame:
     """For sg.search_recs"""
     log.info()
@@ -309,11 +309,15 @@ def get_search_recs(
     # Args for df_cache_*
     compute = _compute_search_recs
     path = f"payloads/search_recs-{key_show}-{key}"
-    name = 'search_recs',
+    name = 'search_recs'
 
     # Delegate to parquet/sqlite
     if not cache_type:
         return compute()
+    elif cache_type == 'hybrid':
+        return df_cache_hybrid(compute=compute, path=path, refresh=refresh,
+            desc=name,
+        )
     elif cache_type == 'parquet':
         return df_cache_parquet(compute=compute, path=path, refresh=refresh,
             desc=name,

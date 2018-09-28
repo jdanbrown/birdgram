@@ -101,6 +101,10 @@ def glob_filenames_ensure_parent_dir(pattern: str) -> Iterable[str]:
     return glob.glob(ensure_parent_dir(pattern))
 
 
+def ensure_dir(path):
+    return mkdir_p(path)
+
+
 def ensure_parent_dir(path):
     mkdir_p(os.path.dirname(path))
     return path
@@ -114,6 +118,7 @@ def touch_file(path):
 
 def mkdir_p(path):
     os.system('mkdir -p %s' % shlex.quote(str(path)))
+    return path
 
 
 def timed(f):
@@ -421,7 +426,7 @@ import uuid
 
 from dataclasses import dataclass
 from frozendict import frozendict
-from more_itertools import one
+from more_itertools import last, one
 import pandas as pd
 from potoo.pandas import df_flatmap
 
@@ -509,6 +514,139 @@ def unbox_many(xs: Iterable['box[X]']) -> Iterable['X']:
     return [x.unbox for x in xs]
 
 
+def df_cache_hybrid(
+    compute: Callable[[], pd.DataFrame],
+    path: str,
+    desc: str,  # Only for logging
+    refresh=False,  # Force cache miss (compute + write)
+    feat_cols: Iterable[str] = None,  # Infer if None
+    # to_parquet/read_parquet
+    engine='fastparquet',  # 'fastparquet' | 'pyarrow'
+    compression='uncompressed',  # 'uncompressed' (fast!) | 'gzip' (slow) | 'snappy' (not installed)
+    read_parquet_kwargs=frozendict(),
+    **to_parquet_kwargs,
+) -> pd.DataFrame:
+    """
+    Save/load a df to file(s), quickly
+    - .npy for heavy np.array cols
+    - .parquet for everything else
+    - Sadly, all the simpler approaches I tried were _significantly_ slower
+        - notebooks/api_dev_search_recs_hybrid
+        - notebooks/api_dev_search_recs_parquet
+        - notebooks/api_dev_search_recs_sqlite
+        - notebooks/api_search_recs_pkl_parquet_sqlite
+    """
+
+    # Params
+    assert not Path(path).is_absolute(), f"{path}"
+    path = ensure_dir(Path(cache_dir) / path)
+    manifest_path = path / 'manifest.pkl'
+    non_feats_path = path / 'non_feats.parquet'
+    feat_path = lambda k: path / f"feat-{k}.npy"
+    rel = lambda p: str(Path(p).relative_to(cache_dir))
+    basename = os.path.basename
+
+    # Use manifest.json to track completion of writes
+    #   - Mark completion of all file writes (else we can incorrectly conclude cache hit vs. miss)
+    #   - Indicate which files were written (else we can read too many files if multiple different write attempts)
+    if refresh or not manifest_path.exists():
+        # Cache miss
+        #   - Blindly overwrite any files from previous attempts
+        log.info(f'Cache miss: {rel(path)}')
+        start_s = time.time()
+
+        # Compute
+        #   - use='sync': don't interfere with user's progress bars in compute(), but still show start/end/elapsed
+        df = one_progress(use='sync', desc=f'df_cache_hybrid:compute[{desc}]', f=lambda: (
+            compute()
+            .pipe(df_require_index_is_trivial)  # Nontrivial indexes aren't supported (complex and don't need it)
+        ))
+
+        # Infer feat_cols if not provided
+        if feat_cols is None:
+            # Inference: all cols with value type np.ndarray
+            feat_cols = [] if df.empty else [
+                k for k in df if isinstance(df.iloc[0][k], np.ndarray)
+            ]
+            log.info('Inferred feat_cols%s' % feat_cols)
+
+        # Write non_feats.parquet (all cols in one file)
+        log.info(f'Write[{basename(rel(non_feats_path))}]')
+        (df
+            .drop(columns=feat_cols)
+            .to_parquet(non_feats_path, engine=engine, compression=compression, **to_parquet_kwargs)
+        )
+
+        # Write feat-*.npy (one col per file)
+        for k in feat_cols:
+            log.info(f'Write[{basename(rel(feat_path(k)))}]')
+            np.save(feat_path(k), np.array(list(df[k])))
+
+        # Write manifest to mark completion of writes
+        #   - tmp + atomic rename (else empty manifest.pkl -> stuck with cache hit that fails)
+        with tempfile.NamedTemporaryFile(mode='wb', delete=False) as f:
+            pickle.dump(file=f, obj=dict(
+                # Record feat_cols so we know which files to read on cache hit
+                #   - Unsafe to assume it's the same as all feat-*.npy files, since who knows what bugs created those...
+                feat_cols=feat_cols,
+                # Record df.columns so we can restore col order
+                columns=list(df.columns),
+                # Record dtypes so we can restore categories (and maybe other stuff in there too)
+                dtypes=df.dtypes,
+            ))
+        os.rename(f.name, manifest_path)
+
+        # Return df
+        #   - Should be the same as the df we will subsequently read on cache hit
+        log.info(f'Write done (took: %.3fs)' % (time.time() - start_s))
+        return df
+
+    else:
+        # Cache hit
+        log.info(f'Cache hit: {rel(path)}')
+        start_s = time.time()
+
+        # Read manifest
+        with open(manifest_path, 'rb') as f:
+            manifest = pickle.load(f)
+        feat_cols = manifest['feat_cols']
+        non_feats_size = naturalsize(non_feats_path.stat().st_size)
+        feat_size = {k: naturalsize(feat_path(k).stat().st_size) for k in feat_cols}
+
+        # Read non_feats.parquet
+        log.info(f'Read[{basename(rel(non_feats_path))}] ({non_feats_size})')
+        non_feats = (
+            pd.read_parquet(non_feats_path, engine=engine, **read_parquet_kwargs)
+            .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
+        )
+
+        # Read feat-*.npy
+        feats: Mapping[str, np.ndarray] = {}
+        for k in feat_cols:
+            log.info(f'Read[{basename(rel(feat_path(k)))}] ({feat_size[k]})')
+            feats[k] = np.load(feat_path(k))
+
+        # Build df
+        log.info(f'Read: join non_feats + feats')
+        df = (
+            non_feats.assign(**{
+                k: list(x)  # np.ndarray[m,n] -> List[np.ndarray[n]], else df.assign barfs
+                for k, x in feats.items()
+            })
+            .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
+            [manifest['columns']]               # Restore col order
+            .astype(manifest['dtypes'])         # Restore categories (and maybe other dtype stuff too)
+        )
+
+        # Return df
+        #   - Should be the same as the df we computed and returned on cache miss
+        #   - TODO Tests (see notebooks/api_dev_search_recs_hybrid)
+        log.info(f'Read done (took: %.3fs)' % (time.time() - start_s))
+        return df
+
+
+# Slow when you have to np_save_to_bytes, use df_cache_hybrid instead
+#   - See notebooks in df_cache_hybrid docstring
 def df_cache_parquet(
     compute: Callable[[], pd.DataFrame],
     path: str,
@@ -516,18 +654,17 @@ def df_cache_parquet(
     refresh=False,  # Force cache miss (compute + write)
     # to_parquet/read_parquet
     #   - Perf notes in notebooks/api_search_recs_pkl_parquet_sqlite
-    engine='fastparquet',  # 'fastparquet' | 'pyarrow' (not installed)
+    engine='fastparquet',  # 'fastparquet' | 'pyarrow'
     compression='uncompressed',  # 'uncompressed' (fast!) | 'gzip' (slow) | 'snappy' (not installed)
-    read_parquet_kwargs=None,
+    read_parquet_kwargs=frozendict(),
     **to_parquet_kwargs,
 ) -> pd.DataFrame:
 
     # Params
     assert not Path(path).is_absolute(), f"{path}"
-    path = f"{path}.parquet"
-    abs_path = ensure_parent_dir(Path(cache_dir) / path)
+    path = ensure_parent_dir(Path(cache_dir) / f"{path}.parquet")
 
-    if not abs_path.exists():
+    if refresh or not path.exists():
         # Cache miss:
 
         # Compute
@@ -549,7 +686,7 @@ def df_cache_parquet(
         # Cache hit:
 
         # Read df from parquet
-        size = abs_path.stat().st_size
+        size = path.stat().st_size
         df = one_progress(desc=f'df_cache_parquet:pd.read_parquet[{desc}]', size=size, f=lambda: (
             pd.read_parquet(path, engine=engine, compression=compression, **read_parquet_kwargs)
         ))
@@ -560,8 +697,9 @@ def df_cache_parquet(
         return df
 
 
-# TODO Revist .sqlite i/o .parquet once we have an idea how mobile will use search_recs
-#   - See notes in notebooks/api_dev_search_recs_sqlite
+# Slow when you have to np_save_to_bytes, use df_cache_hybrid instead
+#   - See notebooks in df_cache_hybrid docstring
+#   - TODO Revist .sqlite vs. hybrid once we have an idea how mobile will use search_recs
 def df_cache_sqlite(
     compute: Callable[[], pd.DataFrame],
     path: Optional[str],  # None for in-mem db
@@ -571,7 +709,7 @@ def df_cache_sqlite(
         Callable[[any], any],  # from_sql: elem -> elem
     ]] = frozendict(),
     refresh=False,  # Force cache miss (compute + write)
-    read_sql_table_kwargs=None,
+    read_sql_table_kwargs=frozendict(),
     **to_sql_kwargs,
 ) -> pd.DataFrame:
 
@@ -581,9 +719,8 @@ def df_cache_sqlite(
         db_url = f'sqlite:///'  # In-mem db
     else:
         assert not Path(path).is_absolute(), f"{path}"
-        path = f"{path}.sqlite3"
-        abs_path = ensure_parent_dir(Path(cache_dir) / path)
-        db_url = f'sqlite:///{abs_path}'
+        path = ensure_parent_dir(Path(cache_dir) / f"{path}.sqlite3")
+        db_url = f'sqlite:///{path}'
 
     # Connect so we can check if table exists
     #   - (.sqlite3 file is created on eng/conn creation, so checking if file exists isn't as reliable as table exists)
@@ -662,7 +799,7 @@ def df_cache_sqlite(
             df = one_progress(desc=f'df_cache_sqlite:pd.read_sql_table[{table}]', n=n_rows, f=lambda: (
                 pd.read_sql_table(table, conn,
                     index_col=None,  # Restore no indexes (we shouldn't have accepted any on write)
-                    **{**(read_sql_table_kwargs or {}),
+                    **{**read_sql_table_kwargs,
                         # (Default opts here)
                         # chunksize=None (default) is faster than pd.concat(... chunksize=1000 ...)
                     },
@@ -1409,6 +1546,11 @@ def one_progress(
     **kwargs,
 ) -> X:
     """Draw a progress bar for a single item, for consistency with surrounding (many-element) progress bars"""
+
+    # Don't default to dask/threads, since we don't benefit from threading overhead with one task
+    if kwargs.get('use') == 'dask':
+        kwargs.setdefault('scheduler', 'synchronous')
+
     [x] = map_progress(f=lambda _: f(), xs=[None], **kwargs)
     return x
 
