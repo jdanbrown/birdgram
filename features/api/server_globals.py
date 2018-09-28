@@ -66,8 +66,8 @@ class _sg_load(DataclassUtil):
         for f in [
             self.load_search,
             self.load_xc_meta,
-            self.load_d_feats,      # Implicit deps: d_feats     -> sg.search
-            self.load_search_recs,  # Implicit deps: search_recs -> sg.xc_meta, sg.d_feats(->sg.search)
+            self.load_feat_info,    # Implicit deps: feat_info   -> sg.search
+            self.load_search_recs,  # Implicit deps: search_recs -> sg.xc_meta, sg.feat_info(->sg.search)
         ]:
             if f in skip:
                 log.warn('%s [skipped]' % f.__name__)
@@ -105,11 +105,11 @@ class _sg_load(DataclassUtil):
         return dict(x)
 
     # No @cache/@lru_cache here because callers do their own caching
-    def load_d_feats(self) -> dict:
-        from api.recs import get_d_feats  # Lazy import to avoid cycles [TODO Refactor to avoid cycle]
+    def load_feat_info(self) -> dict:
+        from api.recs import get_feat_info  # Lazy import to avoid cycles [TODO Refactor to avoid cycle]
         log.info()
         return dict(
-            d_feats=get_d_feats(),  # (Does its own caching)
+            feat_info=get_feat_info(),  # (Does its own caching)
         )
 
     # No @cache/@lru_cache here because callers do their own caching

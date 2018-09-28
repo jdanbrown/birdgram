@@ -2,7 +2,7 @@ from functools import lru_cache
 import inspect
 import linecache
 import numbers
-from typing import Iterable, Optional, Sequence
+from typing import *
 
 from more_itertools import one
 import pandas as pd
@@ -17,6 +17,7 @@ from api.util import *
 from cache import *
 from config import config
 from datasets import xc_meta_to_path, xc_meta_to_raw_recs, xc_raw_recs_to_recs
+from payloads import *
 from sp14.model import rec_neighbors_by, rec_probs, Search
 from util import *
 from viz import *
@@ -108,7 +109,7 @@ def xc_similar_html(
     audio_s: float = 10,
     thumb_s: float = 0,
     scale: float = 2,
-    d_metrics: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
+    dists: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
     sort: str = 'd_pc',
     random_state: int = 0,
     view: bool = None,
@@ -127,17 +128,13 @@ def xc_similar_html(
     audio_s   = audio_s and np.clip(audio_s,  0,  30)
     thumb_s   = thumb_s and np.clip(thumb_s,  0,  10)
     scale     = scale   and np.clip(scale,    .5, 10)
-    d_metrics = list(d_metrics)
+    dists     = list(dists)
 
     # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
     assert audio_s == config.api.recs.search_recs.params.audio_s, \
         f"Can't change audio_s for precomputed search_recs: audio_s[{audio_s}] != config[{config.api.recs.search_recs.params.audio_s}]"
 
-    # 7. TODO TODO f_f = feat is redundant and big. How can we get rid of one?
-    #   - Proposal: .feat + .preds, and hardcode feat_cols = ['feat', 'preds'] somewhere
-    # 7. TODO TODO Switch feat.npy from float64 (423m) to float32, like f_f (211m)
-    #   - How did f_* become float32 in the first place?
-    #   - Proposal: jam this into _compute_search_recs, and think briefly on if there are any other concerns we need to consider
+    # 7. TODO TODO De-risk bytes serdes for .audio/.spectro
 
     # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
     query_rec = (sg.xc_meta
@@ -178,24 +175,26 @@ def xc_similar_html(
         ))
     )
 
-    # Compute dist metrics for query_rec, so user can interactively compare and evaluate them
+    # Compute dists for query_rec, so user can interactively compare and evaluate them
     #   - O(n)
-    d_metrics = {m: sk.metrics.pairwise.distance_metrics()[{
-        '2': 'l2',
-        '1': 'l1',
-        'c': 'cosine',
-    }[m]] for m in d_metrics}
+    #   - (Preds dist last investigated in notebooks/app_ideas_6_with_pca)
+    dist_info = {
+        '2': sk.metrics.pairwise.distance_metrics()['l2'],
+        '1': sk.metrics.pairwise.distance_metrics()['l1'],
+        'c': sk.metrics.pairwise.distance_metrics()['cosine'],
+    }
     dist_recs = (search_recs
         .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-            d_(f, m): one_progress(desc=d_(f, m), n=len(df), f=lambda: (
-                M(
-                    list(df[f_(f)]),  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
-                    [query_rec[f_(f)]],
+            d_(f, d): one_progress(desc=d_(f, d), n=len(df), f=lambda: (
+                d_compute(
+                    list(df[f_col]),  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
+                    [query_rec[f_col]],
                 )
                 .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
             ))
-            for f, F in sg.d_feats.items()
-            for m, M in d_metrics.items()
+            for f_col, f, _f_compute in sg.feat_info
+            for d, d_compute in dist_info
+            if d in dists
         }))
     )
 
@@ -279,14 +278,31 @@ def xc_similar_html(
 # WARNING Unsafe to @cache since it contains methods and stuff
 #   - And if you do @cache, joblib.memory will silently cache miss every time, leaving behind partial .pkl writes :/
 @lru_cache()
-def get_d_feats() -> dict:
-    """For sg.d_feats"""
-    return {
-        'f': Search.X,                         # d_f, "feat dist"
-        'p': partial(sg.search.species_proba,  # d_p, "preds dist" (Last investigated: notebooks/app_ideas_6_with_pca)
-            _cache=True,  # Must explicitly request caching (b/c we're avoiding affecting perf of model eval)
-        )
-    }
+def get_feat_info() -> List[Tuple]:
+    """For sg.feat_info"""
+    return [
+        ('feat',    'f', None),
+        ('f_preds', 'p', partial(sg.search.species_proba,
+            _cache=True,  # Must explicitly request caching (enable caching upstream after we ensure no perf regression in model eval)
+        )),
+        # ('f_likely', 'l', ...),  # TODO ebird_priors
+    ]
+
+
+def d_(f: str, d: str) -> str:
+    return f'd_{f}{d}'
+
+
+# TODO Should we migrate feat to f_feat for consistency, or is it too much trouble?
+#   - Nontrivial: would need to clearly and simply delineate .feat code vs. .f_feat code
+#   - Roughly boilds down to model vs. api, but we'd need a reliable rename layer when api calls into model
+def feat_cols(cols: Union[Iterable[str], pd.DataFrame]) -> Iterable[str]:
+    if isinstance(cols, pd.DataFrame):
+        cols = list(cols.columns)
+    return [c for c in cols if (
+        c == 'feat' or
+        c.startswith('f_')  # e.g. f_preds, f_likely
+    )]
 
 
 @lru_cache()
@@ -328,18 +344,22 @@ def get_search_recs(
     elif cache_type == 'sqlite':
         return df_cache_sqlite(compute=compute, path=path, refresh=refresh,
             table=name,
-            col_conversions=dict(
-                # Fail if any of the big array cols is list i/o np.array
-                #   - list is ~10x slower to serdes than np.array (and only slightly less compact)
-                feat               = (compose(np_save_to_bytes, require_np_array), np_load_from_bytes),  # np.array <-> npy (bytes)
-                f_f                = (compose(np_save_to_bytes, require_np_array), np_load_from_bytes),  # np.array <-> npy (bytes)
-                f_p                = (compose(np_save_to_bytes, require_np_array), np_load_from_bytes),  # np.array <-> npy (bytes)
-                background         = (json_dumps_canonical, json.loads),  # List[str] <-> json (str)
-                background_species = (json_dumps_canonical, json.loads),  # List[str] <-> json (str)
-            ),
+            # If any of the big array cols are list i/o np.array then you'll see ~10x slowdown in serdes
+            #   - [And this shouldn't be specific to sqlite serdes...]
+            #   - Rely on logging (size+times) to catch this
+            col_conversions=lambda df: {} if df.empty else {
+                k: fg
+                for k, v in df.iloc[0].items()
+                for fg in [(
+                    (np_save_to_bytes, np_load_from_bytes) if isinstance(v, np.ndarray) else    # np.array <-> npy (bytes)
+                    (json_dumps_canonical, json.loads)     if isinstance(v, (list, dict)) else  # list/dict <-> json (str)
+                    None
+                )]
+                if fg
+            },
             # Don't bother specifying a schema
             #   - sqlite "type affinity" is pretty fluid with types: https://sqlite.org/datatype3.html#type_affinity
-            #   - f_* cols end up as TEXT instead of BLOB, but TEXT accepts and returns BLOB data (python bytes) as is
+            #   - feat cols end up as TEXT instead of BLOB, but TEXT accepts and returns BLOB data (python bytes) as is
             #   - No other cols meaningfully impact size, so the remaining concerns are data fidelity and client compat
             # dtype={'feat': sqla.BLOB, ...},
         )
@@ -377,11 +397,12 @@ def recs_featurize_pre_rank(
         )
         # .feat
         .pipe(recs_featurize_feat)
-        # f_*
+        # .f_*
         .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-            f_(f): list(v)  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
-            for f, F in sg.d_feats.items()
-            for v in [one_progress(desc=f_(f), n=len(df), f=lambda: F(df))]
+            f_col: list(v)  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
+            for f_col, _f, f_compute in sg.feat_info
+            if f_compute  # Skip e.g. .feat, which we already computed above
+            for v in [one_progress(desc=f_col, n=len(df), f=lambda: f_compute(df))]
         }))
     )
 
@@ -549,6 +570,7 @@ def recs_featurize_feat(recs: pd.DataFrame) -> pd.DataFrame:
     """Featurize: Add .feat"""
     return (recs
         .pipe(sg.projection.transform)
+        .pipe(df_col_map, feat=lambda x: x.astype(np.float32))  # TODO Push float32 up into Projection._feat (slow cache bust)
     )
 
 
@@ -697,14 +719,6 @@ def recs_view(
         .pipe(df_cat_to_str)
         .fillna('')
     )
-
-
-def d_(f: str, m: str) -> str:
-    return f'd_{f}{m}'
-
-
-def f_(f: str) -> str:
-    return f'f_{f}'
 
 
 def species_for_query(species_query: str) -> str:

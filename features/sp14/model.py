@@ -74,6 +74,11 @@ import xgb_sklearn_hack
 
 log = structlog.get_logger(__name__)
 
+# Use np.float32 instead of default np.float64, which is way more precision than we need
+#   - TODO Propagate this through Projection + Features
+#   - TODO Where can we get away with np.float16?
+float_dtype = np.float32
+
 
 @dataclass
 class Features(DataclassConfig):
@@ -578,6 +583,8 @@ class Projection(DataclassConfig):
         proj = map_progress(self._proj, df_rows(recs), n=len(recs), desc='proj', use='dask', scheduler='threads')
         return proj
 
+    # TODO Pull in np.float32 from recs.recs_featurize_feat (slow cache bust)
+    #   - And bump all downstream @cache(version): _feat, feat, ...?
     @short_circuit(lambda self, rec: rec.get('feat'))
     @cache(version=0, tags='rec', key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
     def _feat(self, rec: Row) -> 'np.ndarray[(k*a,)]':
@@ -691,10 +698,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
     # sk.utils.estimator_checks.check_estimator(Search)
 
     _X_col = 'feat'
-    _X_dtype = np.float32  # TODO Bubble this up through Projection (default is np.float64, which we don't need)
     _y_col = 'species'
-    _y_dtype = None
 
+    # XXX Unused?
     @classmethod
     def df(cls, X: Iterable, y: Iterable) -> pd.DataFrame:
         return pd.DataFrame({
@@ -705,12 +711,14 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
     @classmethod
     @requires_cols(_X_col)
     def X(cls, df: pd.DataFrame) -> np.ndarray:
-        return np.array(list(df[cls._X_col]), dtype=cls._X_dtype)
+        return np.array(list(df[cls._X_col]), dtype=float_dtype)
 
     @classmethod
     @requires_cols(_y_col)
     def y(cls, df: pd.DataFrame) -> np.ndarray:
-        return np.array(list(df[cls._y_col]), dtype=cls._y_dtype)
+        return np.array(list(df[cls._y_col]),
+            dtype=None,  # Labels, not floats
+        )
 
     @classmethod
     @requires_cols(_X_col, _y_col)
@@ -1035,7 +1043,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
 
         # Predict: .predict_proba
         #   - Preserve recs.index in output's index, for easy joins
-        proba = classifier_.predict_proba(X)
+        proba = classifier_.predict_proba(X).astype(float_dtype)
         species_probs = pd.DataFrame(index=recs.index, data=[
             {i: [p, c] for i, (c, p) in enumerate(sorted(dict(row).items(), key=lambda x: (-x[1], x[0])))}
             for i, row in pd.DataFrame(proba, columns=classifier_.classes_).iterrows()
@@ -1054,7 +1062,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
 
         return species_probs
 
-    @cache(version=0, tags='recs', key=lambda self, recs, **kwargs: (recs.id, self.classifier_),
+    @cache(version=2, tags='recs', key=lambda self, recs, **kwargs: (recs.id, self.classifier_),
         # Must explicitly cache=True to get caching
         #   - This is because we first wanted caching for api search_recs, and at the time I didn't want to risk
         #     introducing a pref regression into model evaluation, which we've always run with no caching here
@@ -1065,7 +1073,7 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
     def species_proba(self, recs: RecordingDF, _cache=False) -> np.ndarray:
         X = self.X(recs)
         classifier_ = self.classifier_
-        return classifier_.predict_proba(X)
+        return classifier_.predict_proba(X).astype(float_dtype)
 
     def species_probs_one(self, rec: Recording) -> pd.DataFrame:
         return self.species_probs(pd.DataFrame([rec]))
