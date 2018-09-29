@@ -52,6 +52,7 @@ from functools import partial, wraps
 import glob
 import hashlib
 import inspect
+import io
 import re
 import os
 import pickle
@@ -59,6 +60,7 @@ import random
 import shlex
 import textwrap
 from typing import *
+from typing.io import *
 
 import humanize
 import structlog
@@ -243,6 +245,13 @@ def dedent_and_strip(s: str) -> str:
     return textwrap.dedent(s).strip()
 
 
+def bytes_from_file_write(write: Callable[[IO[bytes]], None]) -> bytes:
+    f = io.BytesIO()
+    write(f)
+    f.seek(0)
+    return f.read()
+
+
 #
 # json
 #
@@ -347,10 +356,9 @@ def np_save_to_bytes(x: np.ndarray, **kwargs) -> bytes:
     # From https://stackoverflow.com/a/18622264/397334
     #   - https://docs.scipy.org/doc/numpy/reference/generated/numpy.save.html
     #   - .npy shouldn't be slow or big: https://stackoverflow.com/a/41425878/397334
-    out = io.BytesIO()
-    np.save(out, x, **kwargs)
-    out.seek(0)
-    return out.read()
+    return bytes_from_file_write(lambda f: (
+        np.save(f, x, **kwargs)
+    ))
 
 
 def np_load_from_bytes(b: bytes) -> np.ndarray:
@@ -1271,6 +1279,25 @@ def lm(*args, **kwargs):
 
 
 #
+# PIL
+#
+
+import io
+
+import PIL
+
+
+def pil_img_save_to_bytes(img: PIL.Image.Image, format=None, **params) -> bytes:
+    return bytes_from_file_write(lambda f: (
+        img.save(f, format=format, **params)
+    ))
+
+
+def pil_img_open_from_bytes(b: bytes) -> PIL.Image.Image:
+    return PIL.Image.open(io.BytesIO(b))  # (Infers format)
+
+
+#
 # audiosegment
 #
 
@@ -1557,15 +1584,14 @@ def rec_thumb_with_start(
     return (thumb_start_s, thumb)
 
 
-def audio_rel_path(audio: Audio) -> Path:
-    """An Audio's path is its name relative to data_dir"""
-    assert not Path(audio.name).is_absolute()
-    return Path(audio.name)
-
-
 def audio_abs_path(audio: Audio) -> Path:
+    return audio_id_abs_path(audio.name)
+
+
+def audio_id_abs_path(id: str) -> Path:
     """An Audio's path is its name relative to data_dir"""
-    return Path(data_dir) / audio_rel_path(audio)
+    assert not Path(id).is_absolute()
+    return Path(data_dir) / id
 
 
 def strip_leading_cache_audio_dir(path: str) -> str:
@@ -1825,7 +1851,11 @@ def _audio_id_simplify_ops(ops: List[str]) -> List[str]:
 
 def audio_to_bytes(audio, **kwargs) -> bytes:
     audio = audio_persist(audio, **kwargs)
-    with open(audio_abs_path(audio), 'rb') as f:
+    return audio_id_to_bytes(audio.name)
+
+
+def audio_id_to_bytes(id: str) -> bytes:
+    with open(audio_id_abs_path(id), 'rb') as f:
         return f.read()
 
 
@@ -1836,16 +1866,44 @@ def audio_to_url(audio, url_type=None, **kwargs) -> str:
             safe='/,:()[] ',  # Cosmetic: exclude known-safe chars ('?' is definitely _not_ safe, not sure what else...)
         )
     elif (url_type or config.audio.audio_to_url.url_type) == 'data':
-        return 'data:%(mimetype)s;base64,%(base64)s' % dict(
+        return audio_bytes_to_data_url(
+            audio_to_bytes(audio, **kwargs),
             mimetype=audio_to_mimetype(audio),
-            base64=base64.b64encode(audio_to_bytes(audio, **kwargs)).decode('ascii'),
         )
     else:
         raise ValueError('Unexpected config.audio.audio_to_url.url_type: %s' % config.audio.audio_to_url.url_type)
 
 
-def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='', **kwargs) -> str:
+def audio_bytes_to_data_url(b: bytes, mimetype: str) -> str:
+    return 'data:%(mimetype)s;base64,%(base64)s' % dict(
+        mimetype=mimetype,
+        base64=base64.b64encode(b).decode('ascii'),
+    )
+
+
+def audio_to_html(audio, controls=None, preload=None, more_audio_attrs=None, **kwargs) -> str:
     audio = audio_persist(audio, **kwargs)
+    return _audio_html(
+        type=audio_to_mimetype(audio),
+        src=audio_to_url(audio, **kwargs),
+        controls=controls,
+        preload=preload,
+        more_audio_attrs=more_audio_attrs,
+    )
+
+
+def audio_bytes_to_html(b: bytes, mimetype: str, **kwargs) -> str:
+    return _audio_html(
+        type=mimetype,
+        src=audio_bytes_to_data_url(b, mimetype),
+        **kwargs,
+    )
+
+
+def _audio_html(type: str, src: str, controls=None, preload=None, more_audio_attrs=None, **kwargs) -> str:
+    controls         = True   if controls         is None else controls
+    preload          = 'none' if preload          is None else preload
+    more_audio_attrs = ''     if more_audio_attrs is None else more_audio_attrs
     return dedent_and_strip('''
         <audio class="bubo-audio" %(controls)s preload="%(preload)s" %(more_audio_attrs)s>
             <source type="%(type)s" src="%(src)s" />
@@ -1854,8 +1912,8 @@ def audio_to_html(audio, controls=True, preload='none', more_audio_attrs='', **k
         controls='controls' if controls else '',
         preload=preload,
         more_audio_attrs=more_audio_attrs,
-        type=audio_to_mimetype(audio),
-        src=audio_to_url(audio, **kwargs),
+        type=type,
+        src=src,
     )
 
 
@@ -1866,12 +1924,18 @@ def audio_to_mimetype(audio: Audio) -> str:
 
 
 def audio_id_to_mimetype(id: str) -> str:
+    return format_to_mimetype(audio_id_to_format(id))
+
+
+def format_to_mimetype(format: str) -> str:
     # Let unknown formats fail with an informative KeyError
-    format = audio_id_to_format(id)
     return {
+        # Audio
         'mp3': 'audio/mpeg',
         'wav': 'audio/wav',
-        'mp4': 'audio/mp4',
+        'mp4': 'audio/mp4',  # (Collides with .mp4 video, but we don't care)
+        # Image
+        'png': 'image/png',
         # Add more as needed
     }[format]
 
@@ -1890,11 +1954,22 @@ def audio_id_to_format(id: str) -> str:
 
 
 def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayable':
+    assert type(audio).__name__ == 'Audio'  # Avoid confusing with display_with_audio_html(x, audio_html)
+    return display_with_audio_html(x,
+        audio_html=audio_to_html(audio, **{
+            'controls': False,  # No controls by default, but allow caller to override
+            **kwargs,
+        }),
+    )
+
+
+def display_with_audio_html(x: 'Displayable', audio_html: str) -> 'Displayable':
     """
     Wrap an (ipy) `display`-able so that it plays the given audio on click
     - Click to toggle play/pause
     - Shift-click to seek back to the beginning
     """
+    assert isinstance(audio_html, str)  # Avoid confusing with display_with_audio(x, audio)
 
     # Unpack x._display_with_audio_x (set below) if it exists, so that we're idempotent
     x = getattr(x, '_display_with_audio_x', x)
@@ -1904,10 +1979,6 @@ def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayab
     #     Javascript()), else it will render as junk when used in a df_cell within a df, because df.to_html expects an
     #     html str from each df_cell
     x_html = ipy_formats_to_html(x)
-    audio_html = audio_to_html(audio, **{
-        'controls': False,  # No controls by default, but allow caller to override
-        **kwargs,
-    })
     x_with_audio = HTML(dedent_and_strip('''
         <div class="bubo-audio-container">
             <div>
@@ -2020,7 +2091,7 @@ def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayab
 
 # For potoo.ipython.df_cell
 df_cell_spectros = lambda f, *args, **kwargs: lambda df: df_cell_display.many(f(df, *args, **kwargs, show=False))
-df_cell_audios = lambda df: df_cell_display.many(unbox_many(df.audio))
+df_cell_audios   = lambda df: df_cell_display.many(unbox_many(df.audio))
 df_cell_textwrap = lambda col, width=70: lambda df: df[col].map(lambda x: df_cell_stack([
     subline
     for line in x.split('\n')

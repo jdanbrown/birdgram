@@ -17,6 +17,7 @@ from api.util import *
 from cache import *
 from config import config
 from datasets import xc_meta_to_path, xc_meta_to_raw_recs, xc_raw_recs_to_recs
+from load import Load
 from payloads import *
 from sp14.model import rec_neighbors_by, rec_probs, Search
 from util import *
@@ -50,8 +51,7 @@ def xc_species_html(
     quality: str = None,
     n_recs: int = 20,
     audio_s: float = 10,
-    thumb_s: float = 0,
-    scale: float = 2,
+    scale: float = 1,  # TODO TODO Restore scale=2 in the view logic (pinned scale=1 for payload)
     view: bool = None,
     sp_cols: str = None,
     sort: str = None,
@@ -67,7 +67,6 @@ def xc_species_html(
     quality = [{'N': 'no score'}.get(q, q) for q in quality]
     n_recs = np.clip(n_recs, 0, 50)
     audio_s = np.clip(audio_s, 0, 30)
-    thumb_s = np.clip(thumb_s, 0, 10)
     scale = np.clip(scale, .5, 10)
 
     return (sg.xc_meta
@@ -84,12 +83,12 @@ def xc_species_html(
         [:n_recs]
         .reset_index(drop=True)  # Reset RangeIndex after filter+sort
         # Featurize
-        .pipe(recs_featurize, audio_s=audio_s, thumb_s=thumb_s, scale=scale)
+        .pipe(recs_featurize, audio_s=audio_s, scale=scale)
         # View
         .pipe(recs_view, view=view, sp_cols=sp_cols)
         [lambda df: [c for c in [
             'xc', 'xc_id',
-            'com_name', 'species', 'thumb', 'slice',
+            'com_name', 'species', 'spectro_disp',
             'quality', 'date_time',
             'type', 'subspecies', 'background_species',
             'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
@@ -106,14 +105,12 @@ def xc_similar_html(
     n_total: int = 20,
     n_sp_recs: int = None,
     audio_s: float = 10,
-    thumb_s: float = 0,
-    scale: float = 2,
+    scale: float = 1,  # TODO TODO Restore scale=2 in the view logic (pinned scale=1 for payload)
     dists: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
     sort: str = 'd_pc',
     random_state: int = 0,
     view: bool = None,
     sp_cols: str = None,
-    **plot_many_kwargs,
 ) -> pd.DataFrame:
 
     # Params
@@ -125,13 +122,16 @@ def xc_similar_html(
     n_total   = n_total and np.clip(n_total,  0,  None)
     n_sp_recs = (n_sp_recs or None) and np.clip(n_sp_recs, 0, None)
     audio_s   = audio_s and np.clip(audio_s,  0,  30)
-    thumb_s   = thumb_s and np.clip(thumb_s,  0,  10)
     scale     = scale   and np.clip(scale,    .5, 10)
     dists     = list(dists)
 
     # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
     assert audio_s == config.api.recs.search_recs.params.audio_s, \
         f"Can't change audio_s for precomputed search_recs: audio_s[{audio_s}] != config[{config.api.recs.search_recs.params.audio_s}]"
+    del audio_s
+    assert scale == config.api.recs.search_recs.params.scale, \
+        f"Can't change scale for precomputed search_recs: scale[{scale}] != config[{config.api.recs.search_recs.params.scale}]"
+    del scale
 
     # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
     query_rec = (sg.xc_meta
@@ -240,11 +240,7 @@ def xc_similar_html(
 
     # Featurize ranked_recs: .spectro + recs_view
     view_recs = (ranked_recs
-        # 8. TODO TODO
-        #   - [ ] Push .audio/.spectro bytes into payload: split raw mp4/png bytes (payload concern) vs. df_cell (view concern)
-        #   - [ ] QA bytes serdes for .audio/.spectro
-        .pipe(recs_featurize_audio, load=load_for_audio_persist())
-        .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
+        .pipe(recs_featurize_spectro_disp)  # .spectro_disp <- .spectro_bytes, .audio_bytes
         .pipe(recs_view, view=view, sp_cols=sp_cols)
         .pipe(lambda df: (df
             .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
@@ -258,7 +254,7 @@ def xc_similar_html(
                 # sort,  # Show sort col first, for feedback to user  # XXX Nope, too confusing to change col order
                 *[c for c in df if c.startswith('d_')]  # Scores (d_*)
             ]),
-            'com_name', 'species', 'thumb', 'slice',
+            'com_name', 'species', 'spectro_disp',
             'quality', 'date_time',
             'type', 'subspecies', 'background_species',
             'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
@@ -376,12 +372,18 @@ def _compute_search_recs() -> pd.DataFrame:
 
 def recs_featurize_pre_rank(
     recs: pd.DataFrame,
-    audio_s: int = None,
+    load_sliced: 'LoadLike' = load_for_audio_persist,
 ) -> pd.DataFrame:
+    if callable(load_sliced): load_sliced = load_sliced()
+    # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
+    audio_s = config.api.recs.search_recs.params.audio_s
+    scale   = config.api.recs.search_recs.params.scale
     return (recs
         # Audio metadata, without .audio
         .pipe(recs_featurize_metdata_audio_slice,
-            audio_s=audio_s or config.api.recs.search_recs.params.audio_s,
+            audio_s=config.api.recs.search_recs.params.audio_s,
+            load_sliced=load_sliced,
+            load_full=None,
             # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
             #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
             #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
@@ -390,9 +392,11 @@ def recs_featurize_pre_rank(
             # Don't load .audio for pre-rank recs (only for final n_total recs, below)
             no_audio=True,
         )
+        .pipe(recs_featurize_recs_for_sp)
         .pipe(recs_featurize_feat)
         .pipe(recs_featurize_f_)
-        .pipe(recs_featurize_recs_for_sp)
+        .pipe(recs_featurize_spectro_bytes, load_audio=load_sliced, pad_s=audio_s, scale=scale)
+        .pipe(recs_featurize_audio_bytes)
     )
 
 
@@ -400,22 +404,35 @@ def recs_featurize_pre_rank(
 def recs_featurize(
     recs: pd.DataFrame,
     audio_s: float,
-    thumb_s: float,
     scale: float,
+    load_sliced: 'LoadLike' = load_for_audio_persist,
+    load_full:   'LoadLike' = lambda: sg.load,
     **plot_many_kwargs,
 ) -> pd.DataFrame:
+    if callable(load_sliced): load_sliced = load_sliced()
+    if callable(load_full):   load_full   = load_full()
     return (recs
-        .pipe(recs_featurize_metdata_audio_slice, audio_s=audio_s)
+        .pipe(recs_featurize_metdata_audio_slice,
+            audio_s=audio_s,
+            load_sliced=load_sliced,
+            load_full=load_full,
+        )
+        .pipe(recs_featurize_recs_for_sp)
         .pipe(recs_featurize_feat)
         .pipe(recs_featurize_f_)
-        .pipe(recs_featurize_recs_for_sp)
-        .pipe(recs_featurize_slice_thumb, audio_s=audio_s, thumb_s=thumb_s, scale=scale, **plot_many_kwargs)
+        .pipe(recs_featurize_spectro_bytes, pad_s=audio_s, scale=scale, **plot_many_kwargs,
+            load_audio=None,  # Use the .audio we just loaded (above)
+        )
+        .pipe(recs_featurize_audio_bytes)
+        .pipe(recs_featurize_spectro_disp)  # .spectro_disp <- .spectro_bytes, .audio_bytes
     )
 
 
 def recs_featurize_metdata_audio_slice(
     recs: pd.DataFrame,
     audio_s: float,
+    load_sliced: Load,
+    load_full: Optional[Load],
     # HACK Drop audios with no cache/audio/ slice file instead of recomputing ("Falling back") (which warms cache)
     #   - Invalid input audios don't produce a cache/audio/ file, so if you get one then you're stuck always falling back
     drop_uncached_slice: bool = None,
@@ -432,7 +449,7 @@ def recs_featurize_metdata_audio_slice(
 
     # FIXME "10.09s bug": If you write a 10s-sliced audio to mp4 you get 10.09s in the mp4 file
     #   - To inspect, use `ffprobe` or `ffprobe -show_packets`
-    #   - This messes up e.g. any spectro/slice/thumb that expects its input to be precisely ≤10s, else it wraps
+    #   - This messes up e.g. any spectro plot that expects its input to be precisely ≤10s, else it wraps
     #   - All downstreams currently have to deal with this themselves, e.g. via plot_slice(slice_s=10)
     #   - Takeaways after further investigation:
     #       - It's just a fact of life that non-pcm mp4/mp3 encodings don't precisely preserve audio duration
@@ -445,7 +462,7 @@ def recs_featurize_metdata_audio_slice(
 
         # Return first id whose cache/audio/ file exists
         resample = [
-            'resample(%(sample_rate)s,%(channels)s,%(sample_width_bit)s)' % sg.load.audio_config,
+            'resample(%(sample_rate)s,%(channels)s,%(sample_width_bit)s)' % load_sliced.audio_config,
         ]
         slice_enc = [
             'enc(wav)',
@@ -492,7 +509,7 @@ def recs_featurize_metdata_audio_slice(
         return (recs
             .pipe(recs_featurize_metadata, to_paths=to_paths_sliced)
             .pipe(lambda df: df if no_audio else (df
-                .pipe(recs_featurize_audio, load=load_for_audio_persist())
+                .pipe(recs_featurize_audio, load=load_sliced)
             ))
         )
     except FileNotFoundError as e:
@@ -501,8 +518,8 @@ def recs_featurize_metdata_audio_slice(
         log.warn('Falling back to uncached audio slices', audio_s=audio_s, len_recs=len(recs), path_not_found=str(e))
         return (recs
             .pipe(recs_featurize_metadata)
-            .pipe(recs_featurize_audio, load=sg.load)
-            .pipe(recs_featurize_slice, audio_s=audio_s)
+            .pipe(recs_featurize_audio, load=load_full)
+            .pipe(recs_featurize_slice_audio, audio_s=audio_s)
             .pipe(recs_audio_persist, progress_kwargs=config.api.recs.progress_kwargs)
         )
 
@@ -525,7 +542,7 @@ def recs_featurize_metadata(recs: pd.DataFrame, to_paths=None) -> pd.DataFrame:
 
 def recs_featurize_audio(
     recs: pd.DataFrame,
-    load,  # Explicit load to help us stay aware of which one we're using at all times (lots of wav vs. mp4 confusion)
+    load: Load,  # Explicit load to help us stay aware of which one we're using at all times (lots of wav vs. mp4 confusion)
 ) -> pd.DataFrame:
     """Featurize: Add .audio"""
     return (recs
@@ -533,8 +550,8 @@ def recs_featurize_audio(
     )
 
 
-def recs_featurize_slice(recs: pd.DataFrame, audio_s: float) -> pd.DataFrame:
-    """Featurize: Slice .audio (before .spectro/.feat/.thumb)"""
+def recs_featurize_slice_audio(recs: pd.DataFrame, audio_s: float) -> pd.DataFrame:
+    """Featurize: .audio <- sliced .audio (before .spectro/.feat)"""
     return (recs
         .pipe(df_map_rows_progress, desc='slice_audio', **config.api.recs.progress_kwargs, f=lambda row: (
             sg.features.slice_audio(row, 0, audio_s)
@@ -561,14 +578,15 @@ def recs_featurize_f_(recs: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def recs_featurize_slice_thumb(
+def recs_featurize_spectro_bytes(
     recs: pd.DataFrame,
-    audio_s: float,
-    thumb_s: float,
+    pad_s: float,
     scale: float,
+    load_audio: Optional[Load] = None,  # Use .audio if load_audio=None, else load .audio ourselves (using load_audio)
+    format='png',
     **plot_many_kwargs,
 ) -> pd.DataFrame:
-    """Featurize: Add .thumb, .slice <- .spectro, .audio"""
+    """Featurize: Add .spectro_bytes, spectro_bytes_mimetype <- .audio"""
     plot_many_kwargs = {
         **plot_many_kwargs,
         'scale': dict(h=int(40 * scale)),  # Best if h is multiple of 40 (because of low-level f=40 in Melspectro)
@@ -576,38 +594,72 @@ def recs_featurize_slice_thumb(
         '_nocache': True,  # Dev: disable plot_many cache since it's blind to most of our sub-many code changes [TODO Revisit]
     }
     return (recs
-        .pipe(recs_featurize_spectro)
-        # Clip .audio/.spectro to audio_s/thumb_s
-        .pipe(df_assign_first, **{
-            **({} if not audio_s else dict(
-                slice=df_cell_spectros(plot_slice.many, sg.features, **plot_many_kwargs,
-                    pad_s=audio_s,  # Use pad_s instead of slice_s, else excessive writes (slice->mp4->slice->mp4)
-                ),
-            )),
-            **({} if not thumb_s else dict(
-                thumb=df_cell_spectros(plot_thumb.many, sg.features, **plot_many_kwargs,
-                    thumb_s=thumb_s,
-                ),
-            )),
-        })
-    )
-
-
-def recs_featurize_spectro(recs: pd.DataFrame) -> pd.DataFrame:
-    """Featurize: Add .spectro"""
-    return (recs
+        # .audio (if requested)
+        .pipe(lambda df: df if not load_audio else (df
+            .pipe(recs_featurize_audio, load=load_audio)
+        ))
         # HACK Workaround some bug I haven't debugged yet
         #   - In server, .spectro column is present but all nan, which breaks downstream
         #   - In notebook, works fine
         #   - Workaround: force-drop .spectro column if present
-        #   - Tech debt: Not general, very error prone -- e.g. does this affect .feat? .audio?
         .drop(columns=['spectro'], errors='ignore')
+        # .spectro
         .assign(spectro=lambda df: sg.features.spectro(df, **config.api.recs.progress_kwargs, cache=True))  # threads >> sync, procs
+        # .spectro_bytes
+        .pipe(df_assign_first,
+            spectro_bytes_mimetype=format_to_mimetype(format),
+            spectro_bytes=lambda df: [
+                # TODO Optimize png/img size -- currently bigger than mp4 audio! (a rough start: notebooks/png_compress)
+                pil_img_save_to_bytes(
+                    img.convert('RGB'),  # Drop alpha channel
+                    format=format,
+                )
+                for img in plot_slice.many(df, sg.features, **plot_many_kwargs,
+                    pad_s=pad_s,  # Careful: use pad_s instead of slice_s, else excessive writes (slice->mp4->slice->mp4)
+                    show=False,   # Return img instead of plotting
+                    audio=False,  # Return PIL.Image (no audio) instead of Displayable (with embedded html audio)
+                )
+            ],
+        )
+        # Drop intermediate .audio/.spectro cols, since downstreams should only depend on .spectro_bytes
+        .drop(columns=[
+            *(['audio'] if load_audio else []),
+            'spectro',
+        ])
+    )
+
+
+def recs_featurize_audio_bytes(recs: pd.DataFrame) -> pd.DataFrame:
+    """
+    Featurize: Add .audio_bytes, .audio_bytes_mimetype <- .id
+    - Directly read file for rec.id (audio id), failing if it doesn't exist (no transcoding/caching)
+    - Doesn't use (or need) .audio
+    """
+    return (recs
+        .assign(
+            audio_bytes_mimetype = lambda df: df.id.map(audio_id_to_mimetype),
+            audio_bytes          = lambda df: df.id.map(audio_id_to_bytes),
+        )
+    )
+
+
+def recs_featurize_spectro_disp(recs: pd.DataFrame) -> pd.DataFrame:
+    """Featurize: Add .spectro_disp <- .spectro_bytes, .audio_bytes"""
+    return (recs
+        # .spectro_disp
+        .pipe(df_assign_first,
+            spectro_disp=lambda df: df_map_rows(df, lambda rec: (
+                df_cell_display(display_with_audio_html(
+                    pil_img_open_from_bytes(rec.spectro_bytes),  # (Infers image format from bytes)
+                    audio_html=audio_bytes_to_html(rec.audio_bytes, mimetype=rec.audio_bytes_mimetype),
+                ))
+            )),
+        )
     )
 
 
 def recs_featurize_recs_for_sp(recs: pd.DataFrame) -> pd.DataFrame:
-    """Add .recs_for_sp, the total num recs (any quality) for each rec's .species"""
+    """Featurize: Add .recs_for_sp, the total num recs (any quality) for each rec's .species"""
     return (recs
         .merge(how='left', on='species', right=_recs_for_sp())
     )

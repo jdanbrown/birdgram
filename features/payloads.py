@@ -129,7 +129,9 @@ def df_cache_hybrid(
         # Read non_feats.parquet
         log.debug(f'Hit: Reading {basename(rel(non_feats_path))} ({non_feats_size})')
         non_feats = (
-            pd.read_parquet(non_feats_path, engine=engine, **read_parquet_kwargs)
+            pd.read_parquet(non_feats_path, engine=engine, **read_parquet_kwargs,
+                index=False,  # Else you get a trivial index with name 'index'
+            )
             .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
         )
         log.info(f'Hit: Read {basename(rel(non_feats_path))} ({non_feats_size})')

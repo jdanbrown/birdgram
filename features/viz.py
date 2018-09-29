@@ -1,6 +1,6 @@
 from functools import wraps
 import itertools
-from typing import Callable, Iterable, Optional, Union
+from typing import *
 
 import matplotlib.pyplot as plt
 from more_itertools import first
@@ -26,7 +26,7 @@ from util import *
 #
 
 
-def _with_many(plot_f):
+def _with_many(plot_f: Callable[['X'], 'Y']) -> Callable[['X'], 'Y']:
     """
     Given plot_f(rec), add plot_f.many(recs)
     - Also adds another layer of caching, with granularity the whole input (i.e. recs)
@@ -45,7 +45,7 @@ def _with_many(plot_f):
         raw=True,
         progress=dict(use='dask', scheduler='threads'),  # Faster than sync and processes (measured on plot_thumbs)
         **kwargs,
-    ):
+    ) -> Iterable['Y']:
         xs = list(df_rows(recs))
         f = lambda rec: first([
             plot_f(rec, *args, show=show, raw=raw, **kwargs),
@@ -86,7 +86,7 @@ def plot_thumb(
     plot_kwargs=dict(),
     thumb_s=1,
     **thumb_kwargs,  # [Simpler to make (few, stable) thumb_kwargs explicit and let (many, evolving) **plot_kwargs be implicit?]
-):
+) -> Union[None, PIL.Image.Image, 'Displayable']:
     rec = rec_thumb(rec, features, thumb_s=thumb_s, **thumb_kwargs)
     return plot_spectro(rec, raw=raw, scale=scale, audio=audio, show=show, **plot_kwargs,
         pad_s=thumb_s if pad else None,
@@ -99,7 +99,7 @@ def plot_slice(
     features,
     slice_s=None,
     **kwargs,
-):
+) -> Union[None, PIL.Image.Image, 'Displayable']:
     if slice_s:  # Avoid excessive .slice() ops, else cache misses [Simpler to make slice_spectro noop/idempotent?]
         rec = features.slice_spectro(rec, 0, slice_s)
     return plot_spectro(rec, **kwargs)
@@ -111,7 +111,7 @@ def plot_spectro(
     audio=True,
     audio_kwargs=None,
     **kwargs,
-):
+) -> Union[None, PIL.Image.Image, 'Displayable']:
     ret = plot_spectros(rec, **kwargs,
         limit_s=pad_s and max(pad_s, rec.duration_s),  # Pad to pad_s, but don't limit <duration_s (e.g. 10.09s bug)
     )
@@ -132,7 +132,7 @@ def plot_spectro_wrap(
     audio=True,
     audio_kwargs=None,
     **kwargs,
-):
+) -> Union[None, PIL.Image.Image, 'Displayable']:
     limit_s = min(limit_s or np.inf, rec.duration_s)
     wrap_s = wrap_s or limit_s
     n_wraps = int(np.ceil(limit_s / wrap_s))
@@ -170,7 +170,7 @@ def plot_spectros(
     limit_s=None,  # Limit/pad spectro duration
     verbose=False,
     **kwargs,
-):
+) -> Optional[PIL.Image.Image]:
     """Vis lots of spectros per dataset"""
 
     # Allow recs or rec
