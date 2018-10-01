@@ -11,7 +11,7 @@ bin="`dirname "$0"`"
 export FLASK_SKIP_DOTENV=1
 export FLASK_ENV="${FLASK_ENV:-production}"
 
-export BUBO_ROLE='api'
+export BUBO_ROLE="${BUBO_ROLE:-api}"
 
 cmd=(
   gunicorn

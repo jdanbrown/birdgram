@@ -48,90 +48,92 @@ def xc_meta(
 
 def xc_species_html(
     species: str = None,
-    quality: str = None,
+    quality: str = 'ab',
     n_recs: int = 20,
     audio_s: float = 10,
-    scale: float = 1,  # TODO TODO Restore scale=2 in the view logic (pinned scale=1 for payload)
+    scale: float = 2,
     view: bool = None,
     sp_cols: str = None,
-    sort: str = None,
+    sort: str = 'date',  # Name apart from 'rank' so that e.g. /similar?rank=d_pc doesn't transfer to /species?sort=...
 ) -> pd.DataFrame:
 
     # Params
-    require(n_recs > 0)
-    require(audio_s > 0)
     species = species_for_query(species)
     if not species: return pd.DataFrame([])
-    quality = quality or 'ab'
-    quality = [q.upper() for q in quality]
-    quality = [{'N': 'no score'}.get(q, q) for q in quality]
-    n_recs = np.clip(n_recs, 0, 50)
+    quality = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
+    n_recs  = n_recs and np.clip(n_recs, 0, None)
     audio_s = np.clip(audio_s, 0, 30)
-    scale = np.clip(scale, .5, 10)
 
-    return (sg.xc_meta
+    # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
+    require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
+    del audio_s
+
+    return (sg.search_recs
+
         # Filter
         [lambda df: df.species == species]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=species)
-        [lambda df: df.quality.isin(quality)]
+        [lambda df: df.columns if not quality else df.quality.isin(quality)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=species, quality=quality)
+        .reset_index(drop=True)  # Reset RangeIndex after filter
+        .pipe(df_remove_unused_categories)  # Drop unused cats after filter
+
         # Top recs by `sort` (e.g. .date)
         #   - TODO Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
-        .pipe(lambda df: df.sort_values(ascending=True,
-            by=sort if sort in df else 'date',
-        ))
+        .pipe(lambda df: df.sort_values(**one([
+            dict(by=sort, ascending=sort in ['quality', 'time'])
+            for sort in [sort if sort in df else 'date']
+        ])))
         [:n_recs]
-        .reset_index(drop=True)  # Reset RangeIndex after filter+sort
+        .reset_index(drop=True)  # Reset RangeIndex after sort
+
         # Featurize
-        .pipe(recs_featurize, audio_s=audio_s, scale=scale)
+        .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+
         # View
-        .pipe(recs_view, view=view, sp_cols=sp_cols)
+        .pipe(recs_view, view=view, sp_cols=sp_cols, links=['sort'])
         [lambda df: [c for c in [
             'xc', 'xc_id',
             'com_name', 'species', 'spectro_disp',
-            'quality', 'date_time',
+            'quality', 'date', 'time',
             'type', 'subspecies', 'background_species',
             'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
             'recs_for_sp',
-            # 'duration_s',  # TODO Surface the original duration (this is the sliced duration)
+            # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
         ] if c in df]]
+
     )
 
 
 def xc_similar_html(
     xc_id: int,
     quality: str = None,
-    n_sp: int = 20,
+    n_sp: int = None,
     n_total: int = 20,
     n_sp_recs: int = None,
     audio_s: float = 10,
-    scale: float = 1,  # TODO TODO Restore scale=2 in the view logic (pinned scale=1 for payload)
+    scale: float = 2,
     dists: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
-    sort: str = 'd_pc',
+    rank: str = 'd_pc',  # Name apart from 'sort' so that e.g. /species?sort=date doesn't transfer to /similar?rank=...
     random_state: int = 0,
     view: bool = None,
     sp_cols: str = None,
 ) -> pd.DataFrame:
 
     # Params
-    require(audio_s > 0)
     quality   = quality or 'ab'
     quality   = [q.upper() for q in quality]
     quality   = [{'N': 'no score'}.get(q, q) for q in quality]
     n_sp      = n_sp    and np.clip(n_sp,     0,  None)
-    n_total   = n_total and np.clip(n_total,  0,  None)
+    n_total   = n_total and np.clip(n_total,  0,  1000)
     n_sp_recs = (n_sp_recs or None) and np.clip(n_sp_recs, 0, None)
     audio_s   = audio_s and np.clip(audio_s,  0,  30)
-    scale     = scale   and np.clip(scale,    .5, 10)
     dists     = list(dists)
+    rank      = rank.split(',')
 
     # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
-    assert audio_s == config.api.recs.search_recs.params.audio_s, \
-        f"Can't change audio_s for precomputed search_recs: audio_s[{audio_s}] != config[{config.api.recs.search_recs.params.audio_s}]"
+    require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
     del audio_s
-    assert scale == config.api.recs.search_recs.params.scale, \
-        f"Can't change scale for precomputed search_recs: scale[{scale}] != config[{config.api.recs.search_recs.params.scale}]"
-    del scale
 
     # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
     query_rec = (sg.xc_meta
@@ -190,7 +192,7 @@ def xc_similar_html(
                 .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
             ))
             for f_col, f, _f_compute in sg.feat_info
-            for d, d_compute in dist_info
+            for d, d_compute in dist_info.items()
             if d in dists
         }))
     )
@@ -198,8 +200,13 @@ def xc_similar_html(
     # Rank results
     #   - O(n log k)
     #   - [later] Add ebird_priors prob
-    sort_by_score = lambda df: df.sort_values(ascending=True,
-        by=sort if sort in df else 'd_slp',
+    sort_by_score = lambda df: df.sort_values(
+        by=one([
+            rank
+            for rank in [[c for c in rank if c in df]]  # Ignore rank cols not in df
+            for rank in [rank if rank else 'd_slp']
+        ]),
+        ascending=True,
     )
     ranked_recs = (dist_recs
         # Join in .sp_p for scoring functions
@@ -238,10 +245,12 @@ def xc_similar_html(
         .reset_index(drop=True)  # Reset RangeIndex after sort
     )
 
-    # Featurize ranked_recs: .spectro + recs_view
+    # Featurize + view ranked_recs
     view_recs = (ranked_recs
-        .pipe(recs_featurize_spectro_disp)  # .spectro_disp <- .spectro_bytes, .audio_bytes
-        .pipe(recs_view, view=view, sp_cols=sp_cols)
+        # Featurize
+        .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+        # View
+        .pipe(recs_view, view=view, sp_cols=sp_cols, links=['rank'])
         .pipe(lambda df: (df
             .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
                 'd_slp',
@@ -251,15 +260,15 @@ def xc_similar_html(
         [lambda df: [c for c in [
             'xc', 'xc_id',
             *unique_everseen([
-                # sort,  # Show sort col first, for feedback to user  # XXX Nope, too confusing to change col order
+                # rank,  # Show rank col first, for feedback to user  # XXX Nope, too confusing to change col order
                 *[c for c in df if c.startswith('d_')]  # Scores (d_*)
             ]),
             'com_name', 'species', 'spectro_disp',
-            'quality', 'date_time',
+            'quality', 'date', 'time',
             'type', 'subspecies', 'background_species',
             'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
             'recs_for_sp',
-            # 'duration_s',  # TODO Surface the original duration (this is the sliced duration)
+            # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
         ] if c in df]]
     )
 
@@ -377,7 +386,6 @@ def recs_featurize_pre_rank(
     if callable(load_sliced): load_sliced = load_sliced()
     # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
     audio_s = config.api.recs.search_recs.params.audio_s
-    scale   = config.api.recs.search_recs.params.scale
     return (recs
         # Audio metadata, without .audio
         .pipe(recs_featurize_metdata_audio_slice,
@@ -395,7 +403,9 @@ def recs_featurize_pre_rank(
         .pipe(recs_featurize_recs_for_sp)
         .pipe(recs_featurize_feat)
         .pipe(recs_featurize_f_)
-        .pipe(recs_featurize_spectro_bytes, load_audio=load_sliced, pad_s=audio_s, scale=scale)
+        .pipe(recs_featurize_spectro_bytes, load_audio=load_sliced, pad_s=audio_s,
+            scale=1,  # Fix scale=1 for precompute, deferring scale=N to view logic [currently in .html.j2 as inline style]
+        )
         .pipe(recs_featurize_audio_bytes)
     )
 
@@ -643,15 +653,23 @@ def recs_featurize_audio_bytes(recs: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def recs_featurize_spectro_disp(recs: pd.DataFrame) -> pd.DataFrame:
+def recs_featurize_spectro_disp(
+    recs: pd.DataFrame,
+    scale: float = None,
+) -> pd.DataFrame:
     """Featurize: Add .spectro_disp <- .spectro_bytes, .audio_bytes"""
     return (recs
         # .spectro_disp
         .pipe(df_assign_first,
             spectro_disp=lambda df: df_map_rows(df, lambda rec: (
-                df_cell_display(display_with_audio_html(
-                    pil_img_open_from_bytes(rec.spectro_bytes),  # (Infers image format from bytes)
-                    audio_html=audio_bytes_to_html(rec.audio_bytes, mimetype=rec.audio_bytes_mimetype),
+                df_cell_display(display_with_audio_bytes(
+                    display_with_style(
+                        pil_img_open_from_bytes(rec.spectro_bytes),  # (Infers image format from bytes)
+                        # TODO Make scale a recs_view concern
+                        style_css=scale and '.bubo-audio-container img { height: %spx; }' % int(40 * scale),
+                    ),
+                    audio_bytes=rec.audio_bytes,
+                    mimetype=rec.audio_bytes_mimetype,
                 ))
             )),
         )
@@ -678,6 +696,7 @@ def recs_view(
     recs: pd.DataFrame,
     view: bool = None,  # Disable the fancy stuff, e.g. in case you want to compute on the output data
     sp_cols: str = None,
+    links: List[str] = [],
 ) -> pd.DataFrame:
 
     # Params
@@ -697,9 +716,13 @@ def recs_view(
 
     return (recs
         .pipe(lambda df: df_col_map(df, **{
-            # Scores (d_*)
-            c: lambda x, c=c: '''<a href="{{ req_query_with(sort=%r) }}" >%s</a>''' % (c, round_sig_frac(x, 2))
-            for c in df if c.startswith('d_')
+            # Rank by scores (d_*)
+            c: lambda x, c=c: '''<a href="{{ req_query_with(rank=%r) }}">%s</a>''' % (
+                {'d_slp': 'd_slp,d_pc'}.get(c, c),  # HACK Secondary rank for d_slp [manually edit url to change]
+                round_sig_frac(x, 2),
+            )
+            for c in df
+            if c.startswith('d_') and 'rank' in links
         }))
         .pipe(df_if_cols, 'xc_id', lambda df: (df
             .assign(
@@ -730,12 +753,15 @@ def recs_view(
             # Keep sp_cols only
             .drop(columns=[c for c in {'species', 'com_name'} - set(sp_cols)])
         ))
-        .pipe(df_if_cols, ['date', 'time'], lambda df: df.assign(
-            date_time=lambda df: df_map_rows(df, lambda row: '''
-                %(year)s-%(month_day)s<br/>
-                %(time)s
-            ''' % row),
+        .pipe(df_if_cols, 'date', lambda df: df.assign(
+            date=lambda df: df_map_rows(df, lambda row: '%(year).0f-%(month_day)s' % row),  # .year is float (b/c None)
         ))
+        .pipe(df_col_map_if_col, **{
+            # Sort by cols
+            c: lambda x, c=c: '''<a href="{{ req_query_with(sort=%r) }}">%s</a>''' % (c, x)
+            for c in ['quality', 'date', 'time']
+            if 'sort' in links
+        })
         .pipe(df_col_map_if_col,
             # df_cell_str to prevent df.to_html from truncating long strs
             type=lambda x: df_cell_str('<br>'.join(textwrap.wrap(x,
@@ -766,7 +792,7 @@ def recs_view(
         .pipe(df_col_map_if_col,
             # df_cell_str to prevent df.to_html from truncating long strs
             remarks=lambda x: df_cell_str('<br>'.join(textwrap.wrap(x,
-                width=max(80, int(len(x) / 2.8) or np.inf),
+                width=max(80, int(len(x) / 1.8) or np.inf),
             ))),
         )
         # Fill any remaining nulls with ''

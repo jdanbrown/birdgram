@@ -8,7 +8,6 @@
     <td>quality</td>
     <td>n_recs</td>
     <td>scale</td>
-    <td>audio_s</td>
   </tr>
 
   <tr>
@@ -20,8 +19,7 @@
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
     /></td>
     <td><input type="text" data-arg="n_recs"  class="control num n_recs"   value="{{ req_query_get('n_recs',  20) }}" /></td>
-    <td><input type="text" data-arg="scale"   class="control num scale"    value="{{ req_query_get('scale',   1) }}" /></td>
-    <td><input type="text" data-arg="audio_s" class="control num audio_s"  value="{{ req_query_get('audio_s', 10) }}" /></td>
+    <td><input type="text" data-arg="scale"   class="control num scale"    value="{{ req_query_get('scale',   2) }}" /></td>
   </tr>
 
 {% endblock %}

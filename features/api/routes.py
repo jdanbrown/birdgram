@@ -88,7 +88,7 @@ def req_query_with(**query_params) -> str:
 
 
 @bp.app_template_global()
-def req_query_get(k: str, default: any = None) -> dict:
+def req_query_get(k: str, default: any = None) -> str:
     return request.args.get(k, default)
 
 

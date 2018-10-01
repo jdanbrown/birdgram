@@ -1874,10 +1874,10 @@ def audio_to_url(audio, url_type=None, **kwargs) -> str:
         raise ValueError('Unexpected config.audio.audio_to_url.url_type: %s' % config.audio.audio_to_url.url_type)
 
 
-def audio_bytes_to_data_url(b: bytes, mimetype: str) -> str:
+def audio_bytes_to_data_url(audio_bytes: bytes, mimetype: str) -> str:
     return 'data:%(mimetype)s;base64,%(base64)s' % dict(
         mimetype=mimetype,
-        base64=base64.b64encode(b).decode('ascii'),
+        base64=base64.b64encode(audio_bytes).decode('ascii'),
     )
 
 
@@ -1892,15 +1892,15 @@ def audio_to_html(audio, controls=None, preload=None, more_audio_attrs=None, **k
     )
 
 
-def audio_bytes_to_html(b: bytes, mimetype: str, **kwargs) -> str:
+def audio_bytes_to_html(audio_bytes: bytes, mimetype: str, **kwargs) -> str:
     return _audio_html(
         type=mimetype,
-        src=audio_bytes_to_data_url(b, mimetype),
+        src=audio_bytes_to_data_url(audio_bytes, mimetype),
         **kwargs,
     )
 
 
-def _audio_html(type: str, src: str, controls=None, preload=None, more_audio_attrs=None, **kwargs) -> str:
+def _audio_html(type: str, src: str, controls=None, preload=None, more_audio_attrs=None) -> str:
     controls         = True   if controls         is None else controls
     preload          = 'none' if preload          is None else preload
     more_audio_attrs = ''     if more_audio_attrs is None else more_audio_attrs
@@ -1961,6 +1961,36 @@ def display_with_audio(x: 'Displayable', audio: 'Audio', **kwargs) -> 'Displayab
             **kwargs,
         }),
     )
+
+
+def display_with_audio_bytes(x: 'Displayable', audio_bytes: bytes, mimetype: str, **kwargs) -> 'Displayable':
+    return display_with_audio_html(x,
+        audio_html=audio_bytes_to_html(audio_bytes, mimetype=mimetype, **{
+            'controls': False,  # No controls by default, but allow caller to override
+            **kwargs,
+        }),
+    )
+
+
+def display_with_style(x: 'Displayable', style_css: str) -> 'Displayable':
+    """
+    Wrap an (ipy) `display`-able with an inline style
+    """
+    if not style_css:
+        return x
+    else:
+        x_html = ipy_formats_to_html(x)
+        return HTML(dedent_and_strip('''
+            <div>
+                <style type="text/css">
+                    %(style_css)s
+                </style>
+                %(x_html)s
+            </div>
+        ''') % dict(
+            style_css=style_css,
+            x_html=x_html,
+        ))
 
 
 def display_with_audio_html(x: 'Displayable', audio_html: str) -> 'Displayable':

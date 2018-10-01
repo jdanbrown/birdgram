@@ -62,9 +62,9 @@ config = AttrDict(
                 params=dict(
                     # Global params for precomputed search_recs
                     version=1,   # Manually bump to invalidate cache
-                    # limit=10,  # XXX Faster dev (surfaced here to easily invalidate cache)
+                    # limit=1000,  # XXX Faster dev (surfaced here to easily invalidate cache)
                     audio_s=10,  # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
-                    scale=1,     # Pin scale=1 for payload (img scaling is a view concern)
+                    scale=1,     # XXX Unused, but maintain cache hit [TODO TODO Kill when we're ok with cache rebuild]
                 ),
                 cache=dict(
                     # Manually specify what config values invalidate the search_recs cache (ugh...)

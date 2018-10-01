@@ -12,13 +12,14 @@ loggers:
 
   # bubo
   datasets:
-    {level: INFO}    # Noisy at debug
+    {level: INFO}  # Noisy at debug
   load:
     # {level: DEBUG} # Noisy
-    {level: INFO}    # File reads/writes
-    # {level: WARN}  # Quiet
+    # {level: INFO}  # File reads/writes
+    {level: WARN}  # Quiet
   payloads:
-    {level: INFO}    # Wrote/Read (done) without Writing/Reading (starting)
+    {level: DEBUG} # Writing/Reading + Wrote/Read
+    # {level: INFO}  # Wrote/Read
   sp14.model:
     # {level: DEBUG} # call/done
     {level: INFO}
