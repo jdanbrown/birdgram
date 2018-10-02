@@ -42,7 +42,7 @@ class ProcStats(DataclassUtil):
             run=lambda: self._stats.extend((
                 oneshot(p, lambda p: dict(
                     time=pd.Timestamp.now(),
-                    role=role,
+                    relationship=relationship,
                     pid=p.pid,
                     ppid=p.ppid(),
                     cpu_user=p.cpu_times().user,
@@ -57,7 +57,7 @@ class ProcStats(DataclassUtil):
                     fds=p.num_fds(),
                     threads=p.num_threads(),
                 ))
-                for role, p in [
+                for relationship, p in [
                     ('parent', proc),
                     *[('child', p) for p in proc.children(recursive=True)],
                 ]

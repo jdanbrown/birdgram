@@ -20,6 +20,12 @@ loggers:
   payloads:
     {level: DEBUG} # Writing/Reading + Wrote/Read
     # {level: INFO}  # Wrote/Read
+  api.recs:
+    # {level: DEBUG} # log_time start
+    {level: INFO}  # log_time done
+  api.routes:
+    # {level: DEBUG} # log_time start
+    {level: INFO}  # log_time done
   sp14.model:
     # {level: DEBUG} # call/done
     {level: INFO}

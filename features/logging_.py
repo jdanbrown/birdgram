@@ -7,16 +7,19 @@ import logging.config
 import os
 from pathlib import Path
 import sys
+from typing import *
 
 import crayons
+from potoo import debug_print
 from potoo.util import context_onexit, generator_to
 import structlog
 import oyaml as yaml  # Drop-in replacement that preserves dict ordering (for BuboRenderer)
 
 from config import config
-from util import json_dumps_safe
+from json_ import json_dumps_safe
 
 log = structlog.get_logger(__name__)
+log_as_caller = structlog.get_logger('[caller]')
 
 logging_yaml_path = Path(__file__).parent / 'logging.yaml'
 
@@ -118,9 +121,17 @@ class BuboFilter(logging.Filter):
             # Skip our own frame
             if i == 0:
                 continue
-            # Skip frames from logging and structlog
+            # Skip frames from logging modules
             module = inspect.getmodule(caller.frame)
-            if module is not None and module.__name__.split('.')[0] in ['logging', 'structlog']:
+            if module is not None and module.__name__.split('.')[0] in [
+                'logging',
+                'structlog',
+                # HACK HACK So that log_time* find the real caller's frame
+                'logging_',    # bubo.logging_, for log_time* (which are defined in this module)
+                'contextlib',  # For log_time_context
+                'pandas',      # For `.pipe(log_time_df, ...)`
+                'progress',    # For _map_progress_log_time
+            ]:
                 continue
             break
 
@@ -128,6 +139,11 @@ class BuboFilter(logging.Filter):
         record.lineno = caller.frame.f_lineno
         record.funcName = caller.frame.f_code.co_name
         record.stack_info = None  # TODO Capture this (mimic logging.Logger.findCaller) [high complexity, low prio]
+
+        # Map get_logger('[caller']) .name to caller's module name
+        #   - TODO Is this a good idea? e.g. does controlling log levels get out of hand?
+        if record.name == '[caller]':
+            record.name = module.__name__
 
         # msg, args
         #   - HACK `msg % args` is done downstream by Formatter, but we do it in advance to compute name_funcName_message
@@ -177,3 +193,50 @@ def color(color: str, x: any, bold=True) -> str:
     if sys.stdout.isatty() and color is not None:
         s = getattr(crayons, color)(s, bold=bold)
     return s
+
+
+#
+# TODO Where should these log_time* utils live?
+#   - HACK HACK Putting them here is our current approach to finding the caller's funcName in BuboFilter.filter
+#
+
+from contextlib import contextmanager
+from potoo.util import timer_start
+
+
+def log_time_df(df: 'pd.DataFrame', f: Callable[['pd.DataFrame', '...'], 'X'], *args, **kwargs) -> 'X':
+    return log_time(f, df, *args, **kwargs)
+
+
+def log_time(f: Callable[['...'], 'X'], *args, desc=None, log=None, **kwargs) -> 'X':
+    desc = desc or f.__qualname__
+    with log_time_context(desc=desc, log=log):
+        return f(*args, **kwargs)
+
+
+@contextmanager
+def log_time_context(desc=None, log=None):
+    log = log or log_as_caller
+    timer = timer_start()
+    log.debug('%s[start]' % (f'{desc} ' if desc else ''))
+    try:
+        yield
+    finally:
+        log.info('%s[%.3fs]' % (f'{desc} ' if desc else '', timer.time()))
+
+
+# Dispatch from util.map_progress
+#   - HACK HACK In module logging_ instead of util so it can find the caller's stack (see above)
+def _map_progress_log_time(
+    f: Callable[['X'], 'X'],
+    xs: Iterable['X'],
+    desc: str = None,
+    n: int = None,
+) -> Iterable['X']:
+    desc = (
+        '%s (%s)' % (desc, n) if desc is not None and n is not None else
+        '(%s)' % n if n is not None else
+        desc
+    )
+    with log_time_context(desc=desc):
+        return list(map(f, xs))

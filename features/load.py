@@ -17,6 +17,7 @@ import structlog
 import tqdm
 
 from cache import cache
+from config import config
 from constants import cache_audio_dir, cache_dir, data_dir, standard_sample_rate_hz
 from datasets import audio_path_files, DATASETS, metadata_from_dataset
 from datatypes import Audio, Recording, RecordingDF
@@ -159,18 +160,8 @@ class Load(DataclassConfig):
         log.info(**{
             'len(recs)': len(recs),
         })
-        # Performance (600 peterson recs):
-        #   - Scheduler: [TODO Measure -- 'threads' is like the outcome, like n-1 of the rest]
-        #   - Bottlenecks (no_dask): [TODO Measure]
-        #   - TODO Revisiting with ~87k xc recs...
         metadata = map_progress(self._metadata, df_rows(recs), n=len(recs), desc='audio_metadata',
-            # [Local]
-            use='dask', scheduler='threads',    # Optimal for 600 peterson recs on laptop
-            # [Remote]
-            # Perf comparison:                             machine     cpu   disk_r     disk_w  disk_io_r  disk_io_w
-            # use='dask', scheduler='threads',    # n1-standard-16   5-20%   1-5m/s  10-120m/s      10-50     50-500
-            # use='dask', scheduler='processes',  # n1-standard-16  10-50%  5-20m/s    ~100m/s     50-200    300-600
-            # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),
+            **config.load.metadata_progress_kwargs,
         )
         # Filter out dropped rows (e.g. junky audio file)
         metadata = [x for x in metadata if x is not None]
@@ -205,21 +196,6 @@ class Load(DataclassConfig):
             sample_width_bit=audio.sample_width * 8,
         )
 
-    # Performance (measured with .audio on 600 peterson recs):
-    #   - Scheduler: no_dask[.85s], synchronous[.93s], threads[.74s], processes[25s]
-    #   - Bottlenecks (no_dask):
-    #          ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-    #             600    0.303    0.001    0.312    0.001 audio_segment.py:108(read_wav_audio)
-    #             600    0.170    0.000    0.170    0.000 {method 'read' of '_io.BufferedReader' objects}
-    #               1    0.060    0.060    0.845    0.845 <string>:1(<module>)
-    #           61176    0.018    0.000    0.039    0.000 {built-in method builtins.isinstance}
-    #             600    0.015    0.000    0.015    0.000 {built-in method io.open}
-    _audio_progress_kwargs = dict(
-        # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
-        # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # FIXME Too quiet...
-        use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,
-    )
-
     @requires_nonempty_rows
     @short_circuit(lambda self, recs, **kwargs: recs.get('audio'))
     def audio(self, recs: RecordingDF, load=True, **progress_kwargs) -> RecordingDF:
@@ -232,7 +208,7 @@ class Load(DataclassConfig):
         })
         audio = map_progress(
             partial(self._audio, load=load), df_rows(recs), n=len(recs), desc='audio',
-            **(progress_kwargs or self._audio_progress_kwargs),
+            **(progress_kwargs or config.load.audio_progress_kwargs),
         )
         if load:
             # Don't return recs.audio to the caller if load=False since it would be all None and recs.id would be stale
@@ -263,7 +239,7 @@ class Load(DataclassConfig):
         })
         audio = map_progress(
             partial(self._transcode_audio, load=load), recs.audio.map(unbox), n=len(recs), desc='transcode_audio',
-            **(progress_kwargs or self._audio_progress_kwargs),
+            **(progress_kwargs or config.load.audio_progress_kwargs),
         )
         if load:
             # Don't return recs.audio to the caller if load=False since it would be all None and recs.id would be stale

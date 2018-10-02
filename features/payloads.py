@@ -61,105 +61,103 @@ def df_cache_hybrid(
         log.info(f'Miss: {rel(path)}')
 
         # Compute
-        #   - use='sync': don't interfere with user's progress bars in compute(), but still show start/end/elapsed
-        df = one_progress(use='sync', desc=f'df_cache_hybrid:compute[{desc}]', f=lambda: (
-            compute()
-            .pipe(df_require_index_is_trivial)  # Nontrivial indexes aren't supported (complex and don't need it)
-        ))
+        with log_time_context(f'Compute: {desc}'):
+            df = (
+                compute()
+                .pipe(df_require_index_is_trivial)  # Nontrivial indexes aren't supported (complex and don't need it)
+            )
 
         # Measure write time, excluding compute
-        start_s = time.time()
+        with log_time_context(f'Miss: {desc}'):
 
-        # Infer feat_cols if not provided
-        if feat_cols is None:
-            # Inference: all cols with value type np.ndarray
-            feat_cols = [] if df.empty else [
-                k for k in df if isinstance(df.iloc[0][k], np.ndarray)
-            ]
-            log.info('Miss: Inferred feat_cols%s' % feat_cols)
+            # Infer feat_cols if not provided
+            if feat_cols is None:
+                # Inference: all cols with value type np.ndarray
+                feat_cols = [] if df.empty else [
+                    k for k in df if isinstance(df.iloc[0][k], np.ndarray)
+                ]
+                log.info('Miss: Inferred feat_cols%s' % feat_cols)
 
-        # Write non_feats.parquet (all cols in one file)
-        log.debug(f'Miss: Writing {basename(rel(non_feats_path))}')
-        (df
-            .drop(columns=feat_cols)
-            .to_parquet(non_feats_path, engine=engine, compression=compression, **to_parquet_kwargs)
-        )
-        log.info(f'Miss: Wrote {basename(rel(non_feats_path))} ({naturalsize_path(non_feats_path)})')
+            # Write non_feats.parquet (all cols in one file)
+            log.debug(f'Miss: Writing {basename(rel(non_feats_path))}')
+            (df
+                .drop(columns=feat_cols)
+                .to_parquet(non_feats_path, engine=engine, compression=compression, **to_parquet_kwargs)
+            )
+            log.info(f'Miss: Wrote {basename(rel(non_feats_path))} ({naturalsize_path(non_feats_path)})')
 
-        # Write feat-*.npy (one col per file)
-        for k in feat_cols:
-            x = np.array(list(df[k]))
-            log.debug(f'Miss: Writing {basename(rel(feat_path(k)))}: {x.dtype}')
-            np.save(feat_path(k), x)
-            log.info(f'Miss: Wrote {basename(rel(feat_path(k)))}: {x.dtype} ({naturalsize_path(feat_path(k))})')
+            # Write feat-*.npy (one col per file)
+            for k in feat_cols:
+                x = np.array(list(df[k]))
+                log.debug(f'Miss: Writing {basename(rel(feat_path(k)))}: {x.dtype}')
+                np.save(feat_path(k), x)
+                log.info(f'Miss: Wrote {basename(rel(feat_path(k)))}: {x.dtype} ({naturalsize_path(feat_path(k))})')
 
-        # Write manifest to mark completion of writes
-        #   - tmp + atomic rename (else empty manifest.pkl -> stuck with cache hit that fails)
-        #   - Make tmp_path in target dir instead of /tmp else os.rename will fail if dirs are on separate mounts
-        tmp_path = Path(manifest_path).with_suffix('.tmp')
-        with open(tmp_path, mode='wb') as f:
-            pickle.dump(file=f, obj=dict(
-                # Record feat_cols so we know which files to read on cache hit
-                #   - Unsafe to assume it's the same as all feat-*.npy files, since who knows what bugs created those...
-                feat_cols=feat_cols,
-                # Record df.columns so we can restore col order
-                columns=list(df.columns),
-                # Record dtypes so we can restore categories (and maybe other stuff in there too)
-                dtypes=df.dtypes,
-            ))
-        os.rename(tmp_path, manifest_path)
+            # Write manifest to mark completion of writes
+            #   - tmp + atomic rename (else empty manifest.pkl -> stuck with cache hit that fails)
+            #   - Make tmp_path in target dir instead of /tmp else os.rename will fail if dirs are on separate mounts
+            tmp_path = Path(manifest_path).with_suffix('.tmp')
+            with open(tmp_path, mode='wb') as f:
+                pickle.dump(file=f, obj=dict(
+                    # Record feat_cols so we know which files to read on cache hit
+                    #   - Unsafe to assume it's the same as all feat-*.npy files, since who knows what bugs created those...
+                    feat_cols=feat_cols,
+                    # Record df.columns so we can restore col order
+                    columns=list(df.columns),
+                    # Record dtypes so we can restore categories (and maybe other stuff in there too)
+                    dtypes=df.dtypes,
+                ))
+            os.rename(tmp_path, manifest_path)
 
         # Return df
         #   - Should be the same as the df we will subsequently read on cache hit
-        log.info(f'Miss: Done (took: %.3fs)' % (time.time() - start_s))
         return df
 
     else:
         # Cache hit
         log.info(f'Hit: {rel(path)}')
-        start_s = time.time()
+        with log_time_context('Hit'):
 
-        # Read manifest
-        with open(manifest_path, 'rb') as f:
-            manifest = pickle.load(f)
-        feat_cols = manifest['feat_cols']
-        non_feats_size = naturalsize_path(non_feats_path)
-        feat_size = {k: naturalsize_path(feat_path(k)) for k in feat_cols}
+            # Read manifest
+            with open(manifest_path, 'rb') as f:
+                manifest = pickle.load(f)
+            feat_cols = manifest['feat_cols']
+            non_feats_size = naturalsize_path(non_feats_path)
+            feat_size = {k: naturalsize_path(feat_path(k)) for k in feat_cols}
 
-        # Read non_feats.parquet
-        log.debug(f'Hit: Reading {basename(rel(non_feats_path))} ({non_feats_size})')
-        non_feats = (
-            pd.read_parquet(non_feats_path, engine=engine, **read_parquet_kwargs,
-                index=False,  # Else you get a trivial index with name 'index'
+            # Read non_feats.parquet
+            log.debug(f'Hit: Reading {basename(rel(non_feats_path))} ({non_feats_size})')
+            non_feats = (
+                pd.read_parquet(non_feats_path, engine=engine, **read_parquet_kwargs,
+                    index=False,  # Else you get a trivial index with name 'index'
+                )
+                .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
             )
-            .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
-        )
-        log.info(f'Hit: Read {basename(rel(non_feats_path))} ({non_feats_size})')
+            log.info(f'Hit: Read {basename(rel(non_feats_path))} ({non_feats_size})')
 
-        # Read feat-*.npy
-        feats: Mapping[str, np.ndarray] = {}
-        for k in feat_cols:
-            log.debug(f'Hit: Reading {basename(rel(feat_path(k)))} ({feat_size[k]})')
-            x = np.load(feat_path(k))
-            log.info(f'Hit: Read {basename(rel(feat_path(k)))}: {x.dtype} ({feat_size[k]})')
-            feats[k] = x
+            # Read feat-*.npy
+            feats: Mapping[str, np.ndarray] = {}
+            for k in feat_cols:
+                log.debug(f'Hit: Reading {basename(rel(feat_path(k)))} ({feat_size[k]})')
+                x = np.load(feat_path(k))
+                log.info(f'Hit: Read {basename(rel(feat_path(k)))}: {x.dtype} ({feat_size[k]})')
+                feats[k] = x
 
-        # Build df
-        log.info(f'Hit: Join non_feats + feats')
-        df = (
-            non_feats.assign(**{
-                k: list(x)  # np.ndarray[m,n] -> List[np.ndarray[n]], else df.assign barfs
-                for k, x in feats.items()
-            })
-            .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
-            [manifest['columns']]               # Restore col order
-            .astype(manifest['dtypes'])         # Restore categories (and maybe other dtype stuff too)
-        )
+            # Build df
+            log.info(f'Hit: Join non_feats + feats')
+            df = (
+                non_feats.assign(**{
+                    k: list(x)  # np.ndarray[m,n] -> List[np.ndarray[n]], else df.assign barfs
+                    for k, x in feats.items()
+                })
+                .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
+                [manifest['columns']]               # Restore col order
+                .astype(manifest['dtypes'])         # Restore categories (and maybe other dtype stuff too)
+            )
 
         # Return df
         #   - Should be the same as the df we computed and returned on cache miss
         #   - TODO Tests (see notebooks/api_dev_search_recs_hybrid)
-        log.info(f'Hit: Done (took: %.3fs)' % (time.time() - start_s))
         return df
 
 
@@ -186,8 +184,8 @@ def df_cache_parquet(
         # Cache miss:
 
         # Compute
-        #   - use='sync': don't interfere with user's progress bars in compute(), but still show start/end/elapsed
-        df = one_progress(desc=f'df_cache_parquet:compute[{desc}]', use='sync', f=lambda: (
+        #   - sync_progress_kwargs: don't interfere with user's progress bars in compute(), but still show start/end/elapsed
+        df = one_progress(desc=f'df_cache_parquet:compute[{desc}]', **config.sync_progress_kwargs, f=lambda: (
             compute()
         ))
 
@@ -248,8 +246,8 @@ def df_cache_sqlite(
             # Cache miss:
 
             # Compute
-            #   - use='sync': don't interfere with user's progress bars in compute(), but still show start/end/elapsed
-            real_df = one_progress(desc=f'df_cache_sqlite:compute[{table}]', use='sync', f=lambda: (
+            #   - sync_progress_kwargs: don't interfere with user's progress bars in compute(), but still show start/end/elapsed
+            real_df = one_progress(desc=f'df_cache_sqlite:compute[{table}]', **config.sync_progress_kwargs, f=lambda: (
                 compute()
             ))
             sql_df = real_df
@@ -277,12 +275,12 @@ def df_cache_sqlite(
 
             # Write metadata to sql (so we can reconstruct df on read)
             #   - real_df, not sql_df
-            #   - use='sync': we should be fast, dask progress bars are slow, still show start/end/elapsed
+            #   - sync_progress_kwargs: we should be fast, dask progress bars are slow, still show start/end/elapsed
             metadata = dict(
                 dtypes=real_df.dtypes,  # Includes categories
                 col_conversions=col_conversions,
             )
-            one_progress(desc=f'df_cache_sqlite:df.to_sql[{metadata_table}]', use='sync', f=lambda: (
+            one_progress(desc=f'df_cache_sqlite:df.to_sql[{metadata_table}]', **config.sync_progress_kwargs, f=lambda: (
                 pd.DataFrame({k: [v] for k, v in metadata.items()})
                 .applymap(pickle.dumps)  # Pickle since some values unsafe for json (e.g. dtypes, categories)
                 .to_sql(metadata_table, conn,
@@ -301,12 +299,14 @@ def df_cache_sqlite(
 
             # Read metadata from sql (so we can reconstruct the written df)
             #   - Lightweight: do early to fail fast on bugs, before the heavy stuff below
-            #   - use='sync': we should be fast, dask progress bars are slow, still show start/end/elapsed
-            metadata = one_progress(desc=f'df_cache_sqlite:pd.read_sql_table[{metadata_table}]', use='sync', f=lambda: (
-                pd.read_sql_table(metadata_table, conn)
-                .applymap(pickle.loads)
-                .pipe(lambda df: dict(one(df_rows(df))))
-            ))
+            #   - sync_progress_kwargs: we should be fast, dask progress bars are slow, still show start/end/elapsed
+            metadata = one_progress(desc=f'df_cache_sqlite:pd.read_sql_table[{metadata_table}]', **config.sync_progress_kwargs,
+                f=lambda: (
+                    pd.read_sql_table(metadata_table, conn)
+                    .applymap(pickle.loads)
+                    .pipe(lambda df: dict(one(df_rows(df))))
+                ),
+            )
             dtypes = metadata['dtypes']
             col_conversions = metadata['col_conversions']
 

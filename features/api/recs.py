@@ -18,8 +18,9 @@ from cache import *
 from config import config
 from datasets import xc_meta_to_path, xc_meta_to_raw_recs, xc_raw_recs_to_recs
 from load import Load
+from logging_ import *
 from payloads import *
-from sp14.model import rec_neighbors_by, rec_probs, Search
+from sp14.model import rec_neighbors_by, rec_preds, Search
 from util import *
 from viz import *
 
@@ -75,7 +76,7 @@ def xc_species_html(
         .pipe(df_require_nonempty_for_api, 'No recs found', species=species)
         [lambda df: df.columns if not quality else df.quality.isin(quality)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=species, quality=quality)
-        .reset_index(drop=True)  # Reset RangeIndex after filter
+        .reset_index(drop=True)  # Reset to RangeIndex after filter
         .pipe(df_remove_unused_categories)  # Drop unused cats after filter
 
         # Top recs by `sort` (e.g. .date)
@@ -85,7 +86,7 @@ def xc_species_html(
             for sort in [sort if sort in df else 'date']
         ])))
         [:n_recs]
-        .reset_index(drop=True)  # Reset RangeIndex after sort
+        .reset_index(drop=True)  # Reset to RangeIndex after sort
 
         # Featurize
         .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
@@ -135,44 +136,47 @@ def xc_similar_html(
     require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
     del audio_s
 
-    # Lookup query_rec from xc_meta, and featurize (audio meta + .feat, like search_recs)
-    query_rec = (sg.xc_meta
-        [lambda df: df.id == xc_id]
-        .pipe(df_require_nonempty_for_api, 'No recs found', xc_id=xc_id)
-        .reset_index(drop=True)  # Reset RangeIndex after filter
-        # Featurize
-        .pipe(recs_featurize_pre_rank)
-        .pipe(lambda df: one(df_rows(df)))
-    )
-
-    # Predict query_sp_p from search model
-    query_sp_p = (
-        rec_probs(query_rec, sg.search)
-        [:n_sp]
-        .rename(columns={'p': 'sp_p'})
-    )
-
-    # Get search_recs (precomputed)
+    # Get precomputed search_recs
     search_recs = sg.search_recs
 
+    # Lookup query_rec from search_recs
+    query_rec = log_time_df(search_recs, desc='query_rec', f=lambda df: (df
+        [lambda df: df.xc_id == xc_id]
+        .pipe(df_require_nonempty_for_api, 'No recs found', xc_id=xc_id)
+        .reset_index(drop=True)  # Reset to RangeIndex after filter
+        .pipe(lambda df: one(df_rows(df)))
+    ))
+
+    # Predict query_sp_p from search model
+    query_sp_p = log_time(desc='rec_preds', f=lambda: (
+        # We could reuse query_rec.f_preds, but:
+        #   - The code complexity to map f_preds (np.array(probs)) to rec_preds (df[species, prob]) is nontrivial (>1h refactor)
+        #   - Always using rec_preds ensures that behavior is consistent between user rec and xc rec
+        #   - Skipping rec_preds for xc recs would only save ~150ms
+        rec_preds(query_rec, sg.search)
+        [:n_sp]
+        .rename(columns={'p': 'sp_p'})
+    ))
+
     # Filter search_recs for query_sp_p
-    search_recs = (search_recs
+    search_recs = log_time_df(search_recs, desc='search_recs:filter', f=lambda df: (df
         # Filter
         [lambda df: df.species.isin(query_sp_p.species)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species)
         [lambda df: df.quality.isin(quality)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species, quality=quality)
-        .reset_index(drop=True)  # Reset RangeIndex after filter
+        .reset_index(drop=True)  # Reset to RangeIndex after filter
         .pipe(df_remove_unused_categories)  # Drop unused cats after filter
-    )
+    ))
 
     # HACK Include query_rec in results [this is a view concern, but jam it in here as a shortcut]
-    search_recs = (search_recs
+    search_recs = log_time_df(search_recs, desc='search_recs:add_query_rec', f=lambda df: (df
         .pipe(lambda df: df if query_rec.xc_id in df.xc_id.values else pd.concat(
             [df, DF([query_rec])],
             sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
         ))
-    )
+        .reset_index(drop=True)  # Reset to RangeIndex after concat
+    ))
 
     # Compute dists for query_rec, so user can interactively compare and evaluate them
     #   - O(n)
@@ -182,20 +186,20 @@ def xc_similar_html(
         '1': sk.metrics.pairwise.distance_metrics()['l1'],
         'c': sk.metrics.pairwise.distance_metrics()['cosine'],
     }
-    dist_recs = (search_recs
+    dist_recs = log_time_df(search_recs, desc='dist_recs', f=lambda df: (df
         .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-            d_(f, d): one_progress(desc=d_(f, d), n=len(df), f=lambda: (
+            d_(f, d): (
                 d_compute(
                     list(df[f_col]),  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
                     [query_rec[f_col]],
                 )
                 .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
-            ))
+            )
             for f_col, f, _f_compute in sg.feat_info
             for d, d_compute in dist_info.items()
             if d in dists
         }))
-    )
+    ))
 
     # Rank results
     #   - O(n log k)
@@ -208,49 +212,64 @@ def xc_similar_html(
         ]),
         ascending=True,
     )
+    # ranked_recs = log_time_df(dist_recs, desc='ranked_recs', f=lambda df: (df
     ranked_recs = (dist_recs
-        # Join in .sp_p for scoring functions
-        #   - [Using sort=True to silence "non-concatenation axis" warning -- not sure what we want, or if it matters]
-        .merge(how='left', on='species', right=query_sp_p[['species', 'sp_p']],
-            sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
-        )
-        # Scores (d_*)
-        #   - A distance measure in [0,inf), lower is better
-        #   - Examples: -log(p), feat dist (d_f), preds dist (d_p)
-        #   - Can be meaningfully combined by addition, e.g.
-        #       - -log(p) + -log(q) = -log(pq)
-        #       - -log(p) + d_f     = ... [Meaningful? Helpful to rescale?]
-        #       - -log(p) + d_p     = ... [Meaningful? Helpful to rescale?]
-        #       - d_f     + d_p     = ... [Meaningful? Helpful to rescale?]
-        .pipe(lambda df: (df
-            # Mock scores for query_rec so that it always shows at the top
-            .pipe(df_map_rows, lambda row: row if row.xc_id != query_rec.xc_id else series_assign(row,
-                sp_p=1,
-            ))
-            # Derived scores
-            .assign(
-                d_slp=lambda df: np.abs(-np.log(df.sp_p)),  # d_slp: "species log prob" (abs for 1->0 i/o -0)
+        .pipe(log_time_df, desc='ranked_recs:merge', f=lambda df: (df
+            # Join in .sp_p for scoring functions
+            #   - [Using sort=True to silence "non-concatenation axis" warning -- not sure what we want, or if it matters]
+            .merge(how='left', on='species', right=query_sp_p[['species', 'sp_p']],
+                sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
             )
         ))
-        # Top recs per sp
-        .pipe(lambda df: df if n_sp_recs is None else (df
-            .groupby('species').apply(lambda g: (g
-                .pipe(sort_by_score)[:n_sp_recs + (
-                    1 if g.name == query_rec.species else 0  # Adjust +1 for query_rec.species
-                )]
-            )).reset_index(level=0, drop=True)  # Drop groupby key
+        .pipe(log_time_df, desc='ranked_recs:scores', f=lambda df: (df
+            # Scores (d_*)
+            #   - A distance measure in [0,inf), lower is better
+            #   - Examples: -log(p), feat dist (d_f), preds dist (d_p)
+            #   - Can be meaningfully combined by addition, e.g.
+            #       - -log(p) + -log(q) = -log(pq)
+            #       - -log(p) + d_f     = ... [Meaningful? Helpful to rescale?]
+            #       - -log(p) + d_p     = ... [Meaningful? Helpful to rescale?]
+            #       - d_f     + d_p     = ... [Meaningful? Helpful to rescale?]
+            .pipe(lambda df: (df
+                .pipe(log_time_df, desc='ranked_recs:scores:mock', f=lambda df: (df  # TODO TODO XXX After fixing bottleneck
+                    # Mock scores for query_rec so that it always shows at the top
+                    #   - TODO TODO Mildly slow b/c df_map_rows, but is it a dominant bottleneck at 35k recs?
+                    .pipe(df_map_rows, lambda row: row if row.xc_id != query_rec.xc_id else series_assign(row,
+                        sp_p=1,
+                    ))
+                ))
+                .pipe(log_time_df, desc='ranked_recs:scores:derived', f=lambda df: (df  # TODO TODO XXX After fixing bottleneck
+                    # Derived scores
+                    .assign(
+                        d_slp=lambda df: np.abs(-np.log(df.sp_p)),  # d_slp: "species log prob" (abs for 1->0 i/o -0)
+                    )
+                ))
+            ))
         ))
-        # Top recs overall
-        .pipe(sort_by_score)[:n_total]
-        .reset_index(drop=True)  # Reset RangeIndex after sort
+        .pipe(log_time_df, desc='ranked_recs:top_recs_per_sp', f=lambda df: (df
+            # Top recs per sp
+            #   - TODO TODO Slowest part -- how slow at 35k recs?
+            .pipe(lambda df: df if n_sp_recs is None else (df
+                .groupby('species').apply(lambda g: (g
+                    .pipe(sort_by_score)[:n_sp_recs + (
+                        1 if g.name == query_rec.species else 0  # Adjust +1 for query_rec.species
+                    )]
+                )).reset_index(level=0, drop=True)  # Drop groupby key
+            ))
+        ))
+        .pipe(log_time_df, desc='ranked_recs:top_recs_overall', f=lambda df: (df
+            # Top recs overall
+            .pipe(sort_by_score)[:n_total]
+            .reset_index(drop=True)  # Reset to RangeIndex after sort
+        ))
     )
 
     # Featurize + view ranked_recs
-    view_recs = (ranked_recs
+    view_recs = log_time_df(ranked_recs, desc='view_recs', f=lambda df: (df
         # Featurize
-        .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+        .pipe(log_time_df, recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
         # View
-        .pipe(recs_view, view=view, sp_cols=sp_cols, links=['rank'])
+        .pipe(log_time_df, recs_view, view=view, sp_cols=sp_cols, links=['rank'])
         .pipe(lambda df: (df
             .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
                 'd_slp',
@@ -270,7 +289,7 @@ def xc_similar_html(
             'recs_for_sp',
             # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
         ] if c in df]]
-    )
+    ))
 
     return view_recs
 
@@ -374,8 +393,6 @@ def _compute_search_recs() -> pd.DataFrame:
         [:config.api.recs.search_recs.params.get('limit')]
         # Featurize (audio meta + .feat)
         .pipe(recs_featurize_pre_rank)
-        # Drop *_stack cols: for notebook not api, and the df_cell wrappers clog up sqlite serdes
-        [lambda df: [c for c in df if not c.endswith('_stack')]]
     )
 
 
@@ -386,28 +403,39 @@ def recs_featurize_pre_rank(
     if callable(load_sliced): load_sliced = load_sliced()
     # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
     audio_s = config.api.recs.search_recs.params.audio_s
-    return (recs
-        # Audio metadata, without .audio
-        .pipe(recs_featurize_metdata_audio_slice,
-            audio_s=config.api.recs.search_recs.params.audio_s,
-            load_sliced=load_sliced,
-            load_full=None,
-            # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
-            #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
-            #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
-            #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
-            drop_uncached_slice=True,
-            # Don't load .audio for pre-rank recs (only for final n_total recs, below)
-            no_audio=True,
-        )
-        .pipe(recs_featurize_recs_for_sp)
-        .pipe(recs_featurize_feat)
-        .pipe(recs_featurize_f_)
-        .pipe(recs_featurize_spectro_bytes, load_audio=load_sliced, pad_s=audio_s,
-            scale=1,  # Fix scale=1 for precompute, deferring scale=N to view logic [currently in .html.j2 as inline style]
-        )
-        .pipe(recs_featurize_audio_bytes)
-    )
+    # Batch for mem safety
+    #   - TODO TODO Fix progress logging here so that it's readable (write a _map_progress_log_each?)
+    return pd.concat(objs=map_progress(
+        desc='recs_featurize_pre_rank:batches', **config.sync_progress_kwargs,
+        xs=chunked(recs.index,
+            # 1000,  # Killed on remote n1-highcpu-16 during 27/36
+            # 250,  # Mem safe on remote n1-highcpu-16
+            len(recs),  # TODO TODO Still debugging chunking (seeing an assertion failure...)
+        ),
+        f=lambda ix: (recs
+            .loc[ix]
+            # Audio metadata, without .audio
+            .pipe(recs_featurize_metdata_audio_slice,
+                audio_s=config.api.recs.search_recs.params.audio_s,
+                load_sliced=load_sliced,
+                load_full=None,
+                # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
+                #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
+                #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
+                #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
+                drop_uncached_slice=True,
+                # Don't load .audio for pre-rank recs (only for final n_total recs, below)
+                no_audio=True,
+            )
+            .pipe(recs_featurize_recs_for_sp)
+            .pipe(recs_featurize_feat)
+            .pipe(recs_featurize_f_)
+            .pipe(recs_featurize_spectro_bytes, load_audio=load_sliced, pad_s=audio_s,
+                scale=1,  # Fix scale=1 for precompute, deferring scale=N to view logic [currently in .html.j2 as inline style]
+            )
+            .pipe(recs_featurize_audio_bytes)
+        ),
+    ))
 
 
 # TODO Simplify: replace with sg.search_recs lookup (callers: +xc_species_html -xc_similar_html)
@@ -547,6 +575,8 @@ def recs_featurize_metadata(recs: pd.DataFrame, to_paths=None) -> pd.DataFrame:
     return (recs
         .pipe(xc_meta_to_raw_recs, to_paths=to_paths, load=sg.load)
         .reset_index()  # xc_id
+        # HACK Drop xc_meta_to_raw_recs *_stack cols: for notebook not api, and the df_cell wrappers clog up serdes (e.g. sqlite)
+        [lambda df: [c for c in df if not c.endswith('_stack')]]
     )
 
 
@@ -578,6 +608,7 @@ def recs_featurize_feat(recs: pd.DataFrame) -> pd.DataFrame:
 
 
 def recs_featurize_f_(recs: pd.DataFrame) -> pd.DataFrame:
+    """Featurize: Add .f_*"""
     return (recs
         .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
             f_col: list(v)  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
@@ -594,49 +625,116 @@ def recs_featurize_spectro_bytes(
     scale: float,
     load_audio: Optional[Load] = None,  # Use .audio if load_audio=None, else load .audio ourselves (using load_audio)
     format='png',
-    **plot_many_kwargs,
+    **plot_kwargs,
 ) -> pd.DataFrame:
     """Featurize: Add .spectro_bytes, spectro_bytes_mimetype <- .audio"""
-    plot_many_kwargs = {
-        **plot_many_kwargs,
-        'scale': dict(h=int(40 * scale)),  # Best if h is multiple of 40 (because of low-level f=40 in Melspectro)
-        'progress': dict(**config.api.recs.progress_kwargs),  # threads > sync, threads >> processes
-        '_nocache': True,  # Dev: disable plot_many cache since it's blind to most of our sub-many code changes [TODO Revisit]
-    }
-    return (recs
-        # .audio (if requested)
-        .pipe(lambda df: df if not load_audio else (df
-            .pipe(recs_featurize_audio, load=load_audio)
-        ))
-        # HACK Workaround some bug I haven't debugged yet
-        #   - In server, .spectro column is present but all nan, which breaks downstream
-        #   - In notebook, works fine
-        #   - Workaround: force-drop .spectro column if present
-        .drop(columns=['spectro'], errors='ignore')
-        # .spectro
-        .assign(spectro=lambda df: sg.features.spectro(df, **config.api.recs.progress_kwargs, cache=True))  # threads >> sync, procs
-        # .spectro_bytes
-        .pipe(df_assign_first,
-            spectro_bytes_mimetype=format_to_mimetype(format),
-            spectro_bytes=lambda df: [
-                # TODO Optimize png/img size -- currently bigger than mp4 audio! (a rough start: notebooks/png_compress)
-                pil_img_save_to_bytes(
-                    img.convert('RGB'),  # Drop alpha channel
-                    format=format,
-                )
-                for img in plot_slice.many(df, sg.features, **plot_many_kwargs,
-                    pad_s=pad_s,  # Careful: use pad_s instead of slice_s, else excessive writes (slice->mp4->slice->mp4)
-                    show=False,   # Return img instead of plotting
-                    audio=False,  # Return PIL.Image (no audio) instead of Displayable (with embedded html audio)
-                )
-            ],
+    with log_time_context():
+
+        # TODO TODO Testing
+        plot_kwargs = {
+            **plot_kwargs,
+            'scale': dict(h=int(40 * scale)),  # Best if h is multiple of 40 (because of low-level f=40 in Melspectro)
+        }
+        return (recs
+            .pipe(df_assign_first,
+                spectro_bytes_mimetype=format_to_mimetype(format),
+                spectro_bytes=lambda df: map_progress_df_rows(df, desc='rec_spectro_bytes',
+                    f=partial(rec_spectro_bytes, pad_s=pad_s, load_audio=load_audio, format=format, **plot_kwargs),
+                    # FIXME Saw hangs with dask threads
+                    #   - Repro: use='dask', scheduler='threads', 1k recs, cache hit and/or miss
+                    #   - No repro: use='dask', scheduler='synchronous'
+                    #   - HACK Going with use='sync' to work around...
+                    # **config.api.recs.progress_kwargs,  # threads >> sync, procs
+                    use='sync',
+                ),
+            )
         )
-        # Drop intermediate .audio/.spectro cols, since downstreams should only depend on .spectro_bytes
-        .drop(columns=[
-            *(['audio'] if load_audio else []),
-            'spectro',
-        ])
+
+        # TODO TODO XXX
+        # plot_many_kwargs = {
+        #     **plot_kwargs,
+        #     'progress': dict(**config.api.recs.progress_kwargs),  # threads > sync, threads >> processes
+        #     '_nocache': True,  # Dev: disable plot_many cache since it's blind to most of our sub-many code changes [TODO Revisit]
+        # }
+        # return (recs
+        #     # HACK Workaround some bug I haven't debugged yet
+        #     #   - In server, .spectro column is present but all nan, which breaks downstream
+        #     #   - In notebook, works fine
+        #     #   - Workaround: force-drop .spectro column if present
+        #     .drop(columns=['spectro'], errors='ignore')
+        #     # .spectro
+        #     .assign(spectro=lambda df: (sg.features
+        #         # FIXME Slow (load_audio) vs. incorrect (load)
+        #         #   - features.load=load_audio is correct, but very slow because it doesn't share .spectro cache with features.load=load
+        #         #   - features.spectro cache key includes load.format='wav'|'mp4', which makes load_audio vs. load bust cache
+        #         #   - TODO Should load.format be part of features.spectro cache key? Seems like no, but think harder...
+        #         # .replace(**dict(load=load_audio) if load_audio else {})  # Set features.load for features._cache() -> load._audio()
+        #         .spectro(df,
+        #             cache=True,
+        #             # FIXME Saw hangs with dask threads
+        #             #   - Repro: use='dask', scheduler='threads', 1k recs, cache hit and/or miss
+        #             #   - No repro: use='dask', scheduler='synchronous'
+        #             #   - HACK Going with use='sync' to work around...
+        #             # **config.api.recs.progress_kwargs,  # threads >> sync, procs
+        #             use='sync',
+        #         )
+        #     ))
+        #     # .spectro_bytes
+        #     .pipe(df_assign_first,
+        #         spectro_bytes_mimetype=format_to_mimetype(format),
+        #         spectro_bytes=lambda df: [
+        #             b
+        #             for imgs in [plot_slice.many(df, sg.features, **plot_many_kwargs,
+        #                 pad_s=pad_s,  # Careful: use pad_s instead of slice_s, else excessive writes (slice->mp4->slice->mp4)
+        #                 show=False,   # Return img instead of plotting
+        #                 audio=False,  # Return PIL.Image (no audio) instead of Displayable (with embedded html audio)
+        #             )]
+        #             for b in map_progress(desc='pil_img_save_to_bytes', xs=imgs, f=lambda img: (
+        #                 # TODO Optimize png/img size -- currently bigger than mp4 audio! (a rough start: notebooks/png_compress)
+        #                 pil_img_save_to_bytes(
+        #                     img.convert('RGB'),  # Drop alpha channel
+        #                     format=format,
+        #                 )
+        #             ))
+        #         ],
+        #     )
+        #     # Drop intermediate .spectro col, since downstreams should only depend on .spectro_bytes
+        #     .drop(columns=[
+        #         'spectro',
+        #     ])
+        # )
+
+
+@cache(version=0, tags='rec', key=lambda rec, **kwargs: (rec.id, kwargs, sg.features))
+def rec_spectro_bytes(
+    rec: Row,
+    pad_s: float,
+    load_audio: Optional[Load] = None,  # Use .audio if load_audio=None, else load .audio ourselves (using load_audio)
+    format='png',
+    **plot_kwargs,
+) -> bytes:
+    rec = rec.copy()  # Copy so we can mutate
+    rec.spectro = (sg.features
+        # FIXME Slow (load_audio) vs. incorrect (load)
+        #   - features.load=load_audio is correct, but very slow because it doesn't share .spectro cache with features.load=load
+        #   - features.spectro cache key includes load.format='wav'|'mp4', which makes load_audio vs. load bust cache
+        #   - TODO Should load.format be part of features.spectro cache key? Seems like no, but think harder...
+        # .replace(**dict(load=load_audio) if load_audio else {})  # Set features.load for features._cache() -> load._audio()
+        ._spectro(rec, cache=True)
     )
+    # TODO TODO Replace plot_slice -> plot_spectro: nothing changes except we can remove the warning comment about slice_s
+    spectro_img = plot_slice(rec, sg.features, **plot_kwargs,
+        pad_s=pad_s,  # Careful: use pad_s instead of slice_s, else excessive writes (slice->mp4->slice->mp4)
+        show=False,   # Return img instead of plotting
+        audio=False,  # Return PIL.Image (no audio) instead of Displayable (with embedded html audio)
+    )
+    # TODO Optimize png/img size -- currently bigger than mp4 audio! (a rough start: notebooks/png_compress)
+    spectro_bytes = pil_img_save_to_bytes(
+        spectro_img.convert('RGB'),  # Drop alpha channel
+        format=format,
+    )
+    return spectro_bytes
+
 
 
 def recs_featurize_audio_bytes(recs: pd.DataFrame) -> pd.DataFrame:
@@ -645,12 +743,13 @@ def recs_featurize_audio_bytes(recs: pd.DataFrame) -> pd.DataFrame:
     - Directly read file for rec.id (audio id), failing if it doesn't exist (no transcoding/caching)
     - Doesn't use (or need) .audio
     """
-    return (recs
-        .assign(
-            audio_bytes_mimetype = lambda df: df.id.map(audio_id_to_mimetype),
-            audio_bytes          = lambda df: df.id.map(audio_id_to_bytes),
+    with log_time_context():
+        return (recs
+            .assign(
+                audio_bytes_mimetype = lambda df: df.id.map(audio_id_to_mimetype),
+                audio_bytes          = lambda df: map_progress(audio_id_to_bytes, df.id, desc='audio_bytes'),
+            )
         )
-    )
 
 
 def recs_featurize_spectro_disp(

@@ -1335,7 +1335,7 @@ def species_probs_probs(df) -> pd.DataFrame:
     )
 
 
-def rec_probs(rec, search):
+def rec_preds(rec, search):
     """Interactive shorthand"""
     return (
         search.species_probs_one(rec)

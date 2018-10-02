@@ -19,6 +19,7 @@ from werkzeug.urls import Href, URL, url_parse, url_unparse
 
 import api.recs
 from api.util import *
+from logging_ import *
 from util import *
 
 log = structlog.get_logger(__name__)
@@ -299,18 +300,22 @@ def jsonify_df(df) -> Response:
 
 
 def htmlify_df(template: str, df, render_df_html=True) -> str:
-    # df_html = ipy_formats_to_html(df)  # XXX This doesn't know df_cell's
-    df_html = ipy_formats._format_df(df, mimetype='text/html',  # HACK Promote this from private (and rename?)
-        index=False,
-        # header=False,  # Keep: helpful to include headers on the table, for now
-    )
-    if render_df_html:
-        # Render inline templates in the df html str
-        df_html = render_template_string(df_html)
-    return htmlify_html(
-        template=template,
-        body_html=df_html,
-    )
+    with log_time_context('ipy_formats'):
+        # df_html = ipy_formats_to_html(df)  # XXX This doesn't know df_cell's
+        df_html = ipy_formats._format_df(df, mimetype='text/html',  # HACK Promote _format_df from private (and rename?)
+            index=False,
+            # header=False,  # Keep: helpful to include headers on the table, for now
+        )
+    with log_time_context('render (slow ok)'):
+        # Slow: df_html has a bunch of inline img/audio data urls
+        #   - Don't fix this for web only, since faster flask templates aren't likely to be critical path for mobile
+        if render_df_html:
+            # Render inline templates in the df html str
+            df_html = render_template_string(df_html)
+        return htmlify_html(
+            template=template,
+            body_html=df_html,
+        )
 
 
 def htmlify_html(template: str, body_html: str) -> str:
