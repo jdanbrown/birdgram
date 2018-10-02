@@ -38,11 +38,6 @@ from potoo.pandas import df_ensure, df_summary
 from potoo.util import generator_to, puts, singleton, strip_startswith, tap
 import tqdm
 
-# Order for precedence: last import wins (e.g. more_itertools.take shadows toolz.take)
-from toolz import *
-from more_itertools import *
-from itertools import *
-
 from json_ import *
 from logging_ import *
 from progress import *

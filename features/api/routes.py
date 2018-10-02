@@ -9,10 +9,11 @@ import flask
 from flask import current_app as app  # How to access app in a blueprint [https://stackoverflow.com/a/38262792/397334]
 from flask import Blueprint, Markup, redirect, render_template, render_template_string, request, Response
 from flask.json import jsonify
+from more_itertools import partition
 from potoo.ipython import ipy_formats, ipy_formats_to_html
 from potoo.util import ensure_endswith
 import structlog
-import toolz
+from toolz import compose, valmap
 import werkzeug
 from werkzeug.datastructures import MultiDict
 from werkzeug.urls import Href, URL, url_parse, url_unparse
@@ -33,7 +34,7 @@ bp = Blueprint('routes', __name__, static_folder='api/static')
 
 @bp.route('/')
 def root():
-    return redirect('/health')
+    return redirect('/recs/xc/species')
 
 
 @bp.route('/health')
@@ -140,7 +141,7 @@ def href(*args, safe=True, **kwargs) -> Href:
     """
     h = Href(*args, **kwargs)
     if safe:
-        h = toolz.compose(Markup, h)
+        h = compose(Markup, h)
     return h
 
 
@@ -176,7 +177,7 @@ def handle_exception(e):
 
     # Translate ApiError's into http responses
     if isinstance(e, ApiError):
-        rep = jsonify(dict(error=e.msg, **e.kwargs))
+        rep = jsonify({'msg': e.msg, **valmap(str, e.kwargs)})
         rep.status_code = e.status_code
         return rep
     # Translate RedirectError's into http 3xx responses
@@ -259,7 +260,8 @@ def _parse_request_args(
 
 
 def _parse_request_arg(func, k: str, v: str) -> any:
-    typ = inspect.getfullargspec(func).annotations.get(k)
+    param = inspect.signature(func).parameters.get(k)
+    typ = param and param.annotation
     if typ is None:
         parse = lambda x: x
     elif typ == Sequence[str]:  # TODO Sequence[X], generically
@@ -274,10 +276,10 @@ def _parse_request_arg(func, k: str, v: str) -> any:
 
 
 def _validate_kwargs(func, **kwargs):
-    argspec = inspect.getfullargspec(func)
-    argspec_defaults = argspec.defaults or []
-    required_args = argspec.args[:-len(argspec_defaults)] if len(argspec_defaults) else argspec.args
-    optional_args = dict(zip(argspec.args[-len(argspec_defaults):], argspec_defaults))
+    params = inspect.signature(func).parameters
+    (required_args, optional_args) = partition(lambda p: p.default != inspect.Signature.empty, params.values())
+    required_args = [p.name for p in required_args]
+    optional_args = {p.name: p.default for p in optional_args}
     if set(kwargs) - {*required_args, *optional_args}:
         # Redirect instead of hard error on extra params
         #   - Still provides (subtle) feedback to user by changing the url

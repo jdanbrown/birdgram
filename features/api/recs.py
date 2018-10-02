@@ -27,6 +27,7 @@ from viz import *
 log = structlog.get_logger(__name__)
 
 
+@log_time_deco
 def xc_meta(
     species: str,
     quality: str = None,
@@ -47,6 +48,7 @@ def xc_meta(
     )
 
 
+@log_time_deco
 def xc_species_html(
     species: str = None,
     quality: str = 'ab',
@@ -57,6 +59,10 @@ def xc_species_html(
     sp_cols: str = None,
     sort: str = 'date',  # Name apart from 'rank' so that e.g. /similar?rank=d_pc doesn't transfer to /species?sort=...
 ) -> pd.DataFrame:
+
+    # Return no results so user gets blank controls to fill in
+    if not species:
+        return pd.DataFrame()
 
     # Params
     species = species_for_query(species)
@@ -72,43 +78,52 @@ def xc_species_html(
     return (sg.search_recs
 
         # Filter
-        [lambda df: df.species == species]
-        .pipe(df_require_nonempty_for_api, 'No recs found', species=species)
-        [lambda df: df.columns if not quality else df.quality.isin(quality)]
-        .pipe(df_require_nonempty_for_api, 'No recs found', species=species, quality=quality)
-        .reset_index(drop=True)  # Reset to RangeIndex after filter
-        .pipe(df_remove_unused_categories)  # Drop unused cats after filter
+        .pipe(log_time_df, desc='filter', f=lambda df: (df
+            [lambda df: df.species == species]
+            .pipe(df_require_nonempty_for_api, 'No recs found', species=species)
+            [lambda df: df.columns if not quality else df.quality.isin(quality)]
+            .pipe(df_require_nonempty_for_api, 'No recs found', species=species, quality=quality)
+            .reset_index(drop=True)  # Reset to RangeIndex after filter
+            .pipe(df_remove_unused_categories)  # Drop unused cats after filter
+        ))
 
         # Top recs by `sort` (e.g. .date)
         #   - TODO Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
-        .pipe(lambda df: df.sort_values(**one([
-            dict(by=sort, ascending=sort in ['quality', 'time'])
-            for sort in [sort if sort in df else 'date']
-        ])))
-        [:n_recs]
-        .reset_index(drop=True)  # Reset to RangeIndex after sort
+        .pipe(log_time_df, desc='sort', f=lambda df: (df
+            .pipe(lambda df: df.sort_values(**one([
+                dict(by=sort, ascending=sort in ['quality', 'time'])
+                for sort in [sort if sort in df else 'date']
+            ])))
+            [:n_recs]
+            .reset_index(drop=True)  # Reset to RangeIndex after sort
+        ))
 
         # Featurize
-        .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+        .pipe(log_time_df, desc='spectro_disp', f=lambda df: (df
+            .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+        ))
 
         # View
-        .pipe(recs_view, view=view, sp_cols=sp_cols, links=['sort'])
-        [lambda df: [c for c in [
-            'xc', 'xc_id',
-            'com_name', 'species', 'spectro_disp',
-            'quality', 'date', 'time',
-            'type', 'subspecies', 'background_species',
-            'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
-            'recs_for_sp',
-            # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
-        ] if c in df]]
+        .pipe(log_time_df, desc='view', f=lambda df: (df
+            .pipe(recs_view, view=view, sp_cols=sp_cols, links=['sort'])
+            [lambda df: [c for c in [
+                'xc', 'xc_id',
+                'com_name', 'species', 'spectro_disp',
+                'quality', 'date', 'time',
+                'type', 'subspecies', 'background_species',
+                'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
+                'recs_for_sp',
+                # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
+            ] if c in df]]
+        ))
 
     )
 
 
+@log_time_deco
 def xc_similar_html(
-    xc_id: int,
-    quality: str = None,
+    xc_id: int = None,
+    quality: str = 'ab',
     n_sp: int = None,
     n_total: int = 20,
     n_sp_recs: int = None,
@@ -121,10 +136,12 @@ def xc_similar_html(
     sp_cols: str = None,
 ) -> pd.DataFrame:
 
+    # Return no results so user gets blank controls to fill in
+    if not xc_id:
+        return pd.DataFrame()
+
     # Params
-    quality   = quality or 'ab'
-    quality   = [q.upper() for q in quality]
-    quality   = [{'N': 'no score'}.get(q, q) for q in quality]
+    quality   = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
     n_sp      = n_sp    and np.clip(n_sp,     0,  None)
     n_total   = n_total and np.clip(n_total,  0,  1000)
     n_sp_recs = (n_sp_recs or None) and np.clip(n_sp_recs, 0, None)
@@ -142,7 +159,7 @@ def xc_similar_html(
     # Lookup query_rec from search_recs
     query_rec = log_time_df(search_recs, desc='query_rec', f=lambda df: (df
         [lambda df: df.xc_id == xc_id]
-        .pipe(df_require_nonempty_for_api, 'No recs found', xc_id=xc_id)
+        .pipe(df_require_nonempty_for_api, 'query_rec not found', xc_id=xc_id)
         .reset_index(drop=True)  # Reset to RangeIndex after filter
         .pipe(lambda df: one(df_rows(df)))
     ))
@@ -163,7 +180,7 @@ def xc_similar_html(
         # Filter
         [lambda df: df.species.isin(query_sp_p.species)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species)
-        [lambda df: df.quality.isin(quality)]
+        [lambda df: df.columns if not quality else df.quality.isin(quality)]
         .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species, quality=quality)
         .reset_index(drop=True)  # Reset to RangeIndex after filter
         .pipe(df_remove_unused_categories)  # Drop unused cats after filter
@@ -230,21 +247,14 @@ def xc_similar_html(
             #       - -log(p) + d_f     = ... [Meaningful? Helpful to rescale?]
             #       - -log(p) + d_p     = ... [Meaningful? Helpful to rescale?]
             #       - d_f     + d_p     = ... [Meaningful? Helpful to rescale?]
-            .pipe(lambda df: (df
-                .pipe(log_time_df, desc='ranked_recs:scores:mock', f=lambda df: (df  # TODO TODO XXX After fixing bottleneck
-                    # Mock scores for query_rec so that it always shows at the top
-                    #   - TODO TODO Mildly slow b/c df_map_rows, but is it a dominant bottleneck at 35k recs?
-                    .pipe(df_map_rows, lambda row: row if row.xc_id != query_rec.xc_id else series_assign(row,
-                        sp_p=1,
-                    ))
-                ))
-                .pipe(log_time_df, desc='ranked_recs:scores:derived', f=lambda df: (df  # TODO TODO XXX After fixing bottleneck
-                    # Derived scores
-                    .assign(
-                        d_slp=lambda df: np.abs(-np.log(df.sp_p)),  # d_slp: "species log prob" (abs for 1->0 i/o -0)
-                    )
-                ))
-            ))
+            .assign(
+                # Mock scores for query_rec so that it always shows at the top
+                sp_p=lambda df: df.sp_p.mask(df.xc_id == query_rec.xc_id, 1),
+            )
+            .assign(
+                # Derived scores
+                d_slp=lambda df: np.abs(-np.log(df.sp_p)),  # d_slp: "species log prob" (abs for 1->0 i/o -0)
+            )
         ))
         .pipe(log_time_df, desc='ranked_recs:top_recs_per_sp', f=lambda df: (df
             # Top recs per sp
@@ -265,33 +275,35 @@ def xc_similar_html(
     )
 
     # Featurize + view ranked_recs
-    view_recs = log_time_df(ranked_recs, desc='view_recs', f=lambda df: (df
+    return (ranked_recs
         # Featurize
-        .pipe(log_time_df, recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
-        # View
-        .pipe(log_time_df, recs_view, view=view, sp_cols=sp_cols, links=['rank'])
-        .pipe(lambda df: (df
-            .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
-                'd_slp',
-                *[c for c in [d_(f, m) for m in '2c' for f in 'fp'] if c in df],
-            ])
+        .pipe(log_time_df, desc='spectro_disp', f=lambda df: (df
+            .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
         ))
-        [lambda df: [c for c in [
-            'xc', 'xc_id',
-            *unique_everseen([
-                # rank,  # Show rank col first, for feedback to user  # XXX Nope, too confusing to change col order
-                *[c for c in df if c.startswith('d_')]  # Scores (d_*)
-            ]),
-            'com_name', 'species', 'spectro_disp',
-            'quality', 'date', 'time',
-            'type', 'subspecies', 'background_species',
-            'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
-            'recs_for_sp',
-            # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
-        ] if c in df]]
-    ))
-
-    return view_recs
+        # View
+        .pipe(log_time_df, desc='view', f=lambda df: (df
+            .pipe(recs_view, view=view, sp_cols=sp_cols, links=['rank'])
+            .pipe(lambda df: (df
+                .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
+                    'd_slp',
+                    *[c for c in [d_(f, m) for m in '2c' for f in 'fp'] if c in df],
+                ])
+            ))
+            [lambda df: [c for c in [
+                'xc', 'xc_id',
+                *unique_everseen([
+                    # rank,  # Show rank col first, for feedback to user  # XXX Nope, too confusing to change col order
+                    *[c for c in df if c.startswith('d_')]  # Scores (d_*)
+                ]),
+                'com_name', 'species', 'spectro_disp',
+                'quality', 'date', 'time',
+                'type', 'subspecies', 'background_species',
+                'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
+                'recs_for_sp',
+                # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
+            ] if c in df]]
+        ))
+    )
 
 
 # WARNING Unsafe to @cache since it contains methods and stuff

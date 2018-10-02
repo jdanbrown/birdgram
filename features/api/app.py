@@ -13,6 +13,7 @@ from api.server_globals import sg
 from cache import memory
 from config import config
 from inits import *
+from json_ import json_sanitize
 from logging_ import init_logging
 from util import *
 
@@ -32,6 +33,7 @@ def create_app(
     app = Flask(__name__)
 
     # Config [TODO -> config-*.yaml]
+    app.config['JSON_SORT_KEYS'] = False  # Don't sort_keys=True in flask.json.jsonify (via flask.json.dumps)
     # app.config['EXPLAIN_TEMPLATE_LOADING'] = True  # Debug
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching for /static (for computed responses, see api.routes)
     app.config['BUBO_PDB'] = os.environ.get('BUBO_PDB')
@@ -45,7 +47,7 @@ def create_app(
     log.info('Config:')
     print(textwrap.indent(prefix='  ', text=(  # Indent under the log line
         yaml.safe_dump(default_flow_style=False, width=1e9,  # Yaml for high SNR
-            data=json.loads(json_dumps_safe(config)),  # Json cleanse to strip nonstandard data structures for yaml
+            data=json_sanitize(config),  # json_sanitize to strip nonstandard data structures for yaml
         ).rstrip('\n')
     )))
 

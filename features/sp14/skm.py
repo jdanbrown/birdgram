@@ -12,6 +12,8 @@ import sklearn
 from sklearn.decomposition import PCA
 import yaml
 
+from json_ import json_sanitize
+
 
 class SKM(object):
     """
@@ -477,7 +479,7 @@ class SKM(object):
             print('[%s] %s' % (t, event))
             # Display each (k,v) pair on its own line, indented
             for k, v in kwargs.items():
-                v_yaml = yaml.safe_dump(json.loads(json.dumps(v)), default_flow_style=True, width=1e9)
+                v_yaml = yaml.safe_dump(json_sanitize(v), default_flow_style=True, width=1e9)
                 v_yaml = v_yaml.split('\n')[0]  # Handle documents ([1] -> '[1]\n') and scalars (1 -> '1\n...\n')
                 print('  %s: %s' % (k, v_yaml))
 

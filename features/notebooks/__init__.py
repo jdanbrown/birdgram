@@ -43,11 +43,9 @@ import dask.array as da
 import dask.dataframe as dd
 # import dateparser  # Slow and currently unused
 from IPython.display import display
-from itertools import *
 import lightgbm as lgb
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from more_itertools import *
 import numpy as np
 import pandas as pd
 import PIL
@@ -70,10 +68,14 @@ import sklearn as sk
 import sqlalchemy as sqla
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-import toolz
 from tqdm import tqdm
 import yaml
 import xgboost as xgb
+# Order for precedence: last import wins (e.g. more_itertools.take shadows toolz.take)
+import toolz; from toolz import *
+import more_itertools; from more_itertools import *
+import itertools; from itertools import *
+import functools; from functools import *
 
 from api.recs import *
 from api.server_globals import *

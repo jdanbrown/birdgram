@@ -21,3 +21,10 @@ def json_dumps_canonical(obj: any, **kwargs) -> str:
     - json_dumps_canonical(dict(a=1, b=2)) == json_dumps_canonical(dict(b=2, a=1))
     """
     return json_dumps_safe(obj, sort_keys=True, separators=(',', ':'), **kwargs)
+
+
+def json_sanitize(x: any) -> any:
+    """
+    Sanitize (deep) contents of x so it's json safe
+    """
+    return json.loads(json_dumps_safe(x))

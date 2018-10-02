@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from more_itertools import sliced
-import toolz
+from toolz import valmap
 
 import geoh
 
@@ -21,7 +21,7 @@ def approx_f(x, digits=6):
 
 def approx_fs(xs, digits=6):
     if isinstance(xs, dict):
-        return toolz.valmap(partial(approx_f, digits=digits), xs)
+        return valmap(partial(approx_f, digits=digits), xs)
     else:
         return type(xs)(map(partial(approx_f, digits=digits), xs))
 

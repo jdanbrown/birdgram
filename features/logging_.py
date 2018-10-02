@@ -16,7 +16,7 @@ import structlog
 import oyaml as yaml  # Drop-in replacement that preserves dict ordering (for BuboRenderer)
 
 from config import config
-from json_ import json_dumps_safe
+from json_ import json_dumps_safe, json_sanitize
 
 log = structlog.get_logger(__name__)
 log_as_caller = structlog.get_logger('[caller]')
@@ -79,7 +79,7 @@ def load_logging_dict(logging_yaml=None) -> dict:
         logging_yaml_path
     )
     with open(logging_yaml) as f:
-        return json.loads(json_dumps_safe(yaml.safe_load(f.read())))  # json to sanitize whatever wacky stuff yaml gives us
+        return json_sanitize(yaml.safe_load(f.read()))  # json to sanitize whatever wacky stuff yaml gives us
 
 
 class BuboRenderer:
@@ -96,7 +96,7 @@ class BuboRenderer:
             # *['%s=%s' % (k, v) for k, v in event_dict.items()]
             # *['%s:%s' % (k, json_dumps_safe(v)) for k, v in event_dict.items()]
             # json_dumps_safe(event_dict)
-            yaml.safe_dump(json.loads(json_dumps_safe(event_dict)), default_flow_style=True, width=1e9).rstrip()
+            yaml.safe_dump(json_sanitize(event_dict), default_flow_style=True, width=1e9).rstrip()
         )
         msg = ' '.join(x for x in [event, data] if x is not None)
         return msg
@@ -143,7 +143,7 @@ class BuboFilter(logging.Filter):
         # Map get_logger('[caller']) .name to caller's module name
         #   - TODO Is this a good idea? e.g. does controlling log levels get out of hand?
         if record.name == '[caller]':
-            record.name = module.__name__
+            record.name = module.__name__ if module else '?'  # Guard against module=None
 
         # msg, args
         #   - HACK `msg % args` is done downstream by Formatter, but we do it in advance to compute name_funcName_message
@@ -201,6 +201,8 @@ def color(color: str, x: any, bold=True) -> str:
 #
 
 from contextlib import contextmanager
+from functools import wraps
+
 from potoo.util import timer_start
 
 
@@ -223,6 +225,16 @@ def log_time_context(desc=None, log=None):
         yield
     finally:
         log.info('%s[%.3fs]' % (f'{desc} ' if desc else '', timer.time()))
+
+
+def log_time_deco(f=None, desc=None, log=None):
+    def decorator(f):
+        @wraps(f)
+        def g(*args, **kwargs):
+            with log_time_context(desc=desc, log=log):
+                return f(*args, **kwargs)
+        return g
+    return decorator(f) if f else decorator
 
 
 # Dispatch from util.map_progress
