@@ -7,23 +7,25 @@
     <td>xc_id</td>
     <td>quality</td>
     <td>n_sp</td>
-    <td>n_total</td>
+    <td>group_sp</td>
     <td>n_sp_recs</td>
+    <td>n_total</td>
     <td>scale</td>
     <td>dists</td>
   </tr>
 
   <tr>
     <td><a class="control" href="//{{ req_switch_host_host() }}{{ request.full_path }}">{{ req_switch_host_text() }}</a></td>
-    <td><input type="text" data-arg="xc_id"     class="control num xc_id"     value="{{ req_query_get('xc_id',     '')   }}" /></td>
-    <td><input type="text" data-arg="quality"   class="control text quality"  value="{{ req_query_get('quality',   'ab') }}"
+    <td><input type="text" data-arg="xc_id"     class="control num  xc_id"     value="{{ req_query_get('xc_id',     '')   }}" /></td>
+    <td><input type="text" data-arg="quality"   class="control text quality"   value="{{ req_query_get('quality',   'ab') }}"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
     /></td>
-    <td><input type="text" data-arg="n_sp"      class="control num n_sp"      value="{{ req_query_get('n_sp',      '')   }}" /></td>
-    <td><input type="text" data-arg="n_total"   class="control num n_total"   value="{{ req_query_get('n_total',   20)   }}" /></td>
-    <td><input type="text" data-arg="n_sp_recs" class="control num n_sp_recs" value="{{ req_query_get('n_sp_recs', '')   }}" /></td>
-    <td><input type="text" data-arg="scale"     class="control num scale"     value="{{ req_query_get('scale',     2)    }}" /></td>
-    <td><input type="text" data-arg="dists"     class="control num dists"     value="{{ req_query_get('dists',     '2c') }}" /></td>
+    <td><input type="text" data-arg="n_sp"      class="control num  n_sp"      value="{{ req_query_get('n_sp',      '')   }}" /></td>
+    <td><input type="text" data-arg="group_sp"  class="control text group_sp"  value="{{ req_query_get('group_sp',  'y')  }}" /></td>
+    <td><input type="text" data-arg="n_sp_recs" class="control num  n_sp_recs" value="{{ req_query_get('n_sp_recs', 3)    }}" /></td>
+    <td><input type="text" data-arg="n_total"   class="control num  n_total"   value="{{ req_query_get('n_total',   30)   }}" /></td>
+    <td><input type="text" data-arg="scale"     class="control num  scale"     value="{{ req_query_get('scale',     2)    }}" /></td>
+    <td><input type="text" data-arg="dists"     class="control num  dists"     value="{{ req_query_get('dists',     '2c') }}" /></td>
   </tr>
 
 {% endblock %}

@@ -227,14 +227,21 @@ def log_time_context(desc=None, log=None):
         log.info('%s[%.3fs]' % (f'{desc} ' if desc else '', timer.time()))
 
 
-def log_time_deco(f=None, desc=None, log=None):
-    def decorator(f):
-        @wraps(f)
-        def g(*args, **kwargs):
-            with log_time_context(desc=desc, log=log):
-                return f(*args, **kwargs)
-        return g
-    return decorator(f) if f else decorator
+# TODO How to make this report the call site's lineno (and funcName and module/logger name)?
+#   - Passing log=log fixes record.name, but not .lineno + .funcName
+#   - Example stack: https://gist.github.com/jdanbrown/b9944d7a131fe7faa5585c6064cdacb8
+# def log_time_deco(f_or_desc=None, f=None, desc=None, log=None):
+#     if callable(f_or_desc):
+#         f = f_or_desc
+#     else:
+#         desc = f_or_desc
+#     def decorator(f):
+#         @wraps(f)
+#         def g(*args, **kwargs):
+#             with log_time_context(desc=desc, log=log):
+#                 return f(*args, **kwargs)
+#         return g
+#     return decorator(f) if f else decorator
 
 
 # Dispatch from util.map_progress

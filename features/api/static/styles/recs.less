@@ -1,3 +1,21 @@
+a {
+  text-decoration: none;
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+
+  tr {
+    th, td {
+      padding: 0 5px;
+      text-align: left;
+      white-space: nowrap;
+    }
+  }
+
+}
+
 #top-controls {
   margin-bottom: 10px;
   white-space: nowrap;
@@ -17,10 +35,11 @@
     outline: none;
   }
 
-  input.num       { width: 2ex; }
-  input.species   { width: 5ex; }
-  input.quality   { width: 2ex; }
-  input.num.xc_id { width: 6ex; }
+  input.text.species  { width: 5ex; }
+  input.text.quality  { width: 2ex; }
+  input.text.group_sp { width: 1ex; }
+  input.num           { width: 2ex; }
+  input.num.xc_id     { width: 6ex; }
 
 }
 
@@ -39,22 +58,4 @@
     }
 
   }
-}
-
-table {
-  border-collapse: collapse;
-  border-spacing: 0;
-
-  tr {
-    th, td {
-      padding: 0 5px;
-      text-align: left;
-      white-space: nowrap;
-    }
-  }
-
-}
-
-a {
-  text-decoration: none;
 }

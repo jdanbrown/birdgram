@@ -27,106 +27,107 @@ from viz import *
 log = structlog.get_logger(__name__)
 
 
-@log_time_deco
 def xc_meta(
     species: str,
     quality: str = None,
     n_recs: int = 10,
 ) -> pd.DataFrame:
+    with log_time_context():
 
-    # Params
-    species = species_for_query(species)
-    quality = quality or 'ab'
-    quality = [q.upper() for q in quality]
-    quality = [{'N': 'no score'}.get(q, q) for q in quality]
-    n_recs = np.clip(n_recs, 0, 50)
+        # Params
+        species = species_for_query(species)
+        quality = quality or 'ab'
+        quality = [q.upper() for q in quality]
+        quality = [{'N': 'no score'}.get(q, q) for q in quality]
+        n_recs = np.clip(n_recs, 0, 50)
 
-    return (sg.xc_meta
-        [lambda df: df.species == species]
-        [lambda df: df.quality.isin(quality)]
-        [:n_recs]
-    )
+        return (sg.xc_meta
+            [lambda df: df.species == species]
+            [lambda df: df.quality.isin(quality)]
+            [:n_recs]
+        )
 
 
-@log_time_deco
 def xc_species_html(
     species: str = None,
     quality: str = 'ab',
-    n_recs: int = 20,
+    n_recs: int = 50,
     audio_s: float = 10,
     scale: float = 2,
     view: bool = None,
     sp_cols: str = None,
     sort: str = 'date',  # Name apart from 'rank' so that e.g. /similar?rank=d_pc doesn't transfer to /species?sort=...
 ) -> pd.DataFrame:
+    with log_time_context():
 
-    # Return no results so user gets blank controls to fill in
-    if not species:
-        return pd.DataFrame()
+        # Return no results so user gets blank controls to fill in
+        if not species:
+            return pd.DataFrame()
 
-    # Params
-    species = species_for_query(species)
-    if not species: return pd.DataFrame([])
-    quality = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
-    n_recs  = n_recs and np.clip(n_recs, 0, None)
-    audio_s = np.clip(audio_s, 0, 30)
+        # Params
+        species = species_for_query(species)
+        if not species: return pd.DataFrame([])
+        quality = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
+        n_recs  = n_recs and np.clip(n_recs, 0, None)
+        audio_s = np.clip(audio_s, 0, 30)
+        scale   = np.clip(scale, 0, 5)
 
-    # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
-    require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
-    del audio_s
+        # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
+        require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
+        del audio_s
 
-    return (sg.search_recs
+        return (sg.search_recs
 
-        # Filter
-        .pipe(log_time_df, desc='filter', f=lambda df: (df
-            [lambda df: df.species == species]
-            .pipe(df_require_nonempty_for_api, 'No recs found', species=species)
-            [lambda df: df.columns if not quality else df.quality.isin(quality)]
-            .pipe(df_require_nonempty_for_api, 'No recs found', species=species, quality=quality)
-            .reset_index(drop=True)  # Reset to RangeIndex after filter
-            .pipe(df_remove_unused_categories)  # Drop unused cats after filter
-        ))
+            # Filter
+            .pipe(log_time_df, desc='filter', f=lambda df: (df
+                [lambda df: df.species == species]
+                .pipe(df_require_nonempty_for_api, 'No recs found', species=species)
+                [lambda df: df.columns if not quality else df.quality.isin(quality)]
+                .pipe(df_require_nonempty_for_api, 'No recs found', species=species, quality=quality)
+                .reset_index(drop=True)  # Reset to RangeIndex after filter
+                .pipe(df_remove_unused_categories)  # Drop unused cats after filter
+            ))
 
-        # Top recs by `sort` (e.g. .date)
-        #   - TODO Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
-        .pipe(log_time_df, desc='sort', f=lambda df: (df
-            .pipe(lambda df: df.sort_values(**one([
-                dict(by=sort, ascending=sort in ['quality', 'time'])
-                for sort in [sort if sort in df else 'date']
-            ])))
-            [:n_recs]
-            .reset_index(drop=True)  # Reset to RangeIndex after sort
-        ))
+            # Top recs by `sort` (e.g. .date)
+            #   - TODO Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
+            .pipe(log_time_df, desc='sort', f=lambda df: (df
+                .pipe(lambda df: df.sort_values(**one([
+                    dict(by=sort, ascending=sort in ['quality', 'time'])
+                    for sort in [sort if sort in df else 'date']
+                ])))
+                [:n_recs]
+                .reset_index(drop=True)  # Reset to RangeIndex after sort
+            ))
 
-        # Featurize
-        .pipe(log_time_df, desc='spectro_disp', f=lambda df: (df
-            .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
-        ))
+            # Featurize
+            .pipe(log_time_df, desc='spectro_disp', f=lambda df: (df
+                .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+            ))
 
-        # View
-        .pipe(log_time_df, desc='view', f=lambda df: (df
-            .pipe(recs_view, view=view, sp_cols=sp_cols, links=['sort'])
-            [lambda df: [c for c in [
-                'xc', 'xc_id',
-                'com_name', 'species', 'spectro_disp',
-                'quality', 'date', 'time',
-                'type', 'subspecies', 'background_species',
-                'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
-                'recs_for_sp',
-                # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
-            ] if c in df]]
-        ))
+            # View
+            .pipe(log_time_df, desc='view', f=lambda df: (df
+                .pipe(recs_view, view=view, sp_cols=sp_cols, links=['sort'])
+                [lambda df: [c for c in [
+                    'xc', 'xc_id',
+                    'com_name', 'species', 'spectro_disp',
+                    'quality', 'date', 'time',
+                    'type', 'subspecies', 'background_species',
+                    'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
+                    'recs_for_sp',
+                    # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
+                ] if c in df]]
+            ))
 
-    )
+        )
 
 
-@log_time_deco
 def xc_similar_html(
     xc_id: int = None,
     quality: str = 'ab',
     n_sp: int = None,
-    n_total: int = 20,
-    n_sp_recs: int = None,
+    group_sp: str = 'y',
+    n_sp_recs: int = 3,
+    n_total: int = 30,
     audio_s: float = 10,
     scale: float = 2,
     dists: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
@@ -135,175 +136,185 @@ def xc_similar_html(
     view: bool = None,
     sp_cols: str = None,
 ) -> pd.DataFrame:
+    with log_time_context():
 
-    # Return no results so user gets blank controls to fill in
-    if not xc_id:
-        return pd.DataFrame()
+        # Return no results so user gets blank controls to fill in
+        if not xc_id:
+            return pd.DataFrame()
 
-    # Params
-    quality   = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
-    n_sp      = n_sp    and np.clip(n_sp,     0,  None)
-    n_total   = n_total and np.clip(n_total,  0,  1000)
-    n_sp_recs = (n_sp_recs or None) and np.clip(n_sp_recs, 0, None)
-    audio_s   = audio_s and np.clip(audio_s,  0,  30)
-    dists     = list(dists)
-    rank      = rank.split(',')
+        # Params
+        quality   = quality  and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
+        n_sp      = n_sp     and np.clip(n_sp,     0,  None)
+        require(group_sp in ['y', 'n', '', None])
+        group_sp  = group_sp == 'y'
+        n_sp_recs = (n_sp_recs or None) and np.clip(n_sp_recs, 0, None)
+        n_total   = n_total  and np.clip(n_total,  0,  1000)
+        audio_s   = audio_s  and np.clip(audio_s,  0,  30)
+        scale     = np.clip(scale, 0, 5)
+        dists     = list(dists)
 
-    # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
-    require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
-    del audio_s
+        # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
+        require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
+        del audio_s
 
-    # Get precomputed search_recs
-    search_recs = sg.search_recs
+        # Get precomputed search_recs
+        search_recs = sg.search_recs
 
-    # Lookup query_rec from search_recs
-    query_rec = log_time_df(search_recs, desc='query_rec', f=lambda df: (df
-        [lambda df: df.xc_id == xc_id]
-        .pipe(df_require_nonempty_for_api, 'query_rec not found', xc_id=xc_id)
-        .reset_index(drop=True)  # Reset to RangeIndex after filter
-        .pipe(lambda df: one(df_rows(df)))
-    ))
-
-    # Predict query_sp_p from search model
-    query_sp_p = log_time(desc='rec_preds', f=lambda: (
-        # We could reuse query_rec.f_preds, but:
-        #   - The code complexity to map f_preds (np.array(probs)) to rec_preds (df[species, prob]) is nontrivial (>1h refactor)
-        #   - Always using rec_preds ensures that behavior is consistent between user rec and xc rec
-        #   - Skipping rec_preds for xc recs would only save ~150ms
-        rec_preds(query_rec, sg.search)
-        [:n_sp]
-        .rename(columns={'p': 'sp_p'})
-    ))
-
-    # Filter search_recs for query_sp_p
-    search_recs = log_time_df(search_recs, desc='search_recs:filter', f=lambda df: (df
-        # Filter
-        [lambda df: df.species.isin(query_sp_p.species)]
-        .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species)
-        [lambda df: df.columns if not quality else df.quality.isin(quality)]
-        .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species, quality=quality)
-        .reset_index(drop=True)  # Reset to RangeIndex after filter
-        .pipe(df_remove_unused_categories)  # Drop unused cats after filter
-    ))
-
-    # HACK Include query_rec in results [this is a view concern, but jam it in here as a shortcut]
-    search_recs = log_time_df(search_recs, desc='search_recs:add_query_rec', f=lambda df: (df
-        .pipe(lambda df: df if query_rec.xc_id in df.xc_id.values else pd.concat(
-            [df, DF([query_rec])],
-            sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
+        # Lookup query_rec from search_recs
+        query_rec = log_time_df(search_recs, desc='query_rec', f=lambda df: (df
+            [lambda df: df.xc_id == xc_id]
+            .pipe(df_require_nonempty_for_api, 'query_rec not found', xc_id=xc_id)
+            .reset_index(drop=True)  # Reset to RangeIndex after filter
+            .pipe(lambda df: one(df_rows(df)))
         ))
-        .reset_index(drop=True)  # Reset to RangeIndex after concat
-    ))
 
-    # Compute dists for query_rec, so user can interactively compare and evaluate them
-    #   - O(n)
-    #   - (Preds dist last investigated in notebooks/app_ideas_6_with_pca)
-    dist_info = {
-        '2': sk.metrics.pairwise.distance_metrics()['l2'],
-        '1': sk.metrics.pairwise.distance_metrics()['l1'],
-        'c': sk.metrics.pairwise.distance_metrics()['cosine'],
-    }
-    dist_recs = log_time_df(search_recs, desc='dist_recs', f=lambda df: (df
-        .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-            d_(f, d): (
-                d_compute(
-                    list(df[f_col]),  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
-                    [query_rec[f_col]],
+        # Predict query_sp_p from search model
+        query_sp_p = log_time(desc='rec_preds', f=lambda: (
+            # We could reuse query_rec.f_preds, but:
+            #   - The code complexity to map f_preds (np.array(probs)) to rec_preds (df[species, prob]) is nontrivial (>1h refactor)
+            #   - Always using rec_preds ensures that behavior is consistent between user rec and xc rec
+            #   - Skipping rec_preds for xc recs would only save ~150ms
+            rec_preds(query_rec, sg.search)
+            [:n_sp]
+            .rename(columns={'p': 'sp_p'})
+        ))
+
+        # Filter search_recs for query_sp_p
+        search_recs = log_time_df(search_recs, desc='search_recs:filter', f=lambda df: (df
+            # Filter
+            [lambda df: df.species.isin(query_sp_p.species)]
+            .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species)
+            [lambda df: df.columns if not quality else df.quality.isin(quality)]
+            .pipe(df_require_nonempty_for_api, 'No recs found', species=query_sp_p.species, quality=quality)
+            .reset_index(drop=True)  # Reset to RangeIndex after filter
+            .pipe(df_remove_unused_categories)  # Drop unused cats after filter
+        ))
+
+        # Exclude query_rec from results (in case it's an xc rec)
+        search_recs = log_time_df(search_recs, desc='search_recs:exclude_query_rec', f=lambda df: (df
+            [lambda df: df.xc_id != query_rec.xc_id]
+            .reset_index(drop=True)  # Reset to RangeIndex after filter
+        ))
+
+        # Compute dists for query_rec, so user can interactively compare and evaluate them
+        #   - O(n)
+        #   - (Preds dist last investigated in notebooks/app_ideas_6_with_pca)
+        dist_info = {
+            '2': sk.metrics.pairwise.distance_metrics()['l2'],
+            '1': sk.metrics.pairwise.distance_metrics()['l1'],
+            'c': sk.metrics.pairwise.distance_metrics()['cosine'],
+        }
+        dist_recs = log_time_df(search_recs, desc='dist_recs', f=lambda df: (df
+            .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
+                d_(f, d): (
+                    d_compute(
+                        list(df[f_col]),  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
+                        [query_rec[f_col]],
+                    )
+                    .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
                 )
-                .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
-            )
-            for f_col, f, _f_compute in sg.feat_info
-            for d, d_compute in dist_info.items()
-            if d in dists
-        }))
-    ))
+                for f_col, f, _f_compute in sg.feat_info
+                for d, d_compute in dist_info.items()
+                if d in dists
+            }))
+        ))
 
-    # Rank results
-    #   - O(n log k)
-    #   - [later] Add ebird_priors prob
-    sort_by_score = lambda df: df.sort_values(
-        by=one([
-            rank
-            for rank in [[c for c in rank if c in df]]  # Ignore rank cols not in df
-            for rank in [rank if rank else 'd_slp']
-        ]),
-        ascending=True,
-    )
-    # ranked_recs = log_time_df(dist_recs, desc='ranked_recs', f=lambda df: (df
-    ranked_recs = (dist_recs
-        .pipe(log_time_df, desc='ranked_recs:merge', f=lambda df: (df
-            # Join in .sp_p for scoring functions
-            #   - [Using sort=True to silence "non-concatenation axis" warning -- not sure what we want, or if it matters]
-            .merge(how='left', on='species', right=query_sp_p[['species', 'sp_p']],
-                sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
-            )
-        ))
-        .pipe(log_time_df, desc='ranked_recs:scores', f=lambda df: (df
-            # Scores (d_*)
-            #   - A distance measure in [0,inf), lower is better
-            #   - Examples: -log(p), feat dist (d_f), preds dist (d_p)
-            #   - Can be meaningfully combined by addition, e.g.
-            #       - -log(p) + -log(q) = -log(pq)
-            #       - -log(p) + d_f     = ... [Meaningful? Helpful to rescale?]
-            #       - -log(p) + d_p     = ... [Meaningful? Helpful to rescale?]
-            #       - d_f     + d_p     = ... [Meaningful? Helpful to rescale?]
-            .assign(
-                # Mock scores for query_rec so that it always shows at the top
-                sp_p=lambda df: df.sp_p.mask(df.xc_id == query_rec.xc_id, 1),
-            )
-            .assign(
-                # Derived scores
-                d_slp=lambda df: np.abs(-np.log(df.sp_p)),  # d_slp: "species log prob" (abs for 1->0 i/o -0)
-            )
-        ))
-        .pipe(log_time_df, desc='ranked_recs:top_recs_per_sp', f=lambda df: (df
-            # Top recs per sp
-            #   - TODO TODO Slowest part -- how slow at 35k recs?
-            .pipe(lambda df: df if n_sp_recs is None else (df
-                .groupby('species').apply(lambda g: (g
-                    .pipe(sort_by_score)[:n_sp_recs + (
-                        1 if g.name == query_rec.species else 0  # Adjust +1 for query_rec.species
+        # Rank results
+        #   - O(n log k)
+        #   - [later] Add ebird_priors prob
+        d_slp = lambda sp_p: np.abs(-np.log(sp_p))  # d_slp: "species log prob" (abs for 1->0 i/o -0)
+        ranked_recs = (dist_recs
+            .pipe(log_time_df, desc='ranked_recs:merge', f=lambda df: (df
+                # Join in .sp_p for scoring functions
+                #   - [Using sort=True to silence "non-concatenation axis" warning -- not sure what we want, or if it matters]
+                .merge(how='left', on='species', right=query_sp_p[['species', 'sp_p']],
+                    sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
+                )
+            ))
+            .pipe(log_time_df, desc='ranked_recs:scores', f=lambda df: (df
+                # Scores (d_*)
+                #   - A distance measure in [0,inf), lower is better
+                #   - Examples: -log(p), feat dist (d_f), preds dist (d_p)
+                #   - Can be meaningfully combined by addition, e.g.
+                #       - -log(p) + -log(q) = -log(pq)
+                #       - -log(p) + d_f     = ... [Meaningful? Helpful to rescale?]
+                #       - -log(p) + d_p     = ... [Meaningful? Helpful to rescale?]
+                #       - d_f     + d_p     = ... [Meaningful? Helpful to rescale?]
+                .assign(
+                    d_slp=lambda df: d_slp(df.sp_p),
+                )
+            ))
+            .pipe(log_time_df, desc='ranked_recs:top_recs_per_sp', f=lambda df: (df
+                # Top recs per sp
+                .pipe(lambda df: df if n_sp_recs is None else (df
+                    .set_index('xc_id')
+                    .ix[lambda df: (df
+                        .groupby('species')[rank].nsmallest(n_sp_recs)
+                        .index.get_level_values('xc_id')
                     )]
-                )).reset_index(level=0, drop=True)  # Drop groupby key
+                    .reset_index()  # .xc_id
+                ))
             ))
-        ))
-        .pipe(log_time_df, desc='ranked_recs:top_recs_overall', f=lambda df: (df
-            # Top recs overall
-            .pipe(sort_by_score)[:n_total]
-            .reset_index(drop=True)  # Reset to RangeIndex after sort
-        ))
-    )
+            .pipe(log_time_df, desc='ranked_recs:top_recs_overall', f=lambda df: (df
+                # Top recs overall
+                .sort_values(['d_slp', rank] if group_sp else rank)[:n_total]
+                .reset_index(drop=True)  # Reset to RangeIndex after sort
+            ))
+        )
 
-    # Featurize + view ranked_recs
-    return (ranked_recs
-        # Featurize
-        .pipe(log_time_df, desc='spectro_disp', f=lambda df: (df
-            .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
-        ))
-        # View
-        .pipe(log_time_df, desc='view', f=lambda df: (df
-            .pipe(recs_view, view=view, sp_cols=sp_cols, links=['rank'])
-            .pipe(lambda df: (df
-                .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
-                    'd_slp',
-                    *[c for c in [d_(f, m) for m in '2c' for f in 'fp'] if c in df],
-                ])
+        # Featurize + view ranked_recs
+        return (ranked_recs
+
+            # Include query_rec in view
+            #   - HACK Include it as the first result with some mocked-out columns
+            .pipe(log_time_df, desc='add_query_rec', f=lambda df: (df
+                .pipe(lambda df: pd.concat(
+                    sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
+                    objs=[
+                        (
+                            # Expand query_rec cols to match df cols
+                            pd.concat([DF([query_rec]), df[:0]])
+                            # Add query_rec.d_slp for user feedback (mostly for model debugging)
+                            .assign(
+                                sp_p=lambda df: one(query_sp_p[query_sp_p.species == query_rec.species].sp_p.values),
+                                d_slp=lambda df: d_slp(df.sp_p),
+                            )
+                            # Mock d_* cols as 0
+                            .pipe(lambda df: df.fillna({k: 0 for k in df if k.startswith('d_')}))
+                        ),
+                        df,
+                    ],
+                ))
+                .reset_index(drop=True)  # Reset to RangeIndex after concat
             ))
-            [lambda df: [c for c in [
-                'xc', 'xc_id',
-                *unique_everseen([
-                    # rank,  # Show rank col first, for feedback to user  # XXX Nope, too confusing to change col order
-                    *[c for c in df if c.startswith('d_')]  # Scores (d_*)
-                ]),
-                'com_name', 'species', 'spectro_disp',
-                'quality', 'date', 'time',
-                'type', 'subspecies', 'background_species',
-                'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
-                'recs_for_sp',
-                # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
-            ] if c in df]]
-        ))
-    )
+
+            # Featurize
+            .pipe(log_time_df, desc='spectro_disp (slow ok)', f=lambda df: (df
+                .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+            ))
+
+            # View
+            .pipe(log_time_df, desc='view', f=lambda df: (df
+                .pipe(recs_view, view=view, sp_cols=sp_cols, links=['rank'])
+                .pipe(lambda df: (df
+                    .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
+                        'd_slp',
+                        *[c for c in [d_(f, m) for m in '2c' for f in 'fp'] if c in df],
+                    ])
+                ))
+                [lambda df: [c for c in [
+                    'xc', 'xc_id',
+                    *unique_everseen(c for c in df if c.startswith('d_')),  # Scores (d_*)
+                    'com_name', 'species', 'spectro_disp',
+                    'quality', 'date', 'time',
+                    'type', 'subspecies', 'background_species',
+                    'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
+                    'recs_for_sp',
+                    # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
+                ] if c in df]]
+            ))
+
+        )
 
 
 # WARNING Unsafe to @cache since it contains methods and stuff
@@ -828,10 +839,7 @@ def recs_view(
     return (recs
         .pipe(lambda df: df_col_map(df, **{
             # Rank by scores (d_*)
-            c: lambda x, c=c: '''<a href="{{ req_query_with(rank=%r) }}">%s</a>''' % (
-                {'d_slp': 'd_slp,d_pc'}.get(c, c),  # HACK Secondary rank for d_slp [manually edit url to change]
-                round_sig_frac(x, 2),
-            )
+            c: lambda x, c=c: '''<a href="{{ req_query_with(rank=%r) }}">%s</a>''' % (c, round_sig_frac(x, 2))
             for c in df
             if c.startswith('d_') and 'rank' in links
         }))
