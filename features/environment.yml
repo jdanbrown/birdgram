@@ -16,7 +16,7 @@ dependencies:
 # - "ImportError: dlopen(.../readline.cpython-36m-darwin.so, 2): Library not loaded: @rpath/libncursesw.5.dylib"
 - numpy=1.14.5 # Keep this up to date so that pip deps don't install a newer numpy without openblas
 - pillow=4.3.0 # pillow brings in mkl [TODO How do we want this to work?]
-- pandas=0.23.0 # Duped in pip deps
+- pandas=0.23.4 # Duped in pip deps
 - scikit-learn=0.19.1 # Duped in pip deps
 - scipy=1.1.0
 - sox=14.4.2 # For pydub
