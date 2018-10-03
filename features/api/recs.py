@@ -26,6 +26,12 @@ from viz import *
 
 log = structlog.get_logger(__name__)
 
+dist_info = {
+    '2': sk.metrics.pairwise.distance_metrics()['l2'],
+    '1': sk.metrics.pairwise.distance_metrics()['l1'],
+    'c': sk.metrics.pairwise.distance_metrics()['cosine'],
+}
+
 
 def xc_meta(
     species: str,
@@ -51,12 +57,16 @@ def xc_meta(
 def xc_species_html(
     species: str = None,
     quality: str = 'ab',
+    cluster: str = 'k',
+    cluster_k: int = 5,
     n_recs: int = 50,
     audio_s: float = 10,
     scale: float = 2,
+    dists: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
     view: bool = None,
     sp_cols: str = None,
-    sort: str = 'date',  # Name apart from 'rank' so that e.g. /similar?rank=d_pc doesn't transfer to /species?sort=...
+    sort: str = 'c_pc',  # Name apart from 'rank' so that e.g. /similar?rank=d_pc doesn't transfer to /species?sort=...
+    random_state=0,
 ) -> pd.DataFrame:
     with log_time_context():
 
@@ -65,12 +75,15 @@ def xc_species_html(
             return pd.DataFrame()
 
         # Params
-        species = species_for_query(species)
+        species   = species_for_query(species)
         if not species: return pd.DataFrame([])
-        quality = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
-        n_recs  = n_recs and np.clip(n_recs, 0, None)
-        audio_s = np.clip(audio_s, 0, 30)
-        scale   = np.clip(scale, 0, 5)
+        quality   = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
+        require(cluster in ['k', '', None])  # TODO Allow 'd' once we get it working
+        cluster_k = np.clip(cluster_k, 1, 50)
+        n_recs    = n_recs and np.clip(n_recs, 0, None)
+        audio_s   = np.clip(audio_s, 0, 30)
+        scale     = np.clip(scale, 0, 5)
+        dists     = list(dists)
 
         # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
         require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
@@ -88,34 +101,39 @@ def xc_species_html(
                 .pipe(df_remove_unused_categories)  # Drop unused cats after filter
             ))
 
+            # Cluster
+            .pipe(log_time_df, desc='cluster', f=lambda df: (df
+                .pipe(recs_cluster, dists, cluster, cluster_k)
+            ))
+
+            # TODO Sample or top n?
+            #   - Sample works better for clusters
+            #   - Top n maybe works better for 'date'? Or maybe not? Anything else it works particularly well for?
             # Top recs by `sort` (e.g. .date)
             #   - TODO Can't sort by xc_id since it's added by recs_featurize (-> recs_featurize_metdata_audio_slice), below
             .pipe(log_time_df, desc='sort', f=lambda df: (df
+                # Sample
+                .pipe(lambda df: df if n_recs is None else (df
+                    .sample(n_recs, random_state=random_state)
+                ))
+                # Sort
                 .pipe(lambda df: df.sort_values(**one([
-                    dict(by=sort, ascending=sort in ['quality', 'time'])
+                    dict(by=sort, ascending=any([
+                        sort in ['quality', 'time'],
+                        sort.startswith('c_'),  # Cluster (c_*)
+                    ]))
                     for sort in [sort if sort in df else 'date']
                 ])))
-                [:n_recs]
                 .reset_index(drop=True)  # Reset to RangeIndex after sort
             ))
 
-            # Featurize
-            .pipe(log_time_df, desc='spectro_disp', f=lambda df: (df
+            # View
+            .pipe(log_time_df, desc='view:spectro_disp (slow ok)', f=lambda df: (df
                 .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
             ))
-
-            # View
             .pipe(log_time_df, desc='view', f=lambda df: (df
-                .pipe(recs_view, view=view, sp_cols=sp_cols, links=['sort'])
-                [lambda df: [c for c in [
-                    'xc', 'xc_id',
-                    'com_name', 'species', 'spectro_disp',
-                    'quality', 'date', 'time',
-                    'type', 'subspecies', 'background_species',
-                    'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
-                    'recs_for_sp',
-                    # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
-                ] if c in df]]
+                .pipe(recs_view, view=view, sp_cols=sp_cols, links=['cluster', 'sort'])
+                .pipe(recs_view_cols)
             ))
 
         )
@@ -199,11 +217,6 @@ def xc_similar_html(
         # Compute dists for query_rec, so user can interactively compare and evaluate them
         #   - O(n)
         #   - (Preds dist last investigated in notebooks/app_ideas_6_with_pca)
-        dist_info = {
-            '2': sk.metrics.pairwise.distance_metrics()['l2'],
-            '1': sk.metrics.pairwise.distance_metrics()['l1'],
-            'c': sk.metrics.pairwise.distance_metrics()['cosine'],
-        }
         dist_recs = log_time_df(search_recs, desc='dist_recs', f=lambda df: (df
             .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
                 d_(f, d): (
@@ -288,30 +301,20 @@ def xc_similar_html(
                 .reset_index(drop=True)  # Reset to RangeIndex after concat
             ))
 
-            # Featurize
-            .pipe(log_time_df, desc='spectro_disp (slow ok)', f=lambda df: (df
+            # View
+            .pipe(log_time_df, desc='view:spectro_disp (slow ok)', f=lambda df: (df
                 .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
             ))
-
-            # View
             .pipe(log_time_df, desc='view', f=lambda df: (df
                 .pipe(recs_view, view=view, sp_cols=sp_cols, links=['rank'])
                 .pipe(lambda df: (df
-                    .pipe(df_reorder_cols, first=[  # Manually order d_* cols [Couldn't get to work above]
+                    # Manually order d_* cols [Couldn't get to work above]
+                    .pipe(df_reorder_cols, first=[
                         'd_slp',
                         *[c for c in [d_(f, m) for m in '2c' for f in 'fp'] if c in df],
                     ])
                 ))
-                [lambda df: [c for c in [
-                    'xc', 'xc_id',
-                    *unique_everseen(c for c in df if c.startswith('d_')),  # Scores (d_*)
-                    'com_name', 'species', 'spectro_disp',
-                    'quality', 'date', 'time',
-                    'type', 'subspecies', 'background_species',
-                    'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
-                    'recs_for_sp',
-                    # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
-                ] if c in df]]
+                .pipe(recs_view_cols)
             ))
 
         )
@@ -652,8 +655,6 @@ def recs_featurize_spectro_bytes(
 ) -> pd.DataFrame:
     """Featurize: Add .spectro_bytes, spectro_bytes_mimetype <- .audio"""
     with log_time_context():
-
-        # TODO TODO Testing
         plot_kwargs = {
             **plot_kwargs,
             'scale': dict(h=int(40 * scale)),  # Best if h is multiple of 40 (because of low-level f=40 in Melspectro)
@@ -673,60 +674,6 @@ def recs_featurize_spectro_bytes(
             )
         )
 
-        # TODO TODO XXX
-        # plot_many_kwargs = {
-        #     **plot_kwargs,
-        #     'progress': dict(**config.api.recs.progress_kwargs),  # threads > sync, threads >> processes
-        #     '_nocache': True,  # Dev: disable plot_many cache since it's blind to most of our sub-many code changes [TODO Revisit]
-        # }
-        # return (recs
-        #     # HACK Workaround some bug I haven't debugged yet
-        #     #   - In server, .spectro column is present but all nan, which breaks downstream
-        #     #   - In notebook, works fine
-        #     #   - Workaround: force-drop .spectro column if present
-        #     .drop(columns=['spectro'], errors='ignore')
-        #     # .spectro
-        #     .assign(spectro=lambda df: (sg.features
-        #         # FIXME Slow (load_audio) vs. incorrect (load)
-        #         #   - features.load=load_audio is correct, but very slow because it doesn't share .spectro cache with features.load=load
-        #         #   - features.spectro cache key includes load.format='wav'|'mp4', which makes load_audio vs. load bust cache
-        #         #   - TODO Should load.format be part of features.spectro cache key? Seems like no, but think harder...
-        #         # .replace(**dict(load=load_audio) if load_audio else {})  # Set features.load for features._cache() -> load._audio()
-        #         .spectro(df,
-        #             cache=True,
-        #             # FIXME Saw hangs with dask threads
-        #             #   - Repro: use='dask', scheduler='threads', 1k recs, cache hit and/or miss
-        #             #   - No repro: use='dask', scheduler='synchronous'
-        #             #   - HACK Going with use='sync' to work around...
-        #             # **config.api.recs.progress_kwargs,  # threads >> sync, procs
-        #             use='sync',
-        #         )
-        #     ))
-        #     # .spectro_bytes
-        #     .pipe(df_assign_first,
-        #         spectro_bytes_mimetype=format_to_mimetype(format),
-        #         spectro_bytes=lambda df: [
-        #             b
-        #             for imgs in [plot_slice.many(df, sg.features, **plot_many_kwargs,
-        #                 pad_s=pad_s,  # Careful: use pad_s instead of slice_s, else excessive writes (slice->mp4->slice->mp4)
-        #                 show=False,   # Return img instead of plotting
-        #                 audio=False,  # Return PIL.Image (no audio) instead of Displayable (with embedded html audio)
-        #             )]
-        #             for b in map_progress(desc='pil_img_save_to_bytes', xs=imgs, f=lambda img: (
-        #                 # TODO Optimize png/img size -- currently bigger than mp4 audio! (a rough start: notebooks/png_compress)
-        #                 pil_img_save_to_bytes(
-        #                     img.convert('RGB'),  # Drop alpha channel
-        #                     format=format,
-        #                 )
-        #             ))
-        #         ],
-        #     )
-        #     # Drop intermediate .spectro col, since downstreams should only depend on .spectro_bytes
-        #     .drop(columns=[
-        #         'spectro',
-        #     ])
-        # )
-
 
 @cache(version=0, tags='rec', key=lambda rec, **kwargs: (rec.id, kwargs, sg.features))
 def rec_spectro_bytes(
@@ -745,9 +692,7 @@ def rec_spectro_bytes(
         # .replace(**dict(load=load_audio) if load_audio else {})  # Set features.load for features._cache() -> load._audio()
         ._spectro(rec, cache=True)
     )
-    # TODO TODO Replace plot_slice -> plot_spectro: nothing changes except we can remove the warning comment about slice_s
-    spectro_img = plot_slice(rec, sg.features, **plot_kwargs,
-        pad_s=pad_s,  # Careful: use pad_s instead of slice_s, else excessive writes (slice->mp4->slice->mp4)
+    spectro_img = plot_spectro(rec, sg.features, pad_s=pad_s, **plot_kwargs,
         show=False,   # Return img instead of plotting
         audio=False,  # Return PIL.Image (no audio) instead of Displayable (with embedded html audio)
     )
@@ -814,6 +759,72 @@ def _recs_for_sp() -> pd.DataFrame:
     )
 
 
+def recs_cluster(
+    recs: pd.DataFrame,
+    dists: List[str],
+    cluster: str,
+    cluster_k: int,  # TODO Generalize user controls for more general kwargs
+) -> pd.DataFrame:
+
+    cluster = {
+
+        # TODO Problematic that we don't d_compute here?
+        'k': sk.cluster.KMeans(
+            n_clusters=cluster_k,
+            # verbose=1,  # Noisy
+            # n_jobs=-1,  # Slow for small inputs (proc overhead)
+        ),
+
+        # TODO Compute cluster centroid as mean of its core samples
+        # TODO Figure out usable eps (finicky)
+        # 'd': sk.cluster.DBSCAN(
+        #     metric=d_compute,
+        #     eps=100,  # (Default: .5)
+        #     # min_samples=5,
+        #     # n_jobs=-1,  # Slow for small inputs (proc overhead)
+        # ),
+
+    }[cluster]
+
+    return (recs
+        .pipe(lambda df: df_assign_first(df, **{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
+            k: cluster_label_and_dist(df, cluster, f_col, d_compute)
+            for f_col, f, _f_compute in sg.feat_info
+            for d, d_compute in dist_info.items()
+            if d in dists
+            for k in [f'c_{f}{d}']
+        }))
+    )
+
+
+def cluster_label_and_dist(
+    recs: pd.DataFrame,
+    cluster,
+    f_col,
+    d_compute,
+    show=False,
+) -> "Col[Tuple['label', 'dist_to_center']]":
+
+    X = np.array(list(recs[f_col]))  # Series[np.ndarray[p]] -> np.ndarray[n,p]
+    cluster.fit(X)
+
+    if show:
+        ipy_print({
+            k: eval(f'cluster.{k}')
+            for k in [
+                'n_iter_', 'inertia_', 'cluster_centers_.shape', 'labels_',  # kmeans
+                'core_sample_indices_', 'components_.shape', 'labels_',      # dbscan
+            ]
+            if hasattr(cluster, k.split('.')[0])
+        })
+
+    # TODO Is it coherent to d_compute here, e.g. for kmeans which doesn't use d_compute in fit?
+    return [
+        (label, np.asscalar(d_compute([x], [cluster.cluster_centers_[label]])))
+        for x, label in zip(recs[f_col], cluster.labels_)
+    ]
+
+
 def recs_view(
     recs: pd.DataFrame,
     view: bool = None,  # Disable the fancy stuff, e.g. in case you want to compute on the output data
@@ -842,6 +853,12 @@ def recs_view(
             c: lambda x, c=c: '''<a href="{{ req_query_with(rank=%r) }}">%s</a>''' % (c, round_sig_frac(x, 2))
             for c in df
             if c.startswith('d_') and 'rank' in links
+        }))
+        .pipe(lambda df: df_col_map(df, **{
+            # Sort by clusters (c_*)
+            c: lambda xs, c=c: '''<a href="{{ req_query_with(sort=%r) }}">(%s) %s</a>''' % (c, xs[0], round_sig_frac(xs[1], 2))
+            for c in df
+            if c.startswith('c_') and 'cluster' in links
         }))
         .pipe(df_if_cols, 'xc_id', lambda df: (df
             .assign(
@@ -918,6 +935,28 @@ def recs_view(
         #   - Strip cats else they'll reject '' (unless it's a valid cat)
         .pipe(df_cat_to_str)
         .fillna('')
+    )
+
+
+def recs_view_cols(
+    df: pd.DataFrame,
+    prepend: Iterable[str] = [],
+    append: Iterable[str] = [],
+) -> pd.DataFrame:
+    return (df
+        [lambda df: [c for c in [
+            *prepend,
+            'xc', 'xc_id',
+            *unique_everseen(c for c in df if c.startswith('d_')),  # Scores (d_*)
+            *unique_everseen(c for c in df if c.startswith('c_')),  # Clusters (c_*)
+            'com_name', 'species', 'spectro_disp',
+            'quality', 'date', 'time',
+            'type', 'subspecies', 'background_species',
+            'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
+            'recs_for_sp',
+            # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
+            *append,
+        ] if c in df]]
     )
 
 
