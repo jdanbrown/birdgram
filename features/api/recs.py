@@ -9,10 +9,11 @@ import bleach
 from more_itertools import chunked, one
 import pandas as pd
 from potoo.pandas import *
-from potoo.util import ensure_startswith
+from potoo.util import ensure_startswith, raise_
+import scipy
 import sklearn
 import structlog
-from toolz import compose
+from toolz import compose, itemmap
 
 from api.server_globals import sg, sg_load
 from api.util import *
@@ -41,14 +42,15 @@ defaults = AttrDict(
     audio_s      = 10,      # Hardcoded for precompute
     quality      = 'ab',
     scale        = 1,
-    dists        = '2c',    # 2 (l2), 1 (l1), c (cosine)
+    feats        = 'fp',    # feat_info keys
+    dists        = '2c',    # dist_info keys
     view         = None,
     sp_cols      = None,
     random_state = 0,
 
     # xc_species_html
     species      = None,
-    cluster      = 'aw',    # agglom + ward
+    cluster      = 'a',     # agglom + ward (default linkage)
     cluster_k    = 6,       # TODO Record user's cluster_k per sp so we can learn cluster_k ~ sp
     sort         = 'c_pc',  # (Separate from 'rank' so that e.g. /similar? doesn't transfer to /species?)
 
@@ -91,6 +93,7 @@ def xc_species_html(
     n_recs       : int   = defaults.n_recs,
     audio_s      : float = defaults.audio_s,
     scale        : float = defaults.scale,
+    feats        : str   = defaults.feats,
     dists        : str   = defaults.dists,
     sort         : str   = defaults.sort,
     view         : bool  = defaults.view,
@@ -113,6 +116,7 @@ def xc_species_html(
         n_recs    = n_recs and np.clip(n_recs, 0, None)
         audio_s   = np.clip(audio_s, 0, 30)
         scale     = np.clip(scale, 0, 5)
+        feats     = list(feats)
         dists     = list(dists)
 
         # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
@@ -134,7 +138,9 @@ def xc_species_html(
             # Cluster
             #   - Before n_recs, so that clustering (data concern) is independent of sampling (view concern)
             .pipe(log_time_df, desc='cluster', f=lambda df: (df
-                .pipe(recs_cluster, dists=dists, cluster=cluster, cluster_k=cluster_k, random_state=random_state)
+                .pipe(lambda df: df if not cluster else (df
+                    .pipe(recs_cluster, feats=feats, dists=dists, cluster=cluster, cluster_k=cluster_k, random_state=random_state)
+                ))
             ))
 
             # TODO Sample or top n?
@@ -179,6 +185,7 @@ def xc_similar_html(
     n_recs       : int   = defaults.n_recs,
     audio_s      : float = defaults.audio_s,
     scale        : float = defaults.scale,
+    feats        : str   = defaults.feats,
     dists        : str   = defaults.dists,
     rank         : str   = defaults.rank,
     view         : bool  = defaults.view,
@@ -201,6 +208,7 @@ def xc_similar_html(
         n_recs    = n_recs - 1  # HACK Make room for query_rec in the results ("recs in view", not "search result recs")
         audio_s   = audio_s  and np.clip(audio_s, 0, 30)
         scale     = np.clip(scale, 0, 5)
+        feats     = list(feats)
         dists     = list(dists)
 
         # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
@@ -259,6 +267,7 @@ def xc_similar_html(
                     .round(6)  # Else near-zero but not-zero stuff is noisy (e.g. 6.5e-08)
                 )
                 for f_col, f, _f_compute in sg.feat_info
+                if f in feats
                 for d, d_compute in dist_info.items()
                 if d in dists
             }))
@@ -327,7 +336,10 @@ def xc_similar_html(
                     objs=[
                         (
                             # Expand query_rec cols to match df cols
-                            pd.concat([DF([query_rec]), df[:0]])
+                            pd.concat(
+                                sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
+                                objs=[DF([query_rec]), df[:0]],
+                            )
                             # Add query_rec.slp for user feedback (mostly for model debugging)
                             .assign(
                                 sp_p=lambda df: one(query_sp_p[query_sp_p.species == query_rec.species].sp_p.values),
@@ -680,6 +692,7 @@ def recs_featurize_f_(recs: pd.DataFrame) -> pd.DataFrame:
         .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
             f_col: list(v)  # series->list, else errors -- but don't v.tolist(), else List[list] i/o List[array]
             for f_col, _f, f_compute in sg.feat_info
+            # if _f in feats  # Nope, need to compute all feats since we're used in precompute
             if f_compute  # Skip e.g. .feat, which we already computed above
             for v in [one_progress(desc=f_col, n=len(df), f=lambda: f_compute(df))]
         }))
@@ -806,29 +819,37 @@ def _recs_for_sp() -> pd.DataFrame:
 
 def recs_cluster(
     recs: pd.DataFrame,
+    feats: List[str],
     dists: List[str],
-    cluster: Optional[str],  # None -> skip clustering
+    cluster: str,
     cluster_k: int,  # TODO Generalize user controls for more general kwargs
     random_state: int,
 ) -> pd.DataFrame:
 
-    if not cluster:
-        return recs
+    def clustering_for(cluster: str, d_compute: callable) -> sk.base.ClusterMixin:
 
-    def cluster_info_for(cluster: str, d_compute: callable) -> sk.base.ClusterMixin:
+        # Parse shorthand cluster keys [HACK from web user controls], e.g.
+        #   - 'k'  -> ['k']
+        #   - 'aw' -> ['a', 'w']
+        #   - ...
         (cluster, flags) = (cluster[0], list(cluster[1:]))
 
         agglom_linkages = {
             'w': 'ward',
             'c': 'complete',
             'a': 'average',
-            # 's': 'single',  # TODO Requires sklearn 0.20 [blocked on QA'ing model eval -- see env.yml]
+            # 's': 'single',  # TODO Requires sklearn 0.20 [blocked on heavy QA of model eval -- see env.yml]
         }
-        k = flags[0] if flags else 'w'
-        require(k in agglom_linkages)
-        agglom_linkage = agglom_linkages[k]
+        _x = flags[0] if flags else 'w'
+        require(_x in agglom_linkages)
+        agglom_linkage = agglom_linkages[_x]
 
-        cluster_info = {
+        # Inverse-lookup (dist_info key) d from d_compute
+        dist_info_inv = itemmap(reversed, dist_info)
+        require(d_compute in dist_info_inv, d_compute=d_compute)  # Helpful error msg if d_compute got weird (lambda, partial, etc.)
+        d = dist_info_inv[d_compute]
+
+        clusterings = {
 
             # kmeans
             #   - http://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html
@@ -836,21 +857,28 @@ def recs_cluster(
             #   - TODO Is it problematic that we don't d_compute here?
             'k': sk.cluster.KMeans(
                 n_clusters=min(cluster_k, len(recs)),
+                random_state=random_state,
                 # verbose=1,  # Noisy
                 # n_jobs=-1,  # Slow for small inputs (proc overhead)
-                random_state=random_state,
             ),
 
             # agglom (hierarchical)
             #   - http://scikit-learn.org/stable/modules/generated/sklearn.cluster.AgglomerativeClustering.html
             #   - http://scikit-learn.org/stable/modules/clustering.html#hierarchical-clustering
-            'a': sk.cluster.AgglomerativeClustering(
-                n_clusters=min(cluster_k, len(recs)),
-                # memory=None,
-                # compute_full_tree='auto',
-                linkage=agglom_linkage,
-                affinity=d_compute if agglom_linkage != 'ward' else 'euclidean',  # ward requires euclidean
-            )
+            'a': sk.pipeline.make_pipeline(*[
+                *{
+                    '2': lambda: [],
+                    '1': lambda: raise_(ValueError(f"agglom linkage[ward] requires d[2,c], got: d[{d}]")),
+                    'c': lambda: [sk.preprocessing.Normalizer(norm='l2')],
+                }[d](),
+                sk.cluster.AgglomerativeClustering(
+                    n_clusters=min(cluster_k, len(recs)),
+                    linkage=agglom_linkage,
+                    affinity=d_compute if agglom_linkage != 'ward' else 'euclidean',  # ward requires 'euclidean'
+                    compute_full_tree=True,  # For hierarchical sorting (slow on big inputs, but things are fast enough so far)
+                    # memory=None,  # Avoid the complexity of the optional cache b/c no cache is fast enough so far
+                ),
+            ]),
 
             # dbscan
             #   - http://scikit-learn.org/stable/modules/clustering.html#dbscan
@@ -865,13 +893,14 @@ def recs_cluster(
             # ),
 
         }
-        require(cluster in cluster_info.keys())
-        return cluster_info[cluster]
+        require(cluster in clusterings.keys())
+        return clusterings[cluster]
 
     return (recs
         .pipe(lambda df: df_assign_first(df, **{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-            k: cluster_label_and_dist(df, cluster_info_for(cluster, d_compute), f_col, d_compute)
+            k: recs_cluster_col(df, clustering_for(cluster, d_compute), f_col, d_compute)
             for f_col, f, _f_compute in sg.feat_info
+            if f in feats
             for d, d_compute in dist_info.items()
             if d in dists
             for k in [f'c_{f}{d}']
@@ -879,46 +908,92 @@ def recs_cluster(
     )
 
 
-def cluster_label_and_dist(
+def recs_cluster_col(
     recs: pd.DataFrame,
-    cluster,
-    f_col,
-    d_compute,
+    clustering: sk.base.ClusterMixin,
+    f_col: str,
+    d_compute: callable,
     show=False,
-) -> "Col[Tuple['label', 'dist_to_center']]":
+) -> "Col[Tuple['sort_order', 'label', 'dist_to_center']]":
+
+    # Separate (estimator, clustering_step) in case of pipeline
+    estimator = clustering
+    if isinstance(estimator, sk.pipeline.Pipeline):
+        clustering_step = estimator.steps[-1][-1]
+    else:
+        clustering_step = estimator
+    del clustering
 
     if len(recs) <= 1:
         # Avoid e.g. agglom failing when len(X) == 1
-        cluster.labels_ = [0] * len(recs)
+        clustering_step.labels_ = [0] * len(recs)
     else:
         X = np.array(list(recs[f_col]))  # Series[np.ndarray[p]] -> np.ndarray[n,p]
-        cluster.fit(X)
+        estimator.fit(X)
 
     # Extract inferred attrs (somewhat) generically across various clustering estimators
-    #   - TODO Compute centroids manually for estimators that don't return it (kmeans returns it, agglom/dbscan don't)
-    labels = cluster.labels_
-    centroids = None if not hasattr(cluster, 'cluster_centers_') else cluster.cluster_centers_
+    labels = clustering_step.labels_
+    centroids = getattr(clustering_step, 'cluster_centers_', None)
+    children = getattr(clustering_step, 'children_', None)
 
     if show:
         ipy_print({
-            k: eval(f'cluster.{k}')
+            k: eval(f'clustering_step.{k}')
             for k in [
                 'n_iter_', 'inertia_', 'cluster_centers_.shape', 'labels_',  # kmeans
                 'core_sample_indices_', 'components_.shape', 'labels_',      # dbscan
                 'labels_', 'n_leaves_', 'n_components_', 'children_',        # agglom
             ]
-            if hasattr(cluster, k.split('.')[0])
+            if hasattr(clustering_step, k.split('.')[0])
         })
 
-    # TODO Is it coherent to d_compute here, e.g. for kmeans which doesn't use d_compute in fit?
-    return [
-        (label, dist)
+    # Distances from cluster centroids
+    #   - For: kmeans
+    #   - FIXME We compute centroid distance via d_compute but kmeans doesn't use d_compute... [probably uses l2]
+    #   - TODO Compute centroids manually for estimators that don't return it (kmeans returns it, agglom/dbscan don't)
+    dists = None if centroids is None else [
+        np.asscalar(d_compute([f_x], [centroids[label]]))
         for f_x, label in zip(recs[f_col], labels)
-        for dist in [
-            None if not centroids else
-            np.asscalar(d_compute([f_x], [centroids[label]]))
-        ]
     ]
+
+    # Hierarchical sort, via dendrogram leaf order
+    #   - For: agglom
+    #   - https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.linkage.html
+    #   - https://docs.scipy.org/doc/scipy/reference/generated/scipy.cluster.hierarchy.dendrogram.html
+    sort_orders = None
+    if children is not None:
+
+        # Compute dendrogram
+        Z = np.array(dtype=float, object=[
+            *children.T,
+            np.arange(len(children)),  # Mock (uniform) distances between each pair of children [I don't grok yet...]
+            [None] * len(children),    # Mock num obs in each cluster's subtree
+        ]).T
+        dendro = scipy.cluster.hierarchy.dendrogram(Z, no_plot=True)
+        leaves_sorted = dendro['leaves']
+
+        # Which order should we sort in? (only two choices)
+        #   - Sort bigger cluster first, e.g. show warbler songs (more) before chips (fewer)
+        first_label   = labels[leaves_sorted[0]]
+        last_label    = labels[leaves_sorted[-1]]
+        n_first_label = (labels == first_label).sum()
+        n_last_label  = (labels == last_label).sum()
+        if n_last_label > n_first_label:
+            leaves_sorted = list(reversed(leaves_sorted))
+
+        # Illustration:
+        #   leaves_sorted == [3, 0, 2, 1]          # Means recs.iloc[3] sorts at i=0, recs.iloc[0] sorts at i=1, etc.
+        #   sort_order    == {0:1, 1:3, 2:2, 3:0}  # Invert that to a dict
+        #   sort_orders   == [1, 3, 2, 0]          # Flatten values to a list (for zip below)
+        sort_order = itemmap(reversed, dict(enumerate(leaves_sorted)))
+        sort_orders = list(dict(sorted(sort_order.items())).values())
+
+    nones = [None] * len(labels)
+    return list(zip(
+        sort_orders or nones,
+        labels,
+        dists or nones,
+    ))
 
 
 def recs_view(
@@ -988,10 +1063,13 @@ def recs_view(
         .pipe(lambda df: df_col_map(df, **{
             c: lambda xs, c=c: '''
                 <a href="{{ req_query_with(sort=%(c)r) }}"><span class="label-i i-%(cluster)s">%(cluster)s</span>%(maybe_dist)s</a>
-            ''' % dict(
-                c=c,
-                cluster=xs[0],
-                maybe_dist='' if xs[1] is None else ' %s' % show_num(xs[1], 2),
+            ''' % one(
+                dict(
+                    c=c,
+                    cluster=label,
+                    maybe_dist='' if dist is None else ' %s' % show_num(dist, 2),
+                )
+                for _sort_order, label, dist in [xs]
             )
             for c in df
             if c.startswith('c_') and 'cluster' in links
@@ -1090,7 +1168,7 @@ def recs_view(
 
 def recs_view_cols(
     df: pd.DataFrame,
-    sort_bys: str = None,
+    sort_bys: str = [],
     prepend: Iterable[str] = [],
     append: Iterable[str] = [],
 ) -> pd.DataFrame:
