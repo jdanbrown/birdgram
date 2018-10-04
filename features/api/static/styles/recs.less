@@ -1,6 +1,66 @@
-body {
-  font-size: 16px;
+//
+// @media
+//  - https://developer.mozilla.org/en-US/docs/Web/CSS/@media
+//  - https://developer.mozilla.org/en-US/docs/Web/CSS/Media_Queries/Using_media_queries
+//  - http://stephen.io/mediaqueries/
+//  - https://css-tricks.com/snippets/css/media-queries-for-standard-devices/
+//  - https://gist.github.com/gokulkrishh/242e68d1ee94ad05f488
+//    - [Blindly adopted this one...]
+//  - https://gist.github.com/bartholomej/8415655
+//  - https://responsivedesign.is/develop/browser-feature-support/media-queries-for-common-device-breakpoints/
+//
+
+// NOTE Spectro img height is set by rem (in api.recs.recs_featurize_spectro_disp)
+@rem_desktop: 16px;
+@rem_tablet:  24px; // HACK Tuned for iphone 8, which matches "Tablet (portrait)"
+@rem_mobile:  24px;
+
+@media (min-width: 1025px) {
+  // Desktop
+  // body { background: red; } // XXX Debug
+  html { font-size: @rem_desktop; }
 }
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  // Tablet (portrait)
+  //  - FIXME iphone 8 matches here
+  // body { background: blue; } // XXX Debug
+  html { font-size: @rem_tablet; }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+  // Tablet (landscape)
+  // body { background: green; } // XXX Debug
+  html { font-size: @rem_tablet; }
+}
+
+@media (min-width: 481px) and (max-width: 767px) {
+  // Mobile (landscape), low-res tablets
+  // body { background: yellow; } // XXX Debug
+  html { font-size: @rem_mobile; }
+}
+
+@media (min-width: 320px) and (max-width: 480px) {
+  // Mobile (portrait)
+  // body { background: magenta; } // XXX Debug
+  html { font-size: @rem_mobile; }
+}
+
+@media (max-width: 319px) {
+  // Mobile (portrait)
+  // body { background: cyan; } // XXX Debug
+  html { font-size: @rem_mobile; }
+}
+
+//
+// Not @media
+//
+
+// html {
+//   // font-size: 32px;
+//   font-size: 24px; // Good for mobile
+//   // font-size: 16px; // Good for desktop
+// }
 
 a {
   text-decoration: none;

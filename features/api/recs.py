@@ -36,7 +36,7 @@ dist_info = {
 defaults = AttrDict(
 
     # Shared
-    n_recs       = 30,      # Fits within mobile screen (iphone 8)
+    n_recs       = 36,      # Fits within mobile screen (iphone 8, portrait, safari)
     audio_s      = 10,      # Hardcoded for precompute
     quality      = 'ab',
     scale        = 1,
@@ -47,8 +47,8 @@ defaults = AttrDict(
 
     # xc_species_html
     species      = None,
-    cluster      = 'k',
-    cluster_k    = 4,
+    cluster      = 'aa',    # agglom + average
+    cluster_k    = 2,       # Manually increment from small until clusters look good [TODO Record user's cluster_k per sp]
     sort         = 'c_pc',  # (Separate from 'rank' so that e.g. /similar? doesn't transfer to /species?)
 
     # xc_similar_html
@@ -132,7 +132,7 @@ def xc_species_html(
             # Cluster
             #   - Before n_recs, so that clustering (data concern) is independent of sampling (view concern)
             .pipe(log_time_df, desc='cluster', f=lambda df: (df
-                .pipe(recs_cluster, dists, cluster, cluster_k)
+                .pipe(recs_cluster, dists=dists, cluster=cluster, cluster_k=cluster_k, random_state=random_state)
             ))
 
             # TODO Sample or top n?
@@ -487,7 +487,7 @@ def recs_featurize_pre_rank(
                 # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
                 #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
                 #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
-                #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
+                #   - TODO How to better propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
                 drop_uncached_slice=True,
                 # Don't load .audio for pre-rank recs (only for final n_recs recs, below)
                 no_audio=True,
@@ -772,7 +772,11 @@ def recs_featurize_spectro_disp(
                     display_with_style(
                         pil_img_open_from_bytes(rec.spectro_bytes),  # (Infers image format from bytes)
                         # TODO Make scale a recs_view concern
-                        style_css=scale and '.bubo-audio-container img { height: %spx; }' % int(40 * scale),
+                        #   - TODO Restore multiples of 40px, to avoid pixel blurring [defer until mobile app]
+                        style_css=scale and '.bubo-audio-container img { height: %s; }' % (
+                            # '%spx' % int(40 * scale),  # XXX Switched px->rem for responsive style, but this was multiples of 40px
+                            '%.3frem' % (1.5 * scale),  # Good on mobile, good enough on desktop (but not multiples of 40px)
+                        ),
                     ),
                     audio_bytes=rec.audio_bytes,
                     mimetype=rec.audio_bytes_mimetype,
@@ -803,36 +807,68 @@ def recs_cluster(
     dists: List[str],
     cluster: Optional[str],  # None -> skip clustering
     cluster_k: int,  # TODO Generalize user controls for more general kwargs
+    random_state: int,
 ) -> pd.DataFrame:
 
     if not cluster:
         return recs
 
-    clusters = {
+    def cluster_info_for(cluster: str, d_compute: callable) -> sk.base.ClusterMixin:
+        (cluster, flags) = (cluster[0], list(cluster[1:]))
 
-        # TODO Problematic that we don't d_compute here?
-        'k': sk.cluster.KMeans(
-            n_clusters=min(cluster_k, len(recs)),
-            # verbose=1,  # Noisy
-            # n_jobs=-1,  # Slow for small inputs (proc overhead)
-        ),
+        agglom_linkages = {
+            'w': 'ward',
+            'c': 'complete',
+            'a': 'average',
+            # 's': 'single',  # TODO Requires sklearn 0.20 [blocked on QA'ing model eval -- see env.yml]
+        }
+        k = flags[0] if flags else 'w'
+        require(k in agglom_linkages)
+        agglom_linkage = agglom_linkages[k]
 
-        # TODO Compute cluster centroid as mean of its core samples
-        # TODO Figure out usable eps (finicky)
-        # 'd': sk.cluster.DBSCAN(
-        #     metric=d_compute,
-        #     eps=100,  # (Default: .5)
-        #     # min_samples=5,
-        #     # n_jobs=-1,  # Slow for small inputs (proc overhead)
-        # ),
+        cluster_info = {
 
-    }
-    require(cluster in clusters.keys())
-    cluster = clusters[cluster]
+            # kmeans
+            #   - http://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html
+            #   - http://scikit-learn.org/stable/modules/clustering.html#k-means
+            #   - TODO Is it problematic that we don't d_compute here?
+            'k': sk.cluster.KMeans(
+                n_clusters=min(cluster_k, len(recs)),
+                # verbose=1,  # Noisy
+                # n_jobs=-1,  # Slow for small inputs (proc overhead)
+                random_state=random_state,
+            ),
+
+            # agglom (hierarchical)
+            #   - http://scikit-learn.org/stable/modules/generated/sklearn.cluster.AgglomerativeClustering.html
+            #   - http://scikit-learn.org/stable/modules/clustering.html#hierarchical-clustering
+            'a': sk.cluster.AgglomerativeClustering(
+                n_clusters=min(cluster_k, len(recs)),
+                # memory=None,
+                # compute_full_tree='auto',
+                linkage=agglom_linkage,
+                affinity=d_compute if agglom_linkage != 'ward' else 'euclidean',  # ward requires euclidean
+            )
+
+            # dbscan
+            #   - http://scikit-learn.org/stable/modules/clustering.html#dbscan
+            #   - http://scikit-learn.org/stable/modules/generated/sklearn.cluster.DBSCAN.html
+            #   - TODO Compute cluster centroid as mean of its core samples
+            #   - TODO Figure out usable eps (finicky)
+            # 'd': sk.cluster.DBSCAN(
+            #     metric=d_compute,
+            #     eps=100,  # (Default: .5)
+            #     # min_samples=5,
+            #     # n_jobs=-1,  # Slow for small inputs (proc overhead)
+            # ),
+
+        }
+        require(cluster in cluster_info.keys())
+        return cluster_info[cluster]
 
     return (recs
         .pipe(lambda df: df_assign_first(df, **{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-            k: cluster_label_and_dist(df, cluster, f_col, d_compute)
+            k: cluster_label_and_dist(df, cluster_info_for(cluster, d_compute), f_col, d_compute)
             for f_col, f, _f_compute in sg.feat_info
             for d, d_compute in dist_info.items()
             if d in dists
@@ -858,14 +894,19 @@ def cluster_label_and_dist(
             for k in [
                 'n_iter_', 'inertia_', 'cluster_centers_.shape', 'labels_',  # kmeans
                 'core_sample_indices_', 'components_.shape', 'labels_',      # dbscan
+                'labels_', 'n_leaves_', 'n_components_', 'children_',        # agglom
             ]
             if hasattr(cluster, k.split('.')[0])
         })
 
     # TODO Is it coherent to d_compute here, e.g. for kmeans which doesn't use d_compute in fit?
     return [
-        (label, np.asscalar(d_compute([x], [cluster.cluster_centers_[label]])))
-        for x, label in zip(recs[f_col], cluster.labels_)
+        (label, dist)
+        for f_x, label in zip(recs[f_col], cluster.labels_)
+        for dist in [
+            None if not hasattr(cluster, 'cluster_centers_') else
+            np.asscalar(d_compute([f_x], [cluster.cluster_centers_[label]]))
+        ]
     ]
 
 
@@ -905,9 +946,11 @@ def recs_view(
         .pipe(lambda df: df_col_map(df, **{
             # Sort by clusters (c_*)
             c: lambda xs, c=c: '''
-                <a href="{{ req_query_with(sort=%(c)r) }}"><span class="label-i i-%(cluster)s">%(cluster)s</span> %(dist)s</a>
+                <a href="{{ req_query_with(sort=%(c)r) }}"><span class="label-i i-%(cluster)s">%(cluster)s</span>%(maybe_dist)s</a>
             ''' % dict(
-                c=c, cluster=xs[0], dist=simple_num(round_sig_frac(xs[1], 2)),
+                c=c,
+                cluster=xs[0],
+                maybe_dist='' if xs[1] is None else ' %s' % simple_num(round_sig_frac(xs[1], 2)),
             )
             for c in df
             if c.startswith('c_') and 'cluster' in links
