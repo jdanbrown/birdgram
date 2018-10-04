@@ -281,7 +281,6 @@ def xc_similar_html(
         ranked_recs = (dist_recs
             .pipe(log_time_df, desc='ranked_recs:merge', f=lambda df: (df
                 # Join in .sp_p for scoring functions
-                #   - [Using sort=True to silence "non-concatenation axis" warning -- not sure what we want, or if it matters]
                 .merge(how='left', on='species', right=query_sp_p[['species', 'sp_p']],
                     sort=True,  # [Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
                 )
@@ -405,7 +404,7 @@ def feat_cols(cols: Union[Iterable[str], pd.DataFrame]) -> Iterable[str]:
 
 @lru_cache()
 def get_search_recs(
-    refresh=False,
+    refresh=config.api.recs.search_recs.get('refresh', False),
     cache_type='hybrid',  # None | 'hybrid' | 'parquet' | 'sqlite'
 ) -> pd.DataFrame:
     """For sg.search_recs"""
@@ -480,41 +479,45 @@ def recs_featurize_pre_rank(
     load_sliced: 'LoadLike' = load_for_audio_persist,
 ) -> pd.DataFrame:
     if callable(load_sliced): load_sliced = load_sliced()
-    # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
+    # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s? [Probably not feasible]
     audio_s = config.api.recs.search_recs.params.audio_s
-    # Batch for mem safety
-    #   - TODO TODO Fix progress logging here so that it's readable (write a _map_progress_log_each?)
-    return pd.concat(objs=map_progress(
-        desc='recs_featurize_pre_rank:batches', **config.sync_progress_kwargs,
-        xs=chunked(recs.index,
-            # 1000,  # Killed on remote n1-highcpu-16 during 27/36
-            # 250,  # Mem safe on remote n1-highcpu-16
-            len(recs),  # TODO TODO Still debugging chunking (seeing an assertion failure...)
-        ),
-        f=lambda ix: (recs
-            .loc[ix]
-            # Audio metadata, without .audio
-            .pipe(recs_featurize_metdata_audio_slice,
-                audio_s=config.api.recs.search_recs.params.audio_s,
-                load_sliced=load_sliced,
-                load_full=None,
-                # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
-                #   - Good: this correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
-                #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
-                #   - TODO How to better propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
-                drop_uncached_slice=True,
-                # Don't load .audio for pre-rank recs (only for final n_recs recs, below)
-                no_audio=True,
-            )
-            .pipe(recs_featurize_recs_for_sp)
-            .pipe(recs_featurize_feat)
-            .pipe(recs_featurize_f_)
-            .pipe(recs_featurize_spectro_bytes, load_audio=load_sliced, pad_s=audio_s,
-                scale=1,  # Fix scale=1 for precompute, deferring scale=N to view logic [currently in .html.j2 as inline style]
-            )
-            .pipe(recs_featurize_audio_bytes)
-        ),
-    ))
+    return (
+        # Batch for mem safety
+        #   - [concat(sort=True) to silence "non-concatenation axis" warning -- not sure what we want, or if it matters...]
+        pd.concat(sort=True, objs=map_progress(desc='batches',
+            # use='sync',  # Includes eta, but gets clobbered by the next progress bar
+            use='log_time_each',  # No eta, but avoids interfering with nested progress bars
+            xs=list(chunked(recs.index,
+                # 1000,  # Mem unsafe: oom'd on n1-highcpu-16 (14g) at progress 27/36
+                500,   # TODO TODO Mem safe on n1-standard-4 (15g)?
+                # 250,   # Mem safe: completed on n1-highcpu-16 (14g)
+            )),
+            f=lambda ix: (recs
+                .loc[ix]
+                # Audio metadata, without .audio
+                .pipe(recs_featurize_metdata_audio_slice,
+                    audio_s=config.api.recs.search_recs.params.audio_s,
+                    load_sliced=load_sliced,
+                    load_full=None,
+                    # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
+                    #   - Good: correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
+                    #   - Bad: incorrectly drops any valid audios that haven't been _manually_ cached warmed
+                    #   - TODO How to better propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
+                    drop_uncached_slice=True,
+                    # Don't load .audio for pre-rank recs (only for final n_recs recs, below)
+                    no_audio=True,
+                )
+                .pipe(recs_featurize_recs_for_sp)
+                .pipe(recs_featurize_feat)
+                .pipe(recs_featurize_f_)
+                .pipe(recs_featurize_spectro_bytes, load_audio=load_sliced, pad_s=audio_s,
+                    scale=1,  # Fix scale=1 for precompute, deferring scale=N to view logic [currently in .html.j2 as inline style]
+                )
+                .pipe(recs_featurize_audio_bytes)
+            ),
+        ))
+        .reset_index(drop=True)  # Reset to RangeIndex after concat
+    )
 
 
 # TODO Simplify: replace with sg.search_recs lookup (callers: +xc_species_html -xc_similar_html)

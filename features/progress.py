@@ -13,7 +13,7 @@ from potoo.util import AttrContext, get_cols, timed
 from tqdm import tqdm
 
 from config import config
-from logging_ import _map_progress_log_time
+from logging_ import _map_progress_log_time_all, _map_progress_log_time_each
 
 X = TypeVar('X')
 
@@ -88,7 +88,8 @@ def map_progress(
     use = kwargs.pop('use')
     return ({
         None: _map_progress_none,
-        'log_time': _map_progress_log_time,
+        'log_time_all': _map_progress_log_time_all,
+        'log_time_each': _map_progress_log_time_each,
         'sync': _map_progress_sync,
         'dask': _map_progress_dask,
         'joblib': _map_progress_joblib,

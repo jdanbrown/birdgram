@@ -130,7 +130,7 @@ class BuboFilter(logging.Filter):
                 'logging_',    # bubo.logging_, for log_time* (which are defined in this module)
                 'contextlib',  # For log_time_context
                 'pandas',      # For `.pipe(log_time_df, ...)`
-                'progress',    # For _map_progress_log_time
+                'progress',    # For _map_progress_log_time_all
             ]:
                 continue
             break
@@ -245,17 +245,41 @@ def log_time_context(desc=None, log=None):
 
 
 # Dispatch from util.map_progress
-#   - HACK HACK In module logging_ instead of util so it can find the caller's stack (see above)
-def _map_progress_log_time(
+#   - HACK HACK In module logging_ instead of util so it can find the caller's frame (see above)
+def _map_progress_log_time_all(
     f: Callable[['X'], 'X'],
     xs: Iterable['X'],
     desc: str = None,
     n: int = None,
 ) -> Iterable['X']:
+    """log_time around whole loop"""
     desc = (
-        '%s (%s)' % (desc, n) if desc is not None and n is not None else
-        '(%s)' % n if n is not None else
-        desc
+        None      if desc is None and n is None else
+        f'({n})'  if desc is None else
+        f'{desc}' if n is None else
+        f'{desc} ({n})'
     )
     with log_time_context(desc=desc):
         return list(map(f, xs))
+
+
+# Dispatch from util.map_progress
+#   - HACK HACK In module logging_ instead of util so it can find the caller's frame (see above)
+def _map_progress_log_time_each(
+    f: Callable[['X'], 'X'],
+    xs: Iterable['X'],
+    desc: str = None,
+    n: int = None,
+) -> Iterable['X']:
+    """log_time around each element in loop"""
+    desc_i = lambda i: (
+        None                if desc is None and n is None else
+        f'({i+1}/{n})'      if desc is None else
+        f'{desc} ({i+1}/?)' if n is None else
+        f'{desc} ({i+1}/{n})'
+    )
+    ys = []  # HACK HACK Instead of @generator_to, so we can find the caller's frame (see above)
+    for i, x in enumerate(xs):
+        with log_time_context(desc=desc_i(i)):
+            ys.append(f(x))
+    return ys

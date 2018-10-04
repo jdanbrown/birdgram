@@ -7,7 +7,7 @@ role = os.environ.get('BUBO_ROLE')
 
 override_progress_kwargs = dict(
     # use=None,    # XXX Debug: no par, no progress bars
-    # use='log_time',  # XXX Debug: no par, log start/done instead of progress bars
+    # use='log_time_all',  # XXX Debug: no par, log start/done instead of progress bars
     # use='sync',  # XXX Debug: no par, yes progress bars
     # use='dask', scheduler='threads',  # XXX Debug par
     # use='dask', scheduler='synchronous',  # XXX Debug par
@@ -27,7 +27,8 @@ config = AttrDict(
 
     cache=dict(
         log_level={
-            'api':      'debug',  # Verbose (line) cache logging
+            # 'api':      'debug',  # Verbose (line) cache logging
+            'api':      'warn',   # Silence cache logging
             # 'notebook': 'debug',  # Verbose (line) cache logging
             # 'notebook': 'info',   # Normal (char) cache logging
             'notebook': 'warn',   # Silence cache logging
@@ -73,12 +74,12 @@ config = AttrDict(
         recs=dict(
 
             search_recs=dict(
+                # refresh=True,  # Uncomment to refresh cache (force miss)
                 params=dict(
                     # Global params for precomputed search_recs
-                    version=1,   # Manually bump to invalidate cache
+                    version=2,   # Manually bump to invalidate cache
                     # limit=1000,  # XXX Faster dev (declared here for cache invalidation)
                     audio_s=10,  # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
-                    scale=1,     # XXX Unused, but maintain cache hit [TODO TODO Kill when we're ok with cache rebuild]
                 ),
                 cache=dict(
                     # Manually specify what config values invalidate the search_recs cache (ugh...)
