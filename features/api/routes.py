@@ -90,8 +90,8 @@ def req_query_with(**query_params) -> str:
 
 
 @bp.app_template_global()
-def req_query_get(k: str, default: any = None) -> str:
-    return request.args.get(k, default)
+def req_query_get(k: str, default_default: any = None) -> str:
+    return request.args.get(k, api.recs.defaults.get(k) or default_default)
 
 
 @bp.app_template_global()

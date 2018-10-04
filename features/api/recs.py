@@ -4,7 +4,8 @@ import linecache
 import numbers
 from typing import *
 
-from more_itertools import one
+from attrdict import AttrDict
+from more_itertools import chunked, one
 import pandas as pd
 from potoo.pandas import *
 from potoo.util import ensure_startswith
@@ -32,11 +33,38 @@ dist_info = {
     'c': sk.metrics.pairwise.distance_metrics()['cosine'],
 }
 
+defaults = AttrDict(
+
+    # Shared
+    n_recs       = 30,      # Fits within mobile screen (iphone 8)
+    audio_s      = 10,      # Hardcoded for precompute
+    quality      = 'ab',
+    scale        = 1,
+    dists        = '2c',    # 2 (l2), 1 (l1), c (cosine)
+    view         = None,
+    sp_cols      = None,
+    random_state = 0,
+
+    # xc_species_html
+    species      = None,
+    cluster      = 'k',
+    cluster_k    = 4,
+    sort         = 'c_pc',  # (Separate from 'rank' so that e.g. /similar? doesn't transfer to /species?)
+
+    # xc_similar_html
+    xc_id        = None,
+    n_sp         = None,
+    group_sp     = 'y',
+    n_sp_recs    = 3,
+    rank         = 'd_pc',  # (Separate from 'sort' so that e.g. /species? doesn't transfer to /similar?)
+
+)
+
 
 def xc_meta(
-    species: str,
-    quality: str = None,
-    n_recs: int = 10,
+    species : str,
+    quality : str = defaults.quality,
+    n_recs  : int = defaults.n_recs,
 ) -> pd.DataFrame:
     with log_time_context():
 
@@ -45,7 +73,7 @@ def xc_meta(
         quality = quality or 'ab'
         quality = [q.upper() for q in quality]
         quality = [{'N': 'no score'}.get(q, q) for q in quality]
-        n_recs = np.clip(n_recs, 0, 50)
+        n_recs = np.clip(n_recs, 0, None)
 
         return (sg.xc_meta
             [lambda df: df.species == species]
@@ -55,18 +83,18 @@ def xc_meta(
 
 
 def xc_species_html(
-    species: str = None,
-    quality: str = 'ab',
-    cluster: str = 'k',
-    cluster_k: int = 5,
-    n_recs: int = 50,
-    audio_s: float = 10,
-    scale: float = 2,
-    dists: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
-    view: bool = None,
-    sp_cols: str = None,
-    sort: str = 'c_pc',  # Name apart from 'rank' so that e.g. /similar?rank=d_pc doesn't transfer to /species?sort=...
-    random_state=0,
+    species      : str   = defaults.species,
+    quality      : str   = defaults.quality,
+    cluster      : str   = defaults.cluster,
+    cluster_k    : int   = defaults.cluster_k,
+    n_recs       : int   = defaults.n_recs,
+    audio_s      : float = defaults.audio_s,
+    scale        : float = defaults.scale,
+    dists        : str   = defaults.dists,
+    sort         : str   = defaults.sort,
+    view         : bool  = defaults.view,
+    sp_cols      : str   = defaults.sp_cols,
+    random_state : int   = defaults.random_state,
 ) -> pd.DataFrame:
     with log_time_context():
 
@@ -78,8 +106,8 @@ def xc_species_html(
         species   = species_for_query(species)
         if not species: return pd.DataFrame([])
         quality   = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
-        require(cluster in ['k', '', None])  # TODO Allow 'd' once we get it working
-        cluster_k = np.clip(cluster_k, 1, 50)
+        cluster   = cluster or None  # Validation in recs_cluster
+        cluster_k = cluster_k and np.clip(cluster_k, 1, 50)
         n_recs    = n_recs and np.clip(n_recs, 0, None)
         audio_s   = np.clip(audio_s, 0, 30)
         scale     = np.clip(scale, 0, 5)
@@ -102,6 +130,7 @@ def xc_species_html(
             ))
 
             # Cluster
+            #   - Before n_recs, so that clustering (data concern) is independent of sampling (view concern)
             .pipe(log_time_df, desc='cluster', f=lambda df: (df
                 .pipe(recs_cluster, dists, cluster, cluster_k)
             ))
@@ -114,12 +143,12 @@ def xc_species_html(
             .pipe(log_time_df, desc='sort', f=lambda df: (df
                 # Sample
                 .pipe(lambda df: df if n_recs is None else (df
-                    .sample(n_recs, random_state=random_state)
+                    .sample(min(n_recs, len(df)), random_state=random_state)
                 ))
                 # Sort
                 .pipe(lambda df: df.sort_values(**one([
                     dict(by=sort, ascending=any([
-                        sort in ['quality', 'time'],
+                        sort in ['quality', 'season', 'time'],
                         sort.startswith('c_'),  # Cluster (c_*)
                     ]))
                     for sort in [sort if sort in df else 'date']
@@ -133,26 +162,26 @@ def xc_species_html(
             ))
             .pipe(log_time_df, desc='view', f=lambda df: (df
                 .pipe(recs_view, view=view, sp_cols=sp_cols, links=['cluster', 'sort'])
-                .pipe(recs_view_cols)
+                .pipe(recs_view_cols, sort_bys=[sort])
             ))
 
         )
 
 
 def xc_similar_html(
-    xc_id: int = None,
-    quality: str = 'ab',
-    n_sp: int = None,
-    group_sp: str = 'y',
-    n_sp_recs: int = 3,
-    n_total: int = 30,
-    audio_s: float = 10,
-    scale: float = 2,
-    dists: str = '2c',  # 2 (l2), 1 (l1), c (cosine)
-    rank: str = 'd_pc',  # Name apart from 'sort' so that e.g. /species?sort=date doesn't transfer to /similar?rank=...
-    random_state: int = 0,
-    view: bool = None,
-    sp_cols: str = None,
+    xc_id        : int   = defaults.xc_id,
+    quality      : str   = defaults.quality,
+    n_sp         : int   = defaults.n_sp,
+    group_sp     : str   = defaults.group_sp,
+    n_sp_recs    : int   = defaults.n_sp_recs,
+    n_recs       : int   = defaults.n_recs,
+    audio_s      : float = defaults.audio_s,
+    scale        : float = defaults.scale,
+    dists        : str   = defaults.dists,
+    rank         : str   = defaults.rank,
+    view         : bool  = defaults.view,
+    sp_cols      : str   = defaults.sp_cols,
+    random_state : int   = defaults.random_state,
 ) -> pd.DataFrame:
     with log_time_context():
 
@@ -162,12 +191,13 @@ def xc_similar_html(
 
         # Params
         quality   = quality  and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
-        n_sp      = n_sp     and np.clip(n_sp,     0,  None)
+        n_sp      = n_sp     and np.clip(n_sp, 0, None)
         require(group_sp in ['y', 'n', '', None])
         group_sp  = group_sp == 'y'
         n_sp_recs = (n_sp_recs or None) and np.clip(n_sp_recs, 0, None)
-        n_total   = n_total  and np.clip(n_total,  0,  1000)
-        audio_s   = audio_s  and np.clip(audio_s,  0,  30)
+        n_recs    = n_recs   and np.clip(n_recs, 0, 1000)
+        n_recs    = n_recs - 1  # HACK Make room for query_rec in the results ("recs in view", not "search result recs")
+        audio_s   = audio_s  and np.clip(audio_s, 0, 30)
         scale     = np.clip(scale, 0, 5)
         dists     = list(dists)
 
@@ -235,7 +265,8 @@ def xc_similar_html(
         # Rank results
         #   - O(n log k)
         #   - [later] Add ebird_priors prob
-        d_slp = lambda sp_p: np.abs(-np.log(sp_p))  # d_slp: "species log prob" (abs for 1->0 i/o -0)
+        sort_bys = ['slp', rank] if group_sp else rank
+        slp = lambda sp_p: np.abs(-np.log(sp_p))  # slp: "species log prob" (abs for 1->0 i/o -0)
         ranked_recs = (dist_recs
             .pipe(log_time_df, desc='ranked_recs:merge', f=lambda df: (df
                 # Join in .sp_p for scoring functions
@@ -254,7 +285,7 @@ def xc_similar_html(
                 #       - -log(p) + d_p     = ... [Meaningful? Helpful to rescale?]
                 #       - d_f     + d_p     = ... [Meaningful? Helpful to rescale?]
                 .assign(
-                    d_slp=lambda df: d_slp(df.sp_p),
+                    slp=lambda df: slp(df.sp_p),
                 )
             ))
             .pipe(log_time_df, desc='ranked_recs:top_recs_per_sp', f=lambda df: (df
@@ -270,13 +301,21 @@ def xc_similar_html(
             ))
             .pipe(log_time_df, desc='ranked_recs:top_recs_overall', f=lambda df: (df
                 # Top recs overall
-                .sort_values(['d_slp', rank] if group_sp else rank)[:n_total]
+                .sort_values(sort_bys)[:n_recs]
                 .reset_index(drop=True)  # Reset to RangeIndex after sort
             ))
         )
 
         # Featurize + view ranked_recs
         return (ranked_recs
+
+            # Add .label per species
+            #   - Before including query_rec, so that it doesn't have one
+            .pipe(log_time_df, desc='label_species', f=lambda df: (df
+                .merge(how='left', on='species', right=(df
+                    [['species']].drop_duplicates().reset_index(drop=True).pipe(df_set_index_name, 'label').reset_index()
+                ))
+            ))
 
             # Include query_rec in view
             #   - HACK Include it as the first result with some mocked-out columns
@@ -287,10 +326,10 @@ def xc_similar_html(
                         (
                             # Expand query_rec cols to match df cols
                             pd.concat([DF([query_rec]), df[:0]])
-                            # Add query_rec.d_slp for user feedback (mostly for model debugging)
+                            # Add query_rec.slp for user feedback (mostly for model debugging)
                             .assign(
                                 sp_p=lambda df: one(query_sp_p[query_sp_p.species == query_rec.species].sp_p.values),
-                                d_slp=lambda df: d_slp(df.sp_p),
+                                slp=lambda df: slp(df.sp_p),
                             )
                             # Mock d_* cols as 0
                             .pipe(lambda df: df.fillna({k: 0 for k in df if k.startswith('d_')}))
@@ -310,11 +349,11 @@ def xc_similar_html(
                 .pipe(lambda df: (df
                     # Manually order d_* cols [Couldn't get to work above]
                     .pipe(df_reorder_cols, first=[
-                        'd_slp',
+                        'slp',
                         *[c for c in [d_(f, m) for m in '2c' for f in 'fp'] if c in df],
                     ])
                 ))
-                .pipe(recs_view_cols)
+                .pipe(recs_view_cols, sort_bys=sort_bys)
             ))
 
         )
@@ -450,7 +489,7 @@ def recs_featurize_pre_rank(
                 #   - Bad: this incorrectly drops any valid audios that haven't been _manually_ cached warmed
                 #   - TODO Figure out a better way to propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
                 drop_uncached_slice=True,
-                # Don't load .audio for pre-rank recs (only for final n_total recs, below)
+                # Don't load .audio for pre-rank recs (only for final n_recs recs, below)
                 no_audio=True,
             )
             .pipe(recs_featurize_recs_for_sp)
@@ -552,7 +591,7 @@ def recs_featurize_metdata_audio_slice(
 
     # HACK Do O(n) stat() calls else "Falling back" incurs O(n) .audio read+slice if any audio.mp3 didn't need to .resample(...)
     #   - e.g. cache/audio/xc/data/RIRA/185212/audio.mp3.enc(wav)
-    #   - Repro: xc_similar_html(sort='d_fc', sp_cols='species', xc_id=381417, n_total=5, n_sp=17)
+    #   - Repro: xc_similar_html(sort='d_fc', sp_cols='species', xc_id=381417, n_recs=5, n_sp=17)
     @cache(version=0, key=lambda recs: recs.id)  # Slow: ~13s for 35k NA-CA recs
     def to_paths_sliced(recs) -> Iterable[Tuple[str, str]]:
         return [
@@ -762,15 +801,18 @@ def _recs_for_sp() -> pd.DataFrame:
 def recs_cluster(
     recs: pd.DataFrame,
     dists: List[str],
-    cluster: str,
+    cluster: Optional[str],  # None -> skip clustering
     cluster_k: int,  # TODO Generalize user controls for more general kwargs
 ) -> pd.DataFrame:
 
-    cluster = {
+    if not cluster:
+        return recs
+
+    clusters = {
 
         # TODO Problematic that we don't d_compute here?
         'k': sk.cluster.KMeans(
-            n_clusters=cluster_k,
+            n_clusters=min(cluster_k, len(recs)),
             # verbose=1,  # Noisy
             # n_jobs=-1,  # Slow for small inputs (proc overhead)
         ),
@@ -784,7 +826,9 @@ def recs_cluster(
         #     # n_jobs=-1,  # Slow for small inputs (proc overhead)
         # ),
 
-    }[cluster]
+    }
+    require(cluster in clusters.keys())
+    cluster = clusters[cluster]
 
     return (recs
         .pipe(lambda df: df_assign_first(df, **{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
@@ -841,6 +885,10 @@ def recs_view(
         round(x) if x >= 10**(n - 1) else
         round_sig(x, n)
     )
+    simple_num = lambda x: (
+        '0' if np.isclose(x, 0, atol=1e-3) else
+        str(x).lstrip('0')
+    )
     df_if_cols = lambda df, cols, f: f(df) if set([cols] if isinstance(cols, str) else cols) <= set(df.columns) else df
     df_col_map_if_col = lambda df, **cols: df_col_map(df, **{k: v for k, v in cols.items() if k in df})
 
@@ -850,13 +898,17 @@ def recs_view(
     return (recs
         .pipe(lambda df: df_col_map(df, **{
             # Rank by scores (d_*)
-            c: lambda x, c=c: '''<a href="{{ req_query_with(rank=%r) }}">%s</a>''' % (c, round_sig_frac(x, 2))
+            c: lambda x, c=c: '''<a href="{{ req_query_with(rank=%r) }}">%s</a>''' % (c, simple_num(round_sig_frac(x, 2)))
             for c in df
             if c.startswith('d_') and 'rank' in links
         }))
         .pipe(lambda df: df_col_map(df, **{
             # Sort by clusters (c_*)
-            c: lambda xs, c=c: '''<a href="{{ req_query_with(sort=%r) }}">(%s) %s</a>''' % (c, xs[0], round_sig_frac(xs[1], 2))
+            c: lambda xs, c=c: '''
+                <a href="{{ req_query_with(sort=%(c)r) }}"><span class="label-i i-%(cluster)s">%(cluster)s</span> %(dist)s</a>
+            ''' % dict(
+                c=c, cluster=xs[0], dist=simple_num(round_sig_frac(xs[1], 2)),
+            )
             for c in df
             if c.startswith('c_') and 'cluster' in links
         }))
@@ -888,49 +940,48 @@ def recs_view(
             )
             # Keep sp_cols only
             .drop(columns=[c for c in {'species', 'com_name'} - set(sp_cols)])
+            # Label sp_cols
+            .pipe(df_if_cols, 'label', lambda df: (df
+                .assign(**{
+                    c: df_map_rows(df, lambda row: '''
+                        <span class="label-i i-%(label).0f">%(label_text)s</span> %(c)s
+                    ''' % dict(
+                        label=row.label,
+                        label_text='&nbsp;' if pd.notnull(row.label) else '?',
+                        c=row[c],
+                    ))
+                    for c in sp_cols
+                })
+            ))
         ))
+        .assign(
+            sp_recs=lambda df: df.recs_for_sp,  # TODO Push this upstream into recs_featurize_pre_rank (+ bump cache version)
+        )
         .pipe(df_if_cols, 'date', lambda df: df.assign(
             date=lambda df: df_map_rows(df, lambda row: '%(year).0f-%(month_day)s' % row),  # .year is float (b/c None)
         ))
+        .assign(
+            season=lambda df: df.month_day,
+        )
         .pipe(df_col_map_if_col, **{
             # Sort by cols
             c: lambda x, c=c: '''<a href="{{ req_query_with(sort=%r) }}">%s</a>''' % (c, x)
-            for c in ['quality', 'date', 'time']
+            for c in ['quality', 'date', 'season', 'time']
             if 'sort' in links
         })
         .pipe(df_col_map_if_col,
-            # df_cell_str to prevent df.to_html from truncating long strs
-            type=lambda x: df_cell_str('<br>'.join(textwrap.wrap(x,
-                width=max(20, int(len(x) / 1.8) or np.inf),
-            ))),
-        )
-        .pipe(df_col_map_if_col,
             background_species=lambda xs: ' '.join(xs),
         )
-        .pipe(df_col_map_if_col,
-            # df_cell_str to prevent df.to_html from truncating long strs
-            background_species=lambda x: df_cell_str('<br>'.join(line.strip(',') for line in textwrap.wrap(x,
-                width=max((4 + 1) * 3, int(len(x) / 1.5) or np.inf),
-            ))),
+        .assign(
+            license=lambda df: df.license_type,
         )
-        .pipe(df_if_cols, ['recordist', 'license_type'], lambda df: df.assign(
-            recordist=lambda df: df_map_rows(df, lambda row: '''
-                %(recordist)s<br/>%(license_type)s
+        .pipe(df_if_cols, ['lat', 'lng'], lambda df: df.assign(
+            lat_lng=lambda df: df_map_rows(df, lambda row: '''
+                <a href="https://www.google.com/maps/place/%(lat)s,%(lng)s/@%(lat)s,%(lng)s,6z">%(lat)s, %(lng)s</a>
             ''' % row),
         ))
-        .pipe(df_if_cols, ['place', 'lat', 'lng'], lambda df: df.assign(
-            # df_cell_str to prevent df.to_html from truncating long strs
-            place=lambda df: df_map_rows(df, lambda row: df_cell_str('''
-                %(place)s<br/>
-                <a href="https://www.google.com/maps/place/%(lat)s,%(lng)s/@%(lat)s,%(lng)s,6z">(%(lat)s, %(lng)s)</a>
-            ''' % row)),
-        ))
-        .pipe(df_col_map_if_col,
-            # df_cell_str to prevent df.to_html from truncating long strs
-            remarks=lambda x: df_cell_str('<br>'.join(textwrap.wrap(x,
-                width=max(80, int(len(x) / 1.8) or np.inf),
-            ))),
-        )
+        # df_cell_str all the strs to prevent df.to_html from truncating long strs
+        .applymap(lambda x: df_cell_str(x) if isinstance(x, str) else x)
         # Fill any remaining nulls with ''
         #   - Strip cats else they'll reject '' (unless it's a valid cat)
         .pipe(df_cat_to_str)
@@ -940,21 +991,29 @@ def recs_view(
 
 def recs_view_cols(
     df: pd.DataFrame,
+    sort_bys: str = None,
     prepend: Iterable[str] = [],
     append: Iterable[str] = [],
 ) -> pd.DataFrame:
     return (df
         [lambda df: [c for c in [
             *prepend,
-            'xc', 'xc_id',
-            *unique_everseen(c for c in df if c.startswith('d_')),  # Scores (d_*)
-            *unique_everseen(c for c in df if c.startswith('c_')),  # Clusters (c_*)
-            'com_name', 'species', 'spectro_disp',
-            'quality', 'date', 'time',
-            'type', 'subspecies', 'background_species',
-            'recordist', 'elevation', 'place', 'remarks', 'bird_seen', 'playback_used',
-            'recs_for_sp',
-            # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
+            *[c for c in [
+                'xc', 'xc_id',
+                'slp',
+                *unique_everseen(c for c in df if c.startswith('d_')),  # Scores (d_*)
+                *unique_everseen(c for c in df if c.startswith('c_')),  # Clusters (c_*)
+                'com_name', 'species',
+            ] if c not in sort_bys],
+            *(sort_bys if sort_bys else []),
+            *[c for c in [
+                'spectro_disp', 'sp_recs',
+                # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
+                'quality', 'date', 'season', 'time',
+                'type', 'subspecies', 'background_species',
+                'license', 'recordist', 'bird_seen', 'playback_used',
+                'elevation', 'lat_lng', 'place', 'remarks',
+            ] if c not in sort_bys],
             *append,
         ] if c in df]]
     )

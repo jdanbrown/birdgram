@@ -1,3 +1,7 @@
+body {
+  font-size: 16px;
+}
+
 a {
   text-decoration: none;
 }
@@ -59,3 +63,78 @@ table {
 
   }
 }
+
+//
+// Labels
+//
+
+td .label-i  {
+  display: inline-block;
+  border: 1px solid black;
+  width: 1rem; line-height: 1rem; border-radius: 100rem; // Square dims + large radius -> circle
+  font-size: 66%; // Shrink text relative to enclosing circle (border + background)
+  text-align: center;
+  vertical-align: top; // HACK top appears to do what I want and middle doesn't [don't know why]
+}
+
+// [Autogen]
+/*
+print('\n'.join(
+    'td .label-i.i-%-2s { color: white; background: %s; }' % (i, mpl.colors.rgb2hex(x))
+    for i, x in enumerate(take(50, cycle(chain(
+        islice(mpl.cm.tab20.colors, 0, None, 2),
+        islice(mpl.cm.tab20.colors, 1, None, 2),
+        mpl.cm.Pastel1.colors,
+    ))))
+))
+*/
+td .label-i.i-0  { color: white; background: #1f77b4; }
+td .label-i.i-1  { color: white; background: #ff7f0e; }
+td .label-i.i-2  { color: white; background: #2ca02c; }
+td .label-i.i-3  { color: white; background: #d62728; }
+td .label-i.i-4  { color: white; background: #9467bd; }
+td .label-i.i-5  { color: white; background: #8c564b; }
+td .label-i.i-6  { color: white; background: #e377c2; }
+td .label-i.i-7  { color: white; background: #7f7f7f; }
+td .label-i.i-8  { color: white; background: #bcbd22; }
+td .label-i.i-9  { color: white; background: #17becf; }
+td .label-i.i-10 { color: white; background: #aec7e8; }
+td .label-i.i-11 { color: white; background: #ffbb78; }
+td .label-i.i-12 { color: white; background: #98df8a; }
+td .label-i.i-13 { color: white; background: #ff9896; }
+td .label-i.i-14 { color: white; background: #c5b0d5; }
+td .label-i.i-15 { color: white; background: #c49c94; }
+td .label-i.i-16 { color: white; background: #f7b6d2; }
+td .label-i.i-17 { color: white; background: #c7c7c7; }
+td .label-i.i-18 { color: white; background: #dbdb8d; }
+td .label-i.i-19 { color: white; background: #9edae5; }
+td .label-i.i-20 { color: white; background: #fbb4ae; }
+td .label-i.i-21 { color: white; background: #b3cde3; }
+td .label-i.i-22 { color: white; background: #ccebc5; }
+td .label-i.i-23 { color: white; background: #decbe4; }
+td .label-i.i-24 { color: white; background: #fed9a6; }
+td .label-i.i-25 { color: white; background: #ffffcc; }
+td .label-i.i-26 { color: white; background: #e5d8bd; }
+td .label-i.i-27 { color: white; background: #fddaec; }
+td .label-i.i-28 { color: white; background: #f2f2f2; }
+td .label-i.i-29 { color: white; background: #1f77b4; }
+td .label-i.i-30 { color: white; background: #ff7f0e; }
+td .label-i.i-31 { color: white; background: #2ca02c; }
+td .label-i.i-32 { color: white; background: #d62728; }
+td .label-i.i-33 { color: white; background: #9467bd; }
+td .label-i.i-34 { color: white; background: #8c564b; }
+td .label-i.i-35 { color: white; background: #e377c2; }
+td .label-i.i-36 { color: white; background: #7f7f7f; }
+td .label-i.i-37 { color: white; background: #bcbd22; }
+td .label-i.i-38 { color: white; background: #17becf; }
+td .label-i.i-39 { color: white; background: #aec7e8; }
+td .label-i.i-40 { color: white; background: #ffbb78; }
+td .label-i.i-41 { color: white; background: #98df8a; }
+td .label-i.i-42 { color: white; background: #ff9896; }
+td .label-i.i-43 { color: white; background: #c5b0d5; }
+td .label-i.i-44 { color: white; background: #c49c94; }
+td .label-i.i-45 { color: white; background: #f7b6d2; }
+td .label-i.i-46 { color: white; background: #c7c7c7; }
+td .label-i.i-47 { color: white; background: #dbdb8d; }
+td .label-i.i-48 { color: white; background: #9edae5; }
+td .label-i.i-49 { color: white; background: #fbb4ae; }
