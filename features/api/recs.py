@@ -5,6 +5,7 @@ import numbers
 from typing import *
 
 from attrdict import AttrDict
+import bleach
 from more_itertools import chunked, one
 import pandas as pd
 from potoo.pandas import *
@@ -47,8 +48,8 @@ defaults = AttrDict(
 
     # xc_species_html
     species      = None,
-    cluster      = 'aa',    # agglom + average
-    cluster_k    = 2,       # Manually increment from small until clusters look good [TODO Record user's cluster_k per sp]
+    cluster      = 'aw',    # agglom + ward
+    cluster_k    = 6,       # TODO Record user's cluster_k per sp so we can learn cluster_k ~ sp
     sort         = 'c_pc',  # (Separate from 'rank' so that e.g. /similar? doesn't transfer to /species?)
 
     # xc_similar_html
@@ -107,7 +108,8 @@ def xc_species_html(
         if not species: return pd.DataFrame([])
         quality   = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
         cluster   = cluster or None  # Validation in recs_cluster
-        cluster_k = cluster_k and np.clip(cluster_k, 1, 50)
+        cluster_k = cluster_k or defaults.cluster_k
+        cluster_k = np.clip(cluster_k, 1, 50)
         n_recs    = n_recs and np.clip(n_recs, 0, None)
         audio_s   = np.clip(audio_s, 0, 30)
         scale     = np.clip(scale, 0, 5)
@@ -148,7 +150,7 @@ def xc_species_html(
                 # Sort
                 .pipe(lambda df: df.sort_values(**one([
                     dict(by=sort, ascending=any([
-                        sort in ['quality', 'season', 'time'],
+                        sort in ['quality', 'month_day', 'time'],
                         sort.startswith('c_'),  # Cluster (c_*)
                     ]))
                     for sort in [sort if sort in df else 'date']
@@ -885,8 +887,17 @@ def cluster_label_and_dist(
     show=False,
 ) -> "Col[Tuple['label', 'dist_to_center']]":
 
-    X = np.array(list(recs[f_col]))  # Series[np.ndarray[p]] -> np.ndarray[n,p]
-    cluster.fit(X)
+    if len(recs) <= 1:
+        # Avoid e.g. agglom failing when len(X) == 1
+        cluster.labels_ = [0] * len(recs)
+    else:
+        X = np.array(list(recs[f_col]))  # Series[np.ndarray[p]] -> np.ndarray[n,p]
+        cluster.fit(X)
+
+    # Extract inferred attrs (somewhat) generically across various clustering estimators
+    #   - TODO Compute centroids manually for estimators that don't return it (kmeans returns it, agglom/dbscan don't)
+    labels = cluster.labels_
+    centroids = None if not hasattr(cluster, 'cluster_centers_') else cluster.cluster_centers_
 
     if show:
         ipy_print({
@@ -902,10 +913,10 @@ def cluster_label_and_dist(
     # TODO Is it coherent to d_compute here, e.g. for kmeans which doesn't use d_compute in fit?
     return [
         (label, dist)
-        for f_x, label in zip(recs[f_col], cluster.labels_)
+        for f_x, label in zip(recs[f_col], labels)
         for dist in [
-            None if not hasattr(cluster, 'cluster_centers_') else
-            np.asscalar(d_compute([f_x], [cluster.cluster_centers_[label]]))
+            None if not centroids else
+            np.asscalar(d_compute([f_x], [centroids[label]]))
         ]
     ]
 
@@ -930,6 +941,7 @@ def recs_view(
         '0' if np.isclose(x, 0, atol=1e-3) else
         str(x).lstrip('0')
     )
+    show_num = lambda x, n=2: simple_num(round_sig_frac(x, n))
     df_if_cols = lambda df, cols, f: f(df) if set([cols] if isinstance(cols, str) else cols) <= set(df.columns) else df
     df_col_map_if_col = lambda df, **cols: df_col_map(df, **{k: v for k, v in cols.items() if k in df})
 
@@ -937,41 +949,61 @@ def recs_view(
         return recs
 
     return (recs
+
+        # Strip html in freeform xc inputs (e.g. remarks)
+        #   - Remarks is the only field where markdown is encouraged, but don't assume it's the only place it will show up
+        #   - https://www.xeno-canto.org/upload
+        .pipe(df_col_map_if_col,
+            time               = lambda x: bleach.clean(x, strip=True),
+            type               = lambda x: bleach.clean(x, strip=True),
+            subspecies         = lambda x: bleach.clean(x, strip=True),
+            background_species = lambda xs: [bleach.clean(x, strip=True) for x in xs],
+            recordist          = lambda x: bleach.clean(x, strip=True),
+            elevation          = lambda x: bleach.clean(x, strip=True),
+            place              = lambda x: bleach.clean(x, strip=True),
+            remarks            = lambda x: bleach.clean(x, strip=True),
+        )
+
+        # xc, xc_id
+        .pipe(df_if_cols, 'xc_id', lambda df: (df
+            .assign(
+                # Save raw cols before we junk them up with html
+                _xc_id=lambda df: df.xc_id,
+                xc=lambda df: df_map_rows(df, lambda row: f'''
+                    <a href="https://www.xeno-canto.org/%(_xc_id)s">XC</a>
+                ''' % row),
+                xc_id=lambda df: df_map_rows(df, lambda row: '''
+                    <a href="{{ req_href('/recs/xc/similar')(xc_id=%(_xc_id)r) }}">%(_xc_id)s</a>
+                ''' % row),
+            )
+        ))
+
+        # Scores (d_*)
         .pipe(lambda df: df_col_map(df, **{
-            # Rank by scores (d_*)
-            c: lambda x, c=c: '''<a href="{{ req_query_with(rank=%r) }}">%s</a>''' % (c, simple_num(round_sig_frac(x, 2)))
+            c: lambda x, c=c: '''<a href="{{ req_query_with(rank=%r) }}">%s</a>''' % (c, show_num(x, 2))
             for c in df
             if c.startswith('d_') and 'rank' in links
         }))
+        # Clusters (c_*)
         .pipe(lambda df: df_col_map(df, **{
-            # Sort by clusters (c_*)
             c: lambda xs, c=c: '''
                 <a href="{{ req_query_with(sort=%(c)r) }}"><span class="label-i i-%(cluster)s">%(cluster)s</span>%(maybe_dist)s</a>
             ''' % dict(
                 c=c,
                 cluster=xs[0],
-                maybe_dist='' if xs[1] is None else ' %s' % simple_num(round_sig_frac(xs[1], 2)),
+                maybe_dist='' if xs[1] is None else ' %s' % show_num(xs[1], 2),
             )
             for c in df
             if c.startswith('c_') and 'cluster' in links
         }))
-        .pipe(df_if_cols, 'xc_id', lambda df: (df
-            .assign(
-                # TODO Simplify: Have to do .xc before .xc_id, since we mutate .xc_id
-                xc=lambda df: df_map_rows(df, lambda row: f'''
-                    <a href="https://www.xeno-canto.org/%(xc_id)s">XC</a>
-                ''' % row),
-                xc_id=lambda df: df_map_rows(df, lambda row: '''
-                    <a href="{{ req_href('/recs/xc/similar')(xc_id=%(xc_id)r) }}">%(xc_id)s</a>
-                ''' % row),
-            )
-        ))
+
+        # species, com_name
         .pipe(df_if_cols, 'species', lambda df: (df
-            .rename(columns={
-                'species_com_name': 'com_name',
-            })
             .assign(
-                # TODO Simplify: Have to save .species/.com_name, since we mutate both
+                com_name=lambda df: df.species_com_name,  # [Push this rename upstream, somewhere?]
+            )
+            .assign(
+                # Save raw cols before we junk them up with html
                 _species=lambda df: df.species,
                 _com_name=lambda df: df.com_name,
                 species=lambda df: df_map_rows(df, lambda row: '''
@@ -987,7 +1019,10 @@ def recs_view(
             .pipe(df_if_cols, 'label', lambda df: (df
                 .assign(**{
                     c: df_map_rows(df, lambda row: '''
-                        <span class="label-i i-%(label).0f">%(label_text)s</span> %(c)s
+                        <div class="labeled-species">
+                            %(c)s
+                            <span class="label-i i-%(label).0f">%(label_text)s</span>
+                        </div>
                     ''' % dict(
                         label=row.label,
                         label_text='&nbsp;' if pd.notnull(row.label) else '?',
@@ -997,38 +1032,59 @@ def recs_view(
                 })
             ))
         ))
+
+        # sp_recs
         .assign(
             sp_recs=lambda df: df.recs_for_sp,  # TODO Push this upstream into recs_featurize_pre_rank (+ bump cache version)
         )
+
+        # Sort-by cols: quality, date, month_day, time
+        #   - WARNING Don't rename these (e.g. season=month_day) else names don't connect all the way through recs->view->sort->recs
         .pipe(df_if_cols, 'date', lambda df: df.assign(
             date=lambda df: df_map_rows(df, lambda row: '%(year).0f-%(month_day)s' % row),  # .year is float (b/c None)
         ))
-        .assign(
-            season=lambda df: df.month_day,
-        )
         .pipe(df_col_map_if_col, **{
-            # Sort by cols
             c: lambda x, c=c: '''<a href="{{ req_query_with(sort=%r) }}">%s</a>''' % (c, x)
-            for c in ['quality', 'date', 'season', 'time']
+            for c in ['quality', 'date', 'month_day', 'time']
             if 'sort' in links
         })
+
+        # background_species
         .pipe(df_col_map_if_col,
             background_species=lambda xs: ' '.join(xs),
         )
+
+        # license
         .assign(
             license=lambda df: df.license_type,
         )
+
+        # lat_lng
         .pipe(df_if_cols, ['lat', 'lng'], lambda df: df.assign(
             lat_lng=lambda df: df_map_rows(df, lambda row: '''
                 <a href="https://www.google.com/maps/place/%(lat)s,%(lng)s/@%(lat)s,%(lng)s,6z">%(lat)s, %(lng)s</a>
             ''' % row),
         ))
-        # df_cell_str all the strs to prevent df.to_html from truncating long strs
-        .applymap(lambda x: df_cell_str(x) if isinstance(x, str) else x)
+
+        # place
+        #   - Reverse place parts so that high-order info is first (and visually aligned)
+        .pipe(df_col_map_if_col,
+            place=lambda x: ', '.join(reversed(x.split(', '))),
+        )
+
         # Fill any remaining nulls with ''
         #   - Strip cats else they'll reject '' (unless it's a valid cat)
         .pipe(df_cat_to_str)
         .fillna('')
+
+        # df_cell_str all the strs to prevent df.to_html from truncating long strs
+        #   - HACK df_cell_str everything to fix errant "..."s
+        .applymap(lambda x: (
+            df_cell_str(show_num(x)) if isinstance(x, (numbers.Number, np.generic)) else
+            df_cell_str(x)           if isinstance(x, str) else
+            x
+        ))
+
     )
 
 
@@ -1052,7 +1108,7 @@ def recs_view_cols(
             *[c for c in [
                 'spectro_disp', 'sp_recs',
                 # 'duration_s',  # TODO Surface the original duration (.duration_s is the sliced duration)
-                'quality', 'date', 'season', 'time',
+                'quality', 'date', 'month_day', 'time',
                 'type', 'subspecies', 'background_species',
                 'license', 'recordist', 'bird_seen', 'playback_used',
                 'elevation', 'lat_lng', 'place', 'remarks',
