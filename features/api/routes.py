@@ -34,7 +34,7 @@ bp = Blueprint('routes', __name__, static_folder='api/static')
 
 @bp.route('/')
 def root():
-    return redirect('/recs/xc/species')
+    return redirect('/recs/browse')
 
 
 @bp.route('/health')
@@ -47,26 +47,34 @@ def error():
     raise Exception('oops')
 
 
-@bp.route('/api/recs/xc/meta', methods=['GET'])
-def api_recs_xc_meta():
+@bp.route('/api/recs/meta', methods=['GET'])
+def api_recs_meta():
     return jsonify_df(with_parsed_request_args(
-        api.recs.xc_meta,
+        api.recs.meta_json,
         request.args,
     ))
 
 
-@bp.route('/recs/xc/species', methods=['GET'])
-def recs_xc_species():
-    return htmlify_df('recs_xc_species.html.j2', with_parsed_request_args(
-        api.recs.xc_species_html,
+@bp.route('/recs/browse', methods=['GET'])
+def recs_browse():
+    return htmlify_df('recs_browse.html.j2', with_parsed_request_args(
+        api.recs.browse_html,
         request.args,
     ))
 
 
-@bp.route('/recs/xc/search', methods=['GET'])
-def recs_xc_search():
-    return htmlify_df('recs_xc_search.html.j2', with_parsed_request_args(
-        api.recs.xc_search_html,
+@bp.route('/recs/species', methods=['GET'])
+def recs_species():
+    return htmlify_df('recs_species.html.j2', with_parsed_request_args(
+        api.recs.species_html,
+        request.args,
+    ))
+
+
+@bp.route('/recs/search', methods=['GET'])
+def recs_search():
+    return htmlify_df('recs_search.html.j2', with_parsed_request_args(
+        api.recs.search_html,
         request.args,
     ))
 

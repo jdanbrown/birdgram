@@ -38,9 +38,9 @@ dist_info = {
 defaults = AttrDict(
 
     # Shared
-    n_recs       = 36,      # Fits within mobile screen (iphone 8, portrait, safari)
     audio_s      = 10,      # Hardcoded for precompute
     quality      = 'ab',
+    n_recs       = 18,      # Fits within mobile screen (iphone 8, portrait, safari)
     scale        = 2,
     feats        = 'fp',    # feat_info keys
     dists        = '2c',    # dist_info keys
@@ -49,13 +49,13 @@ defaults = AttrDict(
     random_state = 0,
     dev          = 0,
 
-    # xc_species_html
+    # species_html
     species      = None,
     cluster      = 'a',     # agglom + ward (default linkage)
     cluster_k    = 6,       # TODO Record user's cluster_k per sp so we can learn cluster_k ~ sp
     sort         = 'c_pc',  # (Separate from 'rank' so that e.g. /search? doesn't transfer to /species?)
 
-    # xc_search_html
+    # search_html
     xc_id        = None,
     group_sp     = 'y',
     n_sp_recs    = 3,
@@ -64,7 +64,7 @@ defaults = AttrDict(
 )
 
 
-def xc_meta(
+def meta_json(
     species : str,
     quality : str = defaults.quality,
     n_recs  : int = defaults.n_recs,
@@ -85,7 +85,83 @@ def xc_meta(
         )
 
 
-def xc_species_html(
+def browse_html(
+    quality      : str   = defaults.quality,
+    n_recs       : float = defaults.n_recs,  # float i/o int so zooming in/out doesn't truncate
+    audio_s      : float = defaults.audio_s,
+    scale        : float = defaults.scale,
+    sort         : str   = 'species',
+    view         : bool  = defaults.view,
+    sp_cols      : str   = defaults.sp_cols,
+    random_state : int   = None,
+    dev          : int   = defaults.dev,
+) -> pd.DataFrame:
+    with log_time_context():
+
+        # Params
+        quality = quality and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
+        n_recs  = n_recs and int(np.clip(n_recs, 0, 200))
+        audio_s = np.clip(audio_s, 0, 30)
+        scale   = np.clip(scale, 1, 5)
+        dev     = bool(dev)
+
+        # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
+        require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
+        del audio_s
+
+        return (sg.search_recs
+
+            # Filter
+            .pipe(log_time_df, desc='filter', f=lambda df: (df
+                [lambda df: df.columns if not quality else df.quality.isin(quality)]
+                .pipe(df_require_nonempty_for_api, 'No recs found', quality=quality)
+                .reset_index(drop=True)  # Reset to RangeIndex after filter
+                .pipe(df_remove_unused_categories)  # Drop unused cats after filter
+            ))
+
+            # Sample
+            .pipe(log_time_df, desc='sample', f=lambda df: (df
+                # HACK Samples species, not recs (better UX, until we complexify)
+                #   - Sample 1 rec per sp
+                #   - TODO Slow! (~1s for 35k recs, 331 sp)
+                .groupby('species').apply(lambda g: g.sample(1, random_state=random_state))  # (Don't need .reset_index() [why?])
+                # Sample n_recs many sp's
+                .pipe(lambda df: df if n_recs is None else (df
+                    .sample(min(n_recs, len(df)), random_state=random_state)
+                ))
+            ))
+
+            # Restore .species/.com_name categories for taxo sorting
+            #   - FIXME Why is payloads.df_cache_hybrid losing categories on cache hit?
+            #   - TODO Unify .com_name ~ .species_com_name (see recs_view)
+            .astype({
+                'species': metadata.species.df.shorthand.dtype,
+            })
+
+            # Sort
+            .pipe(log_time_df, desc='sort', f=lambda df: (df
+                .pipe(lambda df: df.sort_values(**one([
+                    dict(by=sort, ascending=any([
+                        sort in ['quality', 'month_day', 'time', 'species'],
+                    ]))
+                    for sort in [sort if sort in df else 'species']
+                ])))
+                .reset_index(drop=True)  # Reset to RangeIndex after sort
+            ))
+
+            # View
+            .pipe(log_time_df, desc='view:spectro_disp (slow ok)', f=lambda df: (df
+                .pipe(recs_featurize_spectro_disp, scale=scale)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+            ))
+            .pipe(log_time_df, desc='view', f=lambda df: (df
+                .pipe(recs_view, view=view, sp_cols=sp_cols, links=['cluster', 'sort'])
+                .pipe(recs_view_cols, dev=dev, sort_bys=[sort])
+            ))
+
+        )
+
+
+def species_html(
     species      : str   = defaults.species,
     quality      : str   = defaults.quality,
     cluster      : str   = defaults.cluster,
@@ -178,7 +254,7 @@ def xc_species_html(
         )
 
 
-def xc_search_html(
+def search_html(
     xc_id        : int   = defaults.xc_id,
     quality      : str   = defaults.quality,
     group_sp     : str   = defaults.group_sp,
@@ -522,7 +598,7 @@ def recs_featurize_pre_rank(
     )
 
 
-# TODO Simplify: replace with sg.search_recs lookup (callers: +xc_species_html -xc_search_html)
+# TODO Simplify: replace with sg.search_recs lookup (callers: +species_html -search_html)
 def recs_featurize(
     recs: pd.DataFrame,
     audio_s: float,
@@ -558,7 +634,7 @@ def recs_featurize_metdata_audio_slice(
     # HACK Drop audios with no cache/audio/ slice file instead of recomputing ("Falling back") (which warms cache)
     #   - Invalid input audios don't produce a cache/audio/ file, so if you get one then you're stuck always falling back
     drop_uncached_slice: bool = None,
-    # Skip loading .audio (e.g. for intermediate stages of xc_search_html)
+    # Skip loading .audio (e.g. for intermediate stages of search_html)
     no_audio: bool = None,
 ) -> pd.DataFrame:
     """Featurize: Add .audio with slice"""
@@ -610,7 +686,7 @@ def recs_featurize_metdata_audio_slice(
 
     # HACK Do O(n) stat() calls else "Falling back" incurs O(n) .audio read+slice if any audio.mp3 didn't need to .resample(...)
     #   - e.g. cache/audio/xc/data/RIRA/185212/audio.mp3.enc(wav)
-    #   - Repro: xc_search_html(sort='d_fc', sp_cols='species', xc_id=381417, n_recs=5, n_sp=17)
+    #   - Repro: search_html(sort='d_fc', sp_cols='species', xc_id=381417, n_recs=5, n_sp=17)
     @cache(version=0, key=lambda recs: recs.id)  # Slow: ~13s for 35k NA-CA recs
     def to_paths_sliced(recs) -> Iterable[Tuple[str, str]]:
         return [
@@ -1074,7 +1150,7 @@ def recs_view(
                     <a href="https://www.xeno-canto.org/%(_xc_id)s">XC</a>
                 ''' % row),
                 xc_id=lambda df: df_map_rows(df, lambda row: '''
-                    <a href="{{ req_href('/recs/xc/search')(xc_id=%(_xc_id)r) }}">%(_xc_id)s</a>
+                    <a href="{{ req_href('/recs/search')(xc_id=%(_xc_id)r) }}">%(_xc_id)s</a>
                 ''' % row),
             )
         ))
@@ -1112,10 +1188,10 @@ def recs_view(
                 _species=lambda df: df.species,
                 _com_name=lambda df: df.com_name,
                 species=lambda df: df_map_rows(df, lambda row: '''
-                    <a href="{{ req_href('/recs/xc/species')(species=%(_species)r) }}" title="%(_com_name)s" >%(_species)s</a>
+                    <a href="{{ req_href('/recs/species')(species=%(_species)r) }}" title="%(_com_name)s" >%(_species)s</a>
                 ''' % row),
                 com_name=lambda df: df_map_rows(df, lambda row: '''
-                    <a href="{{ req_href('/recs/xc/species')(species=%(_species)r) }}" title="%(_species)s"  >%(_com_name)s</a>
+                    <a href="{{ req_href('/recs/species')(species=%(_species)r) }}" title="%(_species)s"  >%(_com_name)s</a>
                 ''' % row),
             )
             # Keep sp_cols only

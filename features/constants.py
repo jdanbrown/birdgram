@@ -25,6 +25,9 @@ data_dir = f'{code_dir}/data'
 cache_dir = f'{data_dir}/cache'
 artifact_dir = f'{data_dir}/artifacts'
 hand_labels_dir = f'{data_dir}/hand-labels'
+#   - data/uploads/
+uploads_dir = f'{data_dir}/uploads'
+uploads_recs_dir = f'{uploads_dir}/recs'
 #   - data/cache/
 cache_audio_dir = f'{cache_dir}/audio'
 
