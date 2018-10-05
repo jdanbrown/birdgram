@@ -3,39 +3,47 @@
 {% block controls_table %}
 
   <tr>
-    <td>host</td>
     <td>xc_id</td>
     <td>quality</td>
-    <td>n_sp</td>
+    <td></td>
+    <td></td>
     <td>group_sp</td>
     <td>n_sp_recs</td>
     <td>n_recs</td>
-    <td>scale</td>
-    <td>dists</td>
-    <td>feats</td>
+    {% if is_dev() %}
+      <td>scale</td>
+      <td>dists</td>
+      <td>feats</td>
+      <td>host</td>
+    {% endif %}
+    <td></td>
   </tr>
 
   <tr>
-    <td><a class="control" href="//{{ req_switch_host_host() }}{{ request.full_path }}">{{ req_switch_host_text() }}</a></td>
     <td><input type="text" data-arg="xc_id"     class="control num  xc_id"     value="{{ req_query_get('xc_id',     '') }}" /></td>
     <td><input type="text" data-arg="quality"   class="control text quality"   value="{{ req_query_get('quality',   '') }}"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
     /></td>
-    <td><input type="text" data-arg="n_sp"      class="control num  n_sp"      value="{{ req_query_get('n_sp',      '') }}" /></td>
+    <td><a class="control zoom" href="{{ req_path_with_zoom(-1) }}">–</a></td>
+    <td><a class="control zoom" href="{{ req_path_with_zoom(+1) }}">+</a></td>
     <td><input type="text" data-arg="group_sp"  class="control text group_sp"  value="{{ req_query_get('group_sp',  '') }}"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
     /></td>
     <td><input type="text" data-arg="n_sp_recs" class="control num  n_sp_recs" value="{{ req_query_get('n_sp_recs', '') }}" /></td>
     <td><input type="text" data-arg="n_recs"    class="control num  n_recs"    value="{{ req_query_get('n_recs',    '') }}" /></td>
-    <td><input type="text" data-arg="scale"     class="control num  scale"     value="{{ req_query_get('scale',     '') }}" /></td>
-    <td><input type="text" data-arg="dists"     class="control num  dists"     value="{{ req_query_get('dists',     '') }}" /></td>
-    <td><input type="text" data-arg="feats"     class="control num  feats"     value="{{ req_query_get('feats',     '') }}" /></td>
+    {% if is_dev() %}
+      <td><input type="text" data-arg="scale"     class="control num  scale"     value="{{ req_query_get('scale',     '') }}" /></td>
+      <td><input type="text" data-arg="dists"     class="control num  dists"     value="{{ req_query_get('dists',     '') }}" /></td>
+      <td><input type="text" data-arg="feats"     class="control num  feats"     value="{{ req_query_get('feats',     '') }}" /></td>
+      <td><a class="control host" href="//{{ req_switch_host_host() }}{{ request.full_path }}">{{ req_switch_host_text() }}</a></td>
+    {% endif %}
+    <td><a class="control dev"  href="{{ req_path_with_toggle_dev() }}">🎛</a></td> <!-- 🎛🎚🔛💡⛄☃️ -->
   </tr>
 
 {% endblock %}
 
 {% block body %}
 
-    {{ body_html | safe }}
+  {{ body_html | safe }}
 
 {% endblock %}

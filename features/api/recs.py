@@ -41,12 +41,13 @@ defaults = AttrDict(
     n_recs       = 36,      # Fits within mobile screen (iphone 8, portrait, safari)
     audio_s      = 10,      # Hardcoded for precompute
     quality      = 'ab',
-    scale        = 1,
+    scale        = 2,
     feats        = 'fp',    # feat_info keys
     dists        = '2c',    # dist_info keys
     view         = None,
     sp_cols      = None,
     random_state = 0,
+    dev          = 0,
 
     # xc_species_html
     species      = None,
@@ -56,7 +57,6 @@ defaults = AttrDict(
 
     # xc_similar_html
     xc_id        = None,
-    n_sp         = None,
     group_sp     = 'y',
     n_sp_recs    = 3,
     rank         = 'd_pc',  # (Separate from 'sort' so that e.g. /species? doesn't transfer to /similar?)
@@ -90,7 +90,7 @@ def xc_species_html(
     quality      : str   = defaults.quality,
     cluster      : str   = defaults.cluster,
     cluster_k    : int   = defaults.cluster_k,
-    n_recs       : int   = defaults.n_recs,
+    n_recs       : float = defaults.n_recs,  # float i/o int so zooming in/out doesn't truncate
     audio_s      : float = defaults.audio_s,
     scale        : float = defaults.scale,
     feats        : str   = defaults.feats,
@@ -99,6 +99,7 @@ def xc_species_html(
     view         : bool  = defaults.view,
     sp_cols      : str   = defaults.sp_cols,
     random_state : int   = defaults.random_state,
+    dev          : int   = defaults.dev,
 ) -> pd.DataFrame:
     with log_time_context():
 
@@ -113,11 +114,12 @@ def xc_species_html(
         cluster   = cluster or None  # Validation in recs_cluster
         cluster_k = cluster_k or defaults.cluster_k
         cluster_k = np.clip(cluster_k, 1, 50)
-        n_recs    = n_recs and np.clip(n_recs, 0, None)
+        n_recs    = n_recs and int(np.clip(n_recs, 0, None))
         audio_s   = np.clip(audio_s, 0, 30)
-        scale     = np.clip(scale, 0, 5)
+        scale     = np.clip(scale, 1, 5)
         feats     = list(feats)
         dists     = list(dists)
+        dev       = bool(dev)
 
         # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
         require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
@@ -170,7 +172,7 @@ def xc_species_html(
             ))
             .pipe(log_time_df, desc='view', f=lambda df: (df
                 .pipe(recs_view, view=view, sp_cols=sp_cols, links=['cluster', 'sort'])
-                .pipe(recs_view_cols, sort_bys=[sort])
+                .pipe(recs_view_cols, dev=dev, sort_bys=[sort])
             ))
 
         )
@@ -179,10 +181,9 @@ def xc_species_html(
 def xc_similar_html(
     xc_id        : int   = defaults.xc_id,
     quality      : str   = defaults.quality,
-    n_sp         : int   = defaults.n_sp,
     group_sp     : str   = defaults.group_sp,
     n_sp_recs    : int   = defaults.n_sp_recs,
-    n_recs       : int   = defaults.n_recs,
+    n_recs       : float = defaults.n_recs,  # float i/o int so zooming in/out doesn't truncate
     audio_s      : float = defaults.audio_s,
     scale        : float = defaults.scale,
     feats        : str   = defaults.feats,
@@ -191,6 +192,7 @@ def xc_similar_html(
     view         : bool  = defaults.view,
     sp_cols      : str   = defaults.sp_cols,
     random_state : int   = defaults.random_state,
+    dev          : int   = defaults.dev,
 ) -> pd.DataFrame:
     with log_time_context():
 
@@ -200,16 +202,16 @@ def xc_similar_html(
 
         # Params
         quality   = quality  and [q for q in quality for q in [q.upper()] for q in [{'N': 'no score'}.get(q, q)]]
-        n_sp      = n_sp     and np.clip(n_sp, 0, None)
         require(group_sp in ['y', 'n', '', None])
         group_sp  = group_sp == 'y'
         n_sp_recs = (n_sp_recs or None) and np.clip(n_sp_recs, 0, None)
-        n_recs    = n_recs   and np.clip(n_recs, 0, 1000)
+        n_recs    = n_recs   and int(np.clip(n_recs, 0, 1000))
         n_recs    = n_recs - 1  # HACK Make room for query_rec in the results ("recs in view", not "search result recs")
         audio_s   = audio_s  and np.clip(audio_s, 0, 30)
-        scale     = np.clip(scale, 0, 5)
+        scale     = np.clip(scale, 1, 5)
         feats     = list(feats)
         dists     = list(dists)
+        dev       = bool(dev)
 
         # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
         require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
@@ -233,7 +235,6 @@ def xc_similar_html(
             #   - Always using rec_preds ensures that behavior is consistent between user rec and xc rec
             #   - Skipping rec_preds for xc recs would only save ~150ms
             rec_preds(query_rec, sg.search)
-            [:n_sp]
             .rename(columns={'p': 'sp_p'})
         ))
 
@@ -366,7 +367,7 @@ def xc_similar_html(
                         *[c for c in [d_(f, m) for m in '2c' for f in 'fp'] if c in df],
                     ])
                 ))
-                .pipe(recs_view_cols, sort_bys=sort_bys)
+                .pipe(recs_view_cols, dev=dev, sort_bys=sort_bys)
             ))
 
         )
@@ -489,7 +490,8 @@ def recs_featurize_pre_rank(
             use='log_time_each',  # No eta, but avoids interfering with nested progress bars
             xs=list(chunked(recs.index,
                 # 1000,  # Mem unsafe: oom'd on n1-highcpu-16 (14g) at progress 27/36
-                500,   # TODO TODO Is this mem safe on n1-standard-4 (15g)?
+                # 500,   # TODO Is this mem safe on n1-standard-4 (15g)?
+                500,   # TODO Is this mem safe on n1-standard-8 (30g)?
                 # 250,   # Mem safe: completed on n1-highcpu-16 (14g)
             )),
             f=lambda ix: (recs
@@ -1079,14 +1081,15 @@ def recs_view(
 
         # Scores (d_*)
         .pipe(lambda df: df_col_map(df, **{
-            c: lambda x, c=c: '''<a href="{{ req_query_with(rank=%r) }}">%s</a>''' % (c, show_num(x, 2))
+            c: lambda x, c=c: '''<a href="{{ req_path_with_query_params(rank=%r) }}">%s</a>''' % (c, show_num(x, 2))
             for c in df
             if c.startswith('d_') and 'rank' in links
         }))
         # Clusters (c_*)
         .pipe(lambda df: df_col_map(df, **{
             c: lambda xs, c=c: '''
-                <a href="{{ req_query_with(sort=%(c)r) }}"><span class="label-i i-%(cluster)s">%(cluster)s</span>%(maybe_dist)s</a>
+                <a href="{{ req_path_with_query_params(sort=%(c)r) }}"
+                    ><span class="label-i i-%(cluster)s">%(cluster)s</span>%(maybe_dist)s</a>
             ''' % one(
                 dict(
                     c=c,
@@ -1146,7 +1149,7 @@ def recs_view(
             date=lambda df: df_map_rows(df, lambda row: '%(year).0f-%(month_day)s' % row),  # .year is float (b/c None)
         ))
         .pipe(df_col_map_if_col, **{
-            c: lambda x, c=c: '''<a href="{{ req_query_with(sort=%r) }}">%s</a>''' % (c, x)
+            c: lambda x, c=c: '''<a href="{{ req_path_with_query_params(sort=%r) }}">%s</a>''' % (c, x)
             for c in ['quality', 'date', 'month_day', 'time']
             if 'sort' in links
         })
@@ -1192,11 +1195,14 @@ def recs_view(
 
 def recs_view_cols(
     df: pd.DataFrame,
+    dev: bool,
     sort_bys: str = [],
     prepend: Iterable[str] = [],
     append: Iterable[str] = [],
 ) -> pd.DataFrame:
     return (df
+
+        # Select + order cols
         [lambda df: [c for c in [
             *prepend,
             *[c for c in [
@@ -1217,6 +1223,15 @@ def recs_view_cols(
             ] if c not in sort_bys],
             *append,
         ] if c in df]]
+
+        # Hide dev cols if not dev
+        [lambda df: [c for c in df if dev or c not in [
+            'slp',
+            *[c for c in df if c.startswith('d_')],
+            *[c for c in df if c.startswith('c_') and c not in sort_bys],  # Keep sorting cluster col so user can see cluster labels
+            # 'sp_recs',  # TODO Do keep showing to user, but should we put it somewhere more out of the way?
+        ]]]
+
     )
 
 

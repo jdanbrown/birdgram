@@ -11,9 +11,9 @@ from flask import Blueprint, Markup, redirect, render_template, render_template_
 from flask.json import jsonify
 from more_itertools import partition
 from potoo.ipython import ipy_formats, ipy_formats_to_html
-from potoo.util import ensure_endswith
+from potoo.util import ensure_endswith, strip_endswith
 import structlog
-from toolz import compose, valmap
+from toolz import compose, valfilter, valmap
 import werkzeug
 from werkzeug.datastructures import MultiDict
 from werkzeug.urls import Href, URL, url_parse, url_unparse
@@ -77,16 +77,53 @@ def recs_xc_similar():
 
 
 @bp.app_template_global()
+def is_dev() -> bool:
+    return bool(req_query_get('dev'))
+
+
+@bp.app_template_global()
 def req_url_replace(**fields) -> str:
     return url_replace(request.url, **fields)
 
 
 @bp.app_template_global()
-def req_query_with(**query_params) -> str:
-    return href(request.path)(**{
+def req_path_with_query_params(**query_params) -> str:
+    return href(request.path)(**valfilter(lambda v: v is not None, {
         **request.args,
         **query_params,
-    })
+    }))
+
+
+@bp.app_template_global()
+def req_path_with_zoom(zoom_inc: Optional[int]) -> str:
+    return req_path_with_query_params(**_zoom_params(zoom_inc))
+
+
+def _zoom_params(
+    zoom_inc: Union['-1', None, '1'],  # None to reset zoom
+) -> dict:
+    assert zoom_inc in [-1, None, 1]
+    curr_scale  = coalesce(or_else(None, lambda: float(request.args.get('scale'))),  api.recs.defaults['scale'])
+    curr_n_recs = coalesce(or_else(None, lambda: float(request.args.get('n_recs'))), api.recs.defaults['n_recs'])
+    curr_scale  = np.clip(curr_scale,  1, 5)     # TODO De-dupe with api.recs
+    curr_n_recs = np.clip(curr_n_recs, 0, None)  # TODO De-dupe with api.recs
+    scale = (
+        np.clip(curr_scale + zoom_inc, 1, 5) if zoom_inc is not None else
+        api.recs.defaults['scale']
+    )
+    clean_float_as_str = lambda x: strip_endswith(str(x), '.0')
+    return dict(
+        scale  = clean_float_as_str(scale),
+        n_recs = clean_float_as_str(curr_n_recs * curr_scale / scale)  # float i/o int so zooming in/out doesn't truncate
+    )
+
+
+@bp.app_template_global()
+def req_path_with_toggle_dev() -> str:
+    dev = coalesce(or_else(None, lambda: int(request.args.get('dev'))), api.recs.defaults['dev'])
+    return req_path_with_query_params(
+        dev=int(not dev) or None,  # None to omit 'dev' query params instead of '&dev=0'
+    )
 
 
 @bp.app_template_global()
