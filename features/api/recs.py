@@ -489,7 +489,7 @@ def recs_featurize_pre_rank(
             use='log_time_each',  # No eta, but avoids interfering with nested progress bars
             xs=list(chunked(recs.index,
                 # 1000,  # Mem unsafe: oom'd on n1-highcpu-16 (14g) at progress 27/36
-                500,   # TODO TODO Mem safe on n1-standard-4 (15g)?
+                500,   # TODO TODO Is this mem safe on n1-standard-4 (15g)?
                 # 250,   # Mem safe: completed on n1-highcpu-16 (14g)
             )),
             f=lambda ix: (recs
@@ -707,7 +707,7 @@ def recs_featurize_spectro_bytes(
     pad_s: float,
     scale: float,
     load_audio: Optional[Load] = None,  # Use .audio if load_audio=None, else load .audio ourselves (using load_audio)
-    format='png',
+    format=config.api.recs.spectro_bytes.format,
     **plot_kwargs,
 ) -> pd.DataFrame:
     """Featurize: Add .spectro_bytes, spectro_bytes_mimetype <- .audio"""
@@ -732,12 +732,35 @@ def recs_featurize_spectro_bytes(
         )
 
 
-@cache(version=0, tags='rec', key=lambda rec, **kwargs: (rec.id, kwargs, sg.features))
 def rec_spectro_bytes(
     rec: Row,
     pad_s: float,
     load_audio: Optional[Load] = None,  # Use .audio if load_audio=None, else load .audio ourselves (using load_audio)
-    format='png',
+    convert: Optional[dict] = config.api.recs.spectro_bytes.get('convert'),
+    save: Optional[dict] = config.api.recs.spectro_bytes.get('save'),
+    format: str = config.api.recs.spectro_bytes.format,
+    **plot_kwargs,
+) -> bytes:
+    # Wrap _rec_spectro_bytes so we can resolve default args from config before it computes cache key
+    return _rec_spectro_bytes(
+        rec,
+        pad_s=pad_s,
+        load_audio=load_audio,
+        convert=convert,
+        save=save,
+        format=format,
+        **plot_kwargs,
+    )
+
+
+@cache(version=1, tags='rec', key=lambda rec, **kwargs: (rec.id, kwargs, sg.features))
+def _rec_spectro_bytes(
+    rec: Row,
+    pad_s: float,
+    load_audio: Optional[Load],
+    convert: Optional[dict],
+    save: Optional[dict],
+    format: str,
     **plot_kwargs,
 ) -> bytes:
     rec = rec.copy()  # Copy so we can mutate
@@ -749,15 +772,13 @@ def rec_spectro_bytes(
         # .replace(**dict(load=load_audio) if load_audio else {})  # Set features.load for features._cache() -> load._audio()
         ._spectro(rec, cache=True)
     )
-    spectro_img = plot_spectro(rec, sg.features, pad_s=pad_s, **plot_kwargs,
+    spectro_img = plot_spectro(rec, pad_s=pad_s, **plot_kwargs,
         show=False,   # Return img instead of plotting
         audio=False,  # Return PIL.Image (no audio) instead of Displayable (with embedded html audio)
     )
-    # TODO Optimize png/img size -- currently bigger than mp4 audio! (a rough start: notebooks/png_compress)
-    spectro_bytes = pil_img_save_to_bytes(
-        spectro_img.convert('RGB'),  # Drop alpha channel
-        format=format,
-    )
+    if convert:
+        spectro_img = spectro_img.convert(**convert)
+    spectro_bytes = pil_img_save_to_bytes(spectro_img, format=format, **(save or {}))
     return spectro_bytes
 
 

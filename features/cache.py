@@ -42,6 +42,7 @@ import attr
 from dataclasses import dataclass, field
 from joblib import Memory
 from joblib.memory import MemorizedFunc
+from potoo import debug_print
 from potoo.util import AttrContext
 
 from config import config

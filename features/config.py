@@ -78,7 +78,7 @@ config = AttrDict(
                 params=dict(
                     # Global params for precomputed search_recs
                     version=2,   # Manually bump to invalidate cache
-                    # limit=1000,  # XXX Faster dev (declared here for cache invalidation)
+                    limit=1000,  # XXX Faster dev (declared here for cache invalidation)
                     audio_s=10,  # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
                 ),
                 cache=dict(
@@ -92,15 +92,25 @@ config = AttrDict(
                         opaque=[
                             # Fields that are too big/complex to reasonably stuff into a human-usable filename
                             'config.server_globals.sg_load.search',
+                            'config.api.recs.spectro_bytes',
                             'config.audio.audio_persist',  # Avoid .audio_to_url b/c it invalidates on role (notebook vs. api)
                         ],
                     ),
                 ),
             ),
 
+            # Tuned in notebooks/spectro_img_encode
+            #   - NOTE ~25% more space savings here by switching from 256->16, at a small but nonzero loss of quality (see notebook)
+            #   - optimize=True only saves ~5% space but adds cpu time, so let's hold off for now
+            spectro_bytes=dict(
+                # format='png', convert=dict(mode='RGBA'),                              # No change (same as convert=None)
+                format='png', convert=dict(mode='P', colors=256), save=dict(bits=8),    # Tiny diff vs. RGBA,RGB (b/c ~16m colors)
+                # format='png', convert=dict(mode='P', colors=16),  save=dict(bits=4),  # Small but nonzero diff vs. 256
+            ),
+
             progress_kwargs=override_progress_kwargs or dict(
                 use='dask', scheduler='threads',  # Faster (primarily useful for remote, for now)
-                # use='sync'  # XXX Dev
+                # use='sync',  # XXX Dev
                 # use=None,  # XXX Dev (disable par and silence progress bars to more easily see reads/writes)
             ),
 
