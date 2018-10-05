@@ -53,13 +53,13 @@ defaults = AttrDict(
     species      = None,
     cluster      = 'a',     # agglom + ward (default linkage)
     cluster_k    = 6,       # TODO Record user's cluster_k per sp so we can learn cluster_k ~ sp
-    sort         = 'c_pc',  # (Separate from 'rank' so that e.g. /similar? doesn't transfer to /species?)
+    sort         = 'c_pc',  # (Separate from 'rank' so that e.g. /search? doesn't transfer to /species?)
 
-    # xc_similar_html
+    # xc_search_html
     xc_id        = None,
     group_sp     = 'y',
     n_sp_recs    = 3,
-    rank         = 'd_pc',  # (Separate from 'sort' so that e.g. /species? doesn't transfer to /similar?)
+    rank         = 'd_pc',  # (Separate from 'sort' so that e.g. /species? doesn't transfer to /search?)
 
 )
 
@@ -178,7 +178,7 @@ def xc_species_html(
         )
 
 
-def xc_similar_html(
+def xc_search_html(
     xc_id        : int   = defaults.xc_id,
     quality      : str   = defaults.quality,
     group_sp     : str   = defaults.group_sp,
@@ -522,7 +522,7 @@ def recs_featurize_pre_rank(
     )
 
 
-# TODO Simplify: replace with sg.search_recs lookup (callers: +xc_species_html -xc_similar_html)
+# TODO Simplify: replace with sg.search_recs lookup (callers: +xc_species_html -xc_search_html)
 def recs_featurize(
     recs: pd.DataFrame,
     audio_s: float,
@@ -558,7 +558,7 @@ def recs_featurize_metdata_audio_slice(
     # HACK Drop audios with no cache/audio/ slice file instead of recomputing ("Falling back") (which warms cache)
     #   - Invalid input audios don't produce a cache/audio/ file, so if you get one then you're stuck always falling back
     drop_uncached_slice: bool = None,
-    # Skip loading .audio (e.g. for intermediate stages of xc_similar_html)
+    # Skip loading .audio (e.g. for intermediate stages of xc_search_html)
     no_audio: bool = None,
 ) -> pd.DataFrame:
     """Featurize: Add .audio with slice"""
@@ -610,7 +610,7 @@ def recs_featurize_metdata_audio_slice(
 
     # HACK Do O(n) stat() calls else "Falling back" incurs O(n) .audio read+slice if any audio.mp3 didn't need to .resample(...)
     #   - e.g. cache/audio/xc/data/RIRA/185212/audio.mp3.enc(wav)
-    #   - Repro: xc_similar_html(sort='d_fc', sp_cols='species', xc_id=381417, n_recs=5, n_sp=17)
+    #   - Repro: xc_search_html(sort='d_fc', sp_cols='species', xc_id=381417, n_recs=5, n_sp=17)
     @cache(version=0, key=lambda recs: recs.id)  # Slow: ~13s for 35k NA-CA recs
     def to_paths_sliced(recs) -> Iterable[Tuple[str, str]]:
         return [
@@ -1074,7 +1074,7 @@ def recs_view(
                     <a href="https://www.xeno-canto.org/%(_xc_id)s">XC</a>
                 ''' % row),
                 xc_id=lambda df: df_map_rows(df, lambda row: '''
-                    <a href="{{ req_href('/recs/xc/similar')(xc_id=%(_xc_id)r) }}">%(_xc_id)s</a>
+                    <a href="{{ req_href('/recs/xc/search')(xc_id=%(_xc_id)r) }}">%(_xc_id)s</a>
                 ''' % row),
             )
         ))

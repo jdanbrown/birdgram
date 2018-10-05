@@ -63,10 +63,10 @@ def recs_xc_species():
     ))
 
 
-@bp.route('/recs/xc/similar', methods=['GET'])
-def recs_xc_similar():
-    return htmlify_df('recs_xc_similar.html.j2', with_parsed_request_args(
-        api.recs.xc_similar_html,
+@bp.route('/recs/xc/search', methods=['GET'])
+def recs_xc_search():
+    return htmlify_df('recs_xc_search.html.j2', with_parsed_request_args(
+        api.recs.xc_search_html,
         request.args,
     ))
 
@@ -320,7 +320,7 @@ def _validate_kwargs(func, **kwargs):
     if set(kwargs) - {*required_args, *optional_args}:
         # Redirect instead of hard error on extra params
         #   - Still provides (subtle) feedback to user by changing the url
-        #   - Smooths the jumps between linked pages (e.g. /species <-> /similar) by silently dropping irrelevant params
+        #   - Smooths the jumps between linked pages (e.g. /species <-> /search) by silently dropping irrelevant params
         raise RedirectError(302, Href(request.base_url)(MultiDict([
             (k, v)
             for k, v in request.args.items(multi=True)  # Preserve repeated keys from MultiDict
