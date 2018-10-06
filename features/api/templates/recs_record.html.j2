@@ -1,0 +1,113 @@
+{% extends "recs.html.j2" %}
+
+{% block controls_table %}
+
+  {# HACK Reusing #top-controls styling for /record #}
+  <tr>
+    <td></td>
+    <td></td>
+    {# <td></td> #}
+  </tr>
+  <tr>
+    <td><a class="control icon home"  href="/">🔝</a></td> {# 🔝🆙⬆️🏠 #}
+    <td><a class="control icon start" href="javascript:recordStart()" >▶️</a></td>
+    {# <td><a class="control icon stop"  href="javascript:recordStop()"  >⏹️</a></td> #}
+  </tr>
+
+{% endblock %}
+
+{% block body %}
+
+  {# XXX video/image work, but audio isn't supported in ios safari #}
+  {# <input type="file" accept="audio/*" capture> #}
+
+  {#
+  XXX Ugh, recording audio from mic on ios safari is a huge pita -- see "Audio/mic support for mobile" in notes
+  - HACK Uploading from ios files instead (record via SpectrumView, or Voice Recorder, or whatever)
+  #}
+
+  <div id="audio-input" class="hidden">
+    <input id="audio-input-input" type="file" accept="audio/*"
+      onchange="window.uploadAudioFile && window.uploadAudioFile(this.files[0])"
+    >
+  </div>
+
+  <div id="audio-selected" class="hidden">
+    <p>Audio to upload:</p>
+    <ul>
+      <li>Filename: <span id="audio-selected-name"></span></li>
+      <li>Mimetype: <span id="audio-selected-mimetype"></span></li>
+      <li>Size: <span id="audio-selected-size-kb"></span> KB</li>
+    </ul>
+    <audio id="audio-selected-audio" controls></audio>
+  </div>
+
+  <div id="upload" class="hidden">
+    <p><label for="upload-progress">Uploading:</label></p>
+    <ul>
+      <li><progress id="upload-progress" name="upload-progress" max="100" value="0"></progress></li>
+      <li id="upload-done" class="hidden">Done! &rarr; <span id="upload-url"></span></li>
+    </ul>
+  </div>
+
+  <div id="notifications">
+  </div>
+
+  <script>
+
+    // HACK HACK HACK
+    //  - https://developer.mozilla.org/en-US/docs/Web/API/FileReader
+    //  - https://developer.mozilla.org/en-US/docs/Web/API/File/Using_files_from_web_applications#Handling_the_upload_process_for_a_file
+
+    window.recordStart = () => { document.getElementById('audio-input-input').click(); };
+    // window.recordStop  = () => { ... };
+
+    window.uploadAudioFile = (file) => {
+      if (file) {
+        window.file = file; // XXX Debug
+
+        // Get mimetype
+        let mimetype = file.type;
+        if (mimetype === 'video/mp4')   mimetype = 'audio/mp4';  // HACK for ios safari
+        if (mimetype === 'audio/x-wav') mimetype = 'audio/wav';  // HACK for ios safari
+        if (mimetype === 'audio/mp3')   mimetype = 'audio/mpeg'; // HACK
+
+        // Checks
+        if (file.size > 100*1024*1024) {
+          alert(`File must be less than 100mb: size[file.size]`);
+          return;
+        }
+
+        // User feedback
+        document.getElementById('audio-selected').classList.remove('hidden');
+        document.getElementById('audio-selected-name').textContent = file.name;
+        document.getElementById('audio-selected-mimetype').textContent = mimetype;
+        document.getElementById('audio-selected-size-kb').textContent = Math.round(file.size / 1024);
+        document.getElementById('audio-selected-audio').src = URL.createObjectURL(file);
+
+        // POST to api
+        document.getElementById('upload').classList.remove('hidden');
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = (ev) => {
+          // Update progress bar
+          document.getElementById('upload-progress').value = 100 * ev.loaded / ev.total;
+        };
+        xhr.onload = (ev) => {
+          // Redirect to /recs/search for the uploaded audio
+          const {audio_id, redir_path} = JSON.parse(ev.target.responseText)
+          document.getElementById('upload-done').classList.remove('hidden');
+          const url = `${window.origin}${redir_path}`;
+          document.getElementById('upload-url').innerHTML = `<a href="${url}">${audio_id}</a>`;
+          window.location = url;
+        };
+        xhr.open('POST', '/api/recs/upload');
+        xhr.setRequestHeader('Content-Type', mimetype);
+        // TODO Content-Disposition: ...; filename=...
+        xhr.send(file);
+
+      }
+    };
+
+  </script>
+
+{% endblock %}

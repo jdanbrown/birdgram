@@ -1109,6 +1109,7 @@ from potoo.util import path_is_contained_by
 import psutil
 import pydub
 import scipy
+from toolz import itemmap
 import yaml
 
 from config import config
@@ -1610,15 +1611,23 @@ def audio_id_to_mimetype(id: str) -> str:
 
 def format_to_mimetype(format: str) -> str:
     # Let unknown formats fail with an informative KeyError
-    return {
-        # Audio
-        'mp3': 'audio/mpeg',
-        'wav': 'audio/wav',
-        'mp4': 'audio/mp4',  # (Collides with .mp4 video, but we don't care)
-        # Image
-        'png': 'image/png',
-        # Add more as needed
-    }[format]
+    return _mimetypes[format]
+
+
+def mimetype_to_format(mimetype: str) -> str:
+    # Let unknown formats fail with an informative KeyError
+    return itemmap(reversed, _mimetypes)[mimetype]
+
+
+_mimetypes = {
+    # Audio
+    'mp3': 'audio/mpeg',
+    'wav': 'audio/wav',
+    'mp4': 'audio/mp4',  # (Collides with .mp4 video, but we don't care)
+    # Image
+    'png': 'image/png',
+    # Add more as needed
+}
 
 
 def audio_id_to_format(id: str) -> str:

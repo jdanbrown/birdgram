@@ -810,21 +810,49 @@ def load_xc_meta(
 
 
 def xc_meta_to_path(row: Row) -> (str, str):
-    return ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
+    # HACK Switch on xc_rec (existing behavior) vs. user_rec (new shoehorned behavior)
+    if isinstance(row.id, int):
+        # xc_rec
+        return ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
+    else:
+        # user_rec
+        assert isinstance(row.id, str), f"{row.id}"
+        dataset = row.id.split('/')[0]
+        return (dataset, f'{data_dir}/{row.id}')
 
 
+# TODO TODO Refactor to clean up the mess we left here to make user_rec work (probably not a simple one)
 def xc_meta_to_raw_recs(
     xc_meta: DF,
     load: 'Load',
     to_paths: Callable[[DF], Iterable[str]] = None,  # e.g. to override paths to be sliced cache paths instead of raw input paths
 ) -> DF:
     log.debug('Loading xc.metadata -> xc_raw_recs (.audio, more metadata)... [slower]')
-    assert 'duration_s' not in xc_meta  # TODO Make this function idempotent (currently, barfs on non-obvious errors)
+
+    # HACK Switch on xc_rec (existing behavior) vs. user_rec (new shoehorned behavior)
+    is_user_rec = (
+        len(xc_meta) == 1 and
+        isinstance(one(xc_meta.id), str) and
+        one(xc_meta.id).startswith('uploads/')
+    )
+
+    # Checks
+    #   - HACK Bypass if user_rec, so we can get the to_paths behavior
+    if not is_user_rec:
+        assert 'duration_s' not in xc_meta  # TODO Make this function idempotent (currently, barfs on non-obvious errors)
+
     to_paths = to_paths or (lambda xc_meta: [xc_meta_to_path(row) for row in df_rows(xc_meta)])
     paths = list(to_paths(xc_meta))
     xc_raw_recs = (
         load.recs(paths=paths)
         .pipe(df_require_nonempty, f'No recs from paths: len(xc_meta)[{len(xc_meta)}], len(paths)[{len(paths)}]')
+    )
+
+    # HACK Short-circuit if user_rec, since we only want the to_paths behavior from here
+    if is_user_rec:
+        return xc_raw_recs
+
+    return (xc_raw_recs
         .assign(
             # TODO Push upstream
             xc_id=lambda df: df.id.map(strip_leading_cache_audio_dir).str.split('/').str[3].astype(int),
@@ -870,7 +898,6 @@ def xc_meta_to_raw_recs(
             )
         ))
     )
-    return xc_raw_recs
 
 
 def _inspect_xc_raw_recs(xc_raw_recs: DF) -> DF:

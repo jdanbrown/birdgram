@@ -55,6 +55,21 @@ def api_recs_meta():
     ))
 
 
+@bp.route('/api/recs/upload', methods=['POST'])
+def api_recs_upload():
+    audio_id = api.recs.upload_audio_id(
+        audio_bytes=request.get_data(),
+        mimetype=request.headers['Content-Type'],
+        # TODO Get filename from Content-Disposition
+    )
+    rep = jsonify({
+        'audio_id': audio_id,
+        'redir_path': req_href('/recs/search')(xc_id=audio_id),
+    })
+    rep.status_code = 201  # Created
+    return rep
+
+
 @bp.route('/recs/browse', methods=['GET'])
 def recs_browse():
     return htmlify_df('recs_browse.html.j2', with_parsed_request_args(
@@ -77,6 +92,11 @@ def recs_search():
         api.recs.search_html,
         request.args,
     ))
+
+
+@bp.route('/recs/record', methods=['GET'])
+def recs_record():
+    return render_template('recs_record.html.j2')
 
 
 #

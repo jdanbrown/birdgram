@@ -2,6 +2,7 @@ from functools import lru_cache
 import inspect
 import linecache
 import numbers
+import secrets
 from typing import *
 
 from attrdict import AttrDict
@@ -83,6 +84,39 @@ def meta_json(
             [lambda df: df.quality.isin(quality)]
             [:n_recs]
         )
+
+
+def upload_audio_id(
+    audio_bytes: bytes,
+    mimetype: str,
+    filename: Optional[str] = None,  # TODO Get filename from Content-Disposition
+) -> str:  # Returns new audio_id
+    with log_time_context():
+        require(len(audio_bytes) < 100*1024*1024, audio_bytes=audio_bytes, mimetype=mimetype)
+
+        # Generate fresh filename
+        ext = or_else('unk', lambda: mimetype_to_format(mimetype))
+        filename = '%s-%s.%s' % (
+            datetime.utcnow().strftime('%Y-%m-%dT%H-%M-%S'),
+            secrets.token_hex(4),
+            ext,
+        )
+
+        # Write file to data/uploads/recs/
+        abs_path = Path(uploads_recs_dir) / filename
+        log.info('Writing file',
+            size=len(audio_bytes),
+            path=str(abs_path.relative_to(data_dir)),
+        )
+        with open(ensure_parent_dir(abs_path), 'wb') as f:
+            f.write(audio_bytes)
+
+        # Return new user_rec.id to view
+        #   - Do load.recs so we can get .id (inefficient since we do it again down in /search, after the user redirs)
+        user_rec = one(df_rows(sg.load.recs(paths=[
+            ('uploads', abs_path),  # TODO Make 'uploads' a real dataset (or just kill dataset?)
+        ])))
+        return user_rec.id
 
 
 def browse_html(
@@ -255,7 +289,7 @@ def species_html(
 
 
 def search_html(
-    xc_id        : int   = defaults.xc_id,
+    xc_id        : str   = defaults.xc_id,  # TODO Rename to accommodate xc_id | user_rec_id
     quality      : str   = defaults.quality,
     group_sp     : str   = defaults.group_sp,
     n_sp_recs    : int   = defaults.n_sp_recs,
@@ -269,6 +303,9 @@ def search_html(
     sp_cols      : str   = defaults.sp_cols,
     random_state : int   = defaults.random_state,
     dev          : int   = defaults.dev,
+    # HACK Shoehorned /edit into /search
+    start_s      : float = 0,
+    end_s        : float = defaults.audio_s,
 ) -> pd.DataFrame:
     with log_time_context():
 
@@ -288,6 +325,12 @@ def search_html(
         feats     = list(feats)
         dists     = list(dists)
         dev       = bool(dev)
+        # Allow manual seeking through query_rec, with sane defaults
+        start_s   = np.clip(coalesce(start_s, 0), 0, None)
+        end_s     = coalesce(end_s, start_s + audio_s)
+        edit      = start_s > 0 or end_s != audio_s
+        require(end_s > start_s)
+        require(end_s - start_s <= 60)  # Bound the total duration, for resource safety
 
         # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
         require(audio_s == config.api.recs.search_recs.params.audio_s)  # Can't change audio_s for precomputed search_recs
@@ -296,13 +339,79 @@ def search_html(
         # Get precomputed search_recs
         search_recs = sg.search_recs
 
-        # Lookup query_rec from search_recs
-        query_rec = log_time_df(search_recs, desc='query_rec', f=lambda df: (df
-            [lambda df: df.xc_id == xc_id]
-            .pipe(df_require_nonempty_for_api, 'query_rec not found', xc_id=xc_id)
-            .reset_index(drop=True)  # Reset to RangeIndex after filter
-            .pipe(lambda df: one(df_rows(df)))
-        ))
+        # TODO TODO Refactor to clean up the mess we left in xc_meta_to_raw_recs to make user_rec work (probably not a simple one)
+        # TODO TODO Clean up this xc_rec/user_rec mess
+
+        # HACK Switch xc_id vs. user_rec_id
+        try:
+            xc_id, user_rec_id = int(xc_id), None
+        except:
+            xc_id, user_rec_id = None, xc_id
+        if user_rec_id:
+            # Load query_rec from user_rec_id, if given
+
+            with log_time_context('user_rec:load_user_rec'):
+                user_rec = one(df_rows(sg.load.recs(paths=[
+                    ('uploads', Path(data_dir) / user_rec_id),
+                ])))
+
+            # Edit + featurize user_rec
+            #   - HACK Reusing recs_featurize as a first cut [TODO Probably not quite right -- think harder]
+            user_rec = log_time_df(DF([user_rec]), desc='user_rec:edit_via_featurize', f=lambda df: (df
+                .pipe(recs_featurize,
+                    start_s=start_s,
+                    audio_s=end_s - start_s,
+                    scale=1,
+                    spectro_disp=False,  # Skip .spectro_disp (view concern), which we redo below
+                )
+                .pipe(lambda df: one(df_rows(df)))
+            ))
+
+            # HACK Mock .xc_id for user_rec's
+            #   - Have to do this after recs_featurize, else user_rec.xc_id goes away [why?]
+            #   - TODO TODO Clean this up with the xc_meta_to_raw_recs refactor (noted above)
+            user_rec.xc_id = -1  # [Seems to work, but is this causing any quiet trouble downstream...?]
+
+            query_rec = user_rec
+
+        else:
+            # Load query_rec from xc recs (search_recs / xc_meta)
+
+            if not edit:
+                # No edits
+
+                # Lookup xc_rec from search_recs
+                xc_rec = log_time_df(search_recs, desc='xc_rec:from_search_recs', f=lambda df: (df
+                    [lambda df: df.xc_id == xc_id]
+                    .pipe(df_require_nonempty_for_api, 'xc_rec not found', xc_id=xc_id)
+                    .reset_index(drop=True)  # Reset to RangeIndex after filter
+                    .pipe(lambda df: one(df_rows(df)))
+                ))
+
+            else:
+                # Edits
+
+                # Lookup xc_rec from xc_meta (unfeaturized)
+                xc_rec = log_time_df(sg.xc_meta, desc='xc_rec:from_xc_meta', f=lambda df: (df
+                    [lambda df: df.id == xc_id]  # (sg.xc_meta.id is .xc_id)
+                    .pipe(df_require_nonempty_for_api, 'xc_rec not found', xc_id=xc_id)
+                    .reset_index(drop=True)  # Reset to RangeIndex after filter
+                    .pipe(lambda df: one(df_rows(df)))
+                ))
+
+                # Edit + featurize xc_rec
+                #   - HACK Reusing recs_featurize as a first cut [TODO Probably not quite right, so think harder]
+                xc_rec = log_time_df(DF([xc_rec]), desc='xc_rec:edit_via_featurize', f=lambda df: (df
+                    .pipe(recs_featurize,
+                        start_s=start_s,
+                        audio_s=end_s - start_s,
+                        scale=1,
+                        spectro_disp=False,  # Skip .spectro_disp (view concern), which we redo below
+                    )
+                    .pipe(lambda df: one(df_rows(df)))
+                ))
+
+            query_rec = xc_rec
 
         # Predict query_sp_p from search model
         query_sp_p = log_time(desc='rec_preds', f=lambda: (
@@ -417,10 +526,13 @@ def search_html(
                                 objs=[DF([query_rec]), df[:0]],
                             )
                             # Add query_rec.slp for user feedback (mostly for model debugging)
-                            .assign(
-                                sp_p=lambda df: one(query_sp_p[query_sp_p.species == query_rec.species].sp_p.values),
-                                slp=lambda df: slp(df.sp_p),
-                            )
+                            #   - Guard against query_rec.species=None if user_rec
+                            .pipe(lambda df: df if query_rec.species not in list(query_sp_p.species) else (df
+                                .assign(
+                                    sp_p=lambda df: one(query_sp_p[query_sp_p.species == query_rec.species].sp_p.values),
+                                    slp=lambda df: slp(df.sp_p),
+                                )
+                            ))
                             # Mock d_* cols as 0
                             .pipe(lambda df: df.fillna({k: 0 for k in df if k.startswith('d_')}))
                         ),
@@ -574,6 +686,7 @@ def recs_featurize_pre_rank(
                 .loc[ix]
                 # Audio metadata, without .audio
                 .pipe(recs_featurize_metdata_audio_slice,
+                    start_s=0,
                     audio_s=config.api.recs.search_recs.params.audio_s,
                     load_sliced=load_sliced,
                     load_full=None,
@@ -598,19 +711,22 @@ def recs_featurize_pre_rank(
     )
 
 
-# TODO Simplify: replace with sg.search_recs lookup (callers: +species_html -search_html)
+# HACK Currently used for edit_via_featurize (in search_html)
 def recs_featurize(
     recs: pd.DataFrame,
+    start_s: float,
     audio_s: float,
     scale: float,
     load_sliced: 'LoadLike' = load_for_audio_persist,
     load_full:   'LoadLike' = lambda: sg.load,
-    **plot_many_kwargs,
+    spectro_disp=True,  # HACK For edit_via_featurize
+    **plot_kwargs,
 ) -> pd.DataFrame:
     if callable(load_sliced): load_sliced = load_sliced()
     if callable(load_full):   load_full   = load_full()
     return (recs
         .pipe(recs_featurize_metdata_audio_slice,
+            start_s=start_s,
             audio_s=audio_s,
             load_sliced=load_sliced,
             load_full=load_full,
@@ -618,16 +734,19 @@ def recs_featurize(
         .pipe(recs_featurize_recs_for_sp)
         .pipe(recs_featurize_feat)
         .pipe(recs_featurize_f_)
-        .pipe(recs_featurize_spectro_bytes, pad_s=audio_s, scale=scale, **plot_many_kwargs,
+        .pipe(recs_featurize_spectro_bytes, pad_s=audio_s, scale=scale, **plot_kwargs,
             load_audio=None,  # Use the .audio we just loaded (above)
         )
         .pipe(recs_featurize_audio_bytes)
-        .pipe(recs_featurize_spectro_disp)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+        .pipe(lambda df: df if not spectro_disp else (df
+            .pipe(recs_featurize_spectro_disp)  # .spectro_disp <- .spectro_bytes, .audio_bytes
+        ))
     )
 
 
 def recs_featurize_metdata_audio_slice(
     recs: pd.DataFrame,
+    start_s: float,
     audio_s: float,
     load_sliced: Load,
     load_full: Optional[Load],
@@ -640,7 +759,8 @@ def recs_featurize_metdata_audio_slice(
     """Featurize: Add .audio with slice"""
 
     # Params
-    assert audio_s is not None and audio_s > 0, f"{audio_s}"
+    assert start_s is not None and start_s >= 0, f"{start_s}"
+    assert audio_s is not None and audio_s >  0, f"{audio_s}"
     drop_uncached_slice = False if drop_uncached_slice is None else drop_uncached_slice
     no_audio = False if no_audio is None else no_audio
     assert not (not drop_uncached_slice and no_audio), "Can't skip audio and compute uncached slices"
@@ -654,7 +774,7 @@ def recs_featurize_metdata_audio_slice(
     #       - We can always precisely slice the pcm samples once they're decoded from mp4/mp3, but as long as we're
     #         dealing in non-pcm encodings (for compression) we're stuck dealing with imprecise audio durations
 
-    def to_sliced_id(id: str) -> Optional[str]:
+    def to_sliced_id(id: str, start_s: float, audio_s: float) -> Optional[str]:
         # Use first sliced id whose cache file exists (O(n) stat() calls)
         #   - HACK Find a principled way to synthesize id for sliced audio (multiple concerns here to untangle...)
 
@@ -664,7 +784,7 @@ def recs_featurize_metdata_audio_slice(
         ]
         slice_enc = [
             'enc(wav)',
-            'slice(%s,%s)' % (0, int(1000 * audio_s)),
+            'slice(%s,%s)' % (int(1000 * start_s), int(1000 * (start_s + audio_s))),
             'spectro_denoise()',
             'enc(%(format)s,%(codec)s,%(bitrate)s)' % config.audio.audio_persist.audio_kwargs,
         ]
@@ -687,7 +807,10 @@ def recs_featurize_metdata_audio_slice(
     # HACK Do O(n) stat() calls else "Falling back" incurs O(n) .audio read+slice if any audio.mp3 didn't need to .resample(...)
     #   - e.g. cache/audio/xc/data/RIRA/185212/audio.mp3.enc(wav)
     #   - Repro: search_html(sort='d_fc', sp_cols='species', xc_id=381417, n_recs=5, n_sp=17)
-    @cache(version=0, key=lambda recs: recs.id)  # Slow: ~13s for 35k NA-CA recs
+    @cache(version=3, key=lambda recs: (  # Slow: ~13s for 35k NA-CA recs
+        recs.id,
+        start_s, audio_s,  # Implicit deps
+    ))
     def to_paths_sliced(recs) -> Iterable[Tuple[str, str]]:
         return [
             dataset_path
@@ -696,7 +819,7 @@ def recs_featurize_metdata_audio_slice(
                     sliced_id and (dataset, str(Path(data_dir) / sliced_id))
                     for (dataset, abs_path) in [xc_meta_to_path(rec)]
                     for id in [str(Path(abs_path).relative_to(data_dir))]
-                    for sliced_id in [to_sliced_id(id)]
+                    for sliced_id in [to_sliced_id(id, start_s=start_s, audio_s=audio_s)]
                 ),
             )
             if dataset_path  # Filter out None's from dropped sliced_id's
@@ -713,11 +836,11 @@ def recs_featurize_metdata_audio_slice(
     except FileNotFoundError as e:
         # Fallback to loading full .audio and computing the slice ourselves (which will cache for next time)
         #   - This is significantly slower (O(n)) than loading sliced .audio directly
-        log.warn('Falling back to uncached audio slices', audio_s=audio_s, len_recs=len(recs), path_not_found=str(e))
+        log.warn('Falling back to uncached audio slices', start_s=start_s, audio_s=audio_s, len_recs=len(recs), path_not_found=str(e))
         return (recs
             .pipe(recs_featurize_metadata)
             .pipe(recs_featurize_audio, load=load_full)
-            .pipe(recs_featurize_slice_audio, audio_s=audio_s)
+            .pipe(recs_featurize_slice_audio, start_s=start_s, audio_s=audio_s)
             .pipe(recs_audio_persist, progress_kwargs=config.api.recs.progress_kwargs)
         )
 
@@ -750,11 +873,11 @@ def recs_featurize_audio(
     )
 
 
-def recs_featurize_slice_audio(recs: pd.DataFrame, audio_s: float) -> pd.DataFrame:
+def recs_featurize_slice_audio(recs: pd.DataFrame, start_s: float, audio_s: float) -> pd.DataFrame:
     """Featurize: .audio <- sliced .audio (before .spectro/.feat)"""
     return (recs
         .pipe(df_map_rows_progress, desc='slice_audio', **config.api.recs.progress_kwargs, f=lambda row: (
-            sg.features.slice_audio(row, 0, audio_s)
+            sg.features.slice_audio(row, start_s, start_s + audio_s)
         ))
     )
 
@@ -1121,6 +1244,7 @@ def recs_view(
     show_num = lambda x, n=2: simple_num(round_sig_frac(x, n))
     df_if_cols = lambda df, cols, f: f(df) if set([cols] if isinstance(cols, str) else cols) <= set(df.columns) else df
     df_col_map_if_col = lambda df, **cols: df_col_map(df, **{k: v for k, v in cols.items() if k in df})
+    strip_html = lambda x: x if pd.isnull(x) else bleach.clean(x, strip=True)
 
     if not view:
         return recs
@@ -1130,26 +1254,28 @@ def recs_view(
         # Strip html in freeform xc inputs (e.g. remarks)
         #   - Remarks is the only field where markdown is encouraged, but don't assume it's the only place it will show up
         #   - https://www.xeno-canto.org/upload
+        #   - Guard against nan, in case of user_rec
         .pipe(df_col_map_if_col,
-            time               = lambda x: bleach.clean(x, strip=True),
-            type               = lambda x: bleach.clean(x, strip=True),
-            subspecies         = lambda x: bleach.clean(x, strip=True),
-            background_species = lambda xs: [bleach.clean(x, strip=True) for x in xs],
-            recordist          = lambda x: bleach.clean(x, strip=True),
-            elevation          = lambda x: bleach.clean(x, strip=True),
-            place              = lambda x: bleach.clean(x, strip=True),
-            remarks            = lambda x: bleach.clean(x, strip=True),
+            time               = lambda x: strip_html(x),
+            type               = lambda x: strip_html(x),
+            subspecies         = lambda x: strip_html(x),
+            background_species = lambda xs: xs if not can_iter(xs) else [strip_html(x) for x in xs],
+            recordist          = lambda x: strip_html(x),
+            elevation          = lambda x: strip_html(x),
+            place              = lambda x: strip_html(x),
+            remarks            = lambda x: strip_html(x),
         )
 
         # xc, xc_id
         .pipe(df_if_cols, 'xc_id', lambda df: (df
             .assign(
                 # Save raw cols before we junk them up with html
+                #   - Guard against nan (if user_rec)
                 _xc_id=lambda df: df.xc_id,
-                xc=lambda df: df_map_rows(df, lambda row: f'''
+                xc=lambda df: df_map_rows(df, lambda row: '' if pd.isnull(row._xc_id) else f'''
                     <a href="https://www.xeno-canto.org/%(_xc_id)s">XC</a>
                 ''' % row),
-                xc_id=lambda df: df_map_rows(df, lambda row: '''
+                xc_id=lambda df: df_map_rows(df, lambda row: '' if pd.isnull(row._xc_id) else '''
                     <a href="{{ req_href('/recs/search')(xc_id=%(_xc_id)r) }}">%(_xc_id)s</a>
                 ''' % row),
             )
@@ -1232,7 +1358,7 @@ def recs_view(
 
         # background_species
         .pipe(df_col_map_if_col,
-            background_species=lambda xs: ' '.join(xs),
+            background_species=lambda xs: xs if not can_iter(xs) else ' '.join(xs),
         )
 
         # license
@@ -1250,7 +1376,7 @@ def recs_view(
         # place
         #   - Reverse place parts so that high-order info is first (and visually aligned)
         .pipe(df_col_map_if_col,
-            place=lambda x: ', '.join(reversed(x.split(', '))),
+            place=lambda x: x if pd.isnull(x) else ', '.join(reversed(x.split(', '))),
         )
 
         # Fill any remaining nulls with ''

@@ -62,6 +62,10 @@
 //   // font-size: 16px; // Good for desktop
 // }
 
+.hidden {
+  display: none;
+}
+
 a {
   text-decoration: none;
 }
@@ -93,7 +97,9 @@ table {
     background: #6d6d6d;
     color: white;
   }
-  .control.dev {
+  .control.icon {
+    margin-right: 0px;
+    padding: 0px;
     background: inherit;
   }
 
@@ -107,6 +113,8 @@ table {
   input.text.group_sp { width: 1ex; }
   input.num           { width: 2ex; }
   input.num.xc_id     { width: 6ex; }
+  input.num.start_s   { width: 3ex; }
+  input.num.end_s     { width: 3ex; }
 
 }
 
@@ -129,6 +137,16 @@ table {
     }
 
   }
+}
+
+//
+// /recs/record
+//
+
+// HACK for ios safari
+#audio-selected audio {
+   width: 100%;          // Else <audio controls> doesn't display controls
+   margin-bottom: 100px; // Else overlaps with next elements below
 }
 
 //

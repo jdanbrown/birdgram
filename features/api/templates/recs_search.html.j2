@@ -3,10 +3,13 @@
 {% block controls_table %}
 
   <tr>
-    <td>xc_id</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>start_s</td>
+    <td>end_s</td>
     <td>quality</td>
-    <td></td>
-    <td></td>
     <td>group_sp</td>
     <td>n_sp_recs</td>
     <td>n_recs</td>
@@ -16,16 +19,20 @@
       <td>feats</td>
       <td>host</td>
     {% endif %}
+    <td>xc_id</td>
     <td></td>
   </tr>
 
   <tr>
-    <td><input type="text" data-arg="xc_id"     class="control num  xc_id"     value="{{ req_query_get('xc_id',     '') }}" /></td>
+    <td><a class="control icon home"    href="/">🔝</a></td> {# 🔝🆙⬆️🏠 #}
+    <td><a class="control icon record"  href="/recs/record">🔴</a></td>
+    <td><a class="control icon zoom-out" href="{{ req_path_with_zoom(-1) }}">➖</a></td>
+    <td><a class="control icon zoom-in"  href="{{ req_path_with_zoom(+1) }}">➕</a></td>
+    <td><input type="text" data-arg="start_s"   class="control num  start_s"   value="{{ req_query_get('start_s',   '') }}" /></td>
+    <td><input type="text" data-arg="end_s"     class="control num  end_s"     value="{{ req_query_get('end_s',     '') }}" /></td>
     <td><input type="text" data-arg="quality"   class="control text quality"   value="{{ req_query_get('quality',   '') }}"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
     /></td>
-    <td><a class="control zoom" href="{{ req_path_with_zoom(-1) }}">–</a></td>
-    <td><a class="control zoom" href="{{ req_path_with_zoom(+1) }}">+</a></td>
     <td><input type="text" data-arg="group_sp"  class="control text group_sp"  value="{{ req_query_get('group_sp',  '') }}"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
     /></td>
@@ -37,7 +44,8 @@
       <td><input type="text" data-arg="feats"     class="control num  feats"     value="{{ req_query_get('feats',     '') }}" /></td>
       <td><a class="control host" href="//{{ req_switch_host_host() }}{{ request.full_path }}">{{ req_switch_host_text() }}</a></td>
     {% endif %}
-    <td><a class="control dev"  href="{{ req_path_with_toggle_dev() }}">🎛</a></td> <!-- 🎛🎚🔛💡⛄☃️ -->
+    <td><input type="text" data-arg="xc_id"     class="control num  xc_id"     value="{{ req_query_get('xc_id',     '') }}" /></td>
+    <td><a class="control icon dev"  href="{{ req_path_with_toggle_dev() }}">🎛</a></td> {# 🎛🎚🔛💡⛄☃️ #}
   </tr>
 
 {% endblock %}

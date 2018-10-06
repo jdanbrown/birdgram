@@ -3,9 +3,10 @@
 {% block controls_table %}
 
   <tr>
+    <td></td>
+    <td></td>
+    <td></td>
     <td>quality</td>
-    <td></td>
-    <td></td>
     <td>n_recs</td>
     {% if is_dev() %}
       <td>scale</td>
@@ -15,17 +16,18 @@
   </tr>
 
   <tr>
+    <td><a class="control icon record"  href="/recs/record">🔴</a></td>
+    <td><a class="control icon zoom-out" href="{{ req_path_with_zoom(-1) }}">➖</a></td>
+    <td><a class="control icon zoom-in"  href="{{ req_path_with_zoom(+1) }}">➕</a></td>
     <td><input type="text" data-arg="quality"   class="control text quality"   value="{{ req_query_get('quality',   '') }}"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
     /></td>
-    <td><a class="control zoom" href="{{ req_path_with_zoom(-1) }}">–</a></td>
-    <td><a class="control zoom" href="{{ req_path_with_zoom(+1) }}">+</a></td>
     <td><input type="text" data-arg="n_recs"    class="control num  n_recs"    value="{{ req_query_get('n_recs',    '') }}" /></td>
     {% if is_dev() %}
       <td><input type="text" data-arg="scale"     class="control num  scale"     value="{{ req_query_get('scale',     '') }}" /></td>
       <td><a class="control host" href="//{{ req_switch_host_host() }}{{ request.full_path }}">{{ req_switch_host_text() }}</a></td>
     {% endif %}
-    <td><a class="control dev"  href="{{ req_path_with_toggle_dev() }}">🎛</a></td> <!-- 🎛🎚🔛💡⛄☃️ -->
+    <td><a class="control icon dev"  href="{{ req_path_with_toggle_dev() }}">🎛</a></td> {# 🎛🎚🔛💡⛄☃️ #}
   </tr>
 
 {% endblock %}
