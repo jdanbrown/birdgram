@@ -1271,12 +1271,13 @@ def recs_view(
             .assign(
                 # Save raw cols before we junk them up with html
                 #   - Guard against nan (if user_rec)
+                #   - FIXME Have to `'%.0f' % row._xc_id` because we int->float it if user_rec
                 _xc_id=lambda df: df.xc_id,
                 xc=lambda df: df_map_rows(df, lambda row: '' if pd.isnull(row._xc_id) else f'''
-                    <a href="https://www.xeno-canto.org/%(_xc_id)s">XC</a>
+                    <a href="https://www.xeno-canto.org/%(_xc_id).0f">XC</a>
                 ''' % row),
                 xc_id=lambda df: df_map_rows(df, lambda row: '' if pd.isnull(row._xc_id) else '''
-                    <a href="{{ req_href('/recs/search')(xc_id=%(_xc_id)r) }}">%(_xc_id)s</a>
+                    <a href="{{ req_href('/recs/search')(xc_id=%(_xc_id).0f) }}">%(_xc_id).0f</a>
                 ''' % row),
             )
         ))
