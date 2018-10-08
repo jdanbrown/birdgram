@@ -15,7 +15,8 @@ $ brew install ffmpeg --with-libvorbis --with-sdl2 --with-theora
 
 ## Optional: Update python env for local potoo/joblib dev
 ```sh
-$ dir=...; pip install -e $dir/potoo && pip install -e $dir/joblib
+$ pip install -e .../potoo
+$ pip install -e .../joblib
 ```
 
 ## Optional: Update python env after changing `environment.yml` or `requirements.txt`
