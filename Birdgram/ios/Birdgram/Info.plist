@@ -56,5 +56,8 @@
 			</dict>
 		</dict>
 	</dict>
+	<!-- For mic access -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Birdgram uses the microphone to record the bird calls you want to identify</string>
 </dict>
 </plist>

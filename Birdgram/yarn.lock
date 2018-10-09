@@ -4908,6 +4908,11 @@ react-is@^16.5.0:
   resolved "https://registry.yarnpkg.com/react-is/-/react-is-16.5.2.tgz#e2a7b7c3f5d48062eb769fcb123505eb928722e3"
   integrity sha512-hSl7E6l25GTjNEZATqZIuWOgSnpXb3kD0DVCujmg46K5zLxsbiKaaT6VO9slkSBDPZfYs30lwfJwbOFOnoEnKQ==
 
+react-native-audio@^4.2.1:
+  version "4.2.1"
+  resolved "https://registry.yarnpkg.com/react-native-audio/-/react-native-audio-4.2.1.tgz#f879903c125b6519d3bc1ea4ea9116128f8f273e"
+  integrity sha512-vRKuvAgJZOi6wsIhI6L22vyrulBHt74WtQofj//0mgjbWl3Pcz685lYWHBCVV5jHxu334q+tqZiQbix7jXwrhA==
+
 react-native-typescript-transformer@^1.2.10:
   version "1.2.10"
   resolved "https://registry.yarnpkg.com/react-native-typescript-transformer/-/react-native-typescript-transformer-1.2.10.tgz#6f76c1449028cdeafa184b533301ecd547367ed1"
