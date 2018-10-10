@@ -26,7 +26,8 @@ exports[`renders correctly with defaults 1`] = `
       Object {
         "alignItems": "stretch",
         "alignSelf": "center",
-        "borderWidth": 5,
+        "borderColor": "lightgray",
+        "borderWidth": 1,
         "flexDirection": "row",
         "minHeight": 70,
       }

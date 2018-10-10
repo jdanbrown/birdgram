@@ -2,12 +2,13 @@
 
 Run ios app in simulator
 ```sh
-# First run (in bg term)
+# 1. Open react-native-debugger
+$ open -a 'React Native Debugger'
+# 2. Run `react-native start ...` in its own term
 # - Workaround for https://github.com/facebook/react-native/issues/21490#issuecomment-427240356
 $ react-native start --reset-cache
-
-# Then run
-react-native run-ios
+# Start the app (in the simulator, by default)
+$ react-native run-ios
 ```
 
 Run tests
@@ -43,6 +44,13 @@ $ yarn test
   - https://jestjs.io/docs/en/snapshot-testing
 
 # Bugs + workarounds
+- react-native-debugger won't connect
+  - This worked for me once:
+    - Open React Native Debugger (.app)
+    - Run `react-native start ...` (as above)
+    - Open Simulator
+    - Open app in Simulator
+  - Else, just keep resetting lots of stuff :/
 - `yarn test` -> `Couldn't find preset "module:metro-react-native-babel-preset"`
   - Solution: updated package.json like https://github.com/facebook/metro/issues/242#issuecomment-421139247
 - `react-native run-ios` -> yellow warning "RCTBridge required dispatch_sync to load RCTDevLoadingView. This may lead to deadlocks."

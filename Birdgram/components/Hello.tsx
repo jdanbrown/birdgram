@@ -38,21 +38,10 @@ export class Hello extends React.Component<Props, State> {
 
         <View style={styles.buttons}>
           <View style={styles.button}>
-            <Button
-              title="-"
-              onPress={this.onDecrement}
-              accessibilityLabel="decrement"
-              color="red"
-            />
+            <Button title="-" onPress={this.onDecrement} accessibilityLabel="decrement" color="red" />
           </View>
-
           <View style={styles.button}>
-            <Button
-              title="+"
-              onPress={this.onIncrement}
-              accessibilityLabel="increment"
-              color="blue"
-            />
+            <Button title="+" onPress={this.onIncrement} accessibilityLabel="increment" color="blue" />
           </View>
         </View>
       </View>
@@ -71,7 +60,8 @@ const styles = StyleSheet.create({
     minHeight: 70,
     alignItems: 'stretch',
     alignSelf: 'center',
-    borderWidth: 5,
+    borderWidth: 1,
+    borderColor: 'lightgray',
   },
   button: {
     flex: 1,
