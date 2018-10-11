@@ -4945,6 +4945,15 @@ react-native-debugger-open@^0.3.17:
     minimist "^1.2.0"
     semver "^5.4.1"
 
+"react-native-microphone-stream@git://github.com/chadsmith/react-native-microphone-stream.git#4cca1e7":
+  version "0.0.1"
+  resolved "git://github.com/chadsmith/react-native-microphone-stream.git#4cca1e7cfab4f3cabe5029aee1929c46a6cbb3a6"
+
+react-native-permissions@^1.1.1:
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/react-native-permissions/-/react-native-permissions-1.1.1.tgz#4876004681ff8556454613d85249b01baff9b35b"
+  integrity sha512-t0Ujm177bagjUOSzhpmkSz+LqFW04HnY9TeZFavDCmV521fQvFz82aD+POXqWsAdsJVOK3umJYBNNqCjC3g0hQ==
+
 react-native-typescript-transformer@^1.2.10:
   version "1.2.10"
   resolved "https://registry.yarnpkg.com/react-native-typescript-transformer/-/react-native-typescript-transformer-1.2.10.tgz#6f76c1449028cdeafa184b533301ecd547367ed1"

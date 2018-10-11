@@ -38,8 +38,6 @@ export class Recorder extends React.Component<Props, State> {
     });
   }
 
-  // TODO File always empty after stop (ios simulator)
-  // TODO onProgress not working (ios simulator)
   async startRecording() {
     console.log('componentDidMount: this', this);
     console.log('startRecording');

@@ -43,7 +43,7 @@ $ yarn test
   - https://jestjs.io/docs/en/tutorial-react-native.html
   - https://jestjs.io/docs/en/snapshot-testing
 
-# Bugs + workarounds
+# Troubleshooting
 - react-native-debugger won't connect
   - This worked for me once:
     - Open React Native Debugger (.app)
@@ -51,9 +51,11 @@ $ yarn test
     - Open Simulator
     - Open app in Simulator
   - Else, just keep resetting lots of stuff :/
-- `yarn test` -> `Couldn't find preset "module:metro-react-native-babel-preset"`
-  - Solution: updated package.json like https://github.com/facebook/metro/issues/242#issuecomment-421139247
-- `react-native run-ios` -> yellow warning "RCTBridge required dispatch_sync to load RCTDevLoadingView. This may lead to deadlocks."
-  - Solution: build in xcode -> rebuild with `react-native run-ios` -> error went away...
+- Add new native dep -> `react-native run-ios` -> app shows strange errors
+  - Rebuild in xcode (cmd-b) -> `react-native run-ios`
+- App shows warning "RCTBridge required dispatch_sync to load RCTDevLoadingView. This may lead to deadlocks."
+  - Rebuild in xcode (cmd-b) -> `react-native run-ios`
   - https://github.com/facebook/react-native/issues/16376
   - https://github.com/rebeccahughes/react-native-device-info/issues/260
+- `yarn test` -> `Couldn't find preset "module:metro-react-native-babel-preset"`
+  - Solution: updated package.json like https://github.com/facebook/metro/issues/242#issuecomment-421139247

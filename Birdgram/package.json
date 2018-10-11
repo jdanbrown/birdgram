@@ -10,7 +10,9 @@
   "dependencies": {
     "react": "16.5.0",
     "react-native": "0.57.2",
-    "react-native-audio": "^4.2.1"
+    "react-native-audio": "^4.2.1",
+    "react-native-microphone-stream": "git://github.com/chadsmith/react-native-microphone-stream.git#4cca1e7",
+    "react-native-permissions": "^1.1.1"
   },
   "devDependencies": {
     "@types/jest": "^23.3.5",
