@@ -11,9 +11,25 @@ $ react-native start --reset-cache
 $ react-native run-ios
 ```
 
+Run tsc
+```sh
+$ yarn run tsc
+$ yarn run tsc --watch
+```
+
 Run tests
 ```sh
 $ yarn test
+$ yarn test --watch
+```
+
+# Device logs
+
+iOS
+```sh
+$ brew install --HEAD usbmuxd libimobiledevice
+$ idevicesyslog
+$ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag --no-color -i birdgram
 ```
 
 # Resources
@@ -44,6 +60,10 @@ $ yarn test
   - https://jestjs.io/docs/en/snapshot-testing
 
 # Troubleshooting
+- App takes forever (~20s) to open (in dev mode)
+  - It might be trying and failing to connect to rndebugger
+  - Try first opening React Native Debugger and then restarting/reloading the app
+  - (Else try the device console...?)
 - react-native-debugger won't connect
   - This worked for me once:
     - Open React Native Debugger (.app)
@@ -59,3 +79,6 @@ $ yarn test
   - https://github.com/rebeccahughes/react-native-device-info/issues/260
 - `yarn test` -> `Couldn't find preset "module:metro-react-native-babel-preset"`
   - Solution: updated package.json like https://github.com/facebook/metro/issues/242#issuecomment-421139247
+
+# TODO
+- Remove unused dep react-native-audio (`yarn remove` + `react-native unlink`)

@@ -1,10 +1,9 @@
 import React from 'react'
-import {Component} from 'react';
-import {Dimensions, Platform, StyleSheet, Text, View, WebView} from 'react-native';
+import { Component } from 'react';
+import { Dimensions, Platform, StyleSheet, Text, View, WebView } from 'react-native';
 
-import {Hello} from './components/Hello';
-import {Recorder} from './components/Recorder';
-import {Recorder2} from './components/Recorder2';
+import { Hello } from './components/Hello';
+import { Recorder } from './components/Recorder';
 
 // TODO -> state with a prefs view
 const config = {
@@ -34,12 +33,10 @@ export default class App extends Component<Props> {
           })
         }</Text>
 
-        {/* <Hello name={'person'} enthusiasmLevel={3} /> */}
-
-        <Recorder2/>
+        <Recorder/>
 
         {
-          // TODO Lots to do here
+          // TODO WebView: ugh, lots to do to make this work
           //  - useWebKit=true crashes in simulator (ios 9), works on phone
           //  - useWebKit=false doesn't play audio on click in simulator
           //  - No back/forward buttons (in simulator)
