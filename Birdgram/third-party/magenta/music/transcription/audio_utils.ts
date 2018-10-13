@@ -3,6 +3,8 @@
 //
 // Edits:
 //  - Deleted functions that don't typecheck without DOM or Web Audio
+//  - Fix applyWindow to not return null
+//  - Add exports
 
 /**
  * Utiltities for loading audio and computing mel spectrograms, based on
@@ -23,13 +25,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-//@ts-ignore
-import * as FFT from 'fft.js';
-import * as ndarray from 'ndarray';
-//@ts-ignore
-import * as resample from 'ndarray-resample';
-
-// import * as logging from '../core/logging';
+// @ts-ignore
+import FFT from 'fft.js';
 
 import {MEL_SPEC_BINS, SAMPLE_RATE, SPEC_HOP_LENGTH} from './constants';
 
@@ -47,7 +44,7 @@ export interface SpecParams {
   fMax?: number;
 }
 
-function melSpectrogram(y: Float32Array, params: SpecParams): Float32Array[] {
+export function melSpectrogram(y: Float32Array, params: SpecParams): Float32Array[] {
   if (!params.power) {
     params.power = 2.0;
   }
@@ -69,7 +66,7 @@ function melSpectrogram(y: Float32Array, params: SpecParams): Float32Array[] {
  * @param amin Minimum threshold for `abs(S)`.
  * @param topDb Threshold the output at `topDb` below the peak.
  */
-function powerToDb(spec: Float32Array[], amin = 1e-10, topDb = 80.0) {
+export function powerToDb(spec: Float32Array[], amin = 1e-10, topDb = 80.0) {
   const width = spec.length;
   const height = spec[0].length;
   const logSpec = [];
@@ -96,7 +93,7 @@ function powerToDb(spec: Float32Array[], amin = 1e-10, topDb = 80.0) {
   return logSpec;
 }
 
-interface MelParams {
+export interface MelParams {
   sampleRate: number;
   nFft?: number;
   nMels?: number;
@@ -104,14 +101,14 @@ interface MelParams {
   fMax?: number;
 }
 
-function magSpectrogram(
+export function magSpectrogram(
     stft: Float32Array[], power: number): [Float32Array[], number] {
   const spec = stft.map(fft => pow(mag(fft), power));
   const nFft = stft[0].length - 1;
   return [spec, nFft];
 }
 
-function stft(y: Float32Array, params: SpecParams): Float32Array[] {
+export function stft(y: Float32Array, params: SpecParams): Float32Array[] {
   const nFft = params.nFft || 2048;
   const winLength = params.winLength || nFft;
   const hopLength = params.hopLength || Math.floor(winLength / 4);
@@ -147,7 +144,7 @@ function stft(y: Float32Array, params: SpecParams): Float32Array[] {
   return stftMatrix;
 }
 
-function applyWholeFilterbank(
+export function applyWholeFilterbank(
     spec: Float32Array[], filterbank: Float32Array[]): Float32Array[] {
   // Apply a point-wise dot product between the array of arrays.
   const out: Float32Array[] = [];
@@ -157,7 +154,7 @@ function applyWholeFilterbank(
   return out;
 }
 
-function applyFilterbank(
+export function applyFilterbank(
     mags: Float32Array, filterbank: Float32Array[]): Float32Array {
   if (mags.length !== filterbank[0].length) {
     throw new Error(
@@ -178,9 +175,8 @@ function applyFilterbank(
   return out;
 }
 
-function applyWindow(buffer: Float32Array, win: Float32Array): Float32Array {
+export function applyWindow(buffer: Float32Array, win: Float32Array): Float32Array {
   if (buffer.length !== win.length) {
-    // HACK: Edit `return null` -> throw, to fix callers that didn't type check
     throw Error(`Buffer length ${buffer.length} != window length ${win.length}.`);
   }
 
@@ -191,7 +187,7 @@ function applyWindow(buffer: Float32Array, win: Float32Array): Float32Array {
   return out;
 }
 
-function padCenterToLength(data: Float32Array, length: number) {
+export function padCenterToLength(data: Float32Array, length: number) {
   // If data is longer than length, error!
   if (data.length > length) {
     throw new Error('Data is longer than length.');
@@ -202,7 +198,7 @@ function padCenterToLength(data: Float32Array, length: number) {
   return padConstant(data, [paddingLeft, paddingRight]);
 }
 
-function padConstant(data: Float32Array, padding: number|number[]) {
+export function padConstant(data: Float32Array, padding: number|number[]) {
   let padLeft, padRight;
   if (typeof (padding) === 'object') {
     [padLeft, padRight] = padding;
@@ -214,7 +210,7 @@ function padConstant(data: Float32Array, padding: number|number[]) {
   return out;
 }
 
-function padReflect(data: Float32Array, padding: number) {
+export function padReflect(data: Float32Array, padding: number) {
   const out = padConstant(data, padding);
   for (let i = 0; i < padding; i++) {
     // Pad the beginning with reflected values.
@@ -229,7 +225,7 @@ function padReflect(data: Float32Array, padding: number) {
  * Given a timeseries, returns an array of timeseries that are windowed
  * according to the params specified.
  */
-function frame(data: Float32Array, frameLength: number, hopLength: number):
+export function frame(data: Float32Array, frameLength: number, hopLength: number):
     Float32Array[] {
   const bufferCount = Math.floor((data.length - frameLength) / hopLength) + 1;
   const buffers = Array.from(
@@ -247,7 +243,7 @@ function frame(data: Float32Array, frameLength: number, hopLength: number):
   return buffers;
 }
 
-function createMelFilterbank(params: MelParams): Float32Array[] {
+export function createMelFilterbank(params: MelParams): Float32Array[] {
   const fMin = params.fMin || 0;
   const fMax = params.fMax || params.sampleRate / 2;
   const nMels = params.nMels || 128;
@@ -284,7 +280,7 @@ function createMelFilterbank(params: MelParams): Float32Array[] {
   return weights;
 }
 
-function fft(y: Float32Array) {
+export function fft(y: Float32Array) {
   const fft = new FFT(y.length);
   const out = fft.createComplexArray();
   const data = fft.toComplexArray(y);
@@ -292,7 +288,7 @@ function fft(y: Float32Array) {
   return out;
 }
 
-function hannWindow(length: number) {
+export function hannWindow(length: number) {
   const win = new Float32Array(length);
   for (let i = 0; i < length; i++) {
     win[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / (length - 1)));
@@ -300,7 +296,7 @@ function hannWindow(length: number) {
   return win;
 }
 
-function linearSpace(start: number, end: number, count: number) {
+export function linearSpace(start: number, end: number, count: number) {
   // Include start and endpoints.
   const delta = (end - start) / (count - 1);
   const out = new Float32Array(count);
@@ -314,7 +310,7 @@ function linearSpace(start: number, end: number, count: number) {
  * Given an interlaced complex array (y_i is real, y_(i+1) is imaginary),
  * calculates the energies. Output is half the size.
  */
-function mag(y: Float32Array) {
+export function mag(y: Float32Array) {
   const out = new Float32Array(y.length / 2);
   for (let i = 0; i < y.length / 2; i++) {
     out[i] = Math.sqrt(y[i * 2] * y[i * 2] + y[i * 2 + 1] * y[i * 2 + 1]);
@@ -322,19 +318,19 @@ function mag(y: Float32Array) {
   return out;
 }
 
-function hzToMel(hz: number): number {
+export function hzToMel(hz: number): number {
   return 1125.0 * Math.log(1 + hz / 700.0);
 }
 
-function melToHz(mel: number): number {
+export function melToHz(mel: number): number {
   return 700.0 * (Math.exp(mel / 1125.0) - 1);
 }
 
-function calculateFftFreqs(sampleRate: number, nFft: number) {
+export function calculateFftFreqs(sampleRate: number, nFft: number) {
   return linearSpace(0, sampleRate / 2, Math.floor(1 + nFft / 2));
 }
 
-function calculateMelFreqs(
+export function calculateMelFreqs(
     nMels: number, fMin: number, fMax: number): Float32Array {
   const melMin = hzToMel(fMin);
   const melMax = hzToMel(fMax);
@@ -346,7 +342,7 @@ function calculateMelFreqs(
   return hzs;
 }
 
-function internalDiff(arr: Float32Array): Float32Array {
+export function internalDiff(arr: Float32Array): Float32Array {
   const out = new Float32Array(arr.length - 1);
   for (let i = 0; i < arr.length; i++) {
     out[i] = arr[i + 1] - arr[i];
@@ -354,7 +350,7 @@ function internalDiff(arr: Float32Array): Float32Array {
   return out;
 }
 
-function outerSubtract(arr: Float32Array, arr2: Float32Array): Float32Array[] {
+export function outerSubtract(arr: Float32Array, arr2: Float32Array): Float32Array[] {
   const out = [];
   for (let i = 0; i < arr.length; i++) {
     out[i] = new Float32Array(arr2.length);
@@ -367,10 +363,10 @@ function outerSubtract(arr: Float32Array, arr2: Float32Array): Float32Array[] {
   return out;
 }
 
-function pow(arr: Float32Array, power: number) {
+export function pow(arr: Float32Array, power: number) {
   return arr.map(v => Math.pow(v, power));
 }
 
-function max(arr: Float32Array) {
+export function max(arr: Float32Array) {
   return arr.reduce((a, b) => Math.max(a, b));
 }

@@ -5,7 +5,6 @@
 	};
 	objectVersion = 46;
 	objects = {
-
 /* Begin PBXBuildFile section */
 		00C302E51ABCBA2D00DB3ED1 /* libRCTActionSheet.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 00C302AC1ABCB8CE00DB3ED1 /* libRCTActionSheet.a */; };
 		00C302E71ABCBA2D00DB3ED1 /* libRCTGeolocation.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 00C302BA1ABCB90400DB3ED1 /* libRCTGeolocation.a */; };
@@ -24,6 +23,7 @@
 		13B07FC11A68108700A75B9A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 13B07FB71A68108700A75B9A /* main.m */; };
 		140ED2AC1D01E1AD002B40FF /* libReact.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 146834041AC3E56700842450 /* libReact.a */; };
 		146834051AC3E58100842450 /* libReact.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 146834041AC3E56700842450 /* libReact.a */; };
+		2945E18A75CF4B11B4BAB744 /* libKCKeepAwake.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 08915E4FDE284CC3A5B683ED /* libKCKeepAwake.a */; };
 		7C19D04F340144F295944389 /* libMicrophoneStream.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C5D782FE18342929BD97492 /* libMicrophoneStream.a */; };
 		832341BD1AAA6AB300B99B32 /* libRCTText.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 832341B51AAA6A8300B99B32 /* libRCTText.a */; };
 		9F82D7A9F95547FE817B4C10 /* libReactNativePermissions.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 2492D59426C14473BD0314D2 /* libReactNativePermissions.a */; };
@@ -318,6 +318,13 @@
 			remoteGlobalIDString = 9D23B34F1C767B80008B4819;
 			remoteInfo = ReactNativePermissions;
 		};
+		B71255412170298A00B2BDB2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EAF48495D93042ED9222D5BA /* KCKeepAwake.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 134814201AA4EA6300B7C361;
+			remoteInfo = KCKeepAwake;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -330,6 +337,7 @@
 		00E356EE1AD99517003FC87E /* BirdgramTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BirdgramTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		00E356F11AD99517003FC87E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		00E356F21AD99517003FC87E /* BirdgramTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BirdgramTests.m; sourceTree = "<group>"; };
+		08915E4FDE284CC3A5B683ED /* libKCKeepAwake.a */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = archive.ar; path = libKCKeepAwake.a; sourceTree = "<group>"; };
 		139105B61AF99BAD00B5F7CC /* RCTSettings.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RCTSettings.xcodeproj; path = "../node_modules/react-native/Libraries/Settings/RCTSettings.xcodeproj"; sourceTree = "<group>"; };
 		139FDEE61B06529A00C62182 /* RCTWebSocket.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RCTWebSocket.xcodeproj; path = "../node_modules/react-native/Libraries/WebSocket/RCTWebSocket.xcodeproj"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* Birdgram.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Birdgram.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -350,6 +358,7 @@
 		991D9356C96D4456BD98BB5E /* RNAudio.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = RNAudio.xcodeproj; path = "../node_modules/react-native-audio/ios/RNAudio.xcodeproj"; sourceTree = "<group>"; };
 		9C5D782FE18342929BD97492 /* libMicrophoneStream.a */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = archive.ar; path = libMicrophoneStream.a; sourceTree = "<group>"; };
 		ADBDB91F1DFEBF0600ED6528 /* RCTBlob.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RCTBlob.xcodeproj; path = "../node_modules/react-native/Libraries/Blob/RCTBlob.xcodeproj"; sourceTree = "<group>"; };
+		EAF48495D93042ED9222D5BA /* KCKeepAwake.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = KCKeepAwake.xcodeproj; path = "../node_modules/react-native-keep-awake/ios/KCKeepAwake.xcodeproj"; sourceTree = "<group>"; };
 		F96F1FE7A7F843F097A08E74 /* ReactNativePermissions.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = ReactNativePermissions.xcodeproj; path = "../node_modules/react-native-permissions/ios/ReactNativePermissions.xcodeproj"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -381,6 +390,7 @@
 				0977352EEE8D4606A8A0AA11 /* libRNAudio.a in Frameworks */,
 				7C19D04F340144F295944389 /* libMicrophoneStream.a in Frameworks */,
 				9F82D7A9F95547FE817B4C10 /* libReactNativePermissions.a in Frameworks */,
+				2945E18A75CF4B11B4BAB744 /* libKCKeepAwake.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -547,6 +557,7 @@
 				991D9356C96D4456BD98BB5E /* RNAudio.xcodeproj */,
 				76E381ABAA42447A9DDAA3F1 /* MicrophoneStream.xcodeproj */,
 				F96F1FE7A7F843F097A08E74 /* ReactNativePermissions.xcodeproj */,
+				EAF48495D93042ED9222D5BA /* KCKeepAwake.xcodeproj */,
 			);
 			name = Libraries;
 			sourceTree = "<group>";
@@ -599,6 +610,8 @@
 				482470C3E7F44B6E9A8415AF /* libRNAudio.a */,
 				9C5D782FE18342929BD97492 /* libMicrophoneStream.a */,
 				2492D59426C14473BD0314D2 /* libReactNativePermissions.a */,
+				08915E4FDE284CC3A5B683ED /* libKCKeepAwake.a */,
+				41CBECABB8FA4EA68F0E3BDF /* libRCTGCanvas.a */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -623,6 +636,14 @@
 			isa = PBXGroup;
 			children = (
 				B7125506216EC3C500B2BDB2 /* libReactNativePermissions.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B712553E2170298A00B2BDB2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B71255422170298A00B2BDB2 /* libKCKeepAwake.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -697,6 +718,10 @@
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
 			projectReferences = (
+				{
+					ProductGroup = B712553E2170298A00B2BDB2 /* Products */;
+					ProjectRef = EAF48495D93042ED9222D5BA /* KCKeepAwake.xcodeproj */;
+				},
 				{
 					ProductGroup = B71254C8216E961A00B2BDB2 /* Products */;
 					ProjectRef = 76E381ABAA42447A9DDAA3F1 /* MicrophoneStream.xcodeproj */;
@@ -1047,6 +1072,13 @@
 			remoteRef = B7125505216EC3C500B2BDB2 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		B71255422170298A00B2BDB2 /* libKCKeepAwake.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libKCKeepAwake.a;
+			remoteRef = B71255412170298A00B2BDB2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 /* End PBXReferenceProxy section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -1140,15 +1172,13 @@
 					"$(SRCROOT)/../node_modules/react-native-audio/ios",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
 					"$(SRCROOT)/../node_modules/react-native-permissions/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-keep-awake/ios",
 				);
 				INFOPLIST_FILE = BirdgramTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"\"$(SRCROOT)/$(TARGET_NAME)\"",
-					"\"$(SRCROOT)/$(TARGET_NAME)\"",
-					"\"$(SRCROOT)/$(TARGET_NAME)\"",
 				);
 				OTHER_LDFLAGS = (
 					"-ObjC",
@@ -1171,15 +1201,13 @@
 					"$(SRCROOT)/../node_modules/react-native-audio/ios",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
 					"$(SRCROOT)/../node_modules/react-native-permissions/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-keep-awake/ios",
 				);
 				INFOPLIST_FILE = BirdgramTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"\"$(SRCROOT)/$(TARGET_NAME)\"",
-					"\"$(SRCROOT)/$(TARGET_NAME)\"",
-					"\"$(SRCROOT)/$(TARGET_NAME)\"",
 				);
 				OTHER_LDFLAGS = (
 					"-ObjC",
@@ -1203,6 +1231,7 @@
 					"$(SRCROOT)/../node_modules/react-native-audio/ios",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
 					"$(SRCROOT)/../node_modules/react-native-permissions/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-keep-awake/ios",
 				);
 				INFOPLIST_FILE = Birdgram/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -1228,6 +1257,7 @@
 					"$(SRCROOT)/../node_modules/react-native-audio/ios",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
 					"$(SRCROOT)/../node_modules/react-native-permissions/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-keep-awake/ios",
 				);
 				INFOPLIST_FILE = Birdgram/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";

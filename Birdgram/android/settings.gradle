@@ -1,4 +1,6 @@
 rootProject.name = 'Birdgram'
+include ':react-native-keep-awake'
+project(':react-native-keep-awake').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-keep-awake/android')
 include ':react-native-microphone-stream'
 project(':react-native-microphone-stream').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-microphone-stream/android')
 include ':react-native-audio'

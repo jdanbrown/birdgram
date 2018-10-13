@@ -60,6 +60,9 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
   - https://jestjs.io/docs/en/snapshot-testing
 
 # Troubleshooting
+- Can't import modules `fs`, `net`, or `dgram`
+  - Finish installing them via node-libs-react-native (skipped because they have native code)
+  - https://github.com/parshap/node-libs-react-native#other-react-native-modules
 - App takes forever (~20s) to open (in dev mode)
   - It might be trying and failing to connect to rndebugger
   - Try first opening React Native Debugger and then restarting/reloading the app
@@ -79,6 +82,8 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
   - https://github.com/rebeccahughes/react-native-device-info/issues/260
 - `yarn test` -> `Couldn't find preset "module:metro-react-native-babel-preset"`
   - Solution: updated package.json like https://github.com/facebook/metro/issues/242#issuecomment-421139247
+- Symlinks break `react-native start` build
+  - Symlinks aren't supported by metro: https://github.com/facebook/metro/issues/1
 
 # TODO
 - Remove unused dep react-native-audio (`yarn remove` + `react-native unlink`)
