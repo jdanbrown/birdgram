@@ -28,8 +28,6 @@
 // @ts-ignore
 import FFT from 'fft.js';
 
-import {MEL_SPEC_BINS, SAMPLE_RATE, SPEC_HOP_LENGTH} from './constants';
-
 /**
  * Parameters for computing a spectrogram from audio.
  */

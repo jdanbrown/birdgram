@@ -11,7 +11,7 @@ import FastImage from 'react-native-fast-image'
 import Permissions from 'react-native-permissions'
 import MicStream from 'react-native-microphone-stream';
 
-import * as AudioUtils from '../../third-party/magenta/music/transcription/audio_utils'
+import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
 import { global } from '../utils';
 
@@ -147,18 +147,30 @@ export class Recorder extends React.Component<Props, State> {
 
     // Compute (mag) spectro from audio
     const {sampleRate} = this.props;
-    const pow = 1; // NOTE pow=2 is invisible with magSpectrogram [obviated once we move to melSpectrogram]
-    const [spectro, nfft] = AudioUtils.magSpectrogram(
-      AudioUtils.stft(new Float32Array(audio), {sampleRate}), // (QA'd via tone generator -> MicStream -> magSpectrogram)
+
+    // pow=1 without powerToDb kinda works, but pow=2 with powerToDb works way better
+    const [pow, db] = [
+      // 1, false, // Barely
+      // 2, false, // Junk
+      // 2, true,  // Decent
+      3, true,  // Good enough (until we melSpectrogram)
+    ];
+    let [spectro, nfft] = magSpectrogram(
+      stft(new Float32Array(audio), {sampleRate}), // (QA'd via tone generator -> MicStream -> magSpectrogram)
       pow,
     );
+    if (db) spectro = powerToDb(spectro);
     let S = nj.array(spectro);
-    console.log('nfft', nfft);
-    console.log('spectro.shape', S.shape);
 
     // Normalize values to [0,1]
     //  - QUESTION max or max-min?
-    S = nj.divide(S, S.max());
+    console.log('S.min, S.max', S.min(), S.max());
+    S = S.subtract(S.min());
+    S = S.divide(S.max());
+    console.log('S.min, S.max', S.min(), S.max());
+
+    console.log('nfft', nfft);
+    console.log('spectro.shape', S.shape);
 
     // Compute imageRGBA from S
     const [w_S, h_S] = S.shape;
@@ -205,6 +217,7 @@ export class Recorder extends React.Component<Props, State> {
 
   }
 
+  // TODO Bigger button hitbox: https://stackoverflow.com/questions/50065928/change-button-font-size-on-react-native
   render = () => {
     return (
       <View style={styles.root}>
