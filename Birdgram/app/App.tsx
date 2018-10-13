@@ -51,13 +51,9 @@ export default class App extends Component<Props> {
 
         {__DEV__ && <KeepAwake/>}
 
-        <Text style={styles.welcome}>Birdgram</Text>
-        <Text style={styles.instructions}>{
-          Platform.select({
-            ios:     'Press Cmd+R to reload,\nCmd+D or shake for dev menu',
-            android: 'Double tap R on your keyboard to reload,\nShake or press menu button for dev menu',
-          })
-        }</Text>
+        <Text style={styles.banner}>
+          Birdgram ({Platform.select({ios: 'ios', android: 'android'})})
+        </Text>
 
         <Recorder sampleRate={22050} />
 
@@ -87,17 +83,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  welcome: {
+  banner: {
     fontSize: 20,
     textAlign: 'center',
     margin: 10,
   },
-  instructions: {
-    textAlign: 'center',
-    color: '#333333',
-    marginBottom: 5,
-  },
-  webView: {
-    width: Dimensions.get('window').width, // Else WebView doesn't appear
-  },
+  // webView: {
+  //   width: Dimensions.get('window').width, // Else WebView doesn't appear
+  // },
 });

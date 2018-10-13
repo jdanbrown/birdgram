@@ -1,9 +1,13 @@
 import { color, RGBColor } from 'd3-color';
 import { interpolateMagma } from 'd3-scale-chromatic';
+// FIXME jimp fails when not "Debug JS Remotely"
+//  - "undefined is not an object (evaluating 'gl.Jimp = Jimp')"
+//  - https://github.com/oliver-moran/jimp/blob/ced893d/packages/core/src/index.js#L1213-L1228
 import Jimp from 'jimp';
 import _ from 'lodash';
 import React from 'react';
 import { Button, EmitterSubscription, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import FastImage from 'react-native-fast-image'
 import Permissions from 'react-native-permissions'
 import MicStream from 'react-native-microphone-stream';
 
@@ -15,10 +19,15 @@ export interface Props {
   sampleRate: number,
 }
 
+enum RecordingState {
+  Stopped = 'Stopped',
+  Recording = 'Recording',
+}
+
 interface State {
-  recordingState: string,
+  recordingState: RecordingState,
   audioSampleChunks: number[][],
-  spectroImage?: Element, // QUESTION What is Element? It made tsc happy...
+  spectroImg?: {width: number, height: number, uri: string},
 }
 
 // https://github.com/chadsmith/react-native-microphone-stream
@@ -29,7 +38,7 @@ export class Recorder extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = {
-      recordingState: 'stopped',
+      recordingState: RecordingState.Stopped,
       audioSampleChunks: [],
     };
     global.Recorder = this; // XXX dev
@@ -56,54 +65,71 @@ export class Recorder extends React.Component<Props, State> {
   }
 
   startRecording = async () => {
-    console.log('startRecording');
+    if (this.state.recordingState === RecordingState.Stopped) {
+      console.log('startRecording');
 
-    // Clear audio data
-    this.setState({audioSampleChunks: []});
+      // Reset audio samples
+      this.setState({
+        audioSampleChunks: [],
+        spectroImg: undefined,
+      });
 
-    // Init mic
-    //  - init() here instead of componentDidMount because we have to call it after each stop()
-    const eventRate = 4; // Set bufferSize to fire ~eventRate js events per sec
-    const {sampleRate} = this.props;
-    MicStream.init({
-      // Options
-      //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L23-L32
-      //  - https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
-      //  - TODO PR to change hardcoded kAudioFormatULaw -> any mFormatID (e.g. mp4)
-      sampleRate,
-      bitsPerChannel: 16,
-      channelsPerFrame: 1,
-      // Compute a bufferSize that will fire at eventRate
-      //  - Hardcode `/ 2` here because MicStream does `* 2`
-      //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L35
-      bufferSize: Math.floor(sampleRate / eventRate / 2),
-    });
+      // Init mic
+      //  - init() here instead of componentDidMount because we have to call it after each stop()
+      const eventRate = 4; // Set bufferSize to fire ~eventRate js events per sec
+      const {sampleRate} = this.props;
+      MicStream.init({
+        // Options
+        //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L23-L32
+        //  - https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
+        //  - TODO PR to change hardcoded kAudioFormatULaw -> any mFormatID (e.g. mp4)
+        sampleRate, // (QA'd via tone generator -> MicStream -> magSpectrogram)
+        bitsPerChannel: 16,
+        channelsPerFrame: 1,
+        // Compute a bufferSize that will fire at eventRate
+        //  - Hardcode `/ 2` here because MicStream does `* 2`
+        //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L35
+        bufferSize: Math.floor(sampleRate / eventRate / 2),
+      });
 
-    // Start recording
-    this.setState({recordingState: 'recording'});
-    MicStream.start();
+      // Start recording
+      this.setState({recordingState: RecordingState.Recording});
+      MicStream.start(); // (Async with no signal of success/failure)
 
+      // Display recorded audio (~empty)
+      await this.drawSpectro();
+
+    }
   }
 
-  onRecordedChunk = (samples: number[]) => {
+  onRecordedChunk = async (samples: number[]) => {
     // MicStream.stop is unobservably async, so ignore any audio capture after we think we've stopped
-    if (this.state.recordingState === 'recording') {
+    if (this.state.recordingState === RecordingState.Recording) {
       console.log('onRecordedChunk: samples', samples)
+
+      // Buffer samples
       this.setState((state, props) => ({
         audioSampleChunks: [...state.audioSampleChunks, samples],
       }));
+
+      // Display recorded audio (incremental)
+      await this.drawSpectro();
+
     }
-    // Display recorded audio
-    this.drawSpectro();
   }
 
   stopRecording = async () => {
-    console.log('stopRecording');
-    // Stop recording
-    MicStream.stop();
-    this.setState({recordingState: 'stopped'});
-    // Display recorded audio
-    this.drawSpectro();
+    if (this.state.recordingState === RecordingState.Recording) {
+      console.log('stopRecording');
+
+      // Stop recording
+      this.setState({recordingState: RecordingState.Stopped});
+      MicStream.stop(); // (Async with no signal of success/failure)
+
+      // Display recorded audio (final)
+      await this.drawSpectro();
+
+    }
   }
 
   drawSpectro = (): Promise<void> => {
@@ -123,7 +149,7 @@ export class Recorder extends React.Component<Props, State> {
     const {sampleRate} = this.props;
     const pow = 1; // NOTE pow=2 is invisible with magSpectrogram [obviated once we move to melSpectrogram]
     const [spectro, nfft] = AudioUtils.magSpectrogram(
-      AudioUtils.stft(new Float32Array(audio), {sampleRate}),
+      AudioUtils.stft(new Float32Array(audio), {sampleRate}), // (QA'd via tone generator -> MicStream -> magSpectrogram)
       pow,
     );
     let S = nj.array(spectro);
@@ -131,6 +157,7 @@ export class Recorder extends React.Component<Props, State> {
     console.log('spectro.shape', S.shape);
 
     // Normalize values to [0,1]
+    //  - QUESTION max or max-min?
     S = nj.divide(S, S.max());
 
     // Compute imageRGBA from S
@@ -138,13 +165,14 @@ export class Recorder extends React.Component<Props, State> {
     const imageRGBA = new Buffer(w_S * h_S * 4);
     for (let w = 0; w < w_S; w++) {
       for (let h = 0; h < h_S; h++) {
-        // TODO Is this loop transposed?
-        const x = S.get(w, -h) as unknown as number; // HACK Fix incorrect type: S.get(w,h): Float32Array
+        const x = S.get(w, -h) as unknown as number; // (Fix bad type: S.get(w,h): Float32Array)
         const c = color(interpolateMagma(1 - x)) as RGBColor;
-        imageRGBA[0 + 4*(w + w_S*h)] = c.r;
-        imageRGBA[1 + 4*(w + w_S*h)] = c.g;
-        imageRGBA[2 + 4*(w + w_S*h)] = c.b;
-        imageRGBA[3 + 4*(w + w_S*h)] = c.opacity * 255;
+        if (c) {
+          imageRGBA[0 + 4*(w + w_S*h)] = c.r;
+          imageRGBA[1 + 4*(w + w_S*h)] = c.g;
+          imageRGBA[2 + 4*(w + w_S*h)] = c.b;
+          imageRGBA[3 + 4*(w + w_S*h)] = c.opacity * 255;
+        }
       }
     }
 
@@ -159,11 +187,9 @@ export class Recorder extends React.Component<Props, State> {
       height: h_S,
     }).then(img => (img
       // .crop(0, 0, w_img, h_img)
-      .resize(w_img, h_img)
+      .resize(w_img, h_img) // TODO Is it faster to resize before data url, or let Image.props.resizeMode do the resizing for us?
       .getBase64Async('image/png')
     )).then(dataUrl => {
-
-      console.log('dataUrl', dataUrl);
 
       // XXX Globals for dev
       Object.assign(global, {
@@ -172,9 +198,7 @@ export class Recorder extends React.Component<Props, State> {
 
       // Render image
       this.setState({
-        spectroImage: (
-          <Image style={{width: w_img, height: h_img}} source={{uri: dataUrl}} />
-        ),
+        spectroImg: {width: w_img, height: h_img, uri: dataUrl},
       });
 
     });
@@ -204,7 +228,20 @@ export class Recorder extends React.Component<Props, State> {
           </View>
         </View>
 
-        {this.state.spectroImage}
+        {
+          // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
+          //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
+          //  - https://github.com/DylanVann/react-native-fast-image
+          this.state.spectroImg && <FastImage
+            style={{
+              width: this.state.spectroImg.width,
+              height: this.state.spectroImg.height,
+            }}
+            source={{
+              uri: this.state.spectroImg.uri,
+            }}
+          />
+        }
 
       </View>
     );

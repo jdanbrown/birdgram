@@ -6074,11 +6074,6 @@ react-is@^16.5.0:
   resolved "https://registry.yarnpkg.com/react-is/-/react-is-16.5.2.tgz#e2a7b7c3f5d48062eb769fcb123505eb928722e3"
   integrity sha512-hSl7E6l25GTjNEZATqZIuWOgSnpXb3kD0DVCujmg46K5zLxsbiKaaT6VO9slkSBDPZfYs30lwfJwbOFOnoEnKQ==
 
-react-native-audio@^4.2.1:
-  version "4.2.1"
-  resolved "https://registry.yarnpkg.com/react-native-audio/-/react-native-audio-4.2.1.tgz#f879903c125b6519d3bc1ea4ea9116128f8f273e"
-  integrity sha512-vRKuvAgJZOi6wsIhI6L22vyrulBHt74WtQofj//0mgjbWl3Pcz685lYWHBCVV5jHxu334q+tqZiQbix7jXwrhA==
-
 react-native-crypto@^2.0.1:
   version "2.1.2"
   resolved "https://registry.yarnpkg.com/react-native-crypto/-/react-native-crypto-2.1.2.tgz#cfe68cad51cd1f73a4202b7ac164f96c1144cb2a"
@@ -6103,6 +6098,11 @@ react-native-debugger-open@^0.3.17:
     es6-template "^1.0.4"
     minimist "^1.2.0"
     semver "^5.4.1"
+
+react-native-fast-image@^5.0.10:
+  version "5.0.10"
+  resolved "https://registry.yarnpkg.com/react-native-fast-image/-/react-native-fast-image-5.0.10.tgz#56d229b4a872e4f01bb5ecb7fe465eee34e5238f"
+  integrity sha512-9WRINd7xk0Hhv3ublbJqGpU+dEApzMmabHU/5ULGvQ0LBWdCFF/4ScQMPJlI0dnCMu/++/emRshn4ML6sQ1yhQ==
 
 react-native-keep-awake@^3.1.0:
   version "3.1.0"

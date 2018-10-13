@@ -60,6 +60,11 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
   - https://jestjs.io/docs/en/snapshot-testing
 
 # Troubleshooting
+- 'config.h' "File not found"
+  - I fixed it by cleaning and rebuilding yarn/xcode a number of times
+  - But if I get stuck on this again, try these:
+    - https://github.com/facebook/react-native/issues/14382#issuecomment-424516909
+    - https://github.com/facebook/react-native/issues/20774
 - Can't import modules `fs`, `net`, or `dgram`
   - Finish installing them via node-libs-react-native (skipped because they have native code)
   - https://github.com/parshap/node-libs-react-native#other-react-native-modules
@@ -86,4 +91,5 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
   - Symlinks aren't supported by metro: https://github.com/facebook/metro/issues/1
 
 # TODO
-- Remove unused dep react-native-audio (`yarn remove` + `react-native unlink`)
+- Fix: `global.*` fails if not "Debug JS Remotely"
+- Fix: `import 'jimp'` fails if not "Debug JS Remotely" (see comments in Recorder.tsx)
