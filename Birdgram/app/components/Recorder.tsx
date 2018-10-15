@@ -7,13 +7,15 @@ import Jimp from 'jimp';
 import _ from 'lodash';
 import React from 'react';
 import { Button, EmitterSubscription, Image, Platform, StyleSheet, Text, View } from 'react-native';
-import FastImage from 'react-native-fast-image'
-import Permissions from 'react-native-permissions'
+import FastImage from 'react-native-fast-image';
 import MicStream from 'react-native-microphone-stream';
+import Permissions from 'react-native-permissions';
+import RNFB from 'rn-fetch-blob';
+const {fs, base64} = RNFB;
 
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
-import { global } from '../utils';
+import { chance, global } from '../utils';
 
 export interface Props {
   sampleRate: number,
@@ -27,7 +29,7 @@ enum RecordingState {
 interface State {
   recordingState: RecordingState,
   audioSampleChunks: number[][],
-  spectroImg?: {width: number, height: number, uri: string},
+  spectroImgProps?: {source: object, style?: object},
 }
 
 // https://github.com/chadsmith/react-native-microphone-stream
@@ -71,7 +73,7 @@ export class Recorder extends React.Component<Props, State> {
       // Reset audio samples
       this.setState({
         audioSampleChunks: [],
-        spectroImg: undefined,
+        spectroImgProps: undefined,
       });
 
       // Init mic
@@ -132,10 +134,10 @@ export class Recorder extends React.Component<Props, State> {
     }
   }
 
-  drawSpectro = (): Promise<void> => {
+  drawSpectro = async (): Promise<void> => {
 
     // Util: wrap `new Jimp` in a promise
-    const JimpPromise = (...args: any[]): Promise<Jimp> => new Promise((resolve, reject) => {
+    const JimpAsync = (...args: any[]): Promise<Jimp> => new Promise((resolve, reject) => {
       new Jimp(...args, (err: Error | null, img: Jimp) => err ? reject(err) : resolve(img));
     })
 
@@ -189,31 +191,49 @@ export class Recorder extends React.Component<Props, State> {
     }
 
     // Build image from imageRGBA
+    //  - XXX Very slow, kills app after ~5s
     const [w_img, h_img] = [
       w_S,
       400,
     ];
-    return JimpPromise({
+    let img = await JimpAsync({
       data: imageRGBA,
       width: w_S,
       height: h_S,
-    }).then(img => (img
+    })
+    img = (img
       // .crop(0, 0, w_img, h_img)
       .resize(w_img, h_img) // TODO Is it faster to resize before data url, or let Image.props.resizeMode do the resizing for us?
-      .getBase64Async('image/png')
-    )).then(dataUrl => {
+    );
 
-      // XXX Globals for dev
-      Object.assign(global, {
-        chunks, audio, spectro, S, w_S, h_S, w_img, h_img, imageRGBA,
-      });
-
-      // Render image
-      this.setState({
-        spectroImg: {width: w_img, height: h_img, uri: dataUrl},
-      });
-
+    // XXX Globals for dev
+    Object.assign(global, {
+      chunks, audio, spectro, S, w_S, h_S, w_img, h_img, imageRGBA,
     });
+
+    // Render image [via file]
+    //  - Scratch: fs.createFile(pngPath, imageRGBA.toString('base64'), 'base64');
+    const dataUrl = await img.getBase64Async('image/png');
+    const filename = `${new Date().toISOString()}-${chance.hash({length: 8})}.png`;
+    const pngPath = `${fs.dirs.CacheDir}/${filename}`;
+    const pngBase64 = dataUrl.replace('data:image/png;base64,', '');
+    await fs.createFile(pngPath, pngBase64, 'base64');
+    this.setState({
+      spectroImgProps: {
+        source: {uri: `file://${pngPath}`},
+        style: {width: w_img, height: h_img}, // For file:// uris, else image doesn't show
+      },
+    });
+
+    // // Render image [via dataUrl]
+    // //  - XXX Faster via file(s)?
+    // const dataUrl = await img.getBase64Async('image/png');
+    // this.setState({
+    //   spectroImgProps: {
+    //     style: {width: w_img, height: h_img},
+    //     source: {uri: dataUrl},
+    //   },
+    // });
 
   }
 
@@ -245,15 +265,7 @@ export class Recorder extends React.Component<Props, State> {
           // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
           //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
           //  - https://github.com/DylanVann/react-native-fast-image
-          this.state.spectroImg && <FastImage
-            style={{
-              width: this.state.spectroImg.width,
-              height: this.state.spectroImg.height,
-            }}
-            source={{
-              uri: this.state.spectroImg.uri,
-            }}
-          />
+          this.state.spectroImgProps && <FastImage {...this.state.spectroImgProps} />
         }
 
       </View>

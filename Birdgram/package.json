@@ -6,6 +6,7 @@
     "tsc-jest-cant-watch": "tsc && jest"
   },
   "dependencies": {
+    "@types/chance": "^1.0.1",
     "@types/d3-color": "^1.2.1",
     "@types/d3-scale-chromatic": "^1.3.0",
     "@types/jimp": "^0.2.28",
@@ -14,6 +15,7 @@
     "@types/numjs": "^0.14.4",
     "@types/react-native-keep-awake": "^2.0.2",
     "@types/react-native-permissions": "^1.1.1",
+    "chance": "^1.0.16",
     "d3-color": "^1.2.3",
     "d3-scale-chromatic": "^1.3.3",
     "fft.js": "^4.0.3",
@@ -30,6 +32,7 @@
     "react-native-keep-awake": "^3.1.0",
     "react-native-microphone-stream": "git://github.com/chadsmith/react-native-microphone-stream.git#4cca1e7",
     "react-native-permissions": "^1.1.1",
+    "rn-fetch-blob": "git://github.com/jdanbrown/rn-fetch-blob.git#patch-1",
     "save-pixels": "^2.3.4",
     "tslib": "^1.9.3",
     "zeros": "^1.0.0"

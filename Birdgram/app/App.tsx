@@ -19,6 +19,7 @@ timed('d3-color',           () => Object.assign(global.d3, require('d3-color')))
 timed('d3-scale-chromatic', () => Object.assign(global.d3, require('d3-scale-chromatic'))); // 6ms
 timed('ndarray',            () => global.ndarray         = require('ndarray'));             // 1ms
 timed('nj',                 () => global.nj              = require('../third-party/numjs/dist/numjs.min')); // 130ms
+timed('rn-fetch-blob',      () => global.RNFB            = require('rn-fetch-blob').default); // 0ms
 timed('sj.ops',             () => global.sj.ops          = require('ndarray-ops'));         // 50ms
 // timed('sj.getPixels',    () => global.sj.getPixels    = require('get-pixels'));          // 10ms
 // timed('sj.savePixels',   () => global.sj.savePixels   = require('save-pixels'));         // 30ms
