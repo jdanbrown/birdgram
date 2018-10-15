@@ -6,7 +6,7 @@ import { interpolateMagma } from 'd3-scale-chromatic';
 import Jimp from 'jimp';
 import _ from 'lodash';
 import React from 'react';
-import { Button, EmitterSubscription, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Button, Dimensions, EmitterSubscription, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import FastImage from 'react-native-fast-image';
 import MicStream from 'react-native-microphone-stream';
 import Permissions from 'react-native-permissions';
@@ -17,32 +17,49 @@ import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-par
 import nj from '../../third-party/numjs/dist/numjs.min';
 import { chance, global } from '../utils';
 
-export interface Props {
-  sampleRate: number,
-}
+// Util: wrap `new Jimp` in a promise
+const JimpAsync = (...args: any[]): Promise<Jimp> => new Promise((resolve, reject) => {
+  new Jimp(...args, (err: Error | null, img: Jimp) => err ? reject(err) : resolve(img));
+});
 
 enum RecordingState {
   Stopped = 'Stopped',
   Recording = 'Recording',
 }
 
+export interface Props {
+  sampleRate: number,
+  refreshRate: number,
+  spectroHeight: number,
+}
+
 interface State {
   recordingState: RecordingState,
   audioSampleChunks: number[][],
-  spectroImgProps?: {source: object, style?: object},
+  spectroChunksImageProps: {source: {uri: string}, style?: object}[],
 }
 
 // https://github.com/chadsmith/react-native-microphone-stream
 export class Recorder extends React.Component<Props, State> {
 
+  // Private attrs (not props or state)
   listener?: EmitterSubscription;
+  spectroChunksPerScreenWidth: number;
+  styles: {
+    spectroChunks: object,
+  }
 
   constructor(props: Props) {
     super(props);
     this.state = {
       recordingState: RecordingState.Stopped,
       audioSampleChunks: [],
+      spectroChunksImageProps: [],
     };
+    this.spectroChunksPerScreenWidth = Dimensions.get('window').width / (44 / this.props.refreshRate) + 1;
+    this.styles = {
+      spectroChunks: {height: this.props.spectroHeight},
+    },
     global.Recorder = this; // XXX dev
   }
 
@@ -70,16 +87,16 @@ export class Recorder extends React.Component<Props, State> {
     if (this.state.recordingState === RecordingState.Stopped) {
       console.log('startRecording');
 
-      // Reset audio samples
+      // Update recordingState + reset audio chunks
       this.setState({
+        recordingState: RecordingState.Recording,
         audioSampleChunks: [],
-        spectroImgProps: undefined,
+        spectroChunksImageProps: [],
       });
 
       // Init mic
       //  - init() here instead of componentDidMount because we have to call it after each stop()
-      const eventRate = 4; // Set bufferSize to fire ~eventRate js events per sec
-      const {sampleRate} = this.props;
+      const {sampleRate, refreshRate} = this.props;
       MicStream.init({
         // Options
         //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L23-L32
@@ -88,18 +105,14 @@ export class Recorder extends React.Component<Props, State> {
         sampleRate, // (QA'd via tone generator -> MicStream -> magSpectrogram)
         bitsPerChannel: 16,
         channelsPerFrame: 1,
-        // Compute a bufferSize that will fire at eventRate
-        //  - Hardcode `/ 2` here because MicStream does `* 2`
+        // Compute a bufferSize that will fire ~refreshRate buffers per sec
+        //  - Hardcode `/2` here to counteract the `*2` in MicStream...
         //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L35
-        bufferSize: Math.floor(sampleRate / eventRate / 2),
+        bufferSize: Math.floor(sampleRate / refreshRate / 2),
       });
 
       // Start recording
-      this.setState({recordingState: RecordingState.Recording});
       MicStream.start(); // (Async with no signal of success/failure)
-
-      // Display recorded audio (~empty)
-      await this.drawSpectro();
 
     }
   }
@@ -107,15 +120,20 @@ export class Recorder extends React.Component<Props, State> {
   onRecordedChunk = async (samples: number[]) => {
     // MicStream.stop is unobservably async, so ignore any audio capture after we think we've stopped
     if (this.state.recordingState === RecordingState.Recording) {
-      console.log('onRecordedChunk: samples', samples)
+      // console.log('onRecordedChunk: samples', samples.length,
+      //   // samples, // Noisy
+      // );
 
       // Buffer samples
       this.setState((state, props) => ({
-        audioSampleChunks: [...state.audioSampleChunks, samples],
+        audioSampleChunks: ([...state.audioSampleChunks, samples]
+          // HACK Trim audio for O(1) mem usage -- think harder how to buffer long durations of audio (e.g. files i/o ram)
+          .slice(-this.spectroChunksPerScreenWidth)
+        ),
       }));
 
       // Display recorded audio (incremental)
-      await this.drawSpectro();
+      await this.renderChunk(samples);
 
     }
   }
@@ -124,34 +142,27 @@ export class Recorder extends React.Component<Props, State> {
     if (this.state.recordingState === RecordingState.Recording) {
       console.log('stopRecording');
 
-      // Stop recording
-      this.setState({recordingState: RecordingState.Stopped});
-      MicStream.stop(); // (Async with no signal of success/failure)
+      // Update recordingState
+      this.setState({
+        recordingState: RecordingState.Stopped,
+      });
 
-      // Display recorded audio (final)
-      await this.drawSpectro();
+      // Stop recording
+      MicStream.stop(); // (Async with no signal of success/failure)
 
     }
   }
 
-  drawSpectro = async (): Promise<void> => {
+  renderChunk = async (chunk: number[]): Promise<void> => {
 
-    // Util: wrap `new Jimp` in a promise
-    const JimpAsync = (...args: any[]): Promise<Jimp> => new Promise((resolve, reject) => {
-      new Jimp(...args, (err: Error | null, img: Jimp) => err ? reject(err) : resolve(img));
-    })
-
-    // https://github.com/d3/d3-scale-chromatic#sequential-multi-hue
-
-    // Concat audio from chunks
-    const chunks = this.state.audioSampleChunks;
-    const audio = _.concat([], ...chunks);
+    // TODO Include previous chunk(s) in stft
+    //  - Defer until melSpectrogram, so we can couple to the right mel params
+    const audio = chunk;
 
     // Compute (mag) spectro from audio
     const {sampleRate} = this.props;
-
-    // pow=1 without powerToDb kinda works, but pow=2 with powerToDb works way better
     const [pow, db] = [
+      // pow=1 without powerToDb kinda works, but pow=2 with powerToDb works way better
       // 1, false, // Barely
       // 2, false, // Junk
       // 2, true,  // Decent
@@ -166,13 +177,13 @@ export class Recorder extends React.Component<Props, State> {
 
     // Normalize values to [0,1]
     //  - QUESTION max or max-min?
-    console.log('S.min, S.max', S.min(), S.max());
+    // console.log('S.min, S.max', S.min(), S.max());
     S = S.subtract(S.min());
     S = S.divide(S.max());
-    console.log('S.min, S.max', S.min(), S.max());
+    // console.log('S.min, S.max', S.min(), S.max());
 
-    console.log('nfft', nfft);
-    console.log('spectro.shape', S.shape);
+    // console.log('nfft', nfft);
+    // console.log('spectro.shape', S.shape);
 
     // Compute imageRGBA from S
     const [w_S, h_S] = S.shape;
@@ -194,7 +205,7 @@ export class Recorder extends React.Component<Props, State> {
     //  - XXX Very slow, kills app after ~5s
     const [w_img, h_img] = [
       w_S,
-      400,
+      this.props.spectroHeight,
     ];
     let img = await JimpAsync({
       data: imageRGBA,
@@ -206,33 +217,26 @@ export class Recorder extends React.Component<Props, State> {
       .resize(w_img, h_img) // TODO Is it faster to resize before data url, or let Image.props.resizeMode do the resizing for us?
     );
 
-    // XXX Globals for dev
-    Object.assign(global, {
-      chunks, audio, spectro, S, w_S, h_S, w_img, h_img, imageRGBA,
-    });
-
-    // Render image [via file]
+    // Render image (via file)
     //  - Scratch: fs.createFile(pngPath, imageRGBA.toString('base64'), 'base64');
     const dataUrl = await img.getBase64Async('image/png');
     const filename = `${new Date().toISOString()}-${chance.hash({length: 8})}.png`;
     const pngPath = `${fs.dirs.CacheDir}/${filename}`;
     const pngBase64 = dataUrl.replace('data:image/png;base64,', '');
     await fs.createFile(pngPath, pngBase64, 'base64');
-    this.setState({
-      spectroImgProps: {
-        source: {uri: `file://${pngPath}`},
-        style: {width: w_img, height: h_img}, // For file:// uris, else image doesn't show
-      },
-    });
+    this.setState((state, props) => ({
+      spectroChunksImageProps: (
+        [...state.spectroChunksImageProps, {
+          source: {uri: `file://${pngPath}`},
+          style: {width: w_img, height: h_img}, // For file:// uris, else image doesn't show
+        }]
+        .slice(-this.spectroChunksPerScreenWidth) // Trim spectro chunks for O(1) mem usage
+      ),
+    }))
 
-    // // Render image [via dataUrl]
-    // //  - XXX Faster via file(s)?
-    // const dataUrl = await img.getBase64Async('image/png');
-    // this.setState({
-    //   spectroImgProps: {
-    //     style: {width: w_img, height: h_img},
-    //     source: {uri: dataUrl},
-    //   },
+    // // XXX Globals for dev
+    // Object.assign(global, {
+    //   audio, spectro, S, w_S, h_S, w_img, h_img, imageRGBA,
     // });
 
   }
@@ -243,30 +247,42 @@ export class Recorder extends React.Component<Props, State> {
       <View style={styles.root}>
 
         <View>
-          <Text>recordingState: {this.state.recordingState}</Text>
+          <Text>state.recordingState: {this.state.recordingState}</Text>
         </View>
         <View>
-          <Text>Chunks: {this.state.audioSampleChunks.length}</Text>
+          <Text>state.audioSampleChunks: {this.state.audioSampleChunks.length}</Text>
         </View>
         <View>
-          <Text>Samples: {_.sum(this.state.audioSampleChunks.map((x: number[]) => x.length))}</Text>
+          <Text>state.audioSampleChunks.sum: {_.sum(this.state.audioSampleChunks.map((x: number[]) => x.length))}</Text>
+        </View>
+        <View>
+          <Text>state.spectroChunksImageProps: {this.state.spectroChunksImageProps.length}</Text>
         </View>
 
         <View style={styles.buttons}>
           <View style={styles.button}>
-            <Button title="▶️" onPress={this.startRecording.bind(this)} />
-          </View>
-          <View style={styles.button}>
-            <Button title="⏹️" onPress={this.stopRecording.bind(this)} />
+            {
+              {
+                [RecordingState.Stopped]:   (<Button title="▶️" onPress={this.startRecording.bind(this)} />),
+                [RecordingState.Recording]: (<Button title="⏹️" onPress={this.stopRecording.bind(this)}  />),
+              }[this.state.recordingState]
+            }
           </View>
         </View>
 
-        {
-          // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
-          //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
-          //  - https://github.com/DylanVann/react-native-fast-image
-          this.state.spectroImgProps && <FastImage {...this.state.spectroImgProps} />
-        }
+        <View style={[styles.spectroChunks, this.styles.spectroChunks]}>
+          {
+            // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
+            //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
+            //  - https://github.com/DylanVann/react-native-fast-image
+            (this.state.spectroChunksImageProps
+              .slice(-this.spectroChunksPerScreenWidth)
+              .map(props => (
+                <FastImage key={props.source.uri} {...props} />
+              ))
+            )
+          }
+        </View>
 
       </View>
     );
@@ -291,4 +307,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 0,
   },
-});
+  spectroChunks: {
+    flexDirection: 'row',
+    alignSelf: 'flex-end',
+  },
+})

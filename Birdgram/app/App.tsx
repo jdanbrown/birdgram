@@ -7,6 +7,8 @@ import { Recorder } from './components/Recorder';
 import { global } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
+global.Dimensions = Dimensions;
+global.Platform = Platform;
 const timed = (desc: string, f: () => void) => { console.time(desc); f(); console.timeEnd(desc); };
 global.sj = {};
 global.d3 = {};
@@ -56,7 +58,11 @@ export default class App extends Component<Props> {
           Birdgram ({Platform.select({ios: 'ios', android: 'android'})})
         </Text>
 
-        <Recorder sampleRate={22050} />
+        <Recorder
+          sampleRate={22050}
+          refreshRate={4}
+          spectroHeight={400}
+        />
 
         {
           // TODO WebView: ugh, lots to do to make this work
