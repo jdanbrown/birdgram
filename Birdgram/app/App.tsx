@@ -1,9 +1,13 @@
 import React from 'React';
-import { Component } from 'react';
-import { Dimensions, Image, Platform, StyleSheet, Text, View, WebView } from 'react-native';
-import KeepAwake from 'react-native-keep-awake';
+import { Dimensions, Platform, Text, View } from 'react-native';
+import FontAwesome from 'react-native-vector-icons/FontAwesome';
+import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
+import ReactNav from 'react-navigation';
 
-import { Recorder } from './components/Recorder';
+import { BrowseScreen } from './components/BrowseScreen';
+import { SearchScreen } from './components/SearchScreen';
+import { SettingsScreen } from './components/SettingsScreen';
+import { SpectroScreen } from './components/SpectroScreen';
 import { global } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
@@ -28,8 +32,8 @@ timed('sj.ops',             () => global.sj.ops          = require('ndarray-ops'
 timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));               // 0ms
 timed('AudioUtils',         () => global.AudioUtils      = require('../third-party/magenta/music/transcription/audio_utils'));
 
+// TODO config -> Settings.state [how to share globally?]
 const config = {
-  // TODO -> state with a prefs view
 
   host: 'local',
   // host: 'remote',
@@ -41,61 +45,39 @@ const config = {
 
 }
 
-type Props = {};
-
-export default class App extends Component<Props> {
-
-  render() {
-
-    console.log('KeepAwake', KeepAwake);
-
-    return (
-      <View style={styles.container}>
-
-        {__DEV__ && <KeepAwake/>}
-
-        <Text style={styles.banner}>
-          Birdgram ({Platform.select({ios: 'ios', android: 'android'})})
-        </Text>
-
-        <Recorder
-          sampleRate={22050}
-          refreshRate={4}
-          spectroHeight={400}
-        />
-
-        {
-          // TODO WebView: ugh, lots to do to make this work
-          //  - useWebKit=true crashes in simulator (ios 9), works on phone
-          //  - useWebKit=false doesn't play audio on click in simulator
-          //  - No back/forward buttons (in simulator)
-          //  - No keyboard (in simulator)
-          //  - ...?
-          // <WebView
-          //   style={styles.webView}
-          //   useWebKit={true}
-          //   source={{uri: `${config.baseUris[config.host]}/recs/browse`}}
-          // />
-        }
-
-      </View>
-    );
-  }
-
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+const Navigator = ReactNav.createBottomTabNavigator(
+  {
+    Spectro: { screen: SpectroScreen },
+    Browse: { screen: BrowseScreen },
+    Search: { screen: SearchScreen },
+    Settings: { screen: SettingsScreen },
   },
-  banner: {
-    fontSize: 20,
-    textAlign: 'center',
-    margin: 10,
+  {
+    navigationOptions: ({navigation}) => ({
+      tabBarIcon: ({focused, horizontal, tintColor}) => {
+        // console.log('navigation', navigation);
+        const size = horizontal ? 20 : 25;
+        return {
+          Spectro:  (<FontAwesome5 name={'signature'} size={size} color={tintColor} />),
+          Browse:   (<FontAwesome5 name={'list-ul'}   size={size} color={tintColor} />),
+          Search:   (<FontAwesome5 name={'search'}    size={size} color={tintColor} />),
+          Settings: (<FontAwesome  name={'gear'}      size={size} color={tintColor} />),
+        }[navigation.state.key];
+      },
+    }),
+    tabBarOptions: {
+      // activeTintColor: 'tomato',
+      // inactiveTintColor: 'gray',
+    },
   },
-  // webView: {
-  //   width: Dimensions.get('window').width, // Else WebView doesn't appear
-  // },
-});
+);
+
+const App = () => (
+  // https://reactnavigation.org/docs/en/state-persistence.html
+  <Navigator
+    key="a"
+    persistenceKey={__DEV__ && '_dev_NavigationState'}
+  />
+);
+
+export default App;

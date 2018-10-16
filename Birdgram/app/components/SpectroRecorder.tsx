@@ -10,6 +10,7 @@ import { Button, Dimensions, EmitterSubscription, Image, Platform, StyleSheet, T
 import FastImage from 'react-native-fast-image';
 import MicStream from 'react-native-microphone-stream';
 import Permissions from 'react-native-permissions';
+import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import RNFB from 'rn-fetch-blob';
 const {fs, base64} = RNFB;
 
@@ -40,13 +41,13 @@ interface State {
 }
 
 // https://github.com/chadsmith/react-native-microphone-stream
-export class Recorder extends React.Component<Props, State> {
+export class SpectroRecorder extends React.Component<Props, State> {
 
   // Private attrs (not props or state)
   listener?: EmitterSubscription;
   spectroChunksPerScreenWidth: number;
   styles: {
-    spectroChunks: object,
+    spectro: object,
   }
 
   constructor(props: Props) {
@@ -58,9 +59,9 @@ export class Recorder extends React.Component<Props, State> {
     };
     this.spectroChunksPerScreenWidth = Dimensions.get('window').width / (44 / this.props.refreshRate) + 1;
     this.styles = {
-      spectroChunks: {height: this.props.spectroHeight},
+      spectro: {height: this.props.spectroHeight},
     },
-    global.Recorder = this; // XXX dev
+    global.SpectroRecorder = this; // XXX dev
   }
 
   componentDidMount = () => {
@@ -244,33 +245,9 @@ export class Recorder extends React.Component<Props, State> {
   // TODO Bigger button hitbox: https://stackoverflow.com/questions/50065928/change-button-font-size-on-react-native
   render = () => {
     return (
-      <View style={styles.root}>
+      <View style={styles.container}>
 
-        <View>
-          <Text>state.recordingState: {this.state.recordingState}</Text>
-        </View>
-        <View>
-          <Text>state.audioSampleChunks: {this.state.audioSampleChunks.length}</Text>
-        </View>
-        <View>
-          <Text>state.audioSampleChunks.sum: {_.sum(this.state.audioSampleChunks.map((x: number[]) => x.length))}</Text>
-        </View>
-        <View>
-          <Text>state.spectroChunksImageProps: {this.state.spectroChunksImageProps.length}</Text>
-        </View>
-
-        <View style={styles.buttons}>
-          <View style={styles.button}>
-            {
-              {
-                [RecordingState.Stopped]:   (<Button title="▶️" onPress={this.startRecording.bind(this)} />),
-                [RecordingState.Recording]: (<Button title="⏹️" onPress={this.stopRecording.bind(this)}  />),
-              }[this.state.recordingState]
-            }
-          </View>
-        </View>
-
-        <View style={[styles.spectroChunks, this.styles.spectroChunks]}>
+        <View style={[styles.spectro, this.styles.spectro]}>
           {
             // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
             //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
@@ -284,6 +261,33 @@ export class Recorder extends React.Component<Props, State> {
           }
         </View>
 
+        <View style={styles.diagnostics}>
+          <Text>state.recordingState: {this.state.recordingState}</Text>
+          <Text>state.audioSampleChunks: {this.state.audioSampleChunks.length}</Text>
+          <Text>state.audioSampleChunks.sum: {_.sum(this.state.audioSampleChunks.map((x: number[]) => x.length))}</Text>
+          <Text>state.spectroChunksImageProps: {this.state.spectroChunksImageProps.length}</Text>
+        </View>
+
+        <View style={styles.buttons}>
+          {
+            <FontAwesome5.Button
+              size={50} color={'black'} backgroundColor={'white'} borderRadius={0} iconStyle={{marginRight: 0}}
+              name={
+                {
+                  [RecordingState.Stopped]:   'play',
+                  [RecordingState.Recording]: 'stop',
+                }[this.state.recordingState]
+              }
+              onPress={
+                {
+                  [RecordingState.Stopped]:   this.startRecording,
+                  [RecordingState.Recording]: this.stopRecording,
+                }[this.state.recordingState]
+              }
+            />
+          }
+        </View>
+
       </View>
     );
   }
@@ -291,24 +295,21 @@ export class Recorder extends React.Component<Props, State> {
 }
 
 const styles = StyleSheet.create({
-  root: {
+  container: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
+  },
+  spectro: {
+    marginVertical: 5,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    width: Dimensions.get('window').width,
+  },
+  diagnostics: {
+    marginVertical: 5,
   },
   buttons: {
-    flexDirection: 'row',
-    minHeight: 70,
-    alignItems: 'stretch',
-    alignSelf: 'center',
-    borderWidth: 1,
-    borderColor: 'lightgray',
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 0,
-  },
-  spectroChunks: {
-    flexDirection: 'row',
-    alignSelf: 'flex-end',
+    marginVertical: 5,
   },
 })
