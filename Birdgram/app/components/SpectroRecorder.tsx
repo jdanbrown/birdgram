@@ -16,7 +16,7 @@ const {fs, base64} = RNFB;
 
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
-import { chance, global } from '../utils';
+import { chance, global, match } from '../utils';
 
 // Util: wrap `new Jimp` in a promise
 const JimpAsync = (...args: any[]): Promise<Jimp> => new Promise((resolve, reject) => {
@@ -272,18 +272,14 @@ export class SpectroRecorder extends React.Component<Props, State> {
           {
             <FontAwesome5.Button
               size={50} color={'black'} backgroundColor={'white'} borderRadius={0} iconStyle={{marginRight: 0}}
-              name={
-                {
-                  [RecordingState.Stopped]:   'play',
-                  [RecordingState.Recording]: 'stop',
-                }[this.state.recordingState]
-              }
-              onPress={
-                {
-                  [RecordingState.Stopped]:   this.startRecording,
-                  [RecordingState.Recording]: this.stopRecording,
-                }[this.state.recordingState]
-              }
+              name={match(this.state.recordingState,
+                [RecordingState.Stopped,   'play'],
+                [RecordingState.Recording, 'stop'],
+              )}
+              onPress={match(this.state.recordingState,
+                [RecordingState.Stopped,   this.startRecording],
+                [RecordingState.Recording, this.stopRecording],
+              )}
             />
           }
         </View>

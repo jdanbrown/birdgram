@@ -966,30 +966,6 @@
   resolved "https://registry.yarnpkg.com/@types/react-native-permissions/-/react-native-permissions-1.1.1.tgz#297f39ed19234045e1dc1cd0abd85b86bdf9c606"
   integrity sha512-+xLVH6kefg9hpJKxQhRcaYHckhbQCxDrU6HEaTzf3gMbn4I4aunjxkqeSMAofrHFNOnOS/phnsTbifoDATjk3w==
 
-"@types/react-native-settings-list@^1.8.1":
-  version "1.8.1"
-  resolved "https://registry.yarnpkg.com/@types/react-native-settings-list/-/react-native-settings-list-1.8.1.tgz#69878465bf71a94c66dd1837ee763c0340cdf053"
-  integrity sha512-/M8XPcgysUhOj3+WOF38nxgnmCcKy6spY8PYFfUJTBLyCK0PY3UAPiZuNkUN/kMAbqPxmTPvomH2sm/9sg1NZg==
-  dependencies:
-    "@types/react" "*"
-    "@types/react-native" "*"
-
-"@types/react-native-vector-icons@^4.6.4":
-  version "4.6.4"
-  resolved "https://registry.yarnpkg.com/@types/react-native-vector-icons/-/react-native-vector-icons-4.6.4.tgz#83c2d88f0c2615a44b9059eb75c11f92702c1ee2"
-  integrity sha512-G2JD98lrgjggA979WeTXlj6He1sN4Skpd4UJlcVDsD71u1yHf8raT9D7OP4vb3LZWX6ILYkVa4dzLtVkt4wyWA==
-  dependencies:
-    "@types/react" "*"
-    "@types/react-native" "*"
-
-"@types/react-native@*":
-  version "0.57.6"
-  resolved "https://registry.yarnpkg.com/@types/react-native/-/react-native-0.57.6.tgz#b53afeebcb19f7ba353f0937b6778d39c2cf10d0"
-  integrity sha512-yHGVQEMvYzl+eGF+qNvRoqah1x8cIDaaUXzwP60R+G0BiiHYp2kwVzOScoATAvQ1GYgtoHQh2wsafX7buJmFvg==
-  dependencies:
-    "@types/prop-types" "*"
-    "@types/react" "*"
-
 "@types/react-native@^0.57.4":
   version "0.57.4"
   resolved "https://registry.yarnpkg.com/@types/react-native/-/react-native-0.57.4.tgz#20824c0ccc2701d81b91af015f96afae095024e5"
@@ -997,14 +973,6 @@
   dependencies:
     "@types/prop-types" "*"
     "@types/react" "*"
-
-"@types/react-navigation@^2.0.24":
-  version "2.0.24"
-  resolved "https://registry.yarnpkg.com/@types/react-navigation/-/react-navigation-2.0.24.tgz#f7cb197efed1496129283c9fd33f134e8cc27803"
-  integrity sha512-jejv7LjBdlynBN1zyfXlbiO0keyHZGz/m5iTfXNK2R5yR8Gg2nRsIscnG+CRBaR2yQtrrS3OLMJbbH+Q54GLiQ==
-  dependencies:
-    "@types/react" "*"
-    "@types/react-native" "*"
 
 "@types/react-test-renderer@^16.0.3":
   version "16.0.3"

@@ -8,7 +8,7 @@ import { BrowseScreen } from './components/BrowseScreen';
 import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { SpectroScreen } from './components/SpectroScreen';
-import { global } from './utils';
+import { global, match } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Dimensions = Dimensions;
@@ -55,14 +55,13 @@ const Navigator = ReactNav.createBottomTabNavigator(
   {
     navigationOptions: ({navigation}) => ({
       tabBarIcon: ({focused, horizontal, tintColor}) => {
-        // console.log('navigation', navigation);
         const size = horizontal ? 20 : 25;
-        return {
-          Spectro:  (<FontAwesome5 name={'signature'} size={size} color={tintColor} />),
-          Browse:   (<FontAwesome5 name={'list-ul'}   size={size} color={tintColor} />),
-          Search:   (<FontAwesome5 name={'search'}    size={size} color={tintColor} />),
-          Settings: (<FontAwesome  name={'gear'}      size={size} color={tintColor} />),
-        }[navigation.state.key];
+        return match(navigation.state.key,
+          ['Spectro',  (<FontAwesome5 name={'signature'} size={size} color={tintColor || undefined} />)],
+          ['Browse',   (<FontAwesome5 name={'list-ul'}   size={size} color={tintColor || undefined} />)],
+          ['Search',   (<FontAwesome5 name={'search'}    size={size} color={tintColor || undefined} />)],
+          ['Settings', (<FontAwesome  name={'gear'}      size={size} color={tintColor || undefined} />)],
+        );
       },
     }),
     tabBarOptions: {
@@ -76,7 +75,7 @@ const App = () => (
   // https://reactnavigation.org/docs/en/state-persistence.html
   <Navigator
     key="a"
-    persistenceKey={__DEV__ && '_dev_NavigationState'}
+    persistenceKey={__DEV__ ? '_dev_NavigationState' : null}
   />
 );
 
