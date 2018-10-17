@@ -9,6 +9,7 @@ from more_itertools import one
 import numpy as np
 import pandas as pd
 from potoo.pandas import df_require_index_is_trivial
+from potoo.plot import *
 import structlog
 
 from datasets import *
@@ -23,6 +24,8 @@ def df_cache_hybrid(
     desc: str,  # Only for logging
     refresh=False,  # Force cache miss (compute + write)
     feat_cols: Iterable[str] = None,  # Infer if None
+    display_sizes=True,  # Logging
+    plot_sizes=False,  # Logging
     # to_parquet/read_parquet
     engine='fastparquet',  # 'fastparquet' | 'pyarrow'
     compression='uncompressed',  # 'uncompressed' (fast!) | 'gzip' (slow) | 'snappy' (not installed)
@@ -44,13 +47,18 @@ def df_cache_hybrid(
     assert not Path(path).is_absolute(), f"{path}"
     path = ensure_dir(Path(cache_dir) / path)
     manifest_path = path / 'manifest.pkl'
-    non_feats_path = path / 'non_feats.parquet'
     feat_path = lambda k: path / f"feat-{k}.npy"
-    rel = lambda p: str(Path(p).relative_to(cache_dir))
+    bytes_path = lambda k: path / f"bytes-{k}.parquet"
+    lite_path = path / 'lite.parquet'
+
+    # State
+    file_sizes = {}
 
     # Utils
+    rel = lambda p: str(Path(p).relative_to(cache_dir))
     basename = os.path.basename
-    naturalsize_path = lambda p: naturalsize(Path(p).stat().st_size)
+    size_path = lambda p: Path(p).stat().st_size
+    naturalsize_path = lambda p: naturalsize(size_path(p))
 
     # Use manifest.json to track completion of writes
     #   - Mark completion of all file writes (else we can incorrectly conclude cache hit vs. miss)
@@ -70,6 +78,12 @@ def df_cache_hybrid(
         # Measure write time, excluding compute
         with log_time_context(f'Miss: {desc}'):
 
+            # Params (written to manifest here, read from manifest below, to mitigate code/data incompats)
+            bytes_cols = [
+                'audio_bytes',
+                'spectro_bytes',
+            ]
+
             # Infer feat_cols if not provided
             if feat_cols is None:
                 # Inference: all cols with value type np.ndarray
@@ -78,13 +92,24 @@ def df_cache_hybrid(
                 ]
                 log.info('Miss: Inferred feat_cols%s' % feat_cols)
 
-            # Write non_feats.parquet (all cols in one file)
-            log.debug(f'Miss: Writing {basename(rel(non_feats_path))}')
+            # Write lite.parquet (all cols in one file)
+            log.debug(f'Miss: Writing {basename(rel(lite_path))}')
             (df
-                .drop(columns=feat_cols)
-                .to_parquet(non_feats_path, engine=engine, compression=compression, **to_parquet_kwargs)
+                .drop(columns=feat_cols + bytes_cols)
+                .to_parquet(lite_path, engine=engine, compression=compression, **to_parquet_kwargs)
             )
-            log.info(f'Miss: Wrote {basename(rel(non_feats_path))} ({naturalsize_path(non_feats_path)})')
+            log.info(f'Miss: Wrote {basename(rel(lite_path))} ({naturalsize_path(lite_path)})')
+            file_sizes[basename(rel(lite_path))] = size_path(lite_path)
+
+            # Write bytes-*.parquet (single col per file)
+            for k in bytes_cols:
+                log.debug(f'Miss: Writing {basename(rel(bytes_path(k)))}')
+                (df
+                    [[k]]
+                    .to_parquet(bytes_path(k), engine=engine, compression=compression, **to_parquet_kwargs)
+                )
+                log.info(f'Miss: Wrote {basename(rel(bytes_path(k)))} ({naturalsize_path(bytes_path(k))})')
+                file_sizes[basename(rel(bytes_path(k)))] = size_path(bytes_path(k))
 
             # Write feat-*.npy (one col per file)
             for k in feat_cols:
@@ -92,6 +117,7 @@ def df_cache_hybrid(
                 log.debug(f'Miss: Writing {basename(rel(feat_path(k)))}: {x.dtype}')
                 np.save(feat_path(k), x)
                 log.info(f'Miss: Wrote {basename(rel(feat_path(k)))}: {x.dtype} ({naturalsize_path(feat_path(k))})')
+                file_sizes[f'{basename(rel(feat_path(k)))}: {x.dtype}'] = size_path(feat_path(k))
 
             # Write manifest to mark completion of writes
             #   - tmp + atomic rename (else empty manifest.pkl -> stuck with cache hit that fails)
@@ -99,8 +125,9 @@ def df_cache_hybrid(
             tmp_path = Path(manifest_path).with_suffix('.tmp')
             with open(tmp_path, mode='wb') as f:
                 pickle.dump(file=f, obj=dict(
-                    # Record feat_cols so we know which files to read on cache hit
+                    # Record bytes_cols + feat_cols so we know which files to read on cache hit
                     #   - Unsafe to assume it's the same as all feat-*.npy files, since who knows what bugs created those...
+                    bytes_cols=bytes_cols,
                     feat_cols=feat_cols,
                     # Record df.columns so we can restore col order
                     columns=list(df.columns),
@@ -109,9 +136,8 @@ def df_cache_hybrid(
                 ))
             os.rename(tmp_path, manifest_path)
 
-        # Return df
-        #   - Should be the same as the df we will subsequently read on cache hit
-        return df
+        # Output df should be the same as the df we will subsequently read on cache hit
+        #   - TODO Tests (see notebooks/api_dev_search_recs_hybrid)
 
     else:
         # Cache hit
@@ -121,32 +147,48 @@ def df_cache_hybrid(
             # Read manifest
             with open(manifest_path, 'rb') as f:
                 manifest = pickle.load(f)
+            bytes_cols = manifest['bytes_cols']
             feat_cols = manifest['feat_cols']
-            non_feats_size = naturalsize_path(non_feats_path)
-            feat_size = {k: naturalsize_path(feat_path(k)) for k in feat_cols}
 
-            # Read non_feats.parquet
-            log.debug(f'Hit: Reading {basename(rel(non_feats_path))} ({non_feats_size})')
-            non_feats = (
-                pd.read_parquet(non_feats_path, engine=engine, **read_parquet_kwargs,
+            # Read lite.parquet
+            log.debug(f'Hit: Reading {basename(rel(lite_path))} ({naturalsize_path(lite_path)})')
+            lite = (
+                pd.read_parquet(lite_path, engine=engine, **read_parquet_kwargs,
                     index=False,  # Else you get a trivial index with name 'index'
                 )
                 .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
             )
-            log.info(f'Hit: Read {basename(rel(non_feats_path))} ({non_feats_size})')
+            log.info(f'Hit: Read {basename(rel(lite_path))} ({naturalsize_path(lite_path)})')
+            file_sizes[basename(rel(lite_path))] = size_path(lite_path)
+
+            # Read bytes-*.parquet
+            bytess: Mapping[str, pd.DataFrame] = {}
+            for k in bytes_cols:
+                log.debug(f'Hit: Reading {basename(rel(bytes_path(k)))} ({naturalsize_path(bytes_path(k))})')
+                bytess[k] = (
+                    pd.read_parquet(bytes_path(k), engine=engine, **read_parquet_kwargs,
+                        index=False,  # Else you get a trivial index with name 'index'
+                    )
+                    .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
+                )
+                log.info(f'Hit: Read {basename(rel(bytes_path(k)))} ({naturalsize_path(bytes_path(k))})')
+                file_sizes[basename(rel(bytes_path(k)))] = size_path(bytes_path(k))
 
             # Read feat-*.npy
             feats: Mapping[str, np.ndarray] = {}
             for k in feat_cols:
-                log.debug(f'Hit: Reading {basename(rel(feat_path(k)))} ({feat_size[k]})')
-                x = np.load(feat_path(k))
-                log.info(f'Hit: Read {basename(rel(feat_path(k)))}: {x.dtype} ({feat_size[k]})')
-                feats[k] = x
+                log.debug(f'Hit: Reading {basename(rel(feat_path(k)))} ({naturalsize_path(feat_path(k))})')
+                feats[k] = np.load(feat_path(k))
+                log.info(f'Hit: Read {basename(rel(feat_path(k)))}: {feats[k].dtype} ({naturalsize_path(feat_path(k))})')
+                file_sizes[f'{basename(rel(feat_path(k)))}: {feats[k].dtype}'] = size_path(feat_path(k))
 
             # Build df
-            log.info(f'Hit: Join non_feats + feats')
-            df = (
-                non_feats.assign(**{
+            log.info(f'Hit: Join lite + bytes + feats')
+            df = (lite
+                .assign(**{
+                    k: x[k]
+                    for k, x in bytess.items()
+                }, **{
                     k: list(x)  # np.ndarray[m,n] -> List[np.ndarray[n]], else df.assign barfs
                     for k, x in feats.items()
                 })
@@ -155,10 +197,29 @@ def df_cache_hybrid(
                 .astype(manifest['dtypes'])         # Restore categories (and maybe other dtype stuff too)
             )
 
-        # Return df
-        #   - Should be the same as the df we computed and returned on cache miss
+        # Output df should be the same as the df we computed and returned on cache miss
         #   - TODO Tests (see notebooks/api_dev_search_recs_hybrid)
-        return df
+
+    # Debug: display/plot file sizes, if requested
+    file_sizes_df = (
+        pd.DataFrame(dict(file=file, size=size) for file, size in file_sizes.items())
+        .pipe(lambda df: df.append(pd.DataFrame([dict(file='total', size=df['size'].sum())])))
+        .sort_values('size', ascending=False)
+    )
+    if display_sizes:
+        display(file_sizes_df)
+    if plot_sizes:
+        display(file_sizes_df
+            .pipe(df_ordered_cat, 'file', transform=reversed)
+            .pipe(ggplot)
+            + aes(x='file', y='size')
+            + geom_col()
+            + coord_flip()
+            + scale_y_continuous(labels=labels_bytes(), breaks=breaks_bytes(pow=3))
+            + theme_figsize(aspect=1/8)
+        )
+
+    return df
 
 
 # Slow when you have to np_save_to_bytes, use df_cache_hybrid instead

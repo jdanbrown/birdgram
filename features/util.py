@@ -32,6 +32,7 @@ from contextlib import contextmanager, ExitStack
 from typing import *
 
 from attrdict import AttrDict
+from IPython.display import display
 import PIL
 from potoo import debug_print
 from potoo.pandas import df_ensure, df_summary
@@ -417,6 +418,8 @@ Row = pd.Series
 
 
 def df_inspect(df, *xs: any):
+    if not xs:
+        xs = [lambda df: df]
     for x in xs:
         if hasattr(x, '__call__'):
             x = x(df)

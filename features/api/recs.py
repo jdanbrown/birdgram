@@ -595,6 +595,7 @@ def feat_cols(cols: Union[Iterable[str], pd.DataFrame]) -> Iterable[str]:
 def get_search_recs(
     refresh=config.api.recs.search_recs.get('refresh', False),
     cache_type='hybrid',  # None | 'hybrid' | 'parquet' | 'sqlite'
+    **df_cache_kwargs,
 ) -> pd.DataFrame:
     """For sg.search_recs"""
     log.info()
@@ -615,20 +616,21 @@ def get_search_recs(
     compute = _compute_search_recs
     path = f"payloads/search_recs-{key_show}-{key}"
     name = 'search_recs'
+    df_cache_kwargs = dict(compute=compute, path=path, refresh=refresh, **df_cache_kwargs)
 
     # Delegate to parquet/sqlite
     if not cache_type:
         return compute()
     elif cache_type == 'hybrid':
-        return df_cache_hybrid(compute=compute, path=path, refresh=refresh,
+        return df_cache_hybrid(**df_cache_kwargs,
             desc=name,
         )
     elif cache_type == 'parquet':
-        return df_cache_parquet(compute=compute, path=path, refresh=refresh,
+        return df_cache_parquet(**df_cache_kwargs,
             desc=name,
         )
     elif cache_type == 'sqlite':
-        return df_cache_sqlite(compute=compute, path=path, refresh=refresh,
+        return df_cache_sqlite(**df_cache_kwargs,
             table=name,
             # If any of the big array cols are list i/o np.array then you'll see ~10x slowdown in serdes
             #   - [And this shouldn't be specific to sqlite serdes...]
