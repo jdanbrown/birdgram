@@ -65,7 +65,7 @@ export class SpectroRecorder extends React.Component<Props, State> {
   }
 
   componentDidMount = () => {
-    console.log('componentDidMount: this', this);
+    console.log('componentDidMount', this);
 
     // Request mic permissions
     Permissions.request('microphone').then(status => {

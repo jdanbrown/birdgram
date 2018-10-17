@@ -10,7 +10,7 @@ type Props = {};
 
 export class SpectroScreen extends Component<Props> {
 
-  render() {
+  render = () => {
     return (
       <View style={styles.container}>
 

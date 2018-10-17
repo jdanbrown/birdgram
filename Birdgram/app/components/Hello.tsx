@@ -28,7 +28,7 @@ export class Hello extends React.Component<Props, State> {
   onDecrement = () => this.setState({enthusiasmLevel: Math.max(0, this.state.enthusiasmLevel - 1)});
   getExclamationMarks = (numChars: number) => Array(numChars + 1).join('!');
 
-  render() {
+  render = () => {
     return (
       <View style={styles.root}>
         <Text style={styles.greeting}>

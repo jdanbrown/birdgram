@@ -9,7 +9,7 @@ type Props = {};
 
 export class SearchScreen extends Component<Props> {
 
-  render() {
+  render = () => {
     return (
       <View style={styles.container}>
 

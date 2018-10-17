@@ -22,7 +22,7 @@ export class SettingsScreen extends Component<Props, State> {
     };
   }
 
-  render() {
+  render = () => {
     // TODO https://github.com/evetstech/react-native-settings-list#a-more-realistic-example
     return (
       <View style={styles.container}>

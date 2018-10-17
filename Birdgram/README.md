@@ -59,6 +59,21 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
   - https://jestjs.io/docs/en/tutorial-react-native.html
   - https://jestjs.io/docs/en/snapshot-testing
 
+# Assets
+- Problem: managing assets in react-native is a minefield, e.g.
+  - Looks easy enough: https://facebook.github.io/react-native/docs/images#static-non-image-resources
+  - Oops, jk: https://github.com/facebook/react-native/issues/16446
+  - Someone had to build a custom package to make it work: https://github.com/unimonkiez/react-native-asset
+- Solution: use https://github.com/unimonkiez/react-native-asset
+- To add/remove assets:
+  - Add/remove file(s) in `app/assets/`
+  - Run `./node_modules/.bin/react-native-asset`
+  - ios: Rebuild in Xcode
+  - android: TODO Test with Android Studio
+- To use assets:
+  - ios: `${fs.dirs.MainBundleDir}/<asset-file>`
+  - android: TODO Try and see
+
 # Troubleshooting
 - 'config.h' "File not found"
   - I fixed it by cleaning and rebuilding yarn/xcode a number of times
