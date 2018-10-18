@@ -220,7 +220,11 @@ def df_cache_hybrid(
             mobile_dir = ensure_dir(path / f'mobile-version[{config.payloads.mobile.version}]')
             mobile_db_path = mobile_dir / f'{desc}.sqlite3'
             mobile_files_dir = lambda dir: mobile_dir / dir
-            mobile_file_path = lambda dir, species, xc_id, format: mobile_files_dir(dir) / species / f'{xc_id}.{format}'
+            mobile_file_path = lambda dir, species, xc_id, format: (
+                # WARNING react-native-asset ignores dir structure under app/assets/ and drops all files in fs.dirs.MainBundleDir
+                #   - HACK Redundantly stuff all the params into the filename so that this is safe
+                mobile_files_dir(dir) / species / f"{dir.replace('/', '-')}-{species}-{xc_id}.{format}"
+            )
 
             # Create and connect to sqlite file
             with sqla_oneshot_eng_conn_tx(f'sqlite:///{ensure_parent_dir(mobile_db_path)}') as conn:
