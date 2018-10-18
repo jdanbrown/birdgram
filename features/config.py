@@ -70,6 +70,12 @@ config = AttrDict(
         )
     ),
 
+    payloads=dict(
+        mobile=dict(
+            version=0,  # Separate from search_recs version so we aren't forced to recompute search_recs when we iterate on mobile
+        ),
+    ),
+
     api=dict(
         recs=dict(
 

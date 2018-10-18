@@ -14,6 +14,7 @@ from potoo.util import strip_endswith
 import sh
 import structlog
 
+from config import config
 from datasets import *
 from util import *
 
@@ -50,11 +51,12 @@ def df_cache_hybrid(
 
     # Params
     assert not Path(path).is_absolute(), f"{path}"
-    path = ensure_dir(Path(cache_dir) / path)
-    manifest_path = path / 'manifest.pkl'
-    feat_path = lambda k: path / f"feat-{k}.npy"
-    bytes_path = lambda k: path / f"bytes-{k}.parquet"
-    lite_path = path / 'lite.parquet'
+    path = Path(cache_dir) / path
+    api_dir = ensure_dir(path / 'api')  # Separate from e.g. mobile_path
+    manifest_path = api_dir / 'manifest.pkl'
+    feat_path = lambda k: api_dir / f"feat-{k}.npy"
+    bytes_path = lambda k: api_dir / f"bytes-{k}.parquet"
+    lite_path = api_dir / 'lite.parquet'
 
     # State
     file_sizes = {}
@@ -99,33 +101,31 @@ def df_cache_hybrid(
                 log.info('Miss: Inferred feat_cols%s' % feat_cols)
 
             # Write lite.parquet (all cols in one file)
-            log.debug(f'Miss: Writing {rel(lite_path)}')
-            (df
-                .drop(columns=bytes_cols + feat_cols)
-                .to_parquet(lite_path, engine=engine, compression=compression, **to_parquet_kwargs)
-            )
-            log.info(f'Miss: Wrote {rel(lite_path)} ({naturalsize_path(lite_path)})')
-            file_sizes[rel(lite_path)] = size_path(lite_path)
+            with log_time_context(f'Miss: Write {rel(lite_path)}', lambda: naturalsize_path(lite_path)):
+                (df
+                    .drop(columns=bytes_cols + feat_cols)
+                    .to_parquet(lite_path, engine=engine, compression=compression, **to_parquet_kwargs)
+                )
+                file_sizes[rel(lite_path)] = size_path(lite_path)
 
             # Write bytes-*.parquet (single col per file)
             for k in bytes_cols:
-                log.debug(f'Miss: Writing {rel(bytes_path(k))}')
-                (df
-                    [[k]]
-                    .to_parquet(bytes_path(k), engine=engine, compression=compression, **to_parquet_kwargs)
-                )
-                log.info(f'Miss: Wrote {rel(bytes_path(k))} ({naturalsize_path(bytes_path(k))})')
-                file_sizes[rel(bytes_path(k))] = size_path(bytes_path(k))
+                with log_time_context(f'Miss: Write {rel(bytes_path(k))}', lambda: naturalsize_path(bytes_path(k))):
+                    (df
+                        [[k]]
+                        .to_parquet(bytes_path(k), engine=engine, compression=compression, **to_parquet_kwargs)
+                    )
+                    file_sizes[rel(bytes_path(k))] = size_path(bytes_path(k))
 
             # Write feat-*.npy (one col per file)
             for k in feat_cols:
                 x = np.array(list(df[k]))
-                log.debug(f'Miss: Writing {rel(feat_path(k))}: {x.dtype}')
-                np.save(feat_path(k), x)
-                log.info(f'Miss: Wrote {rel(feat_path(k))}: {x.dtype} ({naturalsize_path(feat_path(k))})')
-                file_sizes[f'{rel(feat_path(k))}: {x.dtype}'] = size_path(feat_path(k))
+                with log_time_context(f'Miss: Write {rel(feat_path(k))}: {x.dtype}', lambda: naturalsize_path(feat_path(k))):
+                    np.save(feat_path(k), x)
+                    file_sizes[f'{rel(feat_path(k))}: {x.dtype}'] = size_path(feat_path(k))
 
             # Write manifest to mark completion of writes
+            #   - .pkl instead of .json so we can serdes df.dtypes without having to be clever
             #   - tmp + atomic rename (else empty manifest.pkl -> stuck with cache hit that fails)
             #   - Make tmp_path in target dir instead of /tmp else os.rename will fail if dirs are on separate mounts
             tmp_path = Path(manifest_path).with_suffix('.tmp')
@@ -157,36 +157,33 @@ def df_cache_hybrid(
             feat_cols = manifest['feat_cols']
 
             # Read lite.parquet
-            log.debug(f'Hit: Reading {rel(lite_path)} ({naturalsize_path(lite_path)})')
-            lite = (
-                pd.read_parquet(lite_path, engine=engine, **read_parquet_kwargs,
-                    index=False,  # Else you get a trivial index with name 'index'
-                )
-                .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
-            )
-            log.info(f'Hit: Read {rel(lite_path)} ({naturalsize_path(lite_path)})')
-            file_sizes[rel(lite_path)] = size_path(lite_path)
-
-            # Read bytes-*.parquet
-            bytess: Mapping[str, pd.DataFrame] = {}
-            for k in bytes_cols:
-                log.debug(f'Hit: Reading {rel(bytes_path(k))} ({naturalsize_path(bytes_path(k))})')
-                bytess[k] = (
-                    pd.read_parquet(bytes_path(k), engine=engine, **read_parquet_kwargs,
+            with log_time_context(f'Hit: Read {rel(lite_path)} ({naturalsize_path(lite_path)})'):
+                lite = (
+                    pd.read_parquet(lite_path, engine=engine, **read_parquet_kwargs,
                         index=False,  # Else you get a trivial index with name 'index'
                     )
                     .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
                 )
-                log.info(f'Hit: Read {rel(bytes_path(k))} ({naturalsize_path(bytes_path(k))})')
-                file_sizes[rel(bytes_path(k))] = size_path(bytes_path(k))
+                file_sizes[rel(lite_path)] = size_path(lite_path)
+
+            # Read bytes-*.parquet
+            bytess: Mapping[str, pd.DataFrame] = {}
+            for k in bytes_cols:
+                with log_time_context(f'Hit: Read {rel(bytes_path(k))} ({naturalsize_path(bytes_path(k))})'):
+                    bytess[k] = (
+                        pd.read_parquet(bytes_path(k), engine=engine, **read_parquet_kwargs,
+                            index=False,  # Else you get a trivial index with name 'index'
+                        )
+                        .pipe(df_require_index_is_trivial)  # (Guaranteed by cache-miss logic)
+                    )
+                    file_sizes[rel(bytes_path(k))] = size_path(bytes_path(k))
 
             # Read feat-*.npy
             feats: Mapping[str, np.ndarray] = {}
             for k in feat_cols:
-                log.debug(f'Hit: Reading {rel(feat_path(k))} ({naturalsize_path(feat_path(k))})')
-                feats[k] = np.load(feat_path(k))
-                log.info(f'Hit: Read {rel(feat_path(k))}: {feats[k].dtype} ({naturalsize_path(feat_path(k))})')
-                file_sizes[f'{rel(feat_path(k))}: {feats[k].dtype}'] = size_path(feat_path(k))
+                with log_time_context(f'Hit: Read {rel(feat_path(k))} ({naturalsize_path(feat_path(k))})', lambda: feats[k].dtype):
+                    feats[k] = np.load(feat_path(k))
+                    file_sizes[f'{rel(feat_path(k))}: {feats[k].dtype}'] = size_path(feat_path(k))
 
             # Build df
             log.info(f'Hit: Join lite + bytes + feats')
@@ -208,7 +205,7 @@ def df_cache_hybrid(
 
     # HACK Write mobile payload, if requested [TODO Factor this out into a separate function]
     if write_mobile_payload:
-        with log_time_context('Mobile: Writing payload'):
+        with log_time_context('Mobile: Write payload'):
 
             # Utils
             def write_file(path, mode, data):
@@ -220,27 +217,14 @@ def df_cache_hybrid(
                 # 'feat',  # Omit, since it's big and empirically not very useful
                 'f_preds',
             ]
-            mobile_path = path / 'mobile'
-            mobile_db_path = mobile_path / f'{desc}.sqlite3'
-            mobile_file_path = lambda species, xc_id, name, format: (
-                mobile_path / f'files/{species}/{xc_id}-{name}.{format}'
-            )
+            mobile_dir = ensure_dir(path / f'mobile-version[{config.payloads.mobile.version}]')
+            mobile_db_path = mobile_dir / f'{desc}.sqlite3'
+            mobile_files_dir = lambda dir: mobile_dir / dir
+            mobile_file_path = lambda dir, species, xc_id, format: mobile_files_dir(dir) / species / f'{xc_id}.{format}'
 
             # Create and connect to sqlite file
             with sqla_oneshot_eng_conn_tx(f'sqlite:///{ensure_parent_dir(mobile_db_path)}') as conn:
                 mobile_df = df
-
-                # Materialize mobile_feat_cols
-                #   - e.g. .f_preds -> .f_preds_0, .f_preds_1, ...
-                for k in mobile_feat_cols:
-                    n = one(df[k].map(len).drop_duplicates())
-                    with log_time_context(f'Mobile: Materialize feat col: {k}'):
-                        mobile_df = (mobile_df
-                            .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-                                f'{k}_{i}': df[k].map(lambda x: x[i])
-                                for i in range(n)
-                            }))
-                        )
 
                 # Write bytes_cols to files (one file per cell)
                 for bytes_col in bytes_cols:
@@ -248,9 +232,9 @@ def df_cache_hybrid(
                     mobile_files_df = (mobile_df
                         .assign(mobile_file_path=lambda df: [
                             mobile_file_path(
+                                dir=bytes_name,
                                 species=row.species,
                                 xc_id=row.xc_id,
-                                name=bytes_name,
                                 format=mimetype_to_format(row[f'{bytes_col}_mimetype']),
                             )
                             for row in df_rows(df)
@@ -271,10 +255,21 @@ def df_cache_hybrid(
                             write_file(row.mobile_file_path, 'wb', row[bytes_col])
                         ),
                     )
-                    # HACK Approx du for all the files we just wrote (without O(n) stat of each file)
-                    mobile_file_sizes[rel(mobile_file_path(species='*', xc_id='*', name=bytes_name, format='*'))] = (
-                        df[bytes_col].map(len).sum()
-                    )
+                    # Shell out to du to measure the fs size of all the files we just wrote (bigger than sum(len(bytes)))
+                    dir_size = or_else(-1, lambda: 1024 * int(sh.du('-sk', mobile_files_dir(bytes_name)).split()[0]))
+                    mobile_file_sizes[rel(mobile_files_dir(bytes_name)) + '/'] = dir_size
+
+                # Expand mobile_feat_cols
+                #   - e.g. .f_preds -> .f_preds_0, .f_preds_1, ...
+                for k in mobile_feat_cols:
+                    n = one(df[k].map(len).drop_duplicates())
+                    with log_time_context(f'Mobile: Expand feat col: {k} ({n})'):
+                        mobile_df = (mobile_df
+                            .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
+                                f'{k}_{i}': df[k].map(lambda x: x[i])
+                                for i in range(n)
+                            }))
+                        )
 
                 # Drop non-sqlite cols
                 mobile_df = mobile_df.drop(columns=[
@@ -299,7 +294,7 @@ def df_cache_hybrid(
                     if fg
                 }
                 mobile_df = mobile_df.assign(**{
-                    k: map_progress(use='log_time_all', desc=f'Mobile: Covert col for sql: {to_sql.__name__}({k})',
+                    k: map_progress(use='log_time_all', desc=f'Mobile: Covert non-sql col: {to_sql.__name__}({k})',
                         xs=mobile_df[k],
                         f=to_sql,
                     )
@@ -308,39 +303,59 @@ def df_cache_hybrid(
                 # Write to sql
                 #   - Fail if nontrivial indexes, since they're error-prone to manage and we don't really benefit from them here
                 df_require_index_is_trivial(mobile_df)
-                log.debug(f'Mobile: Writing {rel(mobile_db_path)}')
-                mobile_df.to_sql(table, conn,
-                    index=False,  # Silently drop indexes (we shouldn't have any)
-                    if_exists='replace',
-                    **{**to_sql_kwargs,
-                        'chunksize': 1000,  # Safe default for big writes (pd default writes all rows at once -- mem unsafe)
-                    },
-                )
-                log.info(f'Mobile: Wrote {rel(mobile_db_path)} ({naturalsize_path(mobile_db_path)})')
-                mobile_file_sizes[rel(mobile_db_path)] = size_path(mobile_db_path)
+                with log_time_context(f'Mobile: Write {rel(mobile_db_path)}', lambda: naturalsize_path(mobile_db_path)):
+                    mobile_df.to_sql(table, conn,
+                        index=False,  # Silently drop df index (we shouldn't have any)
+                        if_exists='replace',
+                        **{**to_sql_kwargs,
+                            'chunksize': 1000,  # Safe default for big writes (pd default writes all rows at once -- mem unsafe)
+                        },
+                    )
+                    mobile_file_sizes[rel(mobile_db_path)] = size_path(mobile_db_path)
 
     # Debug: display/plot file sizes, if requested
-    for file_sizes in [
-        file_sizes,
-        *[mobile_file_sizes if write_mobile_payload else []],
-    ]:
-        file_sizes_df = (
-            pd.DataFrame(dict(file=file, size=size) for file, size in file_sizes.items())
-            .pipe(lambda df: df.append(pd.DataFrame([dict(file='total', size=df['size'].sum())])))
-            .sort_values('size', ascending=False)
+    file_sizes_df = (
+        pd.DataFrame(
+            dict(dir=str(file).split('/')[0], file=str(file), size=size)
+            for file_sizes in [
+                file_sizes,
+                *([mobile_file_sizes] if write_mobile_payload else []),
+            ]
+            for file, size in file_sizes.items()
         )
-        if display_sizes:
-            display(file_sizes_df)
-        if plot_sizes:
-            display(file_sizes_df
-                .pipe(df_ordered_cat, 'file', transform=reversed)
-                .pipe(ggplot)
-                + aes(x='file', y='size')
-                + geom_col()
-                + coord_flip()
-                + scale_y_continuous(labels=labels_bytes(), breaks=breaks_bytes(pow=3))
-                + theme_figsize(aspect=1/8)
-            )
+        .groupby('dir').apply(lambda g: (g
+            .append(pd.DataFrame([dict(dir=g.name, file='TOTAL', size=g['size'].sum())]))
+            .assign(frac=lambda df: df['size'] / one(df[df.file == 'TOTAL']['size']))
+        )).reset_index(drop=True)
+        .sort_values(['dir', 'size'], ascending=[True, False])
+        .pipe(df_ordered_cat, 'dir')
+        .pipe(df_ordered_cat, 'file')
+    )
+    if display_sizes:
+        display(file_sizes_df)
+    if plot_sizes:
+        display(file_sizes_df
+            .pipe(df_reverse_cat, 'file')
+            .pipe(ggplot)
+            + facet_wrap('dir', ncol=1, scales='free_y')
+            + aes(x='file', y='size', fill='file')
+            + geom_col()
+            + coord_flip()
+            + scale_fill_cmap_d('tab10')
+            + scale_y_continuous(labels=labels_bytes(), breaks=breaks_bytes(pow=3))
+            + theme_figsize(aspect=1/6)
+        )
+        display(file_sizes_df
+            [lambda df: df.file != 'TOTAL']
+            .pipe(df_reverse_cat, 'file', 'dir')
+            .pipe(ggplot)
+            + aes(x='dir', y='size', fill='file')
+            + geom_col()
+            + coord_flip()
+            + scale_fill_cmap_d('tab10')
+            + scale_y_continuous(labels=labels_bytes(), breaks=breaks_bytes(pow=3))
+            + theme_figsize(aspect=1/6)
+        )
 
     return df
 

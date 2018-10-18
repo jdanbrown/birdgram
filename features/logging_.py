@@ -198,6 +198,7 @@ def color(color: str, x: any, bold=True) -> str:
 
 from contextlib import contextmanager
 from functools import wraps
+from typing import *
 
 from potoo.util import timer_start
 
@@ -213,14 +214,18 @@ def log_time(f: Callable[['...'], 'X'], *args, desc=None, log=None, **kwargs) ->
 
 
 @contextmanager
-def log_time_context(desc=None, log=None):
+def log_time_context(desc=None, report: Callable[[], any] = None, log=None):
     log = log or get_log_as_caller()
     timer = timer_start()
-    log.debug('%s[start]' % (f'{desc} ' if desc else ''))
+    log.debug('%s...' % (f'{desc} ' if desc else ''))
     try:
         yield
     finally:
-        log.info('%s[%.3fs]' % (f'{desc} ' if desc else '', timer.time()))
+        report = [
+            *([str(report())] if report else []),
+            '%.3fs' % timer.time(),
+        ]
+        log.info('%s[%s]' % (f'{desc} ' if desc else '', ', '.join(report)))
 
 
 def get_log_as_caller():
