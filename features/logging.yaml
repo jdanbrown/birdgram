@@ -33,6 +33,7 @@ loggers:
   # deps
   PIL:                    {level: INFO} # Noisy at debug
   boto:                   {level: WARN} # Noisy at info
+  sh:                     {level: WARN} # Noisy at info
   urllib3.connectionpool: {level: INFO} # Conn logging at debug -- and you have to set debug, even with root:debug [why?]
 
   # gunicorn does something weird with its logging such that we _have_ to specify [qualname, handlers, propagate]:

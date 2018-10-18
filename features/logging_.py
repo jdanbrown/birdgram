@@ -19,7 +19,6 @@ from config import config
 from json_ import json_dumps_safe, json_sanitize
 
 log = structlog.get_logger(__name__)
-log_as_caller = structlog.get_logger('[caller]')
 
 logging_yaml_path = Path(__file__).parent / 'logging.yaml'
 
@@ -111,39 +110,12 @@ class BuboFilter(logging.Filter):
             datefmt: '%Y-%m-%dT%H:%M:%S'
         """
 
-        # HACK Find the caller's pathname/lineno/funcName (mimic logging.Logger.{_log,findCaller,makeRecord})
-        #   - The builtin logging library supports `funcName` in LogRecord format strings, but it stops working when you
-        #     use structlog _and_ set a log level via logging config (e.g. fileConfig('logging.yaml')), because in that
-        #     case funcName always reports `_proxy_to_logger` (from structlog.stdlib) instead of the actual caller
-        #   - Here we redo the effort and explicitly filter out any callers under the 'logging' and 'structlog' modules
-        #   - (Fingers crossed that this doesn't introduce _other_ bugs...)
-        for i, caller in enumerate(inspect.stack(context=0)):
-            # Skip our own frame
-            if i == 0:
-                continue
-            # Skip frames from logging modules
-            module = inspect.getmodule(caller.frame)
-            if module is not None and module.__name__.split('.')[0] in [
-                'logging',
-                'structlog',
-                # HACK HACK So that log_time* find the real caller's frame
-                'logging_',    # bubo.logging_, for log_time* (which are defined in this module)
-                'contextlib',  # For log_time_context
-                'pandas',      # For `.pipe(log_time_df, ...)`
-                'progress',    # For _map_progress_log_time_all
-            ]:
-                continue
-            break
-
+        # Get caller
+        (caller, module) = get_caller()  # (See detailed comments in get_caller)
         record.pathname = caller.frame.f_code.co_filename
         record.lineno = caller.frame.f_lineno
         record.funcName = caller.frame.f_code.co_name
         record.stack_info = None  # TODO Capture this (mimic logging.Logger.findCaller) [high complexity, low prio]
-
-        # Map get_logger('[caller']) .name to caller's module name
-        #   - TODO Is this a good idea? e.g. does controlling log levels get out of hand?
-        if record.name == '[caller]':
-            record.name = module.__name__ if module else '?'  # Guard against module=None
 
         # msg, args
         #   - HACK `msg % args` is done downstream by Formatter, but we do it in advance to compute name_funcName_message
@@ -188,6 +160,30 @@ class BuboFilter(logging.Filter):
         return True
 
 
+def get_caller():
+    # HACK Find the caller's frame (mimic logging.Logger.{_log,findCaller,makeRecord})
+    #   - The builtin logging library supports `funcName` in LogRecord format strings, but it stops working when you
+    #     use structlog _and_ set a log level via logging config (e.g. fileConfig('logging.yaml')), because in that
+    #     case funcName always reports `_proxy_to_logger` (from structlog.stdlib) instead of the actual caller
+    #   - Here we redo the effort and explicitly filter out any callers under the 'logging' and 'structlog' modules
+    #   - (Fingers crossed that this doesn't introduce _other_ bugs...)
+    for i, caller in enumerate(inspect.stack(context=0)):
+        # Skip frames from logging modules (including our own frame)
+        module = inspect.getmodule(caller.frame)
+        if module is not None and module.__name__.split('.')[0] in [
+            'logging',
+            'structlog',
+            # HACK HACK So that log_time* find the real caller's frame
+            'logging_',    # bubo.logging_, for log_time* (which are defined in this module)
+            'contextlib',  # For log_time_context
+            'pandas',      # For `.pipe(log_time_df, ...)`
+            'progress',    # For _map_progress_log_time_all
+        ]:
+            continue
+        break
+    return (caller, module)
+
+
 def color(color: str, x: any, bold=True) -> str:
     s = str(x)
     if sys.stdout.isatty() and color is not None:
@@ -218,13 +214,18 @@ def log_time(f: Callable[['...'], 'X'], *args, desc=None, log=None, **kwargs) ->
 
 @contextmanager
 def log_time_context(desc=None, log=None):
-    log = log or log_as_caller
+    log = log or get_log_as_caller()
     timer = timer_start()
     log.debug('%s[start]' % (f'{desc} ' if desc else ''))
     try:
         yield
     finally:
         log.info('%s[%.3fs]' % (f'{desc} ' if desc else '', timer.time()))
+
+
+def get_log_as_caller():
+    (_caller, module) = get_caller()
+    return structlog.get_logger(module.__name__ if module else '[none]')
 
 
 # TODO How to make this report the call site's lineno (and funcName and module/logger name)?
