@@ -2,8 +2,8 @@
   "migIndex": 1,
   "data": [
     {
-      "path": "app/assets/foo.db",
-      "sha1": "3199d09d330289f2b43d310ff5dc714e61fe592c"
+      "path": "app/assets/auto/test-auto-assets",
+      "sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709"
     }
   ]
 }

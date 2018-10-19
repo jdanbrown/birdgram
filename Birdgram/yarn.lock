@@ -6242,6 +6242,14 @@ react-native-crypto@^2.0.1:
     pbkdf2 "3.0.8"
     public-encrypt "^4.0.0"
 
+react-native-debug-stylesheet@^0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/react-native-debug-stylesheet/-/react-native-debug-stylesheet-0.1.1.tgz#1473f759f45ee6a622a30464c3106bbda4c9673e"
+  integrity sha1-FHP3WfRe5qYiowRkwxBrvaTJZz4=
+  dependencies:
+    merge "^1.2.0"
+    object-assign "^4.0.1"
+
 react-native-debugger-open@^0.3.17:
   version "0.3.17"
   resolved "https://registry.yarnpkg.com/react-native-debugger-open/-/react-native-debugger-open-0.3.17.tgz#85b1b0dd76b0025d6f7c16a7c161b9d30a9bae93"

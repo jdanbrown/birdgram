@@ -60,19 +60,37 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
   - https://jestjs.io/docs/en/snapshot-testing
 
 # Assets
-- Problem: managing assets in react-native is a minefield, e.g.
+- Problem 1: managing assets in react-native is a minefield, e.g.
   - Looks easy enough: https://facebook.github.io/react-native/docs/images#static-non-image-resources
   - Oops, jk: https://github.com/facebook/react-native/issues/16446
   - Someone had to build a custom package to make it work: https://github.com/unimonkiez/react-native-asset
-- Solution: use https://github.com/unimonkiez/react-native-asset
-- To add/remove assets:
-  - Add/remove file(s) in `app/assets/`
-  - Run `./node_modules/.bin/react-native-asset`
-  - ios: Rebuild in Xcode
-  - android: TODO Test with Android Studio
-- To use assets:
+  - Solution: use https://github.com/unimonkiez/react-native-asset
+- Problem 2: react-native-asset chokes on large assets
+  - Solution: add large assets manually
+- To add/remove assets
+  - `app/assets/manual/`: for large/many asset files (e.g. search_recs/, react-native-asset took >30m for 35k recs)
+    - Xcode
+      - Select project -> Resources -> Add Files to...
+        - Uncheck: Destination -> Copy items if needed (unless you want the assets copied into the project dir)
+        - Select: Added folders -> Create folder references [but I don't actually know what "Create groups" does...]
+      - Caveats:
+        - If you select a dir containing symlinks, the build will fail (with no helpful error msg)
+        - If you select a symlink it will be deref'ed, which means:
+          - Its name won't be what you expect
+          - If you change the symlink later you'll have to manuall remove and re-add
+    - Android Studio
+      - TODO [Fingers crossed that this is feasible with large search_recs...]
+  - `app/assets/auto/`: only for small/few asset files where you don't want to mess with the manual steps
+    - Add/remove file(s) in `app/assets/auto/`
+    - Run `./node_modules/.bin/react-native-asset`
+    - Xcode
+      - Rebuild
+    - Android Studio
+      - TODO Try and see
+- To use assets
   - ios: `${fs.dirs.MainBundleDir}/<asset-file>`
-  - android: TODO Try and see
+  - android: ...
+    - TODO Try and see
 
 # Troubleshooting
 - 'config.h' "File not found"
@@ -85,6 +103,9 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
 - Can't import modules `fs`, `net`, or `dgram`
   - Finish installing them via node-libs-react-native (skipped because they have native code)
   - https://github.com/parshap/node-libs-react-native#other-react-native-modules
+- App hangs, even after force quit
+  - Maybe hit a debug breakpoint in Xcode
+  - Xcode -> cmd-. to stop debugging
 - App takes forever (~20s) to open (in dev mode)
   - It might be trying and failing to connect to rndebugger
   - Try first opening React Native Debugger and then restarting/reloading the app

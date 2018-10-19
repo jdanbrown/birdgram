@@ -7,7 +7,7 @@
   },
   "rnpm": {
     "assets": [
-      "./app/assets"
+      "./app/assets/auto"
     ]
   },
   "dependencies": {
@@ -33,6 +33,7 @@
     "node-libs-react-native": "^1.0.3",
     "react": "16.5.0",
     "react-native": "0.57.2",
+    "react-native-debug-stylesheet": "^0.1.1",
     "react-native-fast-image": "^5.0.10",
     "react-native-keep-awake": "^3.1.0",
     "react-native-microphone-stream": "git://github.com/chadsmith/react-native-microphone-stream.git#4cca1e7",
