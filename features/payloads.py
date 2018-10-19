@@ -220,12 +220,12 @@ def df_cache_hybrid(
             # NOTE Add a stable 'search_recs/' dir at the end of mobile_dir because xcode resolves dirnames through symlinks
             mobile_dir = ensure_dir(path / f'mobile-version[{config.payloads.mobile.version}]' / 'search_recs')
             mobile_db_path = mobile_dir / f'{desc}.sqlite3'
-            mobile_files_dir = lambda dir: mobile_dir / dir
-            mobile_file_path = lambda dir, species, xc_id, format: (
+            mobile_files_dir = lambda kind: mobile_dir / kind
+            mobile_file_path = lambda kind, species, xc_id, format: (
                 # WARNING react-native-asset ignores dir structure under app/assets/ and drops all files in fs.dirs.MainBundleDir
                 #   - Solution 1: Redundantly stuff all the params into the filename so that this is safe
                 #   - Solution 2: Stop using react-native-asset for search_recs/, since it's _way_ slower than manual xcode assets
-                mobile_files_dir(dir) / species / f"{dir.replace('/', '-')}-{species}-{xc_id}.{format}"
+                mobile_files_dir(kind) / species / f"{kind}-{species}-{xc_id}.{format}"
             )
 
             # Create and connect to sqlite file
@@ -238,7 +238,7 @@ def df_cache_hybrid(
                     mobile_files_df = (mobile_df
                         .assign(mobile_file_path=lambda df: [
                             mobile_file_path(
-                                dir=bytes_name,
+                                kind=bytes_name,
                                 species=row.species,
                                 xc_id=row.xc_id,
                                 format=mimetype_to_format(row[f'{bytes_col}_mimetype']),

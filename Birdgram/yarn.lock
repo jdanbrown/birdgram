@@ -6326,6 +6326,11 @@ react-native-settings-list@^1.8.0:
     create-react-class "^15.6.2"
     prop-types "^15.5.10"
 
+react-native-sound@^0.10.9:
+  version "0.10.9"
+  resolved "https://registry.yarnpkg.com/react-native-sound/-/react-native-sound-0.10.9.tgz#6b00b0f4afd017cde09fbb9d171df1b5d5b851a8"
+  integrity sha1-awCw9K/QF83gn7udFx3xtdW4Uag=
+
 react-native-sqlite-storage@^3.3.7:
   version "3.3.7"
   resolved "https://registry.yarnpkg.com/react-native-sqlite-storage/-/react-native-sqlite-storage-3.3.7.tgz#d1156b6a2f77b2c86a87efd0bcf58be9101704ed"
@@ -7179,6 +7184,11 @@ sprintf-js@~1.0.2:
   version "1.0.3"
   resolved "https://registry.yarnpkg.com/sprintf-js/-/sprintf-js-1.0.3.tgz#04e6926f662895354f3dd015203633b857297e2c"
   integrity sha1-BOaSb2YolTVPPdAVIDYzuFcpfiw=
+
+sqlstring-sqlite@^0.1.1:
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/sqlstring-sqlite/-/sqlstring-sqlite-0.1.1.tgz#c8c61810663f2e59a6b0d737b70a8752bda3a078"
+  integrity sha1-yMYYEGY/LlmmsNc3twqHUr2joHg=
 
 sshpk@^1.7.0:
   version "1.14.2"

@@ -70,6 +70,7 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
 - To add/remove assets
   - `app/assets/manual/`: for large/many asset files (e.g. search_recs/, react-native-asset took >30m for 35k recs)
     - Xcode
+      - https://help.apple.com/xcode/mac/current/#/dev81ce1d383
       - Select project -> Resources -> Add Files to...
         - Uncheck: Destination -> Copy items if needed (unless you want the assets copied into the project dir)
         - Select: Added folders -> Create folder references [but I don't actually know what "Create groups" does...]
@@ -80,6 +81,7 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
           - If you change the symlink later you'll have to manuall remove and re-add
     - Android Studio
       - TODO [Fingers crossed that this is feasible with large search_recs...]
+      - [Maybe a lead? https://github.com/zmxv/react-native-sound#basic-usage]
   - `app/assets/auto/`: only for small/few asset files where you don't want to mess with the manual steps
     - Add/remove file(s) in `app/assets/auto/`
     - Run `./node_modules/.bin/react-native-asset`

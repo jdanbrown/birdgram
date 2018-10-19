@@ -8,12 +8,13 @@ import { BrowseScreen } from './components/BrowseScreen';
 import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { SpectroScreen } from './components/SpectroScreen';
+import { log } from './log';
 import { global, match } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Dimensions = Dimensions;
 global.Platform = Platform;
-const timed = (desc: string, f: () => void) => { console.time(desc); f(); console.timeEnd(desc); };
+const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
 global.sj = {};
 global.d3 = {};
 timed('AudioUtils',         () => global.AudioUtils      = require('../third-party/magenta/music/transcription/audio_utils'));
@@ -27,9 +28,10 @@ timed('nj',                 () => global.nj              = require('../third-par
 timed('sj.ops',             () => global.sj.ops          = require('ndarray-ops'));           // 50ms
 timed('React',              () => global.R               = require('React'));                 // 0ms
 timed('ReactNative',        () => global.RN              = require('ReactNative'));           // 13ms
-timed('SQLite',             () => global.SQLite          = require('react-native-sqlite-storage')); // ?
+timed('SQLite',             () => global.SQLite          = require('react-native-sqlite-storage')); // 0ms
 timed('rn-fetch-blob',      () => global.RNFB            = require('rn-fetch-blob').default); // 0ms
 global.fs = global.RNFB.fs;
+timed('react-native-sound', () => global.Sound           = require('react-native-sound'));    // 1ms
 timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));                 // 0ms
 // timed('sj.getPixels',    () => global.sj.getPixels    = require('get-pixels'));            // 10ms // XXX Doesn't work in RN
 // timed('sj.savePixels',   () => global.sj.savePixels   = require('save-pixels'));           // 30ms // XXX Doesn't work in RN

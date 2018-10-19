@@ -16,10 +16,11 @@ const {fs, base64} = RNFB;
 
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
+import { log } from '../log';
 import { chance, global, match } from '../utils';
 
 // Util: wrap `new Jimp` in a promise
-const JimpAsync = (...args: any[]): Promise<Jimp> => new Promise((resolve, reject) => {
+const JimpAsync = (...args: Array<any>): Promise<Jimp> => new Promise((resolve, reject) => {
   new Jimp(...args, (err: Error | null, img: Jimp) => err ? reject(err) : resolve(img));
 });
 
@@ -36,8 +37,8 @@ export interface Props {
 
 interface State {
   recordingState: RecordingState,
-  audioSampleChunks: number[][],
-  spectroChunksImageProps: {source: {uri: string}, style?: object}[],
+  audioSampleChunks: Array<Array<number>>,
+  spectroChunksImageProps: Array<{source: {uri: string}, style?: object}>,
 }
 
 // https://github.com/chadsmith/react-native-microphone-stream
@@ -52,6 +53,7 @@ export class SpectroRecorder extends React.Component<Props, State> {
 
   constructor(props: Props) {
     super(props);
+
     this.state = {
       recordingState: RecordingState.Stopped,
       audioSampleChunks: [],
@@ -61,17 +63,19 @@ export class SpectroRecorder extends React.Component<Props, State> {
     this.styles = {
       spectro: {height: this.props.spectroHeight},
     },
-    global.SpectroRecorder = this; // XXX dev
+
+    global.SpectroRecorder = this; // XXX Debug
+
   }
 
   componentDidMount = () => {
-    console.log('componentDidMount', this);
+    log.debug('componentDidMount', this);
 
     // Request mic permissions
     Permissions.request('microphone').then(status => {
       // NOTE Buggy on ios simulator [https://github.com/yonahforst/react-native-permissions/issues/58]
       //  - Recording works, but permissions always return 'undetermined'
-      console.log('Permissions.request: microphone', status);
+      log.debug('Permissions.request: microphone', status);
     });
 
     // Register callbacks
@@ -86,7 +90,7 @@ export class SpectroRecorder extends React.Component<Props, State> {
 
   startRecording = async () => {
     if (this.state.recordingState === RecordingState.Stopped) {
-      console.log('startRecording');
+      log.debug('startRecording');
 
       // Update recordingState + reset audio chunks
       this.setState({
@@ -118,10 +122,10 @@ export class SpectroRecorder extends React.Component<Props, State> {
     }
   }
 
-  onRecordedChunk = async (samples: number[]) => {
+  onRecordedChunk = async (samples: Array<number>) => {
     // MicStream.stop is unobservably async, so ignore any audio capture after we think we've stopped
     if (this.state.recordingState === RecordingState.Recording) {
-      // console.log('onRecordedChunk: samples', samples.length,
+      // log.debug('onRecordedChunk: samples', samples.length,
       //   // samples, // Noisy
       // );
 
@@ -141,7 +145,7 @@ export class SpectroRecorder extends React.Component<Props, State> {
 
   stopRecording = async () => {
     if (this.state.recordingState === RecordingState.Recording) {
-      console.log('stopRecording');
+      log.debug('stopRecording');
 
       // Update recordingState
       this.setState({
@@ -154,7 +158,7 @@ export class SpectroRecorder extends React.Component<Props, State> {
     }
   }
 
-  renderChunk = async (chunk: number[]): Promise<void> => {
+  renderChunk = async (chunk: Array<number>): Promise<void> => {
 
     // TODO Include previous chunk(s) in stft
     //  - Defer until melSpectrogram, so we can couple to the right mel params
@@ -178,13 +182,13 @@ export class SpectroRecorder extends React.Component<Props, State> {
 
     // Normalize values to [0,1]
     //  - QUESTION max or max-min?
-    // console.log('S.min, S.max', S.min(), S.max());
+    // log.debug('S.min, S.max', S.min(), S.max());
     S = S.subtract(S.min());
     S = S.divide(S.max());
-    // console.log('S.min, S.max', S.min(), S.max());
+    // log.debug('S.min, S.max', S.min(), S.max());
 
-    // console.log('nfft', nfft);
-    // console.log('spectro.shape', S.shape);
+    // log.debug('nfft', nfft);
+    // log.debug('spectro.shape', S.shape);
 
     // Compute imageRGBA from S
     const [w_S, h_S] = S.shape;
@@ -264,7 +268,7 @@ export class SpectroRecorder extends React.Component<Props, State> {
         <View style={styles.diagnostics}>
           <Text>state.recordingState: {this.state.recordingState}</Text>
           <Text>state.audioSampleChunks: {this.state.audioSampleChunks.length}</Text>
-          <Text>state.audioSampleChunks.sum: {_.sum(this.state.audioSampleChunks.map((x: number[]) => x.length))}</Text>
+          <Text>state.audioSampleChunks.sum: {_.sum(this.state.audioSampleChunks.map((x: Array<number>) => x.length))}</Text>
           <Text>state.spectroChunksImageProps: {this.state.spectroChunksImageProps.length}</Text>
         </View>
 
