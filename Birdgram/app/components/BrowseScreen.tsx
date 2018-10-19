@@ -52,7 +52,8 @@ const Rec = {
 
 type State = {
   totalRecs?: number,
-  query: string,
+  queryText: string,
+  query?: string,
   queryConfig: {
     quality: Array<Quality>,
     limit: number,
@@ -78,7 +79,7 @@ export class BrowseScreen extends Component<Props, State> {
     this.soundsCache = new Map();
 
     this.state = {
-      query: '',
+      queryText: '',
       queryConfig: { // TODO Move to (global) SettingsScreen.state
         quality: ['A', 'B'],
         limit: 100,
@@ -137,8 +138,8 @@ export class BrowseScreen extends Component<Props, State> {
     });
 
     // XXX Faster dev
-    this.editQuery('SOSP');
-    this.updateQueryResults();
+    this.editQueryText('SOSP');
+    this.submitQuery();
 
   }
 
@@ -153,24 +154,25 @@ export class BrowseScreen extends Component<Props, State> {
 
   }
 
-  editQuery = (query: string) => {
+  editQueryText = (queryText: string) => {
     this.setState({
-      query,
+      queryText,
     });
   }
 
-  updateQueryResults = async () => {
-    if (this.state.query) {
-      const query = this.state.query;
+  submitQuery = async () => {
+    let {queryText, query} = this.state;
+    if (queryText && queryText !== query) {
+      query = queryText;
 
-      // Clear previous results
+      // Record query + clear previous results
       await this.releaseSounds();
       this.setState({
+        query,
         recs: [],
         status: '[Loading...]',
       });
 
-      // TODO Add param: quality
       log.debug('query', query);
       await querySql<Rec>(this.db!, `
         select *
@@ -292,9 +294,9 @@ export class BrowseScreen extends Component<Props, State> {
 
         <TextInput
           style={styles.queryInput}
-          value={this.state.query}
-          onChangeText={this.editQuery}
-          onSubmitEditing={this.updateQueryResults}
+          value={this.state.queryText}
+          onChangeText={this.editQueryText}
+          onSubmitEditing={this.submitQuery}
           autoCorrect={false}
           autoCapitalize={'characters'}
           enablesReturnKeyAutomatically={true}
