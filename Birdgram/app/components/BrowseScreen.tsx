@@ -27,10 +27,11 @@ const SearchRecs = {
 
 };
 
-type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score'
+type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
+type RecId = string;
 
 type Rec = {
-  id: string,
+  id: RecId,
   xc_id: number,
   species: string,
   species_com_name: string,
@@ -69,9 +70,12 @@ type Props = {};
 export class BrowseScreen extends Component<Props, State> {
 
   db?: SQLiteDatabase
+  soundsCache: Map<RecId, Promise<Sound> | Sound>
 
   constructor(props: Props) {
     super(props);
+
+    this.soundsCache = new Map();
 
     this.state = {
       query: '',
@@ -88,7 +92,24 @@ export class BrowseScreen extends Component<Props, State> {
   }
 
   componentDidMount = async () => {
-    log.debug('componentDidMount', this);
+    log.debug('BrowseScreen.componentDidMount');
+
+    // Configure react-native-sound
+    //  - TODO Experiment to figure out which "playback mode" and "audio session mode" we want
+    //  - https://github.com/zmxv/react-native-sound/wiki/API#soundsetcategoryvalue-mixwithothers-ios-only
+    //  - https://apple.co/2q2osEd
+    //  - https://developer.apple.com/documentation/avfoundation/avaudiosession/audio_session_modes
+    //  - https://apple.co/2R22tcg
+    Sound.setCategory(
+      'Playback', // Enable playback in silence mode [cargo-culted from README]
+      true,       // mixWithOthers
+    );
+    Sound.setMode(
+      'Default', // "The default audio session mode"
+    );
+
+    // Tell other apps we're using the audio device
+    Sound.setActive(true);
 
     // Open db conn
     const dbFilename = SearchRecs.dbPath;
@@ -121,6 +142,17 @@ export class BrowseScreen extends Component<Props, State> {
 
   }
 
+  componentWillUnmount = async () => {
+    log.debug('BrowseScreen.componentWillUnmount');
+
+    // Tell other apps we're no longer using the audio device
+    Sound.setActive(false);
+
+    // Release cached sound resources
+    await this.releaseSounds();
+
+  }
+
   editQuery = (query: string) => {
     this.setState({
       query,
@@ -132,6 +164,7 @@ export class BrowseScreen extends Component<Props, State> {
       const query = this.state.query;
 
       // Clear previous results
+      await this.releaseSounds();
       this.setState({
         recs: [],
         status: '[Loading...]',
@@ -162,86 +195,93 @@ export class BrowseScreen extends Component<Props, State> {
     }
   }
 
-  onTouch = (rec: Rec) => async (event: GestureResponderEvent) => {
-    log.debug('onTouch');
-    log.debug('rec', rec);
-    log.debug('this.state.currentlyPlaying', this.state.currentlyPlaying);
-
-    // Configure react-native-sound
-    //  - QUESTION What "playback mode" / "audio session mode" do we actually want?
-    //  - https://github.com/zmxv/react-native-sound/wiki/API#soundsetcategoryvalue-mixwithothers-ios-only
-    //  - https://apple.co/2q2osEd
-    //  - https://developer.apple.com/documentation/avfoundation/avaudiosession/audio_session_modes
-    //  - https://apple.co/2R22tcg
-    Sound.setCategory(
-      'Playback', // Enable playback in silence mode [cargo-culted from README]
-      true,       // mixWithOthers
+  releaseSounds = async () => {
+    log.info('Releasing cached sounds');
+    await Promise.all(
+      Array.from(this.soundsCache).map(async ([recId, soundAsync]) => {
+        log.info('Releasing sound',
+          // recId, // Noisy
+        );
+        (await soundAsync).release();
+      }),
     );
-    //  - https://developer.apple.com/documentation/avfoundation/avaudiosession/audio_session_modes
-    Sound.setMode(
-      'Default', // "The default audio session mode"
-    );
+    this.soundsCache = new Map();
+  }
 
-    // FIXME Races? Tap a lot of spectros really quickly and watch the "Playing rec" logs pile up
-
-    const {currentlyPlaying} = this.state;
-
-    // Stop any recs that are currently playing
-    if (currentlyPlaying) {
-      const {rec, sound} = currentlyPlaying;
-
-      // Stop sound playback
-      log.debug('Stopping currentlyPlaying rec', rec.id);
-      this.setState({
-        currentlyPlaying: undefined,
-      });
-      await sound.stopAsync();
-
-      global.sound = sound; // XXX Debug
-
-    }
-
-    // If touched rec was the currently playing rec, then we're done (it's stopped)
-    // Else, play the (new) touched rec
-    if (!currentlyPlaying || currentlyPlaying.rec.id !== rec.id) {
-
-      // Tell other apps we're using the audio device
-      Sound.setActive(true);
-
-      // Allocate Sound
-      //  - QUESTION How heavy is this? Can we do it more eagerly / more of them upfront?
-      const sound = await Sound.newAsync(
+  getOrAllocateSoundAsync = async (rec: Rec): Promise<Sound> => {
+    // Is sound already allocated (in the cache)?
+    let soundAsync = this.soundsCache.get(rec.id);
+    if (!soundAsync) {
+      log.debug('Allocating sound',
+        // rec.id, // Noisy
+      );
+      // Allocate + cache sound resource
+      //  - Cache the promise so that get+set is atomic, else we race and allocate multiple sounds per rec.id
+      //  - (Observable via log counts in the console: if num alloc > num release, then we're racing)
+      this.soundsCache.set(rec.id, Sound.newAsync(
         Rec.audioPath(rec),
         Sound.MAIN_BUNDLE,
-      );
+      ));
+      soundAsync = this.soundsCache.get(rec.id);
+    }
+    return await soundAsync!;
+  }
 
-      global.sound = sound; // XXX Debug
+  onTouch = (rec: Rec) => {
 
-      // Play rec
-      log.debug('Playing rec', rec.id);
-      this.setState({
-        currentlyPlaying: {rec, sound},
-      });
-      finallyAsync(sound.playAsync(), () => {
-        // Promise fulfills after playback completes / is stopped / fails
-        log.debug('Done playing rec', rec.id);
+    // Eagerly allocate Sound resource for rec
+    //  - TODO How eagerly should we cache this? What are the cpu/mem costs and tradeoffs?
+    const soundAsync = this.getOrAllocateSoundAsync(rec);
 
+    return async (event: GestureResponderEvent) => {
+      log.debug('onTouch');
+      log.debug('rec', rec);
+      log.debug('this.state.currentlyPlaying', this.state.currentlyPlaying);
+
+      // FIXME Races? Tap a lot of spectros really quickly and watch the "Playing rec" logs pile up
+
+      const {currentlyPlaying} = this.state;
+
+      // Stop any recs that are currently playing
+      if (currentlyPlaying) {
+        const {rec, sound} = currentlyPlaying;
+
+        // Stop sound playback
+        log.debug('Stopping currentlyPlaying rec', rec.id);
         this.setState({
           currentlyPlaying: undefined,
         });
+        await sound.stopAsync();
 
-        // Tell other apps we're no longer using the audio device
-        Sound.setActive(false);
+        global.sound = sound; // XXX Debug
 
-        // Release resources
-        //  - QUESTION Retain resources for more responsive playback on next touch?
-        sound.release();
+      }
 
-      });
+      // If touched rec was the currently playing rec, then we're done (it's stopped)
+      // Else, play the (new) touched rec
+      if (!currentlyPlaying || currentlyPlaying.rec.id !== rec.id) {
 
+        const sound = await soundAsync;
+
+        global.sound = sound; // XXX Debug
+
+        // Play rec
+        log.debug('Playing rec', rec.id);
+        this.setState({
+          currentlyPlaying: {rec, sound},
+        });
+        finallyAsync(sound.playAsync(), () => {
+          // Promise fulfills after playback completes / is stopped / fails
+          log.debug('Done playing rec', rec.id);
+          this.setState({
+            currentlyPlaying: undefined,
+          });
+        });
+
+      }
+
+      // log.debug('onTouch: done');
     }
-
-    log.debug('onTouch: done');
   }
 
   render = () => {
