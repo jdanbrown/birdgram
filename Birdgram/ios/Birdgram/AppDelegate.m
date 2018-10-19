@@ -16,7 +16,12 @@
 {
   NSURL *jsCodeLocation;
 
+  // From https://facebook.github.io/react-native/docs/running-on-device#3-configure-app-to-use-static-bundle
+#ifdef DEBUG
   jsCodeLocation = [[RCTBundleURLProvider sharedSettings] jsBundleURLForBundleRoot:@"index" fallbackResource:nil];
+#else
+  jsCodeLocation = [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
+#endif
 
   RCTRootView *rootView = [[RCTRootView alloc] initWithBundleURL:jsCodeLocation
                                                       moduleName:@"Birdgram"
@@ -29,6 +34,15 @@
   rootViewController.view = rootView;
   self.window.rootViewController = rootViewController;
   [self.window makeKeyAndVisible];
+
+  // From https://facebook.github.io/react-native/docs/running-on-device#3-configure-app-to-use-static-bundle
+  //  - "As your App Bundle grows in size, you may start to see a white screen flash between your splash screen and the
+  //    display of your root application view. If this is the case, you can add the following code to AppDelegate.m in
+  //    order to keep your splash screen displayed during the transition."
+  UIView* launchScreenView = [[[NSBundle mainBundle] loadNibNamed:@"LaunchScreen" owner:self options:nil] objectAtIndex:0];
+  launchScreenView.frame = self.window.bounds;
+  rootView.loadingView = launchScreenView;
+
   return YES;
 }
 
