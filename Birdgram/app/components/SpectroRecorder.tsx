@@ -1,9 +1,10 @@
+// console.warn('XXX: SpectroRecorder');
+
 import { color, RGBColor } from 'd3-color';
 import { interpolateMagma } from 'd3-scale-chromatic';
-// FIXME jimp fails when not "Debug JS Remotely"
-//  - "undefined is not an object (evaluating 'gl.Jimp = Jimp')"
-//  - https://github.com/oliver-moran/jimp/blob/ced893d/packages/core/src/index.js#L1213-L1228
+// console.warn('XXX: SpectroRecorder: import jimp ...'); // XXX Debug
 import Jimp from 'jimp';
+// console.warn('XXX: SpectroRecorder: import jimp: done'); // XXX Debug
 import _ from 'lodash';
 import React from 'react';
 import { Button, Dimensions, EmitterSubscription, Image, Platform, StyleSheet, Text, View } from 'react-native';

@@ -1,0 +1,7 @@
+Vendored jimp-0.5.4 (copied from node_modules/jimp/ after yarn install) so I could manually patch code to workaround issues:
+- Edits marked with "HACK":
+  - "undefined is not an object (evaluating 'gl.Jimp = Jimp')"
+    - jimp/browser/lib/jimp.js:34509 -- Commented out block
+    - cf. https://github.com/oliver-moran/jimp/blob/ced893d/packages/core/src/index.js#L1213-L1228
+  - "self is not defined"
+    - jimp/browser/lib/jimp.js:28 -- Added a mock self={}

@@ -25,12 +25,15 @@ $ yarn test --watch
 
 # Device logs
 
-iOS
+ios
 ```sh
 $ brew install --HEAD usbmuxd libimobiledevice
 $ idevicesyslog
 $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag --no-color -i birdgram
 ```
+
+android
+- TODO
 
 # Resources
 - Project setup
@@ -94,6 +97,14 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
   - android: ...
     - TODO Try and see
 
+# Build for Release vs. Debug
+- Xcode
+  - Product -> Scheme -> Edit Scheme... (cmd-<)
+  - Run -> Build Configuration -> Debug/Release
+  - Build/Run as usual
+- Android Studio
+  - TODO
+
 # Troubleshooting
 - 'config.h' "File not found"
   - I fixed it by cleaning and rebuilding yarn/xcode a number of times
@@ -129,7 +140,3 @@ $ idevicesyslog | hi-color 'bold red' Error | hi-color 'bold green' Notice | ag 
   - Solution: updated package.json like https://github.com/facebook/metro/issues/242#issuecomment-421139247
 - Symlinks break `react-native start` build
   - Symlinks aren't supported by metro: https://github.com/facebook/metro/issues/1
-
-# TODO
-- Fix: `global.*` fails if not "Debug JS Remotely"
-- Fix: `import 'jimp'` fails if not "Debug JS Remotely" (see comments in Recorder.tsx)

@@ -43,7 +43,7 @@
 		ADBDB9381DFEBF1600ED6528 /* libRCTBlob.a in Frameworks */ = {isa = PBXBuildFile; fileRef = ADBDB9271DFEBF0700ED6528 /* libRCTBlob.a */; };
 		AE7E5791EAF94C0C8C2EED80 /* SimpleLineIcons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2633B94505234B6DA1A33BA9 /* SimpleLineIcons.ttf */; };
 		B2CE4D585E83481DB2A6B031 /* Entypo.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2CEE8CD9DE4841FCBC38447E /* Entypo.ttf */; };
-		B7FEBF01217953AF00FA487B /* search_recs in Resources */ = {isa = PBXBuildFile; fileRef = B7FEBF00217953AF00FA487B /* search_recs */; };
+		B70F7D8B217E45A5006CDF36 /* search_recs in Resources */ = {isa = PBXBuildFile; fileRef = B70F7D8A217E45A5006CDF36 /* search_recs */; };
 		BF7C9911FA9C4338B0BF698C /* AntDesign.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E0D3CAC7BEF84537A4FD221A /* AntDesign.ttf */; };
 		C62C1AB9427E46D2BA340C1F /* libFastImage.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 15ACA59D541D436B8793C522 /* libFastImage.a */; };
 		C74E8D388A3649829EFFB91E /* libRNSound.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 58C910D952494CFAB98C0692 /* libRNSound.a */; };
@@ -430,7 +430,7 @@
 		A26112315D9E448AA9F69415 /* FontAwesome5_Brands.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome5_Brands.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome5_Brands.ttf"; sourceTree = "<group>"; };
 		A4A78B34711F4B67BD424763 /* EvilIcons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = EvilIcons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/EvilIcons.ttf"; sourceTree = "<group>"; };
 		ADBDB91F1DFEBF0600ED6528 /* RCTBlob.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RCTBlob.xcodeproj; path = "../node_modules/react-native/Libraries/Blob/RCTBlob.xcodeproj"; sourceTree = "<group>"; };
-		B7FEBF00217953AF00FA487B /* search_recs */ = {isa = PBXFileReference; lastKnownFileType = folder; name = search_recs; path = "../../data/cache/payloads/search_recs-version[4],audio_s[10],countries_k[na],com_names_k[ca],num_recs[None]-7993b24/mobile-version[0]/search_recs"; sourceTree = "<group>"; };
+		B70F7D8A217E45A5006CDF36 /* search_recs */ = {isa = PBXFileReference; lastKnownFileType = folder; name = search_recs; path = "../../data/cache/payloads/search_recs-version[4],limit[3500],audio_s[10],countries_k[na],com_names_k[ca],num_recs[None]-2c30442/mobile-version[0]/search_recs"; sourceTree = "<group>"; };
 		B8ED9E6567504A149A09641B /* SQLite.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = SQLite.xcodeproj; path = "../node_modules/react-native-sqlite-storage/src/ios/SQLite.xcodeproj"; sourceTree = "<group>"; };
 		C6B6829AB2D043BB990531DD /* FontAwesome.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome.ttf"; sourceTree = "<group>"; };
 		CF519C3EDF2D4A06A132EFC4 /* RNFetchBlob.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = RNFetchBlob.xcodeproj; path = "../node_modules/rn-fetch-blob/ios/RNFetchBlob.xcodeproj"; sourceTree = "<group>"; };
@@ -628,7 +628,7 @@
 		7F216E01966A45A9926C3220 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				B7FEBF00217953AF00FA487B /* search_recs */,
+				B70F7D8A217E45A5006CDF36 /* search_recs */,
 				E0D3CAC7BEF84537A4FD221A /* AntDesign.ttf */,
 				2CEE8CD9DE4841FCBC38447E /* Entypo.ttf */,
 				A4A78B34711F4B67BD424763 /* EvilIcons.ttf */,
@@ -1303,7 +1303,7 @@
 				8007C45C489E4E25A5749D3F /* Feather.ttf in Resources */,
 				FDB334E722914F32B8E52B3C /* FontAwesome.ttf in Resources */,
 				D68FB70F0E85421AADC503EB /* FontAwesome5_Brands.ttf in Resources */,
-				B7FEBF01217953AF00FA487B /* search_recs in Resources */,
+				B70F7D8B217E45A5006CDF36 /* search_recs in Resources */,
 				E2CF4592168A45C48A5352B4 /* FontAwesome5_Regular.ttf in Resources */,
 				96428B6A26274CE9A6FC9156 /* FontAwesome5_Solid.ttf in Resources */,
 				8738F8A6FE6340C39347B683 /* Foundation.ttf in Resources */,
@@ -1477,8 +1477,9 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
 				PRODUCT_NAME = Birdgram;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
@@ -1507,8 +1508,9 @@
 					"-ObjC",
 					"-lc++",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
 				PRODUCT_NAME = Birdgram;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
