@@ -1,8 +1,9 @@
 import React from 'React';
 import { Component } from 'react';
-import { Dimensions, Image, Platform, StyleSheet, Text, View, WebView } from 'react-native';
+import { Dimensions, Image, Platform, Text, View, WebView } from 'react-native';
 import KeepAwake from 'react-native-keep-awake';
 
+import { StyleSheet } from '../stylesheet';
 import { global } from '../utils';
 
 type Props = {};

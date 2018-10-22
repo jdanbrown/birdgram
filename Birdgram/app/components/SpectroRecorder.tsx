@@ -7,7 +7,7 @@ import Jimp from 'jimp';
 // console.warn('XXX: SpectroRecorder: import jimp: done'); // XXX Debug
 import _ from 'lodash';
 import React from 'react';
-import { Button, Dimensions, EmitterSubscription, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Button, Dimensions, EmitterSubscription, Image, Platform, Text, View } from 'react-native';
 import FastImage from 'react-native-fast-image';
 import MicStream from 'react-native-microphone-stream';
 import Permissions from 'react-native-permissions';
@@ -18,6 +18,7 @@ const {fs, base64} = RNFB;
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
 import { log } from '../log';
+import { StyleSheet } from '../stylesheet';
 import { chance, global, match } from '../utils';
 
 // Util: wrap `new Jimp` in a promise

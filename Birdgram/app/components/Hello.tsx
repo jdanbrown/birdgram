@@ -1,4 +1,5 @@
 // Example from https://facebook.github.io/react-native/blog/2018/05/07/using-typescript-with-react-native
+//  - Keep as an example of a snapshot test (app/components/__tests__/__snapshots__/Hello.tsx.snap)
 
 import React from 'react';
 import {Button, StyleSheet, Text, View} from 'react-native';

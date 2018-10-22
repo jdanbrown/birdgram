@@ -1,9 +1,10 @@
 import React from 'React';
 import { Component } from 'react';
-import { Alert, Dimensions, Image, Platform, StyleSheet, Text, View, WebView } from 'react-native';
+import { Alert, Dimensions, Image, Platform, Text, View, WebView } from 'react-native';
 import KeepAwake from 'react-native-keep-awake';
 import SettingsList from 'react-native-settings-list';
 
+import { StyleSheet } from '../stylesheet';
 import { global } from '../utils';
 
 type Props = {};

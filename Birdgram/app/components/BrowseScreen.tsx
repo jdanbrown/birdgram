@@ -1,7 +1,7 @@
 import React from 'React';
 import { Component } from 'react';
 import {
-  Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Platform, StyleSheet, Text, TextInput,
+  Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Platform, Text, TextInput,
   TouchableHighlight, View, WebView,
 } from 'react-native';
 import RNFB from 'rn-fetch-blob';
@@ -13,6 +13,7 @@ const fs = RNFB.fs;
 import { log } from '../log';
 import Sound from '../sound';
 import { querySql } from '../sql';
+import { StyleSheet } from '../stylesheet';
 import { finallyAsync, global } from '../utils';
 
 const SearchRecs = {

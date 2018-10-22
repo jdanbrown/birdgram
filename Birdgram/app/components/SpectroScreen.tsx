@@ -1,9 +1,10 @@
 import React from 'React';
 import { Component } from 'react';
-import { Dimensions, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Image, Platform, Text, View } from 'react-native';
 import KeepAwake from 'react-native-keep-awake';
 
 import { SpectroRecorder } from './SpectroRecorder';
+import { StyleSheet } from '../stylesheet';
 import { global } from '../utils';
 
 type Props = {};
