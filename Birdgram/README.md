@@ -106,6 +106,17 @@ android
   - TODO
 
 # Troubleshooting
+- App does weird stuff, e.g. fails on startup with strange errors, or loads to a blank screen
+  - Make sure you're on a happy path
+    - ✅ Debug build + "Debug JS Remotely"
+    - ❌ Debug build + no "Debug JS Remotely" -- untested, and usually does weird stuff
+    - ✅ Release build
+  - Try toggling "Debug JS Remotely" back and forth
+    - I've observed this make Debug build + no "Debug JS Remotely" go from blank screen to a working app...
+- App fails on startup with "No bundle URL present" (Debug build)
+  - Solution: temporarily comment out `export SKIP_BUNDLING=true` in Build Phases:
+    - https://facebook.github.io/react-native/docs/running-on-device#3-configure-app-to-use-static-bundle
+  - (But I don't really understand the problem, since shouldn't this only matter for Release builds...?)
 - 'config.h' "File not found"
   - I fixed it by cleaning and rebuilding yarn/xcode a number of times
   - But if I get stuck on this again, try these:

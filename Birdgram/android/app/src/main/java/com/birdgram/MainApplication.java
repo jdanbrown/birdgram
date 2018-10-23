@@ -3,9 +3,9 @@ package com.birdgram;
 import android.app.Application;
 
 import com.facebook.react.ReactApplication;
+import com.RNFetchBlob.RNFetchBlobPackage;
 import com.zmxv.RNSound.RNSoundPackage;
 import com.oblador.vectoricons.VectorIconsPackage;
-import com.RNFetchBlob.RNFetchBlobPackage;
 import com.dylanvann.fastimage.FastImageViewPackage;
 import com.corbt.keepawake.KCKeepAwakePackage;
 import com.github.chadsmith.MicrophoneStream.MicrophoneStreamPackage;
@@ -29,9 +29,9 @@ public class MainApplication extends Application implements ReactApplication {
     protected List<ReactPackage> getPackages() {
       return Arrays.<ReactPackage>asList(
           new MainReactPackage(),
+            new RNFetchBlobPackage(),
             new RNSoundPackage(),
             new VectorIconsPackage(),
-            new RNFetchBlobPackage(),
             new FastImageViewPackage(),
             new KCKeepAwakePackage(),
             new MicrophoneStreamPackage()

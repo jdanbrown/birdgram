@@ -162,7 +162,7 @@ export class BrowseScreen extends Component<Props, State> {
     });
 
     // XXX Faster dev
-    this.editQueryText('GREG,LASP,HOFI,NOFL');
+    this.editQueryText('GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW');
     this.submitQuery();
 
   }

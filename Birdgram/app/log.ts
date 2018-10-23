@@ -1,3 +1,6 @@
+// Polyfill console.{time,timeEnd} for jsc (works in rndebugger v8)
+import 'react-native-console-time-polyfill';
+
 import { global, match } from './utils';
 
 // Config
