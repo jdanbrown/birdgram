@@ -29,9 +29,15 @@ export async function finallyAsync<X>(p: Promise<X>, f: () => void): Promise<X> 
 
 // `X0 extends X` so that x0 can't (quietly) generalize the type of the case patterns (e.g. to include null)
 //  - e.g. fail on `match(X | null, ...)` if the case patterns don't include null
-export function match<X, X0 extends X, Y>(x0: X0, ...cases: [X, Y][]): Y {
+export function match<X, X0 extends X, Y>(x0: X0, ...cases: Array<[X | Match, Y]>): Y {
   for (let [x, y] of cases) {
-    if (x0 === x) return y;
+    if (x === x0 || x === Match.Default) {
+      return y;
+    }
   }
-  throw new Error(`No cases matched: ${x0} not in [${cases.map(([x, y]) => x)}]`);
+  throw new Error(`No cases matched: ${x0} not in ${cases}`);
 }
+
+// Singleton match.default
+enum Match { Default }
+match.default = Match.Default;

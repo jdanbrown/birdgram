@@ -1,20 +1,24 @@
+import _ from 'lodash';
 import React from 'React';
 import { Component } from 'react';
 import {
-  Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Platform, Text, TextInput,
-  TouchableHighlight, View, WebView,
+  Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Platform, SectionList, SectionListData, Text,
+  TextInput, TouchableHighlight, View, WebView,
 } from 'react-native';
 import RNFB from 'rn-fetch-blob';
 import KeepAwake from 'react-native-keep-awake';
 import SQLite from 'react-native-sqlite-storage';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
+import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
+import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 const fs = RNFB.fs;
 
 import { log } from '../log';
+import { Places } from '../places';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
-import { finallyAsync, global } from '../utils';
+import { finallyAsync, global, match } from '../utils';
 
 const SearchRecs = {
 
@@ -37,18 +41,37 @@ type Rec = {
   species: string,
   species_com_name: string,
   species_sci_name: string,
+  species_taxon_order: string,
   quality: Quality,
   lat: number,
   lng: number,
   month_day: string,
+  place: string,
+  place_only: string,
+  state: string,
   state_only: string,
   recordist: string,
   license_type: string,
 }
 
 const Rec = {
+
   spectroPath: (rec: Rec): string => SearchRecs.assetPath('spectro', rec.species, rec.xc_id, 'png'),
   audioPath:   (rec: Rec): string => SearchRecs.assetPath('audio',   rec.species, rec.xc_id, 'mp4'),
+
+  placeNorm: (rec: Rec): string => {
+    return rec.place.split(', ').reverse().map(x => Rec.placePartAbbrev(x)).join(', ');
+  },
+  placePartAbbrev: (part: string): string => {
+    const ret = (
+      Places.countryCodeFromName[part] ||
+      Places.stateCodeFromName[part] ||
+      part
+    );
+    log.debug(`placePartAbbrev: ${part} -> ${ret}`);
+    return ret;
+  },
+
 };
 
 type State = {
@@ -317,37 +340,33 @@ export class BrowseScreen extends Component<Props, State> {
           returnKeyType={'search'}
         />
 
-        <Text>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
-        <Text>{JSON.stringify(this.state.queryConfig)}</Text>
+        <Text style={styles.summaryText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
+        <Text style={styles.summaryText}>{JSON.stringify(this.state.queryConfig)}</Text>
 
-        <FlatList
-          style={styles.resultsList}
-          data={this.state.recs}
-          keyExtractor={(rec, index) => rec.xc_id.toString()}
+        <SectionList
+          style={styles.recList}
+          sections={sectionsForRecs(this.state.recs)}
+          keyExtractor={(rec, index) => rec.id.toString()}
+          initialNumToRender={20}
+          renderSectionHeader={({section}) => (
+            <Text style={styles.recSectionHeader}>{section.title}</Text>
+          )}
           renderItem={({item: rec, index}) => (
-            <View style={styles.resultsRow}>
+            <View style={styles.recRow}>
 
               <TouchableHighlight onPress={this.onTouch(rec)}>
-                <Image style={styles.resultsRecSpectro as ImageStyle /* HACK Avoid weird type error */}
+                <Image style={styles.recSpectro as ImageStyle /* HACK Avoid weird type error */}
                   source={{uri: Rec.spectroPath(rec)}}
                 />
               </TouchableHighlight>
 
-              <View style={styles.resultsUpper}>
-                <Text style={styles.resultsCell}>{index + 1}</Text>
-                <Text style={styles.resultsCell}>{rec.xc_id}</Text>
-              </View>
-              <View style={styles.resultsLower}>
-                <Text style={styles.resultsCell}>{rec.species_com_name}</Text>
-                <Text style={styles.resultsCell}>{rec.quality}</Text>
-              </View>
-              <View style={styles.resultsLower}>
-                <Text style={styles.resultsCell}>{rec.month_day}</Text>
-                <Text style={styles.resultsCell}>{rec.state_only.slice(0, 15)}</Text>
-              </View>
-              <View style={styles.resultsLower}>
-                <Text style={styles.resultsCell}>{rec.recordist}</Text>
-                <Text style={styles.resultsCell}>{rec.license_type}</Text>
+              <View style={styles.recCaption}>
+                <RecText flex={3}>{rec.xc_id}</RecText>
+                <RecText flex={1}>{rec.quality}</RecText>
+                <RecText flex={2}>{rec.month_day}</RecText>
+                <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
+                {ccIcon({style: styles.recTextFont})}
+                <RecText flex={4}> {rec.recordist}</RecText>
               </View>
 
             </View>
@@ -360,6 +379,45 @@ export class BrowseScreen extends Component<Props, State> {
 
 }
 
+function sectionsForRecs(recs: Array<Rec>): Array<SectionListData<Rec>> {
+  const sections = [];
+  let section;
+  for (let rec of recs) {
+    const title = rec.species_com_name;
+    if (!section || title !== section.title) {
+      if (section) sections.push(section);
+      section = {title, data: [] as Rec[]};
+    }
+    section.data.push(rec);
+  }
+  if (section) sections.push(section);
+  return sections;
+}
+
+function RecText<X extends {children: any, flex?: number}>(props: X) {
+  const flex = props.flex || 1;
+  return (<Text
+    style={[styles.recText, {flex}]}
+    numberOfLines={1}
+    ellipsizeMode={'tail'}
+    {...props}
+  />);
+}
+
+function ccIcon(props?: object): Element {
+  const [icon] = licenseTypeIcons('cc', props);
+  return icon;
+}
+
+function licenseTypeIcons(license_type: string, props?: object): Array<Element> {
+  license_type = `cc-${license_type}`;
+  return license_type.split('-').map(k => (<FontAwesome5
+    key={k}
+    name={k === 'cc' ? 'creative-commons' : `creative-commons-${k}`}
+    {...props}
+  />));
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -369,29 +427,35 @@ const styles = StyleSheet.create({
   },
   queryInput: {
     marginTop: 20, // HACK ios status bar
-    // width: Dimensions.get('window').width,
     borderWidth: 1, borderColor: 'gray',
-    fontSize: 30,
+    ...material.display1Object,
     width: Dimensions.get('window').width, // TODO flex
   },
-  resultsList: {
+  summaryText: {
+    ...material.captionObject,
+  },
+  recList: {
     // borderWidth: 1, borderColor: 'gray',
     width: Dimensions.get('window').width, // TODO flex
   },
-  resultsRow: {
+  recSectionHeader: {
+    // ...material.body1Object, backgroundColor: iOSColors.customGray, // Black on white
+    ...material.body1WhiteObject, backgroundColor: iOSColors.gray, // White on black
+  },
+  recRow: {
     borderWidth: 1, borderColor: 'gray',
     flex: 1, flexDirection: 'column',
   },
-  resultsUpper: {
+  recCaption: {
     flex: 2, flexDirection: 'row', // TODO Eh...
   },
-  resultsLower: {
-    flex: 1, flexDirection: 'row',
+  recText: {
+    ...material.captionObject,
   },
-  resultsCell: {
-    flex: 1,
+  recTextFont: {
+    ...material.captionObject,
   },
-  resultsRecSpectro: {
+  recSpectro: {
     width: Dimensions.get('window').width!, // TODO flex
     height: 50,
     resizeMode: 'stretch',

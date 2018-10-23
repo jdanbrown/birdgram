@@ -865,6 +865,16 @@ anymatch@^2.0.0:
     micromatch "^3.1.4"
     normalize-path "^2.1.1"
 
+app-icon@^0.6.3:
+  version "0.6.3"
+  resolved "https://registry.yarnpkg.com/app-icon/-/app-icon-0.6.3.tgz#94cf1ced78d53f6654409f1774645c4c076c4985"
+  integrity sha512-D/AxSjoUvvpcGMZtZYiVq0WoS95OBQ5U/fnU2lZXaq2j/QvVNChfc6eHDGSERlw7ZeLOv4m3waRrzCNxPlN8ZA==
+  dependencies:
+    chalk "^1.1.3"
+    command-exists "^1.0.2"
+    commander "^2.9.0"
+    mkdirp "^0.5.1"
+
 append-transform@^0.4.0:
   version "0.4.0"
   resolved "https://registry.yarnpkg.com/append-transform/-/append-transform-0.4.0.tgz#d76ebf8ca94d276e247a36bad44a4b74ab611991"
@@ -2041,6 +2051,11 @@ combined-stream@~1.0.6:
   integrity sha512-brWl9y6vOB1xYPZcpZde3N9zDByXTosAeMDo4p1wzo6UMOX4vumB+TP1RZ76sfE6Md68Q0NJSrE/gbezd4Ul+w==
   dependencies:
     delayed-stream "~1.0.0"
+
+command-exists@^1.0.2:
+  version "1.2.8"
+  resolved "https://registry.yarnpkg.com/command-exists/-/command-exists-1.2.8.tgz#715acefdd1223b9c9b37110a149c6392c2852291"
+  integrity sha512-PM54PkseWbiiD/mMsbvW351/u+dafwTJ0ye2qB60G1aGQP9j3xK2gmMDc+R34L3nDtx4qMCitXT75mkbkGJDLw==
 
 commander@^2.9.0:
   version "2.19.0"
@@ -5995,6 +6010,11 @@ react-native-typescript-transformer@^1.2.10:
     jju "^1.3.0"
     semver "^5.4.1"
     source-map "^0.5.6"
+
+react-native-typography@^1.4.0:
+  version "1.4.0"
+  resolved "https://registry.yarnpkg.com/react-native-typography/-/react-native-typography-1.4.0.tgz#166b79c618075882d8af07720649f5bc6523160d"
+  integrity sha512-3lToN3hRvPySw0PWCn1SjbDbNaqlV+FM22zSuymIc2ILGcfWbWcgZ+qdX+VKtHAewMG7Rp5yab2bmuaEYQlu3Q==
 
 react-native-vector-icons@^6.0.2:
   version "6.0.2"
