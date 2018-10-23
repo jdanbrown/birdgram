@@ -158,6 +158,7 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
         species=species.shorthand,
         species_longhand=species.longhand,
         species_com_name=species.com_name,
+        species_sci_name=species.sci_name,
         species_taxon_order=species.taxon_order,
         species_taxon_id=species.taxon_id,
         species_query=species_query,

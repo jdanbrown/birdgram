@@ -38,10 +38,11 @@ type RecId = string;
 type Rec = {
   id: RecId,
   xc_id: number,
-  species: string,
-  species_com_name: string,
-  species_sci_name: string,
-  species_taxon_order: string,
+  species: string,             // (From ebird)
+  species_taxon_order: string, // (From ebird)
+  species_com_name: string,    // (From xc)
+  species_sci_name: string,    // (From xc)
+  recs_for_sp: number,
   quality: Quality,
   lat: number,
   lng: number,
@@ -162,7 +163,7 @@ export class BrowseScreen extends Component<Props, State> {
     });
 
     // XXX Faster dev
-    this.editQueryText('SNGO,LASP,HOFI,NOFL');
+    this.editQueryText('GREG,LASP,HOFI,NOFL');
     this.submitQuery();
 
   }
@@ -349,7 +350,7 @@ export class BrowseScreen extends Component<Props, State> {
           keyExtractor={(rec, index) => rec.id.toString()}
           initialNumToRender={20}
           renderSectionHeader={({section}) => (
-            <Text style={styles.recSectionHeader}>{section.title}</Text>
+            <Text style={styles.recSectionHeader}>{section.species_com_name} ({section.recs_for_sp} total recs)</Text>
           )}
           renderItem={({item: rec, index}) => (
             <View style={styles.recRow}>
@@ -383,10 +384,18 @@ function sectionsForRecs(recs: Array<Rec>): Array<SectionListData<Rec>> {
   const sections = [];
   let section;
   for (let rec of recs) {
-    const title = rec.species_com_name;
+    const title = rec.species;
     if (!section || title !== section.title) {
       if (section) sections.push(section);
-      section = {title, data: [] as Rec[]};
+      section = {
+        title,
+        data: [] as Rec[],
+        species: rec.species,
+        species_taxon_order: rec.species_taxon_order,
+        species_com_name: rec.species_com_name,
+        species_sci_name: rec.species_sci_name,
+        recs_for_sp: rec.recs_for_sp,
+      };
     }
     section.data.push(rec);
   }
