@@ -19,9 +19,9 @@ Audio = audiosegment.AudioSegment
 class Species(DataclassUtil):
     sci_name: str
     com_name: str
-    taxon_id: str
     species_code: str
     taxon_order: str
+    taxon_id: str
     com_name_codes: Iterable[str]
     sci_name_codes: Iterable[str]
     banding_codes: Iterable[str]

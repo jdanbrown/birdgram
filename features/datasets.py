@@ -128,6 +128,7 @@ audio_path_files = _audio_path_files()
 
 
 def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
+    """Lookup metadata from metadata.species for a given (rec.id, dataset)"""
     id = strip_leading_cache_audio_dir(id)
     id_parts = id.split('/')
     basename = id_parts[-1]
@@ -157,6 +158,8 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
         species=species.shorthand,
         species_longhand=species.longhand,
         species_com_name=species.com_name,
+        species_taxon_order=species.taxon_order,
+        species_taxon_id=species.taxon_id,
         species_query=species_query,
         basename=basename,
     )
@@ -198,7 +201,7 @@ class _xc(DataclassUtil):
 
     @property
     @lru_cache()
-    @cache(version=8, tags='metadata', key=lambda self: (self, self._audio_paths_hash))
+    @cache(version=9, tags='metadata', key=lambda self: (self, self._audio_paths_hash))
     def metadata(self) -> 'XCDF':
         """Make a full XCDF by joining _metadata + downloaded_ids"""
         return (self._metadata
@@ -509,10 +512,12 @@ class XCMetadata(DataclassUtil):
     """xeno-canto recording, lightly adapted from the XC api [https://www.xeno-canto.org/article/153]"""
 
     downloaded: bool
-    species: str  # Synthetic FK to metadata.species (species -> shorthand)
+    species: str      # Synthetic FK to metadata.species (species -> shorthand)
+    taxon_order: str = field(default=None, init=False)  # Joined from metadata.species (ebird) (derived field -- see XCDF)
+    taxon_id: str    = field(default=None, init=False)  # Joined from metadata.species (ebird) (derived field -- see XCDF)
     id: int
-    sci_name: str
-    com_name: str
+    sci_name: str     # From xc (not ebird)
+    com_name: str     # From xc (not ebird)
     subspecies: str
     recordist: str
     country: str
@@ -523,8 +528,8 @@ class XCMetadata(DataclassUtil):
     quality: str
     date: pd.Timestamp
     time: str  # '?' for unknown
-    license_type: str = field(default=None, init=False)  # Derived field
-    license_detail: str = field(default=None, init=False)  # Derived field
+    license_type: str   = field(default=None, init=False)  # (Derived field -- see XCDF)
+    license_detail: str = field(default=None, init=False)  # (Derived field -- see XCDF)
     license: str
     url: str
     download: str
@@ -653,12 +658,23 @@ def XCDF(xcdf, *args, **kwargs) -> pd.DataFrame:
     # pseudo-XCDF -> XCDF
     #   - Idempotent (i.e. must map an XCDF to itself) [TODO Write some tests for this]
     return (xcdf
-        # Add 'species' FK to metadata.species.df.shorthand (ebird taxo)
+        # Add .species FK to metadata.species.df.shorthand (ebird taxo)
         .assign(species=lambda df: df.apply(axis=1, func=lambda row: (
             metadata.species[row.sci_name, 'shorthand'] or
             metadata.species[row.com_name, 'shorthand'] or
             unk_species_species_code
         )))
+        # Join .taxon_order, .taxon_id from metadata.species.df (ebird taxo)
+        .pipe(lambda df: df.merge(
+            how='left',
+            left_on='species',
+            right_on='shorthand',
+            right=metadata.species.df[[
+                'shorthand',
+                'taxon_order',
+                'taxon_id',
+            ]],
+        ))
         # Cleaning
         .assign(date=lambda df: df.date if df.date.dtype.name == 'datetime64[ns]' else (df.date
             .str.replace('-00', '-01')  # Coerce e.g. '2003-03-00' -> '2003-03-01'

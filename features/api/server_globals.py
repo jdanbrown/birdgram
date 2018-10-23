@@ -88,7 +88,7 @@ class _sg_load(DataclassUtil):
         x.load = x.features.load
         return dict(x)
 
-    @cache(version=3, tags='sg', key=lambda self: self,
+    @cache(version=4, tags='sg', key=lambda self: self,
         norefresh=True,  # Very slow and rarely worth refreshing [TODO Push this norefresh down closer to the root slowness]
     )
     def load_xc_meta(self) -> dict:

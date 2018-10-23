@@ -66,7 +66,7 @@ class Load(DataclassConfig):
             'codec',
         ]})
 
-    @cache(version=2, tags='recs', key=lambda self, datasets=None, paths=None, *args, **kwargs: (
+    @cache(version=4, tags='recs', key=lambda self, datasets=None, paths=None, *args, **kwargs: (
         {k: DATASETS[k] for k in (datasets or [])},
         paths or self.recs_paths(datasets=datasets),
         args,
@@ -143,6 +143,8 @@ class Load(DataclassConfig):
         'species',
         'species_longhand',
         'species_com_name',
+        'species_taxon_order',
+        'species_taxon_id',
         'species_query',
         # TODO De-dupe these with self._metadata
         'duration_s',
@@ -178,7 +180,7 @@ class Load(DataclassConfig):
     # Cache hit avoids loading audio (~1000x bigger: ~1MB audio vs. ~1KB metadata)
     # Avoid Series.get(cols): it returns nan for unknown cols instead of None overall (df.get(cols) gives None overall)
     @short_circuit(lambda self, rec: AttrDict(rec[self.METADATA]) if set(self.METADATA).issubset(rec.index) else None)
-    @cache(version=5, tags='rec', key=lambda self, rec: rec.id)
+    @cache(version=7, tags='rec', key=lambda self, rec: rec.id)
     def _metadata(self, rec: Row) -> AttrDict:
         """metadata <- .audio"""
         # _audio_no_transcode because we want the metadata from the raw input file, not the standardized version

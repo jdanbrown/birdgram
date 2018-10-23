@@ -85,16 +85,16 @@ class ebird:
 
     @property
     @lru_cache()
-    @cache_to_file_forever(f'{metadata_dir}/cache/_taxa')  # Avoid ~250ms (on a MBP)
+    @cache_to_file_forever(f'{metadata_dir}/cache/_taxa-v2')  # Avoid ~250ms (on a MBP)
     def df(self):
         """The full species df (based on http://ebird.org/ws1.1/ref/taxa/ebird?cat=species&fmt=csv)"""
 
         synthetic_row = lambda species, com_name, species_code, taxon_id: dict(
             sci_name=com_name,
             com_name=com_name,
-            taxon_id=taxon_id,
             species_code=species_code,
             taxon_order=species,
+            taxon_id=taxon_id,
             com_name_codes=species,
             sci_name_codes=species,
             banding_codes=species,
@@ -108,9 +108,9 @@ class ebird:
             .rename(columns={
                 'SCIENTIFIC_NAME': 'sci_name',
                 'COMMON_NAME': 'com_name',
-                'TAXON_ID': 'taxon_id',
                 'SPECIES_CODE': 'species_code',
                 'TAXON_ORDER': 'taxon_order',
+                'TAXON_ID': 'taxon_id',
                 'COM_NAME_CODES': 'com_name_codes',
                 'SCI_NAME_CODES': 'sci_name_codes',
                 'BANDING_CODES': 'banding_codes',
@@ -141,9 +141,9 @@ class ebird:
                 'longhand',
                 'sci_name',
                 'com_name',
-                'taxon_id',
                 'species_code',
                 'taxon_order',
+                'taxon_id',
                 'com_name_codes',
                 'sci_name_codes',
                 'banding_codes',
@@ -158,7 +158,7 @@ class ebird:
         return pd.read_csv(
             ebird_taxa_path,
             dtype={
-                'TAXON_ORDER': 'str',  # Not float
+                'TAXON_ORDER': 'str',  # Not float [TODO Why did I decide str instead of float?]
             },
         )
 
@@ -350,7 +350,7 @@ class ebird:
 
     @property
     @lru_cache()
-    @cache_to_file_forever(f'{metadata_dir}/cache/_df_lookup')  # Avoid ~12s (on a MBP)
+    @cache_to_file_forever(f'{metadata_dir}/cache/_df_lookup-v2')  # Avoid ~12s (on a MBP)
     def _df_lookup(self) -> dict:
         out = dict([
             (self._normalize_query(query), Species(**row))

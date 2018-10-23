@@ -139,7 +139,7 @@ export class BrowseScreen extends Component<Props, State> {
     });
 
     // XXX Faster dev
-    this.editQueryText('SOSP');
+    this.editQueryText('SNGO,LASP,HOFI,NOFL');
     this.submitQuery();
 
   }
@@ -174,17 +174,29 @@ export class BrowseScreen extends Component<Props, State> {
         status: '[Loading...]',
       });
 
+      // Can't use window functions until sqlite ≥3.25.x
+      //  - TODO Waiting on: https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
+
       log.debug('query', query);
       await querySql<Rec>(this.db!, `
         select *
-        from search_recs
-        where
-          species = upper(trim(?)) and
-          quality in (?) and
-          true
-        limit ?
+        from (
+          select
+            *,
+            cast(taxon_order as real) as taxon_order_num
+          from search_recs
+          where
+            species in (?) and
+            quality in (?)
+          order by
+            xc_id desc
+          limit ?
+        )
+        order by
+          taxon_order_num asc,
+          xc_id desc
       `, [
-        query,
+        query.split(',').map(x => _.trim(x).toUpperCase()),
         this.state.queryConfig.quality,
         this.state.queryConfig.limit,
       ])(results => {
