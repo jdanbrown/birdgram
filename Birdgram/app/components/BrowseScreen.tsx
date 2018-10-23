@@ -69,7 +69,6 @@ const Rec = {
       Places.stateCodeFromName[part] ||
       part
     );
-    log.debug(`placePartAbbrev: ${part} -> ${ret}`);
     return ret;
   },
 
@@ -266,14 +265,14 @@ export class BrowseScreen extends Component<Props, State> {
     return await soundAsync!;
   }
 
-  onTouch = (rec: Rec) => {
+  onPress = (rec: Rec) => {
 
     // Eagerly allocate Sound resource for rec
     //  - TODO How eagerly should we cache this? What are the cpu/mem costs and tradeoffs?
     const soundAsync = this.getOrAllocateSoundAsync(rec);
 
     return async (event: GestureResponderEvent) => {
-      log.debug('onTouch');
+      log.debug('onPress');
       log.debug('rec', rec);
       log.debug('this.state.currentlyPlaying', this.state.currentlyPlaying);
 
@@ -319,8 +318,14 @@ export class BrowseScreen extends Component<Props, State> {
 
       }
 
-      // log.debug('onTouch: done');
-    }
+      // log.debug('onPress: done');
+    };
+  }
+
+  onLongPress = (rec: Rec) => {
+    return async (event: GestureResponderEvent) => {
+      log.debug('onLongPress');
+    };
   }
 
   render = () => {
@@ -349,13 +354,16 @@ export class BrowseScreen extends Component<Props, State> {
           sections={sectionsForRecs(this.state.recs)}
           keyExtractor={(rec, index) => rec.id.toString()}
           initialNumToRender={20}
-          renderSectionHeader={({section}) => (
-            <Text style={styles.recSectionHeader}>{section.species_com_name} ({section.recs_for_sp} total recs)</Text>
+          renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
+            <Text style={styles.recSectionHeader}>{species_com_name} ({recs_for_sp} total recs)</Text>
           )}
           renderItem={({item: rec, index}) => (
             <View style={styles.recRow}>
 
-              <TouchableHighlight onPress={this.onTouch(rec)}>
+              <TouchableHighlight
+                onPress={this.onPress(rec)}
+                onLongPress={this.onLongPress(rec)}
+              >
                 <Image style={styles.recSpectro as ImageStyle /* HACK Avoid weird type error */}
                   source={{uri: Rec.spectroPath(rec)}}
                 />
