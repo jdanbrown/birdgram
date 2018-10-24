@@ -1,10 +1,10 @@
-// console.warn('XXX: SpectroRecorder');
+// console.warn('XXX: Recorder');
 
 import { color, RGBColor } from 'd3-color';
 import { interpolateMagma } from 'd3-scale-chromatic';
-// console.warn('XXX: SpectroRecorder: import jimp ...'); // XXX Debug
+// console.warn('XXX: Recorder: import jimp ...'); // XXX Debug
 import Jimp from 'jimp';
-// console.warn('XXX: SpectroRecorder: import jimp: done'); // XXX Debug
+// console.warn('XXX: Recorder: import jimp: done'); // XXX Debug
 import _ from 'lodash';
 import React from 'react';
 import { Button, Dimensions, EmitterSubscription, Image, Platform, Text, View } from 'react-native';
@@ -44,7 +44,7 @@ interface State {
 }
 
 // https://github.com/chadsmith/react-native-microphone-stream
-export class SpectroRecorder extends React.Component<Props, State> {
+export class Recorder extends React.Component<Props, State> {
 
   // Private attrs (not props or state)
   listener?: EmitterSubscription;
@@ -66,7 +66,7 @@ export class SpectroRecorder extends React.Component<Props, State> {
       spectro: {height: this.props.spectroHeight},
     },
 
-    global.SpectroRecorder = this; // XXX Debug
+    global.Recorder = this; // XXX Debug
 
   }
 

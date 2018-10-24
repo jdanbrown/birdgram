@@ -106,6 +106,8 @@ android
   - TODO
 
 # Troubleshooting
+- App starts loading _very_ slowly in Debug mode (with high cpu on laptop)
+  - Try restarting rndebugger (this worked for me once)
 - App does weird stuff, e.g. fails on startup with strange errors, or loads to a blank screen
   - Make sure you're on a happy path
     - ✅ Debug build + "Debug JS Remotely"

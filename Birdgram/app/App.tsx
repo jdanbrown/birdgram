@@ -1,13 +1,13 @@
 import React from 'React';
 import { Animated, Dimensions, Platform, Text, View } from 'react-native';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
-import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
+import Feather from 'react-native-vector-icons/Feather';
 import ReactNav from 'react-navigation';
 
-import { BrowseScreen } from './components/BrowseScreen';
+import { RecentScreen } from './components/RecentScreen';
+import { SavedScreen } from './components/SavedScreen';
 import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
-import { SpectroScreen } from './components/SpectroScreen';
+import { RecordScreen } from './components/RecordScreen';
 import { config } from './config';
 import { log } from './log';
 import { global, match } from './utils';
@@ -42,9 +42,11 @@ global.fs = global.RNFB.fs;
 
 const Navigator = ReactNav.createBottomTabNavigator(
   {
-    Spectro: { screen: SpectroScreen },
-    Browse: { screen: BrowseScreen },
-    Search: { screen: SearchScreen },
+    // NOTE Must bump the Navigator persistenceKey version when changing these keys (below)
+    Record:   { screen: RecordScreen },
+    Search:   { screen: SearchScreen },
+    Recent:   { screen: RecentScreen },
+    Saved:    { screen: SavedScreen },
     Settings: { screen: SettingsScreen },
   },
   {
@@ -52,10 +54,11 @@ const Navigator = ReactNav.createBottomTabNavigator(
       tabBarIcon: ({focused, horizontal, tintColor}) => {
         const size = horizontal ? 20 : 25;
         return match(navigation.state.key,
-          ['Spectro',  (<FontAwesome5 name={'signature'} size={size} color={tintColor || undefined} />)],
-          ['Browse',   (<FontAwesome5 name={'list-ul'}   size={size} color={tintColor || undefined} />)],
-          ['Search',   (<FontAwesome5 name={'search'}    size={size} color={tintColor || undefined} />)],
-          ['Settings', (<FontAwesome  name={'gear'}      size={size} color={tintColor || undefined} />)],
+          ['Record',   (<Feather name='activity'  size={size} color={tintColor || undefined} />)],
+          ['Search',   (<Feather name='search'    size={size} color={tintColor || undefined} />)],
+          ['Recent',   (<Feather name='list'      size={size} color={tintColor || undefined} />)],
+          ['Saved',    (<Feather name='star'      size={size} color={tintColor || undefined} />)],
+          ['Settings', (<Feather name='settings'  size={size} color={tintColor || undefined} />)],
         );
       },
     }),
@@ -68,9 +71,10 @@ const Navigator = ReactNav.createBottomTabNavigator(
 
 const App = () => (
   // https://reactnavigation.org/docs/en/state-persistence.html
+  //  - NOTE Must bump this persistenceKey version when changing the Navigator keys (above)
   <Navigator
     key="a"
-    persistenceKey={__DEV__ ? '_dev_NavigationState' : null}
+    persistenceKey={__DEV__ ? '_dev_NavigationState_v4' : null}
   />
 );
 
