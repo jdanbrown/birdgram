@@ -1,5 +1,5 @@
 import React from 'React';
-import { Dimensions, Platform, Text, View } from 'react-native';
+import { Animated, Dimensions, Platform, Text, View } from 'react-native';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import ReactNav from 'react-navigation';
@@ -8,10 +8,12 @@ import { BrowseScreen } from './components/BrowseScreen';
 import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { SpectroScreen } from './components/SpectroScreen';
+import { config } from './config';
 import { log } from './log';
 import { global, match } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
+global.Animated = Animated;
 global.Dimensions = Dimensions;
 global.Platform = Platform;
 const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
@@ -28,27 +30,15 @@ timed('nj',                 () => global.nj              = require('../third-par
 timed('sj.ops',             () => global.sj.ops          = require('ndarray-ops'));             // 50ms
 timed('React',              () => global.R               = require('React'));                   // 0ms
 timed('ReactNative',        () => global.RN              = require('ReactNative'));             // 13ms
-timed('SQLite',             () => global.SQLite          = require('react-native-sqlite-storage')); // 0ms
 timed('rn-fetch-blob',      () => global.RNFB            = require('rn-fetch-blob').default);   // 0ms
+timed('Gesture',            () => global.Gesture         = require('react-native-gesture-handler')); // ?
 timed('react-native-sound', () => global.Sound           = require('react-native-sound'));      // 1ms
+timed('SQLite',             () => global.SQLite          = require('react-native-sqlite-storage')); // 0ms
 timed('typography',         () => global.typography      = require('react-native-typography')); // 27ms
 timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));                   // 0ms
 // timed('sj.getPixels',    () => global.sj.getPixels    = require('get-pixels'));              // 10ms // XXX Doesn't work in RN
 // timed('sj.savePixels',   () => global.sj.savePixels   = require('save-pixels'));             // 30ms // XXX Doesn't work in RN
 global.fs = global.RNFB.fs;
-
-// TODO config -> Settings.state [how to share globally?]
-const config = {
-
-  host: 'local',
-  // host: 'remote',
-
-  baseUris: {
-    'local':  'http://192.168.0.195:8000',
-    'remote': 'http://35.230.68.91',
-  },
-
-}
 
 const Navigator = ReactNav.createBottomTabNavigator(
   {

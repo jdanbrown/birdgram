@@ -2,6 +2,11 @@ package com.birdgram;
 
 import com.facebook.react.ReactActivity;
 
+// For https://kmagiera.github.io/react-native-gesture-handler/docs/getting-started.html#android
+import com.facebook.react.ReactActivityDelegate;
+import com.facebook.react.ReactRootView;
+import com.swmansion.gesturehandler.react.RNGestureHandlerEnabledRootView;
+
 public class MainActivity extends ReactActivity {
 
     /**
@@ -12,4 +17,16 @@ public class MainActivity extends ReactActivity {
     protected String getMainComponentName() {
         return "Birdgram";
     }
+
+    // For https://kmagiera.github.io/react-native-gesture-handler/docs/getting-started.html#android
+    @Override
+    protected ReactActivityDelegate createReactActivityDelegate() {
+        return new ReactActivityDelegate(this, getMainComponentName()) {
+            @Override
+            protected ReactRootView createRootView() {
+                return new RNGestureHandlerEnabledRootView(MainActivity.this);
+            }
+        };
+    }
+
 }

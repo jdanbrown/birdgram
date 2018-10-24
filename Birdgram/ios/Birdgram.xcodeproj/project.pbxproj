@@ -5,6 +5,7 @@
 	};
 	objectVersion = 46;
 	objects = {
+
 /* Begin PBXBuildFile section */
 		00C302E51ABCBA2D00DB3ED1 /* libRCTActionSheet.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 00C302AC1ABCB8CE00DB3ED1 /* libRCTActionSheet.a */; };
 		00C302E71ABCBA2D00DB3ED1 /* libRCTGeolocation.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 00C302BA1ABCB90400DB3ED1 /* libRCTGeolocation.a */; };
@@ -46,6 +47,7 @@
 		BF7C9911FA9C4338B0BF698C /* AntDesign.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E0D3CAC7BEF84537A4FD221A /* AntDesign.ttf */; };
 		C62C1AB9427E46D2BA340C1F /* libFastImage.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 15ACA59D541D436B8793C522 /* libFastImage.a */; };
 		C74E8D388A3649829EFFB91E /* libRNSound.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 58C910D952494CFAB98C0692 /* libRNSound.a */; };
+		D196A135E78641ADA2BE2B29 /* libRNGestureHandler.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E55685FC3E3E45669F612796 /* libRNGestureHandler.a */; };
 		D68FB70F0E85421AADC503EB /* FontAwesome5_Brands.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A26112315D9E448AA9F69415 /* FontAwesome5_Brands.ttf */; };
 		E2CF4592168A45C48A5352B4 /* FontAwesome5_Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5D88AD5476D646B49025ACF6 /* FontAwesome5_Regular.ttf */; };
 		FDB334E722914F32B8E52B3C /* FontAwesome.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C6B6829AB2D043BB990531DD /* FontAwesome.ttf */; };
@@ -325,6 +327,13 @@
 			remoteGlobalIDString = A15C300E1CD25C330074CB35;
 			remoteInfo = RNFetchBlob;
 		};
+		B70F80C5217FAA0D006CDF36 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 95FD82E165E44F2FB09395D9 /* RNGestureHandler.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 134814201AA4EA6300B7C361;
+			remoteInfo = RNGestureHandler;
+		};
 		B71254CB216E961A00B2BDB2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 76E381ABAA42447A9DDAA3F1 /* MicrophoneStream.xcodeproj */;
@@ -425,6 +434,7 @@
 		832341B01AAA6A8300B99B32 /* RCTText.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RCTText.xcodeproj; path = "../node_modules/react-native/Libraries/Text/RCTText.xcodeproj"; sourceTree = "<group>"; };
 		945DEC247A05462C804E0C32 /* FontAwesome5_Solid.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome5_Solid.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome5_Solid.ttf"; sourceTree = "<group>"; };
 		95D338A68A224B59BF0B0214 /* RNVectorIcons.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = RNVectorIcons.xcodeproj; path = "../node_modules/react-native-vector-icons/RNVectorIcons.xcodeproj"; sourceTree = "<group>"; };
+		95FD82E165E44F2FB09395D9 /* RNGestureHandler.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = RNGestureHandler.xcodeproj; path = "../node_modules/react-native-gesture-handler/ios/RNGestureHandler.xcodeproj"; sourceTree = "<group>"; };
 		9C0E9EFE59FF429F8A4538CB /* libRNVectorIcons.a */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = archive.ar; path = libRNVectorIcons.a; sourceTree = "<group>"; };
 		9C5D782FE18342929BD97492 /* libMicrophoneStream.a */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = archive.ar; path = libMicrophoneStream.a; sourceTree = "<group>"; };
 		A26112315D9E448AA9F69415 /* FontAwesome5_Brands.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome5_Brands.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome5_Brands.ttf"; sourceTree = "<group>"; };
@@ -437,6 +447,7 @@
 		DE94A016F63348E785A58055 /* Feather.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = Feather.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Feather.ttf"; sourceTree = "<group>"; };
 		E0D3CAC7BEF84537A4FD221A /* AntDesign.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = AntDesign.ttf; path = "../node_modules/react-native-vector-icons/Fonts/AntDesign.ttf"; sourceTree = "<group>"; };
 		E4BA4FD5A5644B62A9306C04 /* MaterialIcons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = MaterialIcons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/MaterialIcons.ttf"; sourceTree = "<group>"; };
+		E55685FC3E3E45669F612796 /* libRNGestureHandler.a */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = archive.ar; path = libRNGestureHandler.a; sourceTree = "<group>"; };
 		EAF48495D93042ED9222D5BA /* KCKeepAwake.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = KCKeepAwake.xcodeproj; path = "../node_modules/react-native-keep-awake/ios/KCKeepAwake.xcodeproj"; sourceTree = "<group>"; };
 		F456A7EB74E0402F98D0B31C /* Octicons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = Octicons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Octicons.ttf"; sourceTree = "<group>"; };
 		F6A36DAEFEC847498FBB41CB /* Zocial.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = Zocial.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Zocial.ttf"; sourceTree = "<group>"; };
@@ -476,6 +487,7 @@
 				4EE2055A526D4FC695897053 /* libSQLite.a in Frameworks */,
 				C74E8D388A3649829EFFB91E /* libRNSound.a in Frameworks */,
 				2F655C400EBF4F368515A26B /* libRNFetchBlob.a in Frameworks */,
+				D196A135E78641ADA2BE2B29 /* libRNGestureHandler.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -671,6 +683,7 @@
 				B8ED9E6567504A149A09641B /* SQLite.xcodeproj */,
 				3DB7677A7FCE4E6886B3F6B8 /* RNSound.xcodeproj */,
 				AA1F90226BC44ACE94E2E1CD /* RNFetchBlob.xcodeproj */,
+				95FD82E165E44F2FB09395D9 /* RNGestureHandler.xcodeproj */,
 			);
 			name = Libraries;
 			sourceTree = "<group>";
@@ -726,6 +739,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		B70F80C2217FAA0D006CDF36 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B70F80C6217FAA0D006CDF36 /* libRNGestureHandler.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		B7125450216D58B400B2BDB2 /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
@@ -737,6 +758,7 @@
 				6D89A5A81797432396A7CE1E /* libSQLite.a */,
 				58C910D952494CFAB98C0692 /* libRNSound.a */,
 				7B2C136AB85E475997301EFB /* libRNFetchBlob.a */,
+				E55685FC3E3E45669F612796 /* libRNGestureHandler.a */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -935,6 +957,10 @@
 				{
 					ProductGroup = B70F8065217F9E99006CDF36 /* Products */;
 					ProjectRef = AA1F90226BC44ACE94E2E1CD /* RNFetchBlob.xcodeproj */;
+				},
+				{
+					ProductGroup = B70F80C2217FAA0D006CDF36 /* Products */;
+					ProjectRef = 95FD82E165E44F2FB09395D9 /* RNGestureHandler.xcodeproj */;
 				},
 				{
 					ProductGroup = B7FEBF4321796C8400FA487B /* Products */;
@@ -1224,6 +1250,13 @@
 			remoteRef = B70F8068217F9E99006CDF36 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		B70F80C6217FAA0D006CDF36 /* libRNGestureHandler.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libRNGestureHandler.a;
+			remoteRef = B70F80C5217FAA0D006CDF36 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 		B71254CC216E961A00B2BDB2 /* libMicrophoneStream.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
@@ -1395,12 +1428,14 @@
 					"$(SRCROOT)/../node_modules/react-native-sqlite-storage/src/ios",
 					"$(SRCROOT)/../node_modules/react-native-sound/RNSound",
 					"$(SRCROOT)/../node_modules/rn-fetch-blob/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
 				);
 				INFOPLIST_FILE = BirdgramTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
+					"\"$(SRCROOT)/$(TARGET_NAME)\"",
 					"\"$(SRCROOT)/$(TARGET_NAME)\"",
 				);
 				OTHER_LDFLAGS = (
@@ -1429,12 +1464,14 @@
 					"$(SRCROOT)/../node_modules/react-native-sqlite-storage/src/ios",
 					"$(SRCROOT)/../node_modules/react-native-sound/RNSound",
 					"$(SRCROOT)/../node_modules/rn-fetch-blob/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
 				);
 				INFOPLIST_FILE = BirdgramTests/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
+					"\"$(SRCROOT)/$(TARGET_NAME)\"",
 					"\"$(SRCROOT)/$(TARGET_NAME)\"",
 				);
 				OTHER_LDFLAGS = (
@@ -1464,6 +1501,7 @@
 					"$(SRCROOT)/../node_modules/react-native-sqlite-storage/src/ios",
 					"$(SRCROOT)/../node_modules/react-native-sound/RNSound",
 					"$(SRCROOT)/../node_modules/rn-fetch-blob/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
 				);
 				INFOPLIST_FILE = Birdgram/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -1495,6 +1533,7 @@
 					"$(SRCROOT)/../node_modules/react-native-sqlite-storage/src/ios",
 					"$(SRCROOT)/../node_modules/react-native-sound/RNSound",
 					"$(SRCROOT)/../node_modules/rn-fetch-blob/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
 				);
 				INFOPLIST_FILE = Birdgram/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";

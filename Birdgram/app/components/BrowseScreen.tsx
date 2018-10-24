@@ -1,11 +1,21 @@
+// @ts-ignore
+import animated from "animated.macro";
 import _ from 'lodash';
 import React from 'React';
-import { Component } from 'react';
+import { Component, ReactNode, RefObject } from 'react';
 import {
-  Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Platform, SectionList, SectionListData, Text,
-  TextInput, TouchableHighlight, View, WebView,
+  Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Platform, SectionList, SectionListData,
+  Text, TextInput, TouchableHighlight, View, WebView,
 } from 'react-native';
 import RNFB from 'rn-fetch-blob';
+import FastImage from 'react-native-fast-image';
+import * as Gesture from 'react-native-gesture-handler';
+import {
+  BorderlessButton, LongPressGestureHandler, PanGestureHandler, PinchGestureHandler, RectButton, TapGestureHandler,
+  // FlatList, ScrollView, Slider, Switch, TextInput, // TODO Needed?
+} from 'react-native-gesture-handler';
+import DrawerLayout from 'react-native-gesture-handler/DrawerLayout';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import KeepAwake from 'react-native-keep-awake';
 import SQLite from 'react-native-sqlite-storage';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
@@ -13,6 +23,7 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 const fs = RNFB.fs;
 
+import { config } from '../config';
 import { log } from '../log';
 import { Places } from '../places';
 import Sound from '../sound';
@@ -74,6 +85,11 @@ const Rec = {
 
 };
 
+type WidthHeight<X> = {
+  w: X,
+  h: X,
+};
+
 type State = {
   totalRecs?: number,
   queryText: string,
@@ -84,23 +100,100 @@ type State = {
   },
   status: string,
   recs: Array<Rec>,
+  spectroScaleY: number,
   currentlyPlaying?: {
     rec: Rec,
     sound: Sound,
   }
 };
 
-type Props = {};
+type Props = {
+  spectroScaleYMin: number,
+  spectroScaleYMax: number,
+  spectroBase:      WidthHeight<number>,
+};
+
+type SwipeButton = {name: string, backgroundColor: string, onPress: () => void};
+
+class SpectroAnim {
+
+  // outScaleY:      Animated.Value;
+  inBase:         Animated.Value;
+  inScale:        Animated.Value;
+  outScale:       Animated.Value;
+  outTranslate:   Animated.Animated;
+  transform:      Array<object>;
+  onPinchGesture: (...args: Array<any>) => void;
+
+  constructor(
+    public readonly spectroBase:    WidthHeight<number>,
+    // public          scaleY:         number,
+    public          base:           number,
+    public readonly baseMin:        number,
+    public readonly baseMax:        number,
+  ) {
+    // This is a big poop
+    // this.outScaleY    = new Animated.Value(scaleY);
+    this.inBase       = new Animated.Value(base);
+    this.inScale      = new Animated.Value(1);
+    this.outScale     = animated`${Animated.diffClamp(this.inBase, baseMin, baseMax)} * ${this.inScale}`;
+    this.outTranslate = this.outScale.interpolate({
+      inputRange:  [0, 1],
+      outputRange: [-spectroBase.w / 2, 0],
+    });
+    this.transform = [
+      {translateX: this.outTranslate},
+      {scaleX: this.outScale},
+      // {scaleY: this.outScaleY},
+    ];
+    this.onPinchGesture = Animated.event(
+      [{nativeEvent: {scale: this.inScale}}],
+      {useNativeDriver: config.useNativeDriver},
+    );
+  }
+
+  onPinchState = (event: Gesture.PinchGestureHandlerStateChangeEvent) => {
+    const {nativeEvent: {oldState, scale}} = event;
+    if (oldState === Gesture.State.ACTIVE) {
+      this.base = _.clamp( // TODO Wat. Why do we have to clamp twice?
+        this.base * scale,
+        this.baseMin,
+        this.baseMax,
+      );
+      this.inBase.setValue(this.base);
+      this.inScale.setValue(1);
+    }
+  }
+
+  // onZoomY = (step: number) => {
+  //   this.scaleY = _.clamp(
+  //     this.scaleY * Math.pow(2, step),
+  //     1,
+  //     8,
+  //   );
+  //   this.outScaleY.setValue(this.scaleY);
+  // }
+
+}
 
 export class BrowseScreen extends Component<Props, State> {
 
-  db?: SQLiteDatabase
-  soundsCache: Map<RecId, Promise<Sound> | Sound>
+  static defaultProps = {
+    spectroBase: {
+      w: Dimensions.get('window').width,
+      h: 25,
+    },
+    spectroScaleYMin: 1,
+    spectroScaleYMax: 8,
+  };
+
+  db?: SQLiteDatabase;
+  soundsCache: Map<RecId, Promise<Sound> | Sound>;
+  drawerLayoutRef: RefObject<DrawerLayout>;
+  spectroAnim: SpectroAnim;
 
   constructor(props: Props) {
     super(props);
-
-    this.soundsCache = new Map();
 
     this.state = {
       queryText: '',
@@ -110,10 +203,14 @@ export class BrowseScreen extends Component<Props, State> {
       },
       status: '',
       recs: [],
+      spectroScaleY: 2,
     };
 
-    global.BrowseScreen = this; // XXX Debug
+    this.soundsCache = new Map();
+    this.drawerLayoutRef = React.createRef();
+    this.spectroAnim = new SpectroAnim(this.props.spectroBase, 2, 1, 10);
 
+    global.BrowseScreen = this; // XXX Debug
   }
 
   componentDidMount = async () => {
@@ -271,7 +368,7 @@ export class BrowseScreen extends Component<Props, State> {
     //  - TODO How eagerly should we cache this? What are the cpu/mem costs and tradeoffs?
     const soundAsync = this.getOrAllocateSoundAsync(rec);
 
-    return async (event: GestureResponderEvent) => {
+    return async (pointerInside: boolean) => {
       log.debug('onPress');
       log.debug('rec', rec);
       log.debug('this.state.currentlyPlaying', this.state.currentlyPlaying);
@@ -322,66 +419,192 @@ export class BrowseScreen extends Component<Props, State> {
     };
   }
 
-  onLongPress = (rec: Rec) => {
-    return async (event: GestureResponderEvent) => {
+  onLongPress = (rec: Rec) => async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
+    const {nativeEvent: {state}} = event; // Unpack SyntheticEvent (before async)
+    if (state === Gesture.State.ACTIVE) {
       log.debug('onLongPress');
-    };
+    }
   }
+
+  onMockPress = (rec: Rec) => async () => {
+    console.log('renderLeftAction.onMockPress');
+  }
+
+  renderLeftActions = (rec: Rec) => {
+    return this.renderSwipeButtons(rec, 'left', [
+      {name: 'Hide',   backgroundColor: iOSColors.red,    onPress: this.onMockPress(rec)},
+      {name: 'Show',   backgroundColor: iOSColors.orange, onPress: this.onMockPress(rec)},
+      {name: 'Search', backgroundColor: iOSColors.yellow, onPress: this.onMockPress(rec)},
+      {name: 'More',   backgroundColor: iOSColors.green,  onPress: this.onMockPress(rec)},
+    ]);
+  }
+
+  renderRightActions = (rec: Rec) => {
+    return this.renderSwipeButtons(rec, 'right', [
+      {name: 'Select',  backgroundColor: iOSColors.blue,   onPress: this.onMockPress(rec)},
+      {name: 'Correct', backgroundColor: iOSColors.purple, onPress: this.onMockPress(rec)},
+      {name: 'More',    backgroundColor: iOSColors.pink,   onPress: this.onMockPress(rec)},
+    ]);
+  }
+
+  renderSwipeButtons = (
+    rec: Rec,
+    side: 'left' | 'right',
+    buttons: Array<SwipeButton>,
+  ) => (progress: Animated.Value): ReactNode => {
+
+    const width = 200;
+    const x = (i: number) => (side === 'right' ?
+      width - width / buttons.length * i :
+      width / buttons.length * i
+    );
+
+    const renderButton = (button: SwipeButton, x: number, key: string): ReactNode => {
+      const {name, backgroundColor, onPress} = button;
+      const transform = [{translateX: progress.interpolate({
+        inputRange:  [0, 1],
+        // outputRange: [x, 0],
+        outputRange: [width, 0],
+      })}];
+      return (
+        <Animated.View key={key} style={{flex: 1, transform}}>
+          <RectButton style={[styles.swipeButton, {backgroundColor}]} onPress={onPress}>
+            <Text style={styles.swipeButtonText}>{name}</Text>
+          </RectButton>
+        </Animated.View>
+      );
+    };
+
+    return (
+      <View style={{width, flexDirection: 'row'}}>
+        {buttons.map((button, i) => renderButton(button, x(i), i.toString()))}
+      </View>
+    );
+
+  }
+
+  renderDrawer = (): ReactNode => {
+    return (
+      <View style={styles.drawer}>
+        <Text>The drawer</Text>
+      </View>
+    );
+  }
+
+  openDrawer = () => {
+    this.drawerLayoutRef.current && this.drawerLayoutRef.current.openDrawer();
+  }
+
+  zoomSpectroHeight = (step: number) => {
+    // TODO TODO Hook up buttons to zoom spectro height
+    // this.spectroAnim.onZoomY(step);
+    this.setState((state, props) => ({
+      spectroScaleY: _.clamp(
+        // state.spectroScaleY * Math.pow(2, step),
+        state.spectroScaleY + step,
+        props.spectroScaleYMin,
+        props.spectroScaleYMax,
+      ),
+    }));
+  }
+
+  // TODO Disable when spectroScaleY is min/max
+  TopControlsButton = (props: {name: string, onPress: () => void}) => (
+    <BorderlessButton onPress={props.onPress}>
+      <FontAwesome5 style={styles.topControlsIcon} name={props.name} />
+    </BorderlessButton>
+  )
 
   render = () => {
     return (
-      <View style={styles.container}>
+      <View style={styles.containerOutsideDrawer}>
+        <DrawerLayout
+          ref={this.drawerLayoutRef}
+          drawerWidth={250}
+          drawerPosition='left'
+          drawerType='slide'
+          drawerBackgroundColor={iOSColors.gray}
+          overlayColor='rgba(0,0,0,0)'
+          renderNavigationView={this.renderDrawer}
+        >
+          <PinchGestureHandler onGestureEvent={this.spectroAnim.onPinchGesture} onHandlerStateChange={this.spectroAnim.onPinchState}>
+            <Animated.View style={styles.containerInsideDrawer}>
 
-        {__DEV__ && <KeepAwake/>}
+              {__DEV__ && <KeepAwake/>}
 
-        <TextInput
-          style={styles.queryInput}
-          value={this.state.queryText}
-          onChangeText={this.editQueryText}
-          onSubmitEditing={this.submitQuery}
-          autoCorrect={false}
-          autoCapitalize={'characters'}
-          enablesReturnKeyAutomatically={true}
-          placeholder={'Species'}
-          returnKeyType={'search'}
-        />
-
-        <Text style={styles.summaryText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
-        <Text style={styles.summaryText}>{JSON.stringify(this.state.queryConfig)}</Text>
-
-        <SectionList
-          style={styles.recList}
-          sections={sectionsForRecs(this.state.recs)}
-          keyExtractor={(rec, index) => rec.id.toString()}
-          initialNumToRender={20}
-          renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
-            <Text style={styles.recSectionHeader}>{species_com_name} ({recs_for_sp} total recs)</Text>
-          )}
-          renderItem={({item: rec, index}) => (
-            <View style={styles.recRow}>
-
-              <TouchableHighlight
-                onPress={this.onPress(rec)}
-                onLongPress={this.onLongPress(rec)}
-              >
-                <Image style={styles.recSpectro as ImageStyle /* HACK Avoid weird type error */}
-                  source={{uri: Rec.spectroPath(rec)}}
+              <View style={styles.topControls}>
+                <this.TopControlsButton name='bars'  onPress={this.openDrawer} />
+                <this.TopControlsButton name='minus' onPress={() => this.zoomSpectroHeight(-1)} />
+                <this.TopControlsButton name='plus'  onPress={() => this.zoomSpectroHeight(+1)} />
+                <TextInput
+                  style={styles.queryInput}
+                  value={this.state.queryText}
+                  onChangeText={this.editQueryText}
+                  onSubmitEditing={this.submitQuery}
+                  autoCorrect={false}
+                  autoCapitalize='characters'
+                  enablesReturnKeyAutomatically={true}
+                  placeholder='Species'
+                  returnKeyType='search'
                 />
-              </TouchableHighlight>
-
-              <View style={styles.recCaption}>
-                <RecText flex={3}>{rec.xc_id}</RecText>
-                <RecText flex={1}>{rec.quality}</RecText>
-                <RecText flex={2}>{rec.month_day}</RecText>
-                <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
-                {ccIcon({style: styles.recTextFont})}
-                <RecText flex={4}> {rec.recordist}</RecText>
               </View>
 
-            </View>
-          )}
-        />
+              <Text style={styles.summaryText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
+              <Text style={styles.summaryText}>{JSON.stringify(this.state.queryConfig)}</Text>
 
+              <SectionList
+                style={styles.recList}
+                sections={sectionsForRecs(this.state.recs)}
+                keyExtractor={(rec, index) => rec.id.toString()}
+                initialNumToRender={20}
+                renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
+                  <Text style={styles.recSectionHeader}>{species_com_name} ({recs_for_sp} total recs)</Text>
+                )}
+                renderItem={({item: rec, index}) => (
+                  <View style={styles.recRow}>
+
+                    <Swipeable
+                      renderLeftActions={this.renderLeftActions(rec)}
+                      renderRightActions={this.renderRightActions(rec)}
+                      // @ts-ignore [TODO PR react-native-gesture-handler/react-native-gesture-handler.d.ts]
+                      waitFor={this.drawerLayoutRef}
+                    >
+                      <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
+                        <BorderlessButton onPress={this.onPress(rec)}>
+
+                          <Animated.View collapsable={false}>
+                            <Animated.Image
+                              style={[{
+                                width:     this.spectroAnim.spectroBase.w,
+                                height:    this.spectroAnim.spectroBase.h * this.state.spectroScaleY,
+                                transform: this.spectroAnim.transform,
+                              }]}
+                              resizeMode='stretch'
+                              source={{uri: Rec.spectroPath(rec)}}
+                            />
+                          </Animated.View>
+
+                        </BorderlessButton>
+                      </LongPressGestureHandler>
+
+                      <View style={styles.recCaption}>
+                        <RecText flex={3}>{rec.xc_id}</RecText>
+                        <RecText flex={1}>{rec.quality}</RecText>
+                        <RecText flex={2}>{rec.month_day}</RecText>
+                        <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
+                        {ccIcon({style: styles.recTextFont})}
+                        <RecText flex={4}> {rec.recordist}</RecText>
+                      </View>
+
+                    </Swipeable>
+
+                  </View>
+                )}
+              />
+
+            </Animated.View>
+          </PinchGestureHandler>
+        </DrawerLayout>
       </View>
     );
   }
@@ -416,7 +639,7 @@ function RecText<X extends {children: any, flex?: number}>(props: X) {
   return (<Text
     style={[styles.recText, {flex}]}
     numberOfLines={1}
-    ellipsizeMode={'tail'}
+    ellipsizeMode='tail'
     {...props}
   />);
 }
@@ -436,24 +659,33 @@ function licenseTypeIcons(license_type: string, props?: object): Array<Element> 
 }
 
 const styles = StyleSheet.create({
-  container: {
+  containerOutsideDrawer: {
     flex: 1,
-    justifyContent: 'center',
+  },
+  drawer: {
+    paddingTop: 20, // TODO How to not overlap with ios status bar?
+  },
+  containerInsideDrawer: {
+    flex: 1,
+    paddingTop: 20, // TODO How to not overlap with ios status bar?
+  },
+  topControls: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: Dimensions.get('window').width,
+  },
+  topControlsIcon: {
+    ...material.headlineObject,
+    paddingHorizontal: 15,
   },
   queryInput: {
-    marginTop: 20, // HACK ios status bar
     borderWidth: 1, borderColor: 'gray',
     ...material.display1Object,
-    width: Dimensions.get('window').width, // TODO flex
   },
   summaryText: {
     ...material.captionObject,
   },
   recList: {
     // borderWidth: 1, borderColor: 'gray',
-    width: Dimensions.get('window').width, // TODO flex
   },
   recSectionHeader: {
     // ...material.body1Object, backgroundColor: iOSColors.customGray, // Black on white
@@ -473,8 +705,14 @@ const styles = StyleSheet.create({
     ...material.captionObject,
   },
   recSpectro: {
-    width: Dimensions.get('window').width!, // TODO flex
-    height: 50,
-    resizeMode: 'stretch',
+  },
+  swipeButtons: {
+    flexDirection: 'row',
+  },
+  swipeButton: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  swipeButtonText: {
   },
 });
