@@ -4,8 +4,8 @@ import _ from 'lodash';
 import React from 'React';
 import { Component, ReactNode, RefObject } from 'react';
 import {
-  Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Platform, SectionList, SectionListData,
-  Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
+  Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, LayoutChangeEvent, Platform, SectionList,
+  SectionListData, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
 } from 'react-native';
 import RNFB from 'rn-fetch-blob';
 import FastImage from 'react-native-fast-image';
@@ -22,6 +22,7 @@ import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
+import { sprintf } from 'sprintf-js';
 const fs = RNFB.fs;
 
 import { config } from '../config';
@@ -30,7 +31,7 @@ import { Places } from '../places';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
-import { finallyAsync, global, match, Styles } from '../utils';
+import { finallyAsync, getOrSet, global, match, puts, Styles } from '../utils';
 
 const SearchRecs = {
 
@@ -91,6 +92,11 @@ type WidthHeight<X> = {
   h: X,
 };
 
+type Clamp<X> = {
+  min: X,
+  max: X,
+};
+
 type State = {
   totalRecs?: number,
   queryText: string,
@@ -109,16 +115,15 @@ type State = {
 };
 
 type Props = {
-  spectroScaleYMin: number,
-  spectroScaleYMax: number,
-  spectroBase:      WidthHeight<number>,
+  spectroBase:        WidthHeight<number>,
+  spectroScaleYClamp: Clamp<number>,
 };
 
 type SwipeButton = {name: string, backgroundColor: string, onPress: () => void};
 
-class SpectroAnim {
+// HACK This is a big poop
+class PinchScaleX {
 
-  // outScaleY:      Animated.Value;
   inBase:         Animated.Value;
   inScale:        Animated.Value;
   outScale:       Animated.Value;
@@ -127,17 +132,13 @@ class SpectroAnim {
   onPinchGesture: (...args: Array<any>) => void;
 
   constructor(
-    public readonly spectroBase:    WidthHeight<number>,
-    // public          scaleY:         number,
-    public          base:           number,
-    public readonly baseMin:        number,
-    public readonly baseMax:        number,
+    public readonly spectroBase: WidthHeight<number>,
+    public          base:        number,
+    public readonly baseClamp:   Clamp<number>,
   ) {
-    // This is a big poop
-    // this.outScaleY    = new Animated.Value(scaleY);
     this.inBase       = new Animated.Value(base);
     this.inScale      = new Animated.Value(1);
-    this.outScale     = animated`${Animated.diffClamp(this.inBase, baseMin, baseMax)} * ${this.inScale}`;
+    this.outScale     = animated`${Animated.diffClamp(this.inBase, baseClamp.min, baseClamp.max)} * ${this.inScale}`;
     this.outTranslate = this.outScale.interpolate({
       inputRange:  [0, 1],
       outputRange: [-spectroBase.w / 2, 0],
@@ -145,7 +146,6 @@ class SpectroAnim {
     this.transform = [
       {translateX: this.outTranslate},
       {scaleX: this.outScale},
-      // {scaleY: this.outScaleY},
     ];
     this.onPinchGesture = Animated.event(
       [{nativeEvent: {scale: this.inScale}}],
@@ -158,8 +158,8 @@ class SpectroAnim {
     if (oldState === Gesture.State.ACTIVE) {
       this.base = _.clamp( // TODO Wat. Why do we have to clamp twice?
         this.base * scale,
-        this.baseMin,
-        this.baseMax,
+        this.baseClamp.min,
+        this.baseClamp.max,
       );
       this.inBase.setValue(this.base);
       this.inScale.setValue(1);
@@ -168,21 +168,129 @@ class SpectroAnim {
 
 }
 
+// HACK This is a slightly less big poop
+class PanTranslateX {
+
+  listenTranslationX: number;
+  inTranslationX:  Animated.Value;
+  outTranslationX: Animated.Animated;
+  transform:       Array<object>;
+  onPanGesture:    (...args: Array<any>) => void;
+
+  constructor(
+    public readonly scale:             Animated.Animated,
+    public          translationX:      number,
+    public readonly translationXClamp: Clamp<number>, // TODO TODO
+  ) {
+
+    this.listenTranslationX = 0;
+    this.inTranslationX = new Animated.Value(0);
+    this.outTranslationX = (
+
+      // Works (mostly)
+      this.inTranslationX
+
+      // TODO TODO Why does this do something funny?
+      // animated`${this.inTranslationX} / ${this.scale}`
+
+      // TODO TODO Clamp
+      // Animated.diffClamp(this.inTranslationX,
+      //   // -500,
+      //   -Dimensions.get('window').width * 1.5,
+      //   0,
+      // )
+
+    );
+    this.transform = [
+      {translateX: this.outTranslationX},
+    ];
+    this.onPanGesture = Animated.event(
+      [{nativeEvent: {translationX: this.inTranslationX}}],
+      {useNativeDriver: config.useNativeDriver},
+    );
+
+    // HACK Must call addListener else .{_value,_offset} don't update on the js side
+    //  - We rely on ._value below, to workaround a race-condition bug
+    this.inTranslationX.addListener(() => {});
+
+    // this._log = (log_f, desc, keys = [], values = []) => { // XXX Debug
+    //   log_f(sprintf(
+    //     ['%21s :', 'inTranslationX[{_value[%7.2f], _offset[%7.2f]}]', 'listenTranslationX[%7.2f]', 'translationX[%7.2f]',
+    //      ...keys].join(' '),
+    //     desc, this.inTranslationX._value, this.inTranslationX._offset, this.listenTranslationX, this.translationX, ...values,
+    //   ));
+    // }
+
+  }
+
+  onPanState = (event: Gesture.PanGestureHandlerStateChangeEvent) => {
+    const {nativeEvent: {oldState, translationX, velocityX}} = event;
+    if (oldState === Gesture.State.ACTIVE) {
+
+      // log.info('-----------------------------');
+      // this._log(log.info, 'onPanState', ['e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [translationX, velocityX]);
+
+      // Flatten offset -> value so that .decay can use offset for momentum
+      //  - {value, offset} -> {value: value+offset, offset: 0}
+      this.inTranslationX.flattenOffset();
+
+      // HACK Save ._value for workaround below
+      //  - WARNING This only works if we've called .addListener (else it's always 0)
+      // @ts-ignore (._value isn't exposed)
+      const _valueBefore = this.inTranslationX._value;
+
+      // this._log(log.info, 'onPanState', ['_value[%7.2f]', 'e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [_value, translationX, velocityX]);
+
+      // Scale velocityX waaaaay down, else it's ludicrous speed [Why? Maybe a unit mismatch?]
+      const scaleVelocity = 1/1000;
+
+      Animated.decay(this.inTranslationX, {
+        velocity: velocityX * scaleVelocity,
+        // deceleration: .997, // Very light, needs twiddling
+        deceleration: .98,     // Very heavy, good for debug
+        useNativeDriver: config.useNativeDriver,
+      }).start(({finished}) => {
+        // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
+
+        // Bug: .decay resets ._value to 0 if you swipe multiple times really fast and make multiple .decay's race
+        //  - HACK Workaround: if .decay moved us the wrong direction, reset to the _value before .decay
+        //  - When you do trip the bug the animation displays incorrectly, but ._value ends up correct
+        //  - Without the workaround you'd reset to .value=0 anytime you trip the bug
+        // @ts-ignore (._value isn't exposed)
+        const _valueAfter = this.inTranslationX._value;
+        const sgn = Math.sign(velocityX);
+        if (sgn * _valueAfter < sgn * _valueBefore) {
+          this.inTranslationX.setValue(_valueBefore);
+          // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
+        }
+
+        // Extract offset <- value now that .decay is done using offset for momentum
+        //  - {value, offset} -> {value: 0, offset: value+offset}
+        //  - Net effect: (0, offset) -[flatten]> (offset, 0) -[decay]> (offset, momentum) -[extract]> (0, offset+momentum)
+        this.inTranslationX.extractOffset();
+
+        // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
+      });
+
+    }
+  }
+
+}
+
 export class SearchScreen extends Component<Props, State> {
 
   static defaultProps = {
-    spectroBase: {
-      w: Dimensions.get('window').width,
-      h: 20,
-    },
-    spectroScaleYMin: 1,
-    spectroScaleYMax: 8,
+    spectroBase:        {h: 20, w: Dimensions.get('window').width},
+    spectroScaleYClamp: {min: 1, max: 8},
   };
 
   db?: SQLiteDatabase;
   soundsCache: Map<RecId, Promise<Sound> | Sound>;
+  pinchRef: RefObject<PinchGestureHandler>;
   drawerLayoutRef: RefObject<DrawerLayout>;
-  spectroAnim: SpectroAnim;
+  pinchScaleX: PinchScaleX;
+  panTranslateX: Map<RecId, PanTranslateX>;
+  panRefs: Map<RecId, RefObject<PanGestureHandler>>;
 
   constructor(props: Props) {
     super(props);
@@ -199,10 +307,35 @@ export class SearchScreen extends Component<Props, State> {
     };
 
     this.soundsCache = new Map();
+    this.pinchRef = React.createRef();
     this.drawerLayoutRef = React.createRef();
-    this.spectroAnim = new SpectroAnim(this.props.spectroBase, 2, 1, 10);
+    this.pinchScaleX = new PinchScaleX(this.props.spectroBase,
+      // 2, {min: 1, max: 10}, // TODO TODO Restore
+      // .5, {min: .5, max: 10},
+      1, {min: .5, max: 10},
+    );
+    this.panTranslateX = new Map();
+    this.panRefs = new Map();
 
     global.SearchScreen = this; // XXX Debug
+  }
+
+  componentDidUpdate = (prevProps: Props, prevState: State) => {
+
+    // Drop PanTranslateX resources for recs we no longer have, and preserve PanTranslateX state for recs we still have
+    this.panTranslateX = new Map(this.state.recs.map<[RecId, PanTranslateX]>(rec => [
+      rec.id,
+      this.panTranslateX.get(rec.id) || new PanTranslateX(
+        this.pinchScaleX.outScale, // scale
+        0, {min: 0, max: 0},
+        // 0, {min: -Rec.spectroWidthPx(rec), max: 0}, // TODO TODO Clamp
+      ),
+    ]));
+    log.info('panTranslateX = new Map', this.panTranslateX); // TODO TODO XXX Debug
+
+    // TODO TODO Does this work?
+    this.panRefs = new Map();
+
   }
 
   componentDidMount = async () => {
@@ -422,59 +555,6 @@ export class SearchScreen extends Component<Props, State> {
     console.log('renderLeftAction.onMockPress');
   }
 
-  renderLeftActions = (rec: Rec) => {
-    return this.renderSwipeButtons(rec, 'left', [
-      {name: 'Hide',   backgroundColor: iOSColors.red,    onPress: this.onMockPress(rec)},
-      {name: 'Show',   backgroundColor: iOSColors.orange, onPress: this.onMockPress(rec)},
-      {name: 'Search', backgroundColor: iOSColors.yellow, onPress: this.onMockPress(rec)},
-      {name: 'More',   backgroundColor: iOSColors.green,  onPress: this.onMockPress(rec)},
-    ]);
-  }
-
-  renderRightActions = (rec: Rec) => {
-    return this.renderSwipeButtons(rec, 'right', [
-      {name: 'Select',  backgroundColor: iOSColors.blue,   onPress: this.onMockPress(rec)},
-      {name: 'Correct', backgroundColor: iOSColors.purple, onPress: this.onMockPress(rec)},
-      {name: 'More',    backgroundColor: iOSColors.pink,   onPress: this.onMockPress(rec)},
-    ]);
-  }
-
-  renderSwipeButtons = (
-    rec: Rec,
-    side: 'left' | 'right',
-    buttons: Array<SwipeButton>,
-  ) => (progress: Animated.Value): ReactNode => {
-
-    const width = 200;
-    const x = (i: number) => (side === 'right' ?
-      width - width / buttons.length * i :
-      width / buttons.length * i
-    );
-
-    const renderButton = (button: SwipeButton, x: number, key: string): ReactNode => {
-      const {name, backgroundColor, onPress} = button;
-      const transform = [{translateX: progress.interpolate({
-        inputRange:  [0, 1],
-        // outputRange: [x, 0],
-        outputRange: [width, 0],
-      })}];
-      return (
-        <Animated.View key={key} style={{flex: 1, transform}}>
-          <RectButton style={[styles.swipeButton, {backgroundColor}]} onPress={onPress}>
-            <Text style={styles.swipeButtonText}>{name}</Text>
-          </RectButton>
-        </Animated.View>
-      );
-    };
-
-    return (
-      <View style={{width, flexDirection: 'row'}}>
-        {buttons.map((button, i) => renderButton(button, x(i), i.toString()))}
-      </View>
-    );
-
-  }
-
   renderFiltersDrawer = (): ReactNode => {
     return (
       <View style={styles.filtersDrawer}>
@@ -483,6 +563,19 @@ export class SearchScreen extends Component<Props, State> {
         <Text>- month</Text>
         <Text>- species likelihood [bucketed ebird priors]</Text>
         <Text>- rec text search [conflate fields]</Text>
+        {/* XXX For reference
+        <TextInput
+          style={styles.queryInput}
+          value={this.state.queryText}
+          onChangeText={this.editQueryText}
+          onSubmitEditing={this.submitQuery}
+          autoCorrect={false}
+          autoCapitalize='characters'
+          enablesReturnKeyAutomatically={true}
+          placeholder='Species'
+          returnKeyType='search'
+        />
+        */}
       </View>
     );
   }
@@ -495,8 +588,8 @@ export class SearchScreen extends Component<Props, State> {
     this.setState((state, props) => ({
       spectroScaleY: _.clamp(
         state.spectroScaleY + step,
-        props.spectroScaleYMin,
-        props.spectroScaleYMax,
+        props.spectroScaleYClamp.min,
+        props.spectroScaleYClamp.max,
       ),
     }));
   }
@@ -514,130 +607,149 @@ export class SearchScreen extends Component<Props, State> {
           overlayColor='rgba(0,0,0,0)'
           renderNavigationView={this.renderFiltersDrawer}
         >
-          <PinchGestureHandler onGestureEvent={this.spectroAnim.onPinchGesture} onHandlerStateChange={this.spectroAnim.onPinchState}>
-            <Animated.View style={styles.containerInsideDrawer}>
+          <Animated.View style={styles.containerInsideDrawer}>
 
-              {__DEV__ && <KeepAwake/>}
+            {__DEV__ && <KeepAwake/>}
 
-              <View style={styles.topControls}>
-
-                {/* Filters */}
-                <TopControlsButton onPress={this.openFiltersDrawer} {...{
-                  name: 'filter'
-                }} />
-                {/* Save as new list / add all to saved list / share list */}
-                <TopControlsButton onPress={() => {}} {...{
-                  name: 'star'
-                  // name: 'share'
-                }} />
-                {/* Add species (select species manually) */}
-                <TopControlsButton onPress={() => {}} {...{
-                  // name: 'user-plus'
-                  // name: 'file-plus'
-                  // name: 'folder-plus'
-                  name: 'plus-circle'
-                  // name: 'plus'
-                }} />
-                {/* Toggle sort: species probs / rec dist / manual list */}
-                <TopControlsButton onPress={() => {}} {...{
-                  // name: 'chevrons-down'
-                  // name: 'chevron-down'
-                  name: 'arrow-down'
-                  // name: 'arrow-down-circle'
-                }} />
-                {/* Cycle metadata: none / oneline / full */}
-                <TopControlsButton onPress={() => {}} {...{
-                  name: 'credit-card', style: Styles.flipVertical,
-                  // name: 'sidebar', style: Styles.rotate270,
-                  // name: 'file-text',
-                }} />
-                {/* Zoom more/fewer recs (spectro height)  */}
-                <TopControlsButton onPress={() => this.zoomSpectroHeight(-1)} {...{
-                  name: 'align-justify' // 4 horizontal lines
-                }} />
-                <TopControlsButton onPress={() => this.zoomSpectroHeight(+1)} {...{
-                  name: 'menu'          // 3 horizontal lines
-                }} />
-                {/* Toggle controls for rec/species */}
-                <TopControlsButton onPress={() => {}} {...{
-                  name: 'sliders'
-                  // name: 'edit'
-                  // name: 'edit-2'
-                  // name: 'edit-3'
-                  // name: 'layout', style: Styles.flipBoth,
-                }} />
-
-                {/* XXX Unused, but keeping for reference
-                <TextInput
-                  style={styles.queryInput}
-                  value={this.state.queryText}
-                  onChangeText={this.editQueryText}
-                  onSubmitEditing={this.submitQuery}
-                  autoCorrect={false}
-                  autoCapitalize='characters'
-                  enablesReturnKeyAutomatically={true}
-                  placeholder='Species'
-                  returnKeyType='search'
-                />
-                */}
-
-              </View>
-
-              <Text style={styles.summaryText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
-              <Text style={styles.summaryText}>{JSON.stringify(this.state.queryConfig)}</Text>
-
-              <SectionList
-                style={styles.recList}
-                sections={sectionsForRecs(this.state.recs)}
-                keyExtractor={(rec, index) => rec.id.toString()}
-                initialNumToRender={20}
-                renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
-                  <Text style={styles.recSectionHeader}>{species_com_name} ({recs_for_sp} total recs)</Text>
-                )}
-                renderItem={({item: rec, index}) => (
-                  <View style={styles.recRow}>
-
-                    <Swipeable
-                      renderLeftActions={this.renderLeftActions(rec)}
-                      renderRightActions={this.renderRightActions(rec)}
-                      // @ts-ignore [TODO PR react-native-gesture-handler/react-native-gesture-handler.d.ts]
-                      waitFor={this.drawerLayoutRef}
-                    >
-                      <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
-                        <BorderlessButton onPress={this.onPress(rec)}>
-
-                          <Animated.View collapsable={false}>
-                            <Animated.Image
-                              style={[{
-                                width:     this.spectroAnim.spectroBase.w,
-                                height:    this.spectroAnim.spectroBase.h * this.state.spectroScaleY,
-                                transform: this.spectroAnim.transform,
-                              }]}
-                              resizeMode='stretch'
-                              source={{uri: Rec.spectroPath(rec)}}
-                            />
-                          </Animated.View>
-
-                        </BorderlessButton>
-                      </LongPressGestureHandler>
-
-                      <View style={styles.recCaption}>
-                        <RecText flex={3}>{rec.xc_id}</RecText>
-                        <RecText flex={1}>{rec.quality}</RecText>
-                        <RecText flex={2}>{rec.month_day}</RecText>
-                        <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
-                        {ccIcon({style: styles.recTextFont})}
-                        <RecText flex={4}> {rec.recordist}</RecText>
-                      </View>
-
-                    </Swipeable>
-
-                  </View>
-                )}
+            <View style={styles.topControls}>
+              {/* Filters */}
+              <TopControlsButton onPress={this.openFiltersDrawer}
+                name='filter'
               />
+              {/* Save as new list / add all to saved list / share list */}
+              <TopControlsButton onPress={() => {}}
+                name='star'
+                // name='share'
+              />
+              {/* Add species (select species manually) */}
+              <TopControlsButton onPress={() => {}}
+                // name='user-plus'
+                // name='file-plus'
+                // name='folder-plus'
+                name='plus-circle'
+                // name='plus'
+              />
+              {/* Toggle sort: species probs / rec dist / manual list */}
+              <TopControlsButton onPress={() => {}}
+                // name='chevrons-down'
+                // name='chevron-down'
+                name='arrow-down'
+                // name='arrow-down-circle'
+              />
+              {/* Cycle metadata: none / oneline / full */}
+              <TopControlsButton onPress={() => {}}
+                name='credit-card' style={Styles.flipVertical}
+                // name='sidebar' style={Styles.rotate270}
+                // name='file-text'
+              />
+              {/* Zoom more/fewer recs (spectro height)  */}
+              <TopControlsButton onPress={() => this.zoomSpectroHeight(-1)}
+                name='align-justify' // 4 horizontal lines
+              />
+              <TopControlsButton onPress={() => this.zoomSpectroHeight(+1)}
+                name='menu'          // 3 horizontal lines
+              />
+              {/* Toggle controls for rec/species */}
+              <TopControlsButton onPress={() => {}}
+                name='sliders'
+                // name='edit'
+                // name='edit-2'
+                // name='edit-3'
+                // name='layout' style={Styles.flipBoth}
+              />
+            </View>
 
-            </Animated.View>
-          </PinchGestureHandler>
+            <Text style={styles.summaryText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
+            <Text style={styles.summaryText}>{JSON.stringify(this.state.queryConfig)}</Text>
+
+            <PinchGestureHandler
+              ref={this.pinchRef}
+              onGestureEvent={this.pinchScaleX.onPinchGesture}
+              onHandlerStateChange={this.pinchScaleX.onPinchState}
+              // TODO TODO Make this waitFor work!
+              waitFor={Array.from(this.panRefs.values())}
+            >
+              <Animated.View style={{flex: 1}}>
+
+                <SectionList
+                  style={styles.recList}
+                  sections={sectionsForRecs(this.state.recs)}
+                  keyExtractor={(rec, index) => rec.id.toString()}
+                  initialNumToRender={20}
+                  renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
+                    <Text style={styles.recSectionHeader}>{species_com_name} ({recs_for_sp} total recs)</Text>
+                  )}
+                  renderItem={({item: rec, index}) => (
+                    <Animated.View style={styles.recRow}>
+
+                      <PanGestureHandler
+                        ref={getOrSet(this.panRefs, rec.id, () => React.createRef())}
+                        // [Why do these trigger undefined.onPanGesture on init?]
+                        onGestureEvent       = {(this.panTranslateX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
+                        onHandlerStateChange = {(this.panTranslateX.get(rec.id) || {onPanState:   undefined}).onPanState}
+                        // @ts-ignore [TODO PR: add waitFor to react-native-gesture-handler/react-native-gesture-handler.d.ts]
+                        // waitFor={this.pinchRef}
+                        // XXX Nope, doesn't control for multiple pointers on separate spectros
+                        // maxPointers={1}
+
+                        // TODO TODO Does this prevent multiple simultaneous pans?
+                        //  - TODO TODO Keep debugging -- all arrays are still empty...
+                        waitFor={puts(
+                          Array.from(this.panRefs.entries())
+                          .filter(([recId, ref]) => puts(recId) < puts(rec.id))
+                          .map(([recId, ref]) => ref)
+                        )}
+
+                      >
+                        <Animated.View>
+
+                          {/* <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}> */}
+                            {/* <BorderlessButton onPress={this.onPress(rec)}> */}
+
+                              <Animated.View collapsable={false}>
+                                <Animated.Image
+                                  style={[{
+                                    // XXX Can't animate height
+                                    //  - "Error: Style property 'height' is not supported by native animated module"
+                                    // height: this.pinchScaleX.outScaleY.interpolate({
+                                    //   inputRange: [0, 1],
+                                    //   outputRange: [0, this.pinchScaleX.spectroBase.h],
+                                    // }),
+                                    width:  this.pinchScaleX.spectroBase.w,
+                                    height: this.pinchScaleX.spectroBase.h * this.state.spectroScaleY,
+                                    transform: [
+                                      ...this.pinchScaleX.transform,
+                                      ...(this.panTranslateX.get(rec.id) || {transform: []}).transform,
+                                    ],
+                                  }]}
+                                  resizeMode='stretch'
+                                  source={{uri: Rec.spectroPath(rec)}}
+                                />
+                              </Animated.View>
+
+                            {/* </BorderlessButton> */}
+                          {/* </LongPressGestureHandler> */}
+
+                          <View style={styles.recCaption}>
+                            <RecText flex={3}>{rec.xc_id}</RecText>
+                            <RecText flex={1}>{rec.quality}</RecText>
+                            <RecText flex={2}>{rec.month_day}</RecText>
+                            <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
+                            {ccIcon({style: styles.recTextFont})}
+                            <RecText flex={4}> {rec.recordist}</RecText>
+                          </View>
+
+                        </Animated.View>
+                      </PanGestureHandler>
+
+                    </Animated.View>
+                  )}
+                />
+
+              </Animated.View>
+            </PinchGestureHandler>
+
+          </Animated.View>
         </DrawerLayout>
       </View>
     );
@@ -645,12 +757,13 @@ export class SearchScreen extends Component<Props, State> {
 
 }
 
-// TODO Disable when spectroScaleY is min/max
 type TopControlsButtonProps = {
   style?: ViewStyle | TextStyle,
   name: string,
   onPress?: (pointerInside: boolean) => void,
 }
+
+// TODO Disable when spectroScaleY is min/max
 function TopControlsButton<X extends TopControlsButtonProps>(_props: X) {
   // Type assertion else https://github.com/Microsoft/TypeScript/issues/16780 ("rest types may only be created from object types")
   const {style, onPress, ...props} = _props as TopControlsButtonProps;

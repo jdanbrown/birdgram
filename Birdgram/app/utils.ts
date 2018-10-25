@@ -23,6 +23,18 @@ export function match<X, X0 extends X, Y>(x0: X0, ...cases: Array<[X | Match, Y]
 enum Match { Default }
 match.default = Match.Default;
 
+export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
+  if (map.has(k)) {
+    map.set(k, v());
+  }
+  return map.get(k)!;
+}
+
+export function puts<X>(x: X): X {
+  console.debug('puts', x);
+  return x;
+}
+
 //
 // Promise
 //
