@@ -2,6 +2,8 @@
 // Utils
 //
 
+import reactFastCompare from 'react-fast-compare';
+
 // Export global:any, which would have otherwise come from DOM but we disable DOM for react-native (tsconfig -> "lib")
 //  - Fallback to a mock `{}` for release builds, which run in jsc instead of chrome v8 and don't have window.global
 //  - https://facebook.github.io/react-native/docs/javascript-environment
@@ -30,9 +32,9 @@ export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
   return map.get(k)!;
 }
 
-export function puts<X>(x: X): X {
-  console.debug('puts', x);
-  return x;
+// Typesafe wrapper around react-fast-compare
+export function deepEqual<X, Y extends X>(x: X, y: Y): boolean {
+  return reactFastCompare(x, y);
 }
 
 //

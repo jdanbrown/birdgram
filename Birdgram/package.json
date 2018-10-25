@@ -22,6 +22,7 @@
     "ndarray-resample": "^1.0.1",
     "node-libs-react-native": "^1.0.3",
     "react": "16.5.0",
+    "react-fast-compare": "^2.0.2",
     "react-native": "0.57.2",
     "react-native-console-time-polyfill": "^0.0.6",
     "react-native-debug-stylesheet": "^0.1.1",

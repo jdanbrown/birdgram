@@ -46,6 +46,13 @@ interface HeaderProps {
 }
 
 interface ItemProps {
+
+    // HACK For isEditable
+    isEditable?: boolean;
+    id?: string;
+    value?: string;
+    onTextChange?: (text: string) => void;
+
     /**
      * Title being displayed
      */

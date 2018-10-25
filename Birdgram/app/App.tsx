@@ -1,21 +1,29 @@
-import React from 'React';
-import { Animated, Dimensions, Platform, Text, View } from 'react-native';
+import React, { Component } from 'React';
+import { Animated, AsyncStorage, Dimensions, Platform, Text, View } from 'react-native';
+import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import ReactNav from 'react-navigation';
 
 import { RecentScreen } from './components/RecentScreen';
+import { RecordScreen } from './components/RecordScreen';
 import { SavedScreen } from './components/SavedScreen';
 import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
-import { RecordScreen } from './components/RecordScreen';
+import { Settings } from './components/Settings';
 import { config } from './config';
 import { log } from './log';
-import { global, match } from './utils';
+import { deepEqual, global, match } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Animated = Animated;
+global.AsyncStorage = AsyncStorage;
 global.Dimensions = Dimensions;
 global.Platform = Platform;
+global.iOSColors = iOSColors;
+global.material = material;
+global.materialColors = materialColors;
+global.systemWeights = systemWeights;
+global.Settings = Settings;
 const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
 global.sj = {};
 global.d3 = {};
@@ -63,19 +71,66 @@ const Navigator = ReactNav.createBottomTabNavigator(
       },
     }),
     tabBarOptions: {
+      showLabel: false,
       // activeTintColor: 'tomato',
       // inactiveTintColor: 'gray',
     },
   },
 );
 
-const App = () => (
-  // https://reactnavigation.org/docs/en/state-persistence.html
-  //  - NOTE Must bump this persistenceKey version when changing the Navigator keys (above)
-  <Navigator
-    key="a"
-    persistenceKey={__DEV__ ? '_dev_NavigationState_v4' : null}
-  />
-);
+type Props = {};
+
+type State = {
+  loading: boolean;
+  settings?: Settings;
+};
+
+class App extends Component<Props, State> {
+
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      loading: true,
+    };
+  }
+
+  componentDidMount = async () => {
+    // Load settings (async) on app startup
+    //  - TODO Show loading screen until load completes
+    const settings = await Settings.load(
+      settings => this.setState({settings}), // Callback for when Settings updates
+    );
+    this.setState({
+      loading: false,
+      settings,
+    });
+  }
+
+  shouldComponentUpdate(nextProps: Props, nextState: State): boolean {
+    return !(deepEqual(this.props, nextProps) && deepEqual(this.state, nextState));
+  }
+
+  componentDidUpdate = (prevProps: Props, prevState: State) => {
+    log.debug('App.componentDidUpdate', this.state.settings);
+    global.settings = this.state.settings; // XXX Debug
+  }
+
+  render = () => (
+    this.state.loading ? (
+      <View>
+        <Text>LOADING HOLD ON</Text>
+      </View>
+    ) : (
+      // https://reactnavigation.org/docs/en/state-persistence.html
+      //  - NOTE Must bump this persistenceKey version when changing the Navigator keys (above)
+      <Settings.Context.Provider value={this.state.settings!}>
+        <Navigator
+          persistenceKey={__DEV__ ? '_dev_NavigationState_v4' : null}
+        />
+      </Settings.Context.Provider>
+    )
+  );
+
+}
 
 export default App;

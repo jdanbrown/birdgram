@@ -70,6 +70,21 @@ export class Log {
 // Global logger (with defaults as per above)
 export const log = new Log();
 
+//
+// Utils (that rely on log.*)
+//
+
+export function puts<X>(x: X, ...args: any[]): X {
+  log.debug('puts', x, ...args);
+  return x;
+}
+
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
-global.log   = log;
-global.print = log.info.bind(log); // Shorthand for interactive dev
+global.log        = log;
+global.print      = log.info.bind(log); // Shorthand for interactive dev
+
+// Greppable + tsc-unhappy shorthand for trace debugging [copy of puts, but different printed string]
+global.debugPrint = <X>(x: X, ...args: any[]): X => {
+  log.debug('debugPrint', x, ...args);
+  return x;
+};

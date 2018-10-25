@@ -25,13 +25,14 @@ import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import { sprintf } from 'sprintf-js';
 const fs = RNFB.fs;
 
+import { Settings } from './Settings';
 import { config } from '../config';
-import { log } from '../log';
+import { log, puts } from '../log';
 import { Places } from '../places';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
-import { finallyAsync, getOrSet, global, match, puts, Styles } from '../utils';
+import { finallyAsync, getOrSet, global, match, Styles } from '../utils';
 
 const SearchRecs = {
 
@@ -95,28 +96,6 @@ type WidthHeight<X> = {
 type Clamp<X> = {
   min: X,
   max: X,
-};
-
-type State = {
-  totalRecs?: number,
-  queryText: string,
-  query?: string,
-  queryConfig: {
-    quality: Array<Quality>,
-    limit: number,
-  },
-  status: string,
-  recs: Array<Rec>,
-  spectroScaleY: number,
-  currentlyPlaying?: {
-    rec: Rec,
-    sound: Sound,
-  }
-};
-
-type Props = {
-  spectroBase:        WidthHeight<number>,
-  spectroScaleYClamp: Clamp<number>,
 };
 
 type SwipeButton = {name: string, backgroundColor: string, onPress: () => void};
@@ -276,6 +255,28 @@ class PanTranslateX {
   }
 
 }
+
+type State = {
+  totalRecs?: number,
+  queryText: string,
+  query?: string,
+  queryConfig: {
+    quality: Array<Quality>,
+    limit: number,
+  },
+  status: string,
+  recs: Array<Rec>,
+  spectroScaleY: number,
+  currentlyPlaying?: {
+    rec: Rec,
+    sound: Sound,
+  }
+};
+
+type Props = {
+  spectroBase:        WidthHeight<number>,
+  spectroScaleYClamp: Clamp<number>,
+};
 
 export class SearchScreen extends Component<Props, State> {
 
@@ -596,180 +597,189 @@ export class SearchScreen extends Component<Props, State> {
 
   render = () => {
     return (
-      <View style={styles.containerOutsideDrawer}>
-        <DrawerLayout
-          ref={this.drawerLayoutRef}
-          drawerWidth={250}
-          drawerPosition='left'
-          drawerType='slide'
-          edgeWidth={0}
-          drawerBackgroundColor={iOSColors.gray}
-          overlayColor='rgba(0,0,0,0)'
-          renderNavigationView={this.renderFiltersDrawer}
-        >
-          <Animated.View style={styles.containerInsideDrawer}>
+      <Settings.Context.Consumer children={settings => (
+        <View style={styles.containerOutsideDrawer}>
+          <DrawerLayout
+            ref={this.drawerLayoutRef}
+            drawerWidth={250}
+            drawerPosition='left'
+            drawerType='slide'
+            edgeWidth={0}
+            drawerBackgroundColor={iOSColors.gray}
+            overlayColor='rgba(0,0,0,0)'
+            renderNavigationView={this.renderFiltersDrawer}
+          >
+            <Animated.View style={styles.containerInsideDrawer}>
 
-            {__DEV__ && <KeepAwake/>}
+              {__DEV__ && <KeepAwake/>}
 
-            <View style={styles.topControls}>
-              {/* Filters */}
-              <TopControlsButton onPress={this.openFiltersDrawer}
-                name='filter'
-              />
-              {/* Save as new list / add all to saved list / share list */}
-              <TopControlsButton onPress={() => {}}
-                name='star'
-                // name='share'
-              />
-              {/* Add species (select species manually) */}
-              <TopControlsButton onPress={() => {}}
-                // name='user-plus'
-                // name='file-plus'
-                // name='folder-plus'
-                name='plus-circle'
-                // name='plus'
-              />
-              {/* Toggle sort: species probs / rec dist / manual list */}
-              <TopControlsButton onPress={() => {}}
-                // name='chevrons-down'
-                // name='chevron-down'
-                name='arrow-down'
-                // name='arrow-down-circle'
-              />
-              {/* Cycle metadata: none / oneline / full */}
-              <TopControlsButton onPress={() => {}}
-                name='credit-card' style={Styles.flipVertical}
-                // name='sidebar' style={Styles.rotate270}
-                // name='file-text'
-              />
-              {/* Zoom more/fewer recs (spectro height)  */}
-              <TopControlsButton onPress={() => this.zoomSpectroHeight(-1)}
-                name='align-justify' // 4 horizontal lines
-              />
-              <TopControlsButton onPress={() => this.zoomSpectroHeight(+1)}
-                name='menu'          // 3 horizontal lines
-              />
-              {/* Toggle controls for rec/species */}
-              <TopControlsButton onPress={() => {}}
-                name='sliders'
-                // name='edit'
-                // name='edit-2'
-                // name='edit-3'
-                // name='layout' style={Styles.flipBoth}
-              />
-            </View>
+              <PinchGestureHandler
+                ref={this.pinchRef}
+                onGestureEvent={this.pinchScaleX.onPinchGesture}
+                onHandlerStateChange={this.pinchScaleX.onPinchState}
+                // TODO TODO Make this waitFor work!
+                waitFor={Array.from(this.panRefs.values())}
+              >
+                <Animated.View style={{flex: 1}}>
 
-            <Text style={styles.summaryText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
-            <Text style={styles.summaryText}>{JSON.stringify(this.state.queryConfig)}</Text>
-
-            <PinchGestureHandler
-              ref={this.pinchRef}
-              onGestureEvent={this.pinchScaleX.onPinchGesture}
-              onHandlerStateChange={this.pinchScaleX.onPinchState}
-              // TODO TODO Make this waitFor work!
-              waitFor={Array.from(this.panRefs.values())}
-            >
-              <Animated.View style={{flex: 1}}>
-
-                <SectionList
-                  style={styles.recList}
-                  sections={sectionsForRecs(this.state.recs)}
-                  keyExtractor={(rec, index) => rec.id.toString()}
-                  initialNumToRender={20}
-                  renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
-                    <Text style={styles.recSectionHeader}>{species_com_name} ({recs_for_sp} total recs)</Text>
-                  )}
-                  renderItem={({item: rec, index}) => (
-                    <Animated.View style={styles.recRow}>
-
-                      <PanGestureHandler
-                        ref={getOrSet(this.panRefs, rec.id, () => React.createRef())}
-                        // [Why do these trigger undefined.onPanGesture on init?]
-                        onGestureEvent       = {(this.panTranslateX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
-                        onHandlerStateChange = {(this.panTranslateX.get(rec.id) || {onPanState:   undefined}).onPanState}
-                        // @ts-ignore [TODO PR: add waitFor to react-native-gesture-handler/react-native-gesture-handler.d.ts]
-                        // waitFor={this.pinchRef}
-                        // XXX Nope, doesn't control for multiple pointers on separate spectros
-                        // maxPointers={1}
-
-                        // TODO TODO Does this prevent multiple simultaneous pans?
-                        //  - TODO TODO Keep debugging -- all arrays are still empty...
-                        waitFor={puts(
-                          Array.from(this.panRefs.entries())
-                          .filter(([recId, ref]) => puts(recId) < puts(rec.id))
-                          .map(([recId, ref]) => ref)
+                  <SectionList
+                    style={styles.recList}
+                    sections={sectionsForRecs(this.state.recs)}
+                    keyExtractor={(rec, index) => rec.id.toString()}
+                    initialNumToRender={20}
+                    renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
+                      <View style={styles.recSectionHeader}>
+                        <Text numberOfLines={1}>{species_com_name}</Text>
+                        {settings.showDebug && (
+                          <Text numberOfLines={1} style={[{marginLeft: 'auto'}, settings.debugText]}>({recs_for_sp} recs)</Text>
                         )}
+                      </View>
+                    )}
+                    renderItem={({item: rec, index}) => (
+                      <Animated.View style={styles.recRow}>
 
-                      >
-                        <Animated.View>
+                        <PanGestureHandler
+                          ref={getOrSet(this.panRefs, rec.id, () => React.createRef())}
+                          // [Why do these trigger undefined.onPanGesture on init?]
+                          onGestureEvent       = {(this.panTranslateX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
+                          onHandlerStateChange = {(this.panTranslateX.get(rec.id) || {onPanState:   undefined}).onPanState}
+                          // @ts-ignore [TODO PR: add waitFor to react-native-gesture-handler/react-native-gesture-handler.d.ts]
+                          // waitFor={this.pinchRef}
+                          // XXX Nope, doesn't control for multiple pointers on separate spectros
+                          // maxPointers={1}
 
-                          {/* <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}> */}
-                            {/* <BorderlessButton onPress={this.onPress(rec)}> */}
+                          // TODO TODO Does this prevent multiple simultaneous pans?
+                          //  - TODO TODO Keep debugging -- all arrays are still empty...
+                          // waitFor={puts(
+                          //   Array.from(this.panRefs.entries())
+                          //   .filter(([recId, ref]) => puts(recId) < puts(rec.id))
+                          //   .map(([recId, ref]) => ref)
+                          // )}
 
-                              <Animated.View collapsable={false}>
-                                <Animated.Image
-                                  style={[{
-                                    // XXX Can't animate height
-                                    //  - "Error: Style property 'height' is not supported by native animated module"
-                                    // height: this.pinchScaleX.outScaleY.interpolate({
-                                    //   inputRange: [0, 1],
-                                    //   outputRange: [0, this.pinchScaleX.spectroBase.h],
-                                    // }),
-                                    width:  this.pinchScaleX.spectroBase.w,
-                                    height: this.pinchScaleX.spectroBase.h * this.state.spectroScaleY,
-                                    transform: [
-                                      ...this.pinchScaleX.transform,
-                                      ...(this.panTranslateX.get(rec.id) || {transform: []}).transform,
-                                    ],
-                                  }]}
-                                  resizeMode='stretch'
-                                  source={{uri: Rec.spectroPath(rec)}}
-                                />
-                              </Animated.View>
+                        >
+                          <Animated.View>
 
-                            {/* </BorderlessButton> */}
-                          {/* </LongPressGestureHandler> */}
+                            {/* <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}> */}
+                              {/* <BorderlessButton onPress={this.onPress(rec)}> */}
 
-                          <View style={styles.recCaption}>
-                            <RecText flex={3}>{rec.xc_id}</RecText>
-                            <RecText flex={1}>{rec.quality}</RecText>
-                            <RecText flex={2}>{rec.month_day}</RecText>
-                            <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
-                            {ccIcon({style: styles.recTextFont})}
-                            <RecText flex={4}> {rec.recordist}</RecText>
-                          </View>
+                                <Animated.View collapsable={false}>
+                                  <Animated.Image
+                                    style={[{
+                                      // XXX Can't animate height
+                                      //  - "Error: Style property 'height' is not supported by native animated module"
+                                      // height: this.pinchScaleX.outScaleY.interpolate({
+                                      //   inputRange: [0, 1],
+                                      //   outputRange: [0, this.pinchScaleX.spectroBase.h],
+                                      // }),
+                                      width:  this.pinchScaleX.spectroBase.w,
+                                      height: this.pinchScaleX.spectroBase.h * this.state.spectroScaleY,
+                                      transform: [
+                                        ...this.pinchScaleX.transform,
+                                        ...(this.panTranslateX.get(rec.id) || {transform: []}).transform,
+                                      ],
+                                    }]}
+                                    resizeMode='stretch'
+                                    source={{uri: Rec.spectroPath(rec)}}
+                                  />
+                                </Animated.View>
 
-                        </Animated.View>
-                      </PanGestureHandler>
+                              {/* </BorderlessButton> */}
+                            {/* </LongPressGestureHandler> */}
 
-                    </Animated.View>
-                  )}
+                            <View style={styles.recCaption}>
+                              <RecText flex={3}>{rec.xc_id}</RecText>
+                              <RecText flex={1}>{rec.quality}</RecText>
+                              <RecText flex={2}>{rec.month_day}</RecText>
+                              <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
+                              {ccIcon({style: styles.recTextFont})}
+                              <RecText flex={4}> {rec.recordist}</RecText>
+                            </View>
+
+                          </Animated.View>
+                        </PanGestureHandler>
+
+                      </Animated.View>
+                    )}
+                  />
+
+                </Animated.View>
+              </PinchGestureHandler>
+
+              <View style={settings.debugView}>
+                <Text style={settings.debugText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
+                <Text style={settings.debugText}>{JSON.stringify(this.state.queryConfig)}</Text>
+              </View>
+
+              <View style={styles.bottomControls}>
+                {/* Filters */}
+                <BottomControlsButton onPress={this.openFiltersDrawer}
+                  name='filter'
                 />
+                {/* Save as new list / add all to saved list / share list */}
+                <BottomControlsButton onPress={() => {}}
+                  name='star'
+                  // name='share'
+                />
+                {/* Add species (select species manually) */}
+                <BottomControlsButton onPress={() => {}}
+                  // name='user-plus'
+                  // name='file-plus'
+                  // name='folder-plus'
+                  name='plus-circle'
+                  // name='plus'
+                />
+                {/* Toggle sort: species probs / rec dist / manual list */}
+                <BottomControlsButton onPress={() => {}}
+                  // name='chevrons-down'
+                  // name='chevron-down'
+                  name='arrow-down'
+                  // name='arrow-down-circle'
+                />
+                {/* Cycle metadata: none / oneline / full */}
+                <BottomControlsButton onPress={() => {}}
+                  name='credit-card' style={Styles.flipVertical}
+                  // name='sidebar' style={Styles.rotate270}
+                  // name='file-text'
+                />
+                {/* Zoom more/fewer recs (spectro height)  */}
+                <BottomControlsButton onPress={() => this.zoomSpectroHeight(-1)}
+                  name='align-justify' // 4 horizontal lines
+                />
+                <BottomControlsButton onPress={() => this.zoomSpectroHeight(+1)}
+                  name='menu'          // 3 horizontal lines
+                />
+                {/* Toggle controls for rec/species */}
+                <BottomControlsButton onPress={() => {}}
+                  name='sliders'
+                  // name='edit'
+                  // name='edit-2'
+                  // name='edit-3'
+                  // name='layout' style={Styles.flipBoth}
+                />
+              </View>
 
-              </Animated.View>
-            </PinchGestureHandler>
-
-          </Animated.View>
-        </DrawerLayout>
-      </View>
+            </Animated.View>
+          </DrawerLayout>
+        </View>
+      )}/>
     );
   }
 
 }
 
-type TopControlsButtonProps = {
+type BottomControlsButtonProps = {
   style?: ViewStyle | TextStyle,
   name: string,
   onPress?: (pointerInside: boolean) => void,
 }
 
-// TODO Disable when spectroScaleY is min/max
-function TopControlsButton<X extends TopControlsButtonProps>(_props: X) {
-  // Type assertion else https://github.com/Microsoft/TypeScript/issues/16780 ("rest types may only be created from object types")
-  const {style, onPress, ...props} = _props as TopControlsButtonProps;
+function BottomControlsButton<X extends BottomControlsButtonProps>(_props: X) {
+  // Type assertion else "rest types may only be created from object types" [https://github.com/Microsoft/TypeScript/issues/16780]
+  const {style, onPress, ...props} = _props as BottomControlsButtonProps;
   return (
-    <BorderlessButton style={styles.topControlsButton} onPress={onPress}>
-      <Feather style={[styles.topControlsIcon, style]} {...props} />
+    // TODO Disable when spectroScaleY is min/max
+    <BorderlessButton style={styles.bottomControlsButton} onPress={onPress}>
+      <Feather style={[styles.bottomControlsIcon, style]} {...props} />
     </BorderlessButton>
   );
 }
@@ -832,15 +842,17 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 20, // TODO How to not overlap with ios status bar?
   },
-  topControls: {
+  bottomControls: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 5,
+    backgroundColor: iOSColors.midGray,
   },
-  topControlsButton: {
+  bottomControlsButton: {
     flex: 1,
     alignItems: 'center',
   },
-  topControlsIcon: {
+  bottomControlsIcon: {
     ...material.headlineObject,
   },
   queryInput: {
@@ -854,6 +866,7 @@ const styles = StyleSheet.create({
     // borderWidth: 1, borderColor: 'gray',
   },
   recSectionHeader: {
+    flexDirection: 'row',
     // ...material.body1Object, backgroundColor: iOSColors.customGray, // Black on white
     ...material.body1WhiteObject, backgroundColor: iOSColors.gray, // White on black
   },
