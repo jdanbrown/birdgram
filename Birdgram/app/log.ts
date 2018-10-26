@@ -74,6 +74,11 @@ export const log = new Log();
 // Utils (that rely on log.*)
 //
 
+export function tap<X>(x: X, f: (x: X) => void): X {
+  f(x);
+  return x;
+}
+
 export function puts<X>(x: X, ...args: any[]): X {
   log.debug('puts', x, ...args);
   return x;
@@ -81,6 +86,8 @@ export function puts<X>(x: X, ...args: any[]): X {
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.log        = log;
+global.tap        = tap;
+global.puts       = puts;
 global.print      = log.info.bind(log); // Shorthand for interactive dev
 
 // Greppable + tsc-unhappy shorthand for trace debugging [copy of puts, but different printed string]
