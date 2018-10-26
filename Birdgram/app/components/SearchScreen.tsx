@@ -19,6 +19,7 @@ import Swipeable from 'react-native-gesture-handler/Swipeable';
 import KeepAwake from 'react-native-keep-awake';
 import SQLite from 'react-native-sqlite-storage';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
+import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
@@ -836,11 +837,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filtersDrawer: {
-    paddingTop: 20, // TODO How to not overlap with ios status bar?
+    marginTop: getStatusBarHeight(),
   },
   containerInsideDrawer: {
     flex: 1,
-    paddingTop: 20, // TODO How to not overlap with ios status bar?
+    marginTop: getStatusBarHeight(),
   },
   bottomControls: {
     flexDirection: 'row',
