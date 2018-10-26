@@ -34,176 +34,6 @@ import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import { finallyAsync, getOrSet, global, match, Styles, TabBarBottomConstants } from '../utils';
 
-type WidthHeight<X> = {
-  w: X,
-  h: X,
-};
-
-type Clamp<X> = {
-  min: X,
-  max: X,
-};
-
-type SwipeButton = {name: string, backgroundColor: string, onPress: () => void};
-
-// HACK This is a big poop
-class PinchScaleX {
-
-  inBase:         Animated.Value;
-  inScale:        Animated.Value;
-  outScale:       Animated.Value;
-  outTranslate:   Animated.Animated;
-  transform:      Array<object>;
-  onPinchGesture: (...args: Array<any>) => void;
-
-  constructor(
-    public readonly spectroBase: WidthHeight<number>,
-    public          base:        number,
-    public readonly baseClamp:   Clamp<number>,
-  ) {
-    this.inBase       = new Animated.Value(base);
-    this.inScale      = new Animated.Value(1);
-    this.outScale     = animated`${Animated.diffClamp(this.inBase, baseClamp.min, baseClamp.max)} * ${this.inScale}`;
-    this.outTranslate = this.outScale.interpolate({
-      inputRange:  [0, 1],
-      outputRange: [-spectroBase.w / 2, 0],
-    });
-    this.transform = [
-      {translateX: this.outTranslate},
-      {scaleX: this.outScale},
-    ];
-    this.onPinchGesture = Animated.event(
-      [{nativeEvent: {scale: this.inScale}}],
-      {useNativeDriver: config.useNativeDriver},
-    );
-  }
-
-  onPinchState = (event: Gesture.PinchGestureHandlerStateChangeEvent) => {
-    const {nativeEvent: {oldState, scale}} = event;
-    if (oldState === Gesture.State.ACTIVE) {
-      this.base = _.clamp( // TODO Wat. Why do we have to clamp twice?
-        this.base * scale,
-        this.baseClamp.min,
-        this.baseClamp.max,
-      );
-      this.inBase.setValue(this.base);
-      this.inScale.setValue(1);
-    }
-  }
-
-}
-
-// HACK This is a slightly less big poop
-class PanTranslateX {
-
-  listenTranslationX: number;
-  inTranslationX:  Animated.Value;
-  outTranslationX: Animated.Animated;
-  transform:       Array<object>;
-  onPanGesture:    (...args: Array<any>) => void;
-
-  constructor(
-    public readonly scale:             Animated.Animated,
-    public          translationX:      number,
-    public readonly translationXClamp: Clamp<number>, // TODO TODO
-  ) {
-
-    this.listenTranslationX = 0;
-    this.inTranslationX = new Animated.Value(0);
-    this.outTranslationX = (
-
-      // Works (mostly)
-      this.inTranslationX
-
-      // TODO TODO Why does this do something funny?
-      // animated`${this.inTranslationX} / ${this.scale}`
-
-      // TODO TODO Clamp
-      // Animated.diffClamp(this.inTranslationX,
-      //   // -500,
-      //   -Dimensions.get('window').width * 1.5,
-      //   0,
-      // )
-
-    );
-    this.transform = [
-      {translateX: this.outTranslationX},
-    ];
-    this.onPanGesture = Animated.event(
-      [{nativeEvent: {translationX: this.inTranslationX}}],
-      {useNativeDriver: config.useNativeDriver},
-    );
-
-    // HACK Must call addListener else .{_value,_offset} don't update on the js side
-    //  - We rely on ._value below, to workaround a race-condition bug
-    this.inTranslationX.addListener(() => {});
-
-    // this._log = (log_f, desc, keys = [], values = []) => { // XXX Debug
-    //   log_f(sprintf(
-    //     ['%21s :', 'inTranslationX[{_value[%7.2f], _offset[%7.2f]}]', 'listenTranslationX[%7.2f]', 'translationX[%7.2f]',
-    //      ...keys].join(' '),
-    //     desc, this.inTranslationX._value, this.inTranslationX._offset, this.listenTranslationX, this.translationX, ...values,
-    //   ));
-    // }
-
-  }
-
-  onPanState = (event: Gesture.PanGestureHandlerStateChangeEvent) => {
-    const {nativeEvent: {oldState, translationX, velocityX}} = event;
-    if (oldState === Gesture.State.ACTIVE) {
-
-      // log.info('-----------------------------');
-      // this._log(log.info, 'onPanState', ['e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [translationX, velocityX]);
-
-      // Flatten offset -> value so that .decay can use offset for momentum
-      //  - {value, offset} -> {value: value+offset, offset: 0}
-      this.inTranslationX.flattenOffset();
-
-      // HACK Save ._value for workaround below
-      //  - WARNING This only works if we've called .addListener (else it's always 0)
-      // @ts-ignore (._value isn't exposed)
-      const _valueBefore = this.inTranslationX._value;
-
-      // this._log(log.info, 'onPanState', ['_value[%7.2f]', 'e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [_value, translationX, velocityX]);
-
-      // Scale velocityX waaaaay down, else it's ludicrous speed [Why? Maybe a unit mismatch?]
-      const scaleVelocity = 1/1000;
-
-      Animated.decay(this.inTranslationX, {
-        velocity: velocityX * scaleVelocity,
-        // deceleration: .997, // Very light, needs twiddling
-        deceleration: .98,     // Very heavy, good for debug
-        useNativeDriver: config.useNativeDriver,
-      }).start(({finished}) => {
-        // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
-
-        // Bug: .decay resets ._value to 0 if you swipe multiple times really fast and make multiple .decay's race
-        //  - HACK Workaround: if .decay moved us the wrong direction, reset to the _value before .decay
-        //  - When you do trip the bug the animation displays incorrectly, but ._value ends up correct
-        //  - Without the workaround you'd reset to .value=0 anytime you trip the bug
-        if (_valueBefore !== undefined) {
-          // @ts-ignore (._value isn't exposed)
-          const _valueAfter = this.inTranslationX._value;
-          const sgn = Math.sign(velocityX);
-          if (sgn * _valueAfter < sgn * _valueBefore) {
-            this.inTranslationX.setValue(_valueBefore);
-            // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
-          }
-        }
-
-        // Extract offset <- value now that .decay is done using offset for momentum
-        //  - {value, offset} -> {value: 0, offset: value+offset}
-        //  - Net effect: (0, offset) -[flatten]> (offset, 0) -[decay]> (offset, momentum) -[extract]> (0, offset+momentum)
-        this.inTranslationX.extractOffset();
-
-        // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
-      });
-
-    }
-  }
-
-}
-
 type State = {
   showFilters: boolean;
   showHelp: boolean;
@@ -444,14 +274,14 @@ export class SearchScreen extends Component<Props, State> {
     return await soundAsync!;
   }
 
-  onPress = (rec: Rec) => {
+  toggleRecPlaying = (rec: Rec) => {
 
     // Eagerly allocate Sound resource for rec
     //  - TODO How eagerly should we cache this? What are the cpu/mem costs and tradeoffs?
     const soundAsync = this.getOrAllocateSoundAsync(rec);
 
     return async (pointerInside: boolean) => {
-      log.debug('onPress');
+      log.debug('toggleRecPlaying');
       log.debug('rec', rec);
       log.debug('this.state.currentlyPlaying', this.state.currentlyPlaying);
 
@@ -497,7 +327,7 @@ export class SearchScreen extends Component<Props, State> {
 
       }
 
-      // log.debug('onPress: done');
+      // log.debug('toggleRecPlaying: done');
     };
   }
 
@@ -570,6 +400,75 @@ export class SearchScreen extends Component<Props, State> {
     }));
   }
 
+  BottomControls = (props: {}) => (
+    <Settings.Context.Consumer children={settings => (
+      <View style={styles.bottomControls}>
+        {/* Filters */}
+        <this.BottomControlsButton
+          help='Filters'
+          onPress={() => this.setState({showFilters: true})}
+          iconProps={{name: 'filter'}}
+        />
+        {/* Save as new list / add all to saved list / share list */}
+        <this.BottomControlsButton
+          help='Save'
+          onPress={() => this.saveActionSheet.current!.show()}
+          iconProps={{name: 'star'}}
+          // iconProps={{name: 'share'}}
+        />
+        {/* Add species (select species manually) */}
+        <this.BottomControlsButton
+          help='Add'
+          onPress={() => this.addActionSheet.current!.show()}
+          // iconProps={{name: 'user-plus'}}
+          // iconProps={{name: 'file-plus'}}
+          // iconProps={{name: 'folder-plus'}}
+          iconProps={{name: 'plus-circle'}}
+          // iconProps={{name: 'plus'}}
+        />
+        {/* Toggle sort: species probs / rec dist / manual list */}
+        <this.BottomControlsButton
+          help='Sort'
+          onPress={() => this.sortActionSheet.current!.show()}
+          // iconProps={{name: 'chevrons-down'}}
+          // iconProps={{name: 'chevron-down'}}
+          iconProps={{name: 'arrow-down'}}
+          // iconProps={{name: 'arrow-down-circle'}}
+        />
+        {/* Cycle metadata: none / oneline / full */}
+        <this.BottomControlsButton
+          help='Info'
+          onPress={() => this.cycleMetadata(settings)}
+          iconProps={{name: 'file-text'}}
+          // iconProps={{name: 'credit-card', style: Styles.flipVertical}}
+          // iconProps={{name: 'sidebar', style: Styles.rotate270}}
+        />
+        {/* Toggle editing controls for rec/species */}
+        <this.BottomControlsButton
+          help='Edit'
+          onPress={() => settings.toggle('editing')}
+          iconProps={{name: 'sliders'}}
+          // iconProps={{name: 'edit'}}
+          // iconProps={{name: 'edit-2'}}
+          // iconProps={{name: 'edit-3'}}
+          // iconProps={{name: 'layout', style: Styles.flipBoth}}
+        />
+        {/* Zoom more/fewer recs (spectro height) */}
+        {/* - TODO Disable when spectroScaleY is min/max */}
+        <this.BottomControlsButton
+          help='Denser'
+          onPress={() => this.zoomSpectroHeight(-1)}
+          iconProps={{name: 'align-justify'}} // 4 horizontal lines
+        />
+        <this.BottomControlsButton
+          help='Taller'
+          onPress={() => this.zoomSpectroHeight(+1)}
+          iconProps={{name: 'menu'}}          // 3 horizontal lines
+        />
+      </View>
+    )}/>
+  );
+
   BottomControlsButton = (props: {
     help: string,
     onPress?: (pointerInside: boolean) => void,
@@ -578,15 +477,91 @@ export class SearchScreen extends Component<Props, State> {
     const {style: iconStyle, ...iconProps} = props.iconProps;
     return (
       <LongPressGestureHandler onHandlerStateChange={this.onBottomControlsLongPress}>
-        <BorderlessButton style={styles.bottomControlButton} onPress={props.onPress}>
+        <BorderlessButton style={styles.bottomControlsButton} onPress={props.onPress}>
           {this.state.showHelp && (
-            <Text style={styles.bottomControlHelp}>{props.help}</Text>
+            <Text style={styles.bottomControlsButtonHelp}>{props.help}</Text>
           )}
-          <Feather style={[styles.bottomControlIcon, iconStyle]} {...iconProps} />
+          <Feather style={[styles.bottomControlsButtonIcon, iconStyle]} {...iconProps} />
         </BorderlessButton>
       </LongPressGestureHandler>
     );
   }
+
+  sectionsForRecs = (recs: Array<Rec>): Array<SectionListData<Rec>> => {
+    const sections = [];
+    let section;
+    for (let rec of recs) {
+      const title = rec.species;
+      if (!section || title !== section.title) {
+        if (section) sections.push(section);
+        section = {
+          title,
+          data: [] as Rec[],
+          species: rec.species,
+          species_taxon_order: rec.species_taxon_order,
+          species_com_name: rec.species_com_name,
+          species_sci_name: rec.species_sci_name,
+          recs_for_sp: rec.recs_for_sp,
+        };
+      }
+      section.data.push(rec);
+    }
+    if (section) sections.push(section);
+    return sections;
+  }
+
+  RecText = <X extends {children: any, flex?: number}>(props: X) => {
+    const flex = props.flex || 1;
+    return (<Text
+      style={[styles.recText, {flex}]}
+      numberOfLines={1}
+      ellipsizeMode='tail'
+      {...props}
+    />);
+  }
+
+  ModalsAndActionSheets = () => (
+    <View>
+      <Modal
+        visible={this.state.showFilters}
+        animationType='none' // 'none' | 'slide' | 'fade'
+        transparent={true}
+        children={this.Filters()}
+      />
+      <ActionSheetBasic
+        innerRef={this.saveActionSheet}
+        options={[
+          ['Save as new list',      () => {}],
+          ['Add all to saved list', () => {}],
+          ['Share list',            () => {}],
+        ]}
+      />
+      <ActionSheetBasic
+        innerRef={this.addActionSheet}
+        options={[
+          ['Add a species manually', () => {}],
+          ['+ num species',          () => {}],
+          ['– num species',          () => {}],
+          ['+ num recs per species', () => {}],
+          ['– num recs per species', () => {}],
+        ]}
+      />
+      <ActionSheetBasic
+        innerRef={this.sortActionSheet}
+        options={
+          // this.state.queryRec ? [ // TODO queryRec
+          true ? [
+            ['Sort by species, then by recs', () => {}],
+            ['Sort by recs only',             () => {}],
+            ['Order manually',                () => {}],
+          ] : [
+            ['Sort recs by similarity',       () => {}],
+            ['Order manually',                () => {}],
+          ]
+        }
+      />
+    </View>
+  );
 
   render = () => {
     return (
@@ -604,105 +579,152 @@ export class SearchScreen extends Component<Props, State> {
 
               <SectionList
                 style={styles.recList}
-                sections={sectionsForRecs(this.state.recs)}
+                sections={this.sectionsForRecs(this.state.recs)}
                 keyExtractor={(rec, index) => rec.id.toString()}
                 initialNumToRender={20}
                 renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
                   settings.showMetadata === 'none' ? null : (
-                    <View style={styles.recSectionHeader}>
-                      <Text numberOfLines={1}>{species_com_name}</Text>
-                      {settings.showDebug && (
-                        <Text numberOfLines={1} style={[{marginLeft: 'auto'}, settings.debugText]}>({recs_for_sp} recs)</Text>
+                    <View style={styles.sectionSpecies}>
+
+                      {!settings.editing ? null : (
+                        <View style={styles.sectionSpeciesEditingView}>
+                          <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
+                            <Feather style={styles.sectionSpeciesEditingIcon} name='move' />
+                          </BorderlessButton>
+                          <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
+                            <Feather style={styles.sectionSpeciesEditingIcon} name='search' />
+                          </BorderlessButton>
+                          <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
+                            <Feather style={styles.sectionSpeciesEditingIcon} name='user-x' />
+                          </BorderlessButton>
+                          <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
+                            <Feather style={styles.sectionSpeciesEditingIcon} name='plus-circle' />
+                          </BorderlessButton>
+                        </View>
                       )}
+
+                      <Text numberOfLines={1} style={styles.sectionSpeciesText}>
+                        {species_com_name}
+                      </Text>
+
+                      {settings.showDebug && (
+                        <Text numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}, settings.debugText]}>
+                          ({recs_for_sp} recs)
+                        </Text>
+                      )}
+
                     </View>
                   )
                 )}
                 renderItem={({item: rec, index}) => (
                   <Animated.View style={styles.recRow}>
 
-                    <PanGestureHandler
-                      ref={getOrSet(this.panRefs, rec.id, () => React.createRef())}
-                      // [Why do these trigger undefined.onPanGesture on init?]
-                      onGestureEvent       = {(this.panTranslateX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
-                      onHandlerStateChange = {(this.panTranslateX.get(rec.id) || {onPanState:   undefined}).onPanState}
-                      // @ts-ignore [TODO PR: add waitFor to react-native-gesture-handler/react-native-gesture-handler.d.ts]
-                      // waitFor={this.pinchRef}
-                      // XXX Nope, doesn't control for multiple pointers on separate spectros
-                      // maxPointers={1}
-
-                      // TODO TODO Does this prevent multiple simultaneous pans?
-                      //  - TODO TODO Keep debugging -- all arrays are still empty...
-                      // waitFor={puts(
-                      //   Array.from(this.panRefs.entries())
-                      //   .filter(([recId, ref]) => puts(recId) < puts(rec.id))
-                      //   .map(([recId, ref]) => ref)
-                      // )}
-
-                    >
-                      <Animated.View>
-
-                        {/* <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}> */}
-                          {/* <BorderlessButton onPress={this.onPress(rec)}> */}
-
-                            <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
-
-                              {settings.showMetadata !== 'none' ? null : (
-                                <View style={styles.recSpeciesVerticalView}>
-                                  <Text style={styles.recSpeciesVerticalText} numberOfLines={1}>
-                                    {rec.species}
-                                  </Text>
-                                </View>
-                              )}
-
-                              <Animated.Image
-                                style={[{
-                                  // XXX Can't animate height
-                                  //  - "Error: Style property 'height' is not supported by native animated module"
-                                  // height: this.pinchScaleX.outScaleY.interpolate({
-                                  //   inputRange: [0, 1],
-                                  //   outputRange: [0, this.pinchScaleX.spectroBase.h],
-                                  // }),
-                                  width:  this.pinchScaleX.spectroBase.w,
-                                  height: this.pinchScaleX.spectroBase.h * this.state.spectroScaleY,
-                                  transform: [
-                                    ...this.pinchScaleX.transform,
-                                    ...(this.panTranslateX.get(rec.id) || {transform: []}).transform,
-                                  ],
-                                }]}
-                                resizeMode='stretch'
-                                source={{uri: Rec.spectroPath(rec)}}
-                              />
-                            </Animated.View>
-
-                          {/* </BorderlessButton> */}
-                        {/* </LongPressGestureHandler> */}
-
-                      </Animated.View>
-                    </PanGestureHandler>
-
-                    {match(settings.showMetadata,
-                      ['none', null],
-                      ['oneline', (
-                        <View style={styles.recMetadataOneline}>
-                          <RecText flex={3}>{rec.xc_id}</RecText>
-                          <RecText flex={1}>{rec.quality}</RecText>
-                          <RecText flex={2}>{rec.month_day}</RecText>
-                          <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
-                          {ccIcon({style: styles.recTextFont})}
-                          <RecText flex={4}> {rec.recordist}</RecText>
-                        </View>
-                      )],
-                      ['full', (
-                        <View style={styles.recMetadataFull}>
-                          <RecText flex={3}>{rec.xc_id}</RecText>
-                          <RecText flex={1}>{rec.quality}</RecText>
-                          <RecText flex={2}>{rec.month_day}</RecText>
-                          <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
-                          {ccIcon({style: styles.recTextFont})}
-                          <RecText flex={4}> {rec.recordist}</RecText>
-                        </View>
-                      )],
+                    {/* TODO Flex image width so we can show these on the right (as is they'd be pushed off screen) */}
+                    {!settings.editing ? null : (
+                      <View style={styles.recEditingView}>
+                        <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
+                          <Feather style={styles.recEditingIcon} name='move' />
+                        </BorderlessButton>
+                        <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
+                          <Feather style={styles.recEditingIcon} name='search' />
+                        </BorderlessButton>
+                        <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
+                          <Feather style={styles.recEditingIcon} name='x' />
+                        </BorderlessButton>
+                        <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
+                          <Feather style={styles.recEditingIcon} name='star' />
+                        </BorderlessButton>
+                      </View>
                     )}
+
+                    <Animated.View style={styles.recRowInner}>
+
+                      <PanGestureHandler
+                        ref={getOrSet(this.panRefs, rec.id, () => React.createRef())}
+                        // [Why do these trigger undefined.onPanGesture on init?]
+                        onGestureEvent       = {(this.panTranslateX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
+                        onHandlerStateChange = {(this.panTranslateX.get(rec.id) || {onPanState:   undefined}).onPanState}
+                        // @ts-ignore [TODO PR: add waitFor to react-native-gesture-handler/react-native-gesture-handler.d.ts]
+                        // waitFor={this.pinchRef}
+                        // XXX Nope, doesn't control for multiple pointers on separate spectros
+                        // maxPointers={1}
+
+                        // TODO TODO Does this prevent multiple simultaneous pans?
+                        //  - TODO TODO Keep debugging -- all arrays are still empty...
+                        // waitFor={puts(
+                        //   Array.from(this.panRefs.entries())
+                        //   .filter(([recId, ref]) => puts(recId) < puts(rec.id))
+                        //   .map(([recId, ref]) => ref)
+                        // )}
+
+                      >
+                        <Animated.View>
+
+                          {/* <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}> */}
+                            {/* <BorderlessButton onPress={this.toggleRecPlaying(rec)}> */}
+
+                              <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
+
+                                {settings.showMetadata !== 'none' ? null : (
+                                  <View style={styles.recSpeciesVerticalView}>
+                                    <Text style={styles.recSpeciesVerticalText} numberOfLines={1}>
+                                      {rec.species}
+                                    </Text>
+                                  </View>
+                                )}
+
+                                <Animated.Image
+                                  style={[{
+                                    // XXX Can't animate height
+                                    //  - "Error: Style property 'height' is not supported by native animated module"
+                                    // height: this.pinchScaleX.outScaleY.interpolate({
+                                    //   inputRange: [0, 1],
+                                    //   outputRange: [0, this.pinchScaleX.spectroBase.h],
+                                    // }),
+                                    width:  this.pinchScaleX.spectroBase.w,
+                                    height: this.pinchScaleX.spectroBase.h * this.state.spectroScaleY,
+                                    transform: [
+                                      ...this.pinchScaleX.transform,
+                                      ...(this.panTranslateX.get(rec.id) || {transform: []}).transform,
+                                    ],
+                                  }]}
+                                  resizeMode='stretch'
+                                  source={{uri: Rec.spectroPath(rec)}}
+                                />
+
+                              </Animated.View>
+
+                            {/* </BorderlessButton> */}
+                          {/* </LongPressGestureHandler> */}
+
+                        </Animated.View>
+                      </PanGestureHandler>
+
+                      {match(settings.showMetadata,
+                        ['none', null],
+                        ['oneline', (
+                          <View style={styles.recMetadataOneline}>
+                            <this.RecText flex={3} children={rec.xc_id} />
+                            <this.RecText flex={1} children={rec.quality} />
+                            <this.RecText flex={2} children={rec.month_day} />
+                            <this.RecText flex={4} children={Rec.placeNorm(rec)} />
+                            {ccIcon({style: styles.recTextFont})}
+                            <this.RecText flex={4} children={` ${rec.recordist}`} />
+                          </View>
+                        )],
+                        ['full', (
+                          <View style={styles.recMetadataFull}>
+                            <this.RecText flex={3} children={rec.xc_id} />
+                            <this.RecText flex={1} children={rec.quality} />
+                            <this.RecText flex={2} children={rec.month_day} />
+                            <this.RecText flex={4} children={Rec.placeNorm(rec)} />
+                            {ccIcon({style: styles.recTextFont})}
+                            <this.RecText flex={4} children={` ${rec.recordist}`} />
+                          </View>
+                        )],
+                      )}
+
+                    </Animated.View>
 
                   </Animated.View>
                 )}
@@ -716,112 +738,8 @@ export class SearchScreen extends Component<Props, State> {
             <Text style={settings.debugText}>{JSON.stringify(this.state.queryConfig)}</Text>
           </View>
 
-          <View style={styles.bottomControls}>
-            {/* Filters */}
-            <this.BottomControlsButton
-              help='Filters'
-              onPress={() => this.setState({showFilters: true})}
-              iconProps={{name: 'filter'}}
-            />
-            {/* Save as new list / add all to saved list / share list */}
-            <this.BottomControlsButton
-              help='Save'
-              onPress={() => this.saveActionSheet.current!.show()}
-              iconProps={{name: 'star'}}
-              // iconProps={{name: 'share'}}
-            />
-            {/* Add species (select species manually) */}
-            <this.BottomControlsButton
-              help='Add'
-              onPress={() => this.addActionSheet.current!.show()}
-              // iconProps={{name: 'user-plus'}}
-              // iconProps={{name: 'file-plus'}}
-              // iconProps={{name: 'folder-plus'}}
-              iconProps={{name: 'plus-circle'}}
-              // iconProps={{name: 'plus'}}
-            />
-            {/* Toggle sort: species probs / rec dist / manual list */}
-            <this.BottomControlsButton
-              help='Sort'
-              onPress={() => this.sortActionSheet.current!.show()}
-              // iconProps={{name: 'chevrons-down'}}
-              // iconProps={{name: 'chevron-down'}}
-              iconProps={{name: 'arrow-down'}}
-              // iconProps={{name: 'arrow-down-circle'}}
-            />
-            {/* Cycle metadata: none / oneline / full */}
-            <this.BottomControlsButton
-              help='Info'
-              onPress={() => this.cycleMetadata(settings)}
-              iconProps={{name: 'credit-card', style: Styles.flipVertical,}}
-              // iconProps={{name: 'sidebar', style: Styles.rotate270,}}
-              // iconProps={{name: 'file-text'}}
-            />
-            {/* Zoom more/fewer recs (spectro height) */}
-            {/* - TODO Disable when spectroScaleY is min/max */}
-            <this.BottomControlsButton
-              help='Denser'
-              onPress={() => this.zoomSpectroHeight(-1)}
-              iconProps={{name: 'align-justify'}} // 4 horizontal lines
-            />
-            <this.BottomControlsButton
-              help='Taller'
-              onPress={() => this.zoomSpectroHeight(+1)}
-              iconProps={{name: 'menu'}}          // 3 horizontal lines
-            />
-            {/* Toggle controls for rec/species */}
-            <this.BottomControlsButton
-              help='Edit'
-              onPress={() => {}}
-              iconProps={{name: 'sliders'}}
-              // iconProps={{name: 'edit'}}
-              // iconProps={{name: 'edit-2'}}
-              // iconProps={{name: 'edit-3'}}
-              // iconProps={{name: 'layout', style: Styles.flipBoth,}}
-            />
-          </View>
-
-          <Modal
-            visible={this.state.showFilters}
-            animationType='none' // 'none' | 'slide' | 'fade'
-            transparent={true}
-            children={this.Filters()}
-          />
-
-          <ActionSheetBasic
-            innerRef={this.saveActionSheet}
-            options={[
-              ['Save as new list',      () => {}],
-              ['Add all to saved list', () => {}],
-              ['Share list',            () => {}],
-            ]}
-          />
-
-          <ActionSheetBasic
-            innerRef={this.addActionSheet}
-            options={[
-              ['Add a species manually', () => {}],
-              ['+ num species',          () => {}],
-              ['– num species',          () => {}],
-              ['+ num recs per species', () => {}],
-              ['– num recs per species', () => {}],
-            ]}
-          />
-
-          <ActionSheetBasic
-            innerRef={this.sortActionSheet}
-            options={
-              // this.state.queryRec ? [ // TODO queryRec
-              true ? [
-                ['Sort by species, then by recs', () => {}],
-                ['Sort by recs only',             () => {}],
-                ['Order manually',                () => {}],
-              ] : [
-                ['Sort recs by similarity',       () => {}],
-                ['Order manually',                () => {}],
-              ]
-            }
-          />
+          <this.BottomControls/>
+          <this.ModalsAndActionSheets/>
 
         </View>
       )}/>
@@ -830,38 +748,173 @@ export class SearchScreen extends Component<Props, State> {
 
 }
 
-function sectionsForRecs(recs: Array<Rec>): Array<SectionListData<Rec>> {
-  const sections = [];
-  let section;
-  for (let rec of recs) {
-    const title = rec.species;
-    if (!section || title !== section.title) {
-      if (section) sections.push(section);
-      section = {
-        title,
-        data: [] as Rec[],
-        species: rec.species,
-        species_taxon_order: rec.species_taxon_order,
-        species_com_name: rec.species_com_name,
-        species_sci_name: rec.species_sci_name,
-        recs_for_sp: rec.recs_for_sp,
-      };
-    }
-    section.data.push(rec);
+// HACK This is a big poop
+class PinchScaleX {
+
+  inBase:         Animated.Value;
+  inScale:        Animated.Value;
+  outScale:       Animated.Value;
+  outTranslate:   Animated.Animated;
+  transform:      Array<object>;
+  onPinchGesture: (...args: Array<any>) => void;
+
+  constructor(
+    public readonly spectroBase: WidthHeight<number>,
+    public          base:        number,
+    public readonly baseClamp:   Clamp<number>,
+  ) {
+    this.inBase       = new Animated.Value(base);
+    this.inScale      = new Animated.Value(1);
+    this.outScale     = animated`${Animated.diffClamp(this.inBase, baseClamp.min, baseClamp.max)} * ${this.inScale}`;
+    this.outTranslate = this.outScale.interpolate({
+      inputRange:  [0, 1],
+      outputRange: [-spectroBase.w / 2, 0],
+    });
+    this.transform = [
+      {translateX: this.outTranslate},
+      {scaleX: this.outScale},
+    ];
+    this.onPinchGesture = Animated.event(
+      [{nativeEvent: {scale: this.inScale}}],
+      {useNativeDriver: config.useNativeDriver},
+    );
   }
-  if (section) sections.push(section);
-  return sections;
+
+  onPinchState = (event: Gesture.PinchGestureHandlerStateChangeEvent) => {
+    const {nativeEvent: {oldState, scale}} = event;
+    if (oldState === Gesture.State.ACTIVE) {
+      this.base = _.clamp( // TODO Wat. Why do we have to clamp twice?
+        this.base * scale,
+        this.baseClamp.min,
+        this.baseClamp.max,
+      );
+      this.inBase.setValue(this.base);
+      this.inScale.setValue(1);
+    }
+  }
+
 }
 
-function RecText<X extends {children: any, flex?: number}>(props: X) {
-  const flex = props.flex || 1;
-  return (<Text
-    style={[styles.recText, {flex}]}
-    numberOfLines={1}
-    ellipsizeMode='tail'
-    {...props}
-  />);
+// HACK This is a slightly less big poop
+class PanTranslateX {
+
+  listenTranslationX: number;
+  inTranslationX:  Animated.Value;
+  outTranslationX: Animated.Animated;
+  transform:       Array<object>;
+  onPanGesture:    (...args: Array<any>) => void;
+
+  constructor(
+    public readonly scale:             Animated.Animated,
+    public          translationX:      number,
+    public readonly translationXClamp: Clamp<number>, // TODO TODO
+  ) {
+
+    this.listenTranslationX = 0;
+    this.inTranslationX = new Animated.Value(0);
+    this.outTranslationX = (
+
+      // Works (mostly)
+      this.inTranslationX
+
+      // TODO TODO Why does this do something funny?
+      // animated`${this.inTranslationX} / ${this.scale}`
+
+      // TODO TODO Clamp
+      // Animated.diffClamp(this.inTranslationX,
+      //   // -500,
+      //   -Dimensions.get('window').width * 1.5,
+      //   0,
+      // )
+
+    );
+    this.transform = [
+      {translateX: this.outTranslationX},
+    ];
+    this.onPanGesture = Animated.event(
+      [{nativeEvent: {translationX: this.inTranslationX}}],
+      {useNativeDriver: config.useNativeDriver},
+    );
+
+    // HACK Must call addListener else .{_value,_offset} don't update on the js side
+    //  - We rely on ._value below, to workaround a race-condition bug
+    this.inTranslationX.addListener(() => {});
+
+    // this._log = (log_f, desc, keys = [], values = []) => { // XXX Debug
+    //   log_f(sprintf(
+    //     ['%21s :', 'inTranslationX[{_value[%7.2f], _offset[%7.2f]}]', 'listenTranslationX[%7.2f]', 'translationX[%7.2f]',
+    //      ...keys].join(' '),
+    //     desc, this.inTranslationX._value, this.inTranslationX._offset, this.listenTranslationX, this.translationX, ...values,
+    //   ));
+    // }
+
+  }
+
+  onPanState = (event: Gesture.PanGestureHandlerStateChangeEvent) => {
+    const {nativeEvent: {oldState, translationX, velocityX}} = event;
+    if (oldState === Gesture.State.ACTIVE) {
+
+      // log.info('-----------------------------');
+      // this._log(log.info, 'onPanState', ['e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [translationX, velocityX]);
+
+      // Flatten offset -> value so that .decay can use offset for momentum
+      //  - {value, offset} -> {value: value+offset, offset: 0}
+      this.inTranslationX.flattenOffset();
+
+      // HACK Save ._value for workaround below
+      //  - WARNING This only works if we've called .addListener (else it's always 0)
+      // @ts-ignore (._value isn't exposed)
+      const _valueBefore = this.inTranslationX._value;
+
+      // this._log(log.info, 'onPanState', ['_value[%7.2f]', 'e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [_value, translationX, velocityX]);
+
+      // Scale velocityX waaaaay down, else it's ludicrous speed [Why? Maybe a unit mismatch?]
+      const scaleVelocity = 1/1000;
+
+      Animated.decay(this.inTranslationX, {
+        velocity: velocityX * scaleVelocity,
+        // deceleration: .997, // Very light, needs twiddling
+        deceleration: .98,     // Very heavy, good for debug
+        useNativeDriver: config.useNativeDriver,
+      }).start(({finished}) => {
+        // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
+
+        // Bug: .decay resets ._value to 0 if you swipe multiple times really fast and make multiple .decay's race
+        //  - HACK Workaround: if .decay moved us the wrong direction, reset to the _value before .decay
+        //  - When you do trip the bug the animation displays incorrectly, but ._value ends up correct
+        //  - Without the workaround you'd reset to .value=0 anytime you trip the bug
+        if (_valueBefore !== undefined) {
+          // @ts-ignore (._value isn't exposed)
+          const _valueAfter = this.inTranslationX._value;
+          const sgn = Math.sign(velocityX);
+          if (sgn * _valueAfter < sgn * _valueBefore) {
+            this.inTranslationX.setValue(_valueBefore);
+            // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
+          }
+        }
+
+        // Extract offset <- value now that .decay is done using offset for momentum
+        //  - {value, offset} -> {value: 0, offset: value+offset}
+        //  - Net effect: (0, offset) -[flatten]> (offset, 0) -[decay]> (offset, momentum) -[extract]> (0, offset+momentum)
+        this.inTranslationX.extractOffset();
+
+        // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
+      });
+
+    }
+  }
+
 }
+
+type Clamp<X> = {
+  min: X,
+  max: X,
+};
+
+type WidthHeight<X> = {
+  w: X,
+  h: X,
+};
 
 function ccIcon(props?: object): Element {
   const [icon] = licenseTypeIcons('cc', props);
@@ -895,14 +948,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     backgroundColor: iOSColors.midGray,
   },
-  bottomControlButton: {
+  bottomControlsButton: {
     flex: 1,
     alignItems: 'center',
   },
-  bottomControlHelp: {
+  bottomControlsButtonHelp: {
     ...material.captionObject,
   },
-  bottomControlIcon: {
+  bottomControlsButtonIcon: {
     ...material.headlineObject,
   },
   queryInput: {
@@ -915,20 +968,40 @@ const styles = StyleSheet.create({
   recList: {
     // borderWidth: 1, borderColor: 'gray',
   },
-  recSectionHeader: {
+  sectionSpecies: {
     flexDirection: 'row',
     // ...material.body1Object, backgroundColor: iOSColors.customGray, // Black on white
     ...material.body1WhiteObject, backgroundColor: iOSColors.gray, // White on black
   },
+  sectionSpeciesText: {
+    alignSelf: 'center', // Align text vertically
+  },
+  sectionSpeciesEditingView: {
+    flexDirection: 'row',
+    zIndex: 1, // Over spectro image
+  },
+  sectionSpeciesEditingButton: {
+    width: 35, // Need explicit width (i/o flex:1) else view shows with width:0
+    justifyContent: 'center', // Align icon vertically
+    backgroundColor: iOSColors.gray,
+  },
+  sectionSpeciesEditingIcon: {
+    ...material.headlineObject,
+    alignSelf: 'center', // Align icon horizontally
+  },
   recRow: {
-    borderWidth: 1, borderColor: 'gray',
+    flex: 1, flexDirection: 'row',
+  },
+  recRowInner: {
     flex: 1, flexDirection: 'column',
+    borderBottomWidth: 1, borderColor: 'gray',
   },
   recSpeciesVerticalView: {
-    backgroundColor: iOSColors.tealBlue, // TODO Map rec.species -> color
+    backgroundColor: iOSColors.gray, // TODO Map rec.species -> color
     width: 15, // Else widths are variable [why?]
     justifyContent: 'center',
     // padding: 0, margin: 0, // Nope, doesn't help
+    zIndex: 1, // Over spectro image
   },
   recSpeciesVerticalText: {
     alignSelf: 'center',
@@ -952,6 +1025,20 @@ const styles = StyleSheet.create({
     ...material.captionObject,
   },
   recSpectro: {
+  },
+  recEditingView: {
+    flexDirection: 'row',
+    zIndex: 1, // Over spectro image
+  },
+  recEditingButton: {
+    width: 35, // Need explicit width (i/o flex:1) else view shows with width:0
+    justifyContent: 'center', // Align icon vertically
+    backgroundColor: iOSColors.midGray,
+  },
+  recEditingIcon: {
+    // ...material.titleObject,
+    ...material.headlineObject,
+    alignSelf: 'center', // Align icon horizontally
   },
   swipeButtons: {
     flexDirection: 'row',

@@ -15,6 +15,7 @@ export interface Props {
   readonly debugTextColor: string; // XXX Junk setting (so we can have more than one)
   // For SearchScreen
   readonly showMetadata: ShowMetadata;
+  readonly editing: boolean;
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
@@ -23,6 +24,7 @@ export const DEFAULTS: Props = {
   debugTextColor: 'green',
   // For SearchScreen
   showMetadata: 'oneline',
+  editing: false,
 };
 export const TYPES: {[key: string]: string} = {
   // NOTE Keep attrs in sync (3/5)
@@ -31,6 +33,7 @@ export const TYPES: {[key: string]: string} = {
   debugTextColor: 'string',
   // For SearchScreen
   showMetadata: 'string',
+  editing: 'boolean',
 };
 export const KEYS = [
   // NOTE Keep attrs in sync (4/5)
@@ -40,6 +43,7 @@ export const KEYS = [
   'debugTextColor',
   // For SearchScreen
   'showMetadata',
+  'editing',
 ];
 
 export class Settings implements Props {
@@ -54,6 +58,7 @@ export class Settings implements Props {
     public readonly debugTextColor: string,
   // For SearchScreen
     public readonly showMetadata: ShowMetadata,
+    public readonly editing: boolean,
   ) {}
 
   withProps(props: object): Settings {

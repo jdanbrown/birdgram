@@ -41,11 +41,8 @@ export class SettingsScreen extends Component<Props, State> {
             />
 
             <SettingsList.Item
-              title='Show debug info'
-              hasNavArrow={false}
-              hasSwitch={true}
-              switchState={settings.showDebug}
-              switchOnValueChange={async x => await settings.set('showDebug', x)}
+              title='Test modal'
+              onPress={() => this.setState({showModal: true})}
             />
 
             {/* FIXME Well, this is a pretty horrible UX. Looks like we'll need to redo react-native-settings-list ourselves. */}
@@ -59,8 +56,11 @@ export class SettingsScreen extends Component<Props, State> {
             />
 
             <SettingsList.Item
-              title='Test modal'
-              onPress={() => this.setState({showModal: true})}
+              title='Show debug info'
+              hasNavArrow={false}
+              hasSwitch={true}
+              switchState={settings.showDebug}
+              switchOnValueChange={async x => await settings.set('showDebug', x)}
             />
 
           </SettingsList>
