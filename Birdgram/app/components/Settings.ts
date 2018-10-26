@@ -16,6 +16,7 @@ export interface Props {
   // For SearchScreen
   readonly showMetadata: ShowMetadata;
   readonly editing: boolean;
+  readonly spectroScaleY: number;
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
@@ -25,6 +26,7 @@ export const DEFAULTS: Props = {
   // For SearchScreen
   showMetadata: 'oneline',
   editing: false,
+  spectroScaleY: 2,
 };
 export const TYPES: {[key: string]: string} = {
   // NOTE Keep attrs in sync (3/5)
@@ -34,6 +36,7 @@ export const TYPES: {[key: string]: string} = {
   // For SearchScreen
   showMetadata: 'string',
   editing: 'boolean',
+  spectroScaleY: 'number',
 };
 export const KEYS = [
   // NOTE Keep attrs in sync (4/5)
@@ -44,6 +47,7 @@ export const KEYS = [
   // For SearchScreen
   'showMetadata',
   'editing',
+  'spectroScaleY',
 ];
 
 export class Settings implements Props {
@@ -59,6 +63,7 @@ export class Settings implements Props {
   // For SearchScreen
     public readonly showMetadata: ShowMetadata,
     public readonly editing: boolean,
+    public readonly spectroScaleY: number,
   ) {}
 
   withProps(props: object): Settings {

@@ -46,7 +46,6 @@ type State = {
   };
   status: string;
   recs: Array<Rec>;
-  spectroScaleY: number;
   currentlyPlaying?: {
     rec: Rec,
     sound: Sound,
@@ -88,7 +87,6 @@ export class SearchScreen extends Component<Props, State> {
       },
       status: '',
       recs: [],
-      spectroScaleY: 2,
     };
 
     this.soundsCache = new Map();
@@ -390,14 +388,16 @@ export class SearchScreen extends Component<Props, State> {
     await settings.set('showMetadata', next(settings.showMetadata));
   }
 
-  zoomSpectroHeight = (step: number) => {
-    this.setState((state, props) => ({
-      spectroScaleY: _.clamp(
-        state.spectroScaleY + step,
-        props.spectroScaleYClamp.min,
-        props.spectroScaleYClamp.max,
-      ),
-    }));
+  zoomSpectroHeight = async (settings: Settings, step: number) => {
+    const before = settings.spectroScaleY;
+    const after = _.clamp(
+      before + step,
+      this.props.spectroScaleYClamp.min,
+      this.props.spectroScaleYClamp.max,
+    );
+    if (after !== before) {
+      await settings.set('spectroScaleY', after);
+    }
   }
 
   BottomControls = (props: {}) => (
@@ -457,12 +457,12 @@ export class SearchScreen extends Component<Props, State> {
         {/* - TODO Disable when spectroScaleY is min/max */}
         <this.BottomControlsButton
           help='Denser'
-          onPress={() => this.zoomSpectroHeight(-1)}
+          onPress={() => this.zoomSpectroHeight(settings, -1)}
           iconProps={{name: 'align-justify'}} // 4 horizontal lines
         />
         <this.BottomControlsButton
           help='Taller'
-          onPress={() => this.zoomSpectroHeight(+1)}
+          onPress={() => this.zoomSpectroHeight(settings, +1)}
           iconProps={{name: 'menu'}}          // 3 horizontal lines
         />
       </View>
@@ -669,7 +669,7 @@ export class SearchScreen extends Component<Props, State> {
                                   <View style={styles.recSpeciesSidewaysView}>
                                     <View style={styles.recSpeciesSidewaysViewInner}>
                                       <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
-                                        fontSize: match<number, number, number>(this.state.spectroScaleY,
+                                        fontSize: match<number, number, number>(settings.spectroScaleY,
                                           [1,             6], // Compact species label to fit within tiny rows
                                           [match.default, 11],
                                         ),
@@ -689,7 +689,7 @@ export class SearchScreen extends Component<Props, State> {
                                     //   outputRange: [0, this.pinchScaleX.spectroBase.h],
                                     // }),
                                     width:  this.pinchScaleX.spectroBase.w,
-                                    height: this.pinchScaleX.spectroBase.h * this.state.spectroScaleY,
+                                    height: this.pinchScaleX.spectroBase.h * settings.spectroScaleY,
                                     transform: [
                                       ...this.pinchScaleX.transform,
                                       ...(this.panTranslateX.get(rec.id) || {transform: []}).transform,
