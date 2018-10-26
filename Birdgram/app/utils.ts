@@ -26,7 +26,7 @@ enum Match { Default }
 match.default = Match.Default;
 
 export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
-  if (map.has(k)) {
+  if (!map.has(k)) {
     map.set(k, v());
   }
   return map.get(k)!;
