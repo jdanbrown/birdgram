@@ -1,7 +1,6 @@
 import React from 'React';
 import { Component } from 'react';
 import { Dimensions, Image, Platform, Text, View } from 'react-native';
-import KeepAwake from 'react-native-keep-awake';
 
 import { Recorder } from './Recorder';
 import { StyleSheet } from '../stylesheet';
@@ -14,8 +13,6 @@ export class RecordScreen extends Component<Props> {
   render = () => {
     return (
       <View style={styles.container}>
-
-        {__DEV__ && <KeepAwake/>}
 
         <Recorder
           sampleRate={22050}

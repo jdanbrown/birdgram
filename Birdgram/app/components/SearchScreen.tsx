@@ -14,10 +14,10 @@ import {
   // FlatList, ScrollView, Slider, Switch, TextInput, // TODO Needed?
 } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
-import KeepAwake from 'react-native-keep-awake';
 import SQLite from 'react-native-sqlite-storage';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
+import { IconProps } from 'react-native-vector-icons/Icon';
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import RNFB from 'rn-fetch-blob';
@@ -25,68 +25,14 @@ import { sprintf } from 'sprintf-js';
 const fs = RNFB.fs;
 
 import { ActionSheetBasic } from './ActionSheets';
-import { Settings } from './Settings';
+import { Settings, ShowMetadata } from './Settings';
 import { config } from '../config';
+import { Quality, Rec, RecId, SearchRecs } from '../datatypes';
 import { log, puts } from '../log';
-import { Places } from '../places';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import { finallyAsync, getOrSet, global, match, Styles, TabBarBottomConstants } from '../utils';
-
-const SearchRecs = {
-
-  // TODO Test asset paths on android (see notes in README)
-  dbPath: 'search_recs/search_recs.sqlite3',
-
-  // TODO After verifying that asset dirs are preserved on android, simplify the basenames back to `${xc_id}.${format}`
-  assetPath: (kind: string, species: string, xc_id: number, format: string): string => (
-    `search_recs/${kind}/${species}/${kind}-${species}-${xc_id}.${format}`
-  ),
-
-};
-
-type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
-type RecId = string;
-
-type Rec = {
-  id: RecId,
-  xc_id: number,
-  species: string,             // (From ebird)
-  species_taxon_order: string, // (From ebird)
-  species_com_name: string,    // (From xc)
-  species_sci_name: string,    // (From xc)
-  recs_for_sp: number,
-  quality: Quality,
-  lat: number,
-  lng: number,
-  month_day: string,
-  place: string,
-  place_only: string,
-  state: string,
-  state_only: string,
-  recordist: string,
-  license_type: string,
-}
-
-const Rec = {
-
-  spectroPath: (rec: Rec): string => SearchRecs.assetPath('spectro', rec.species, rec.xc_id, 'png'),
-  audioPath:   (rec: Rec): string => SearchRecs.assetPath('audio',   rec.species, rec.xc_id, 'mp4'),
-
-  placeNorm: (rec: Rec): string => {
-    return rec.place.split(', ').reverse().map(x => Rec.placePartAbbrev(x)).join(', ');
-  },
-  placePartAbbrev: (part: string): string => {
-    const ret = (
-      Places.countryCodeFromName[part] ||
-      Places.stateCodeFromName[part] ||
-      part
-    );
-    return ret;
-  },
-
-};
 
 type WidthHeight<X> = {
   w: X,
@@ -259,26 +205,27 @@ class PanTranslateX {
 }
 
 type State = {
-  showFilters: boolean,
-  totalRecs?: number,
-  queryText: string,
-  query?: string,
+  showFilters: boolean;
+  showHelp: boolean;
+  totalRecs?: number;
+  queryText: string;
+  query?: string;
   queryConfig: {
     quality: Array<Quality>,
     limit: number,
-  },
-  status: string,
-  recs: Array<Rec>,
-  spectroScaleY: number,
+  };
+  status: string;
+  recs: Array<Rec>;
+  spectroScaleY: number;
   currentlyPlaying?: {
     rec: Rec,
     sound: Sound,
-  }
+  };
 };
 
 type Props = {
-  spectroBase:        WidthHeight<number>,
-  spectroScaleYClamp: Clamp<number>,
+  spectroBase:        WidthHeight<number>;
+  spectroScaleYClamp: Clamp<number>;
 };
 
 export class SearchScreen extends Component<Props, State> {
@@ -303,6 +250,7 @@ export class SearchScreen extends Component<Props, State> {
 
     this.state = {
       showFilters: false,
+      showHelp: false,
       queryText: '',
       queryConfig: { // TODO Move to (global) SettingsScreen.state
         quality: ['A', 'B'],
@@ -560,41 +508,56 @@ export class SearchScreen extends Component<Props, State> {
     }
   }
 
+  onBottomControlsLongPress = async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
+    const {nativeEvent: {state}} = event; // Unpack SyntheticEvent (before async)
+    match(state,
+      [Gesture.State.ACTIVE, () => this.setState({showHelp: true})],
+      [Gesture.State.END,    () => this.setState({showHelp: false})],
+    )();
+  }
+
   onMockPress = (rec: Rec) => async () => {
     console.log('renderLeftAction.onMockPress');
   }
 
-  renderFilters = (): ReactNode => {
-    return (
-      <View style={[
-        styles.filtersModal,
-        {marginBottom: TabBarBottomConstants.DEFAULT_HEIGHT},
-      ]}>
-        <Text>Filters</Text>
-        <Text>- quality</Text>
-        <Text>- month</Text>
-        <Text>- species likelihood [bucketed ebird priors]</Text>
-        <Text>- rec text search [conflate fields]</Text>
-        {/* XXX For reference
-        <TextInput
-          style={styles.queryInput}
-          value={this.state.queryText}
-          onChangeText={this.editQueryText}
-          onSubmitEditing={this.submitQuery}
-          autoCorrect={false}
-          autoCapitalize='characters'
-          enablesReturnKeyAutomatically={true}
-          placeholder='Species'
-          returnKeyType='search'
-        />
-        */}
-        <RectButton onPress={() => this.setState({showFilters: false})}>
-          <View style={{padding: 10, backgroundColor: iOSColors.blue}}>
-            <Text>Done</Text>
-          </View>
-        </RectButton>
-      </View>
+  Filters = () => (
+    <View style={[
+      styles.filtersModal,
+      {marginBottom: TabBarBottomConstants.DEFAULT_HEIGHT},
+    ]}>
+      <Text>Filters</Text>
+      <Text>- quality</Text>
+      <Text>- month</Text>
+      <Text>- species likelihood [bucketed ebird priors]</Text>
+      <Text>- rec text search [conflate fields]</Text>
+      {/* XXX For reference
+      <TextInput
+        style={styles.queryInput}
+        value={this.state.queryText}
+        onChangeText={this.editQueryText}
+        onSubmitEditing={this.submitQuery}
+        autoCorrect={false}
+        autoCapitalize='characters'
+        enablesReturnKeyAutomatically={true}
+        placeholder='Species'
+        returnKeyType='search'
+      />
+      */}
+      <RectButton onPress={() => this.setState({showFilters: false})}>
+        <View style={{padding: 10, backgroundColor: iOSColors.blue}}>
+          <Text>Done</Text>
+        </View>
+      </RectButton>
+    </View>
+  );
+
+  cycleMetadata = async (settings: Settings) => {
+    const next = (showMetadata: ShowMetadata) => match<ShowMetadata, ShowMetadata, ShowMetadata>(showMetadata,
+      ['none',    'oneline'],
+      ['oneline', 'full'],
+      ['full',    'none'],
     );
+    await settings.set('showMetadata', next(settings.showMetadata));
   }
 
   zoomSpectroHeight = (step: number) => {
@@ -607,12 +570,28 @@ export class SearchScreen extends Component<Props, State> {
     }));
   }
 
+  BottomControlsButton = (props: {
+    help: string,
+    onPress?: (pointerInside: boolean) => void,
+    iconProps: IconProps,
+  }) => {
+    const {style: iconStyle, ...iconProps} = props.iconProps;
+    return (
+      <LongPressGestureHandler onHandlerStateChange={this.onBottomControlsLongPress}>
+        <BorderlessButton style={styles.bottomControlButton} onPress={props.onPress}>
+          {this.state.showHelp && (
+            <Text style={styles.bottomControlHelp}>{props.help}</Text>
+          )}
+          <Feather style={[styles.bottomControlIcon, iconStyle]} {...iconProps} />
+        </BorderlessButton>
+      </LongPressGestureHandler>
+    );
+  }
+
   render = () => {
     return (
       <Settings.Context.Consumer children={settings => (
         <View style={styles.container}>
-
-          {__DEV__ && <KeepAwake/>}
 
           <PinchGestureHandler
             ref={this.pinchRef}
@@ -629,12 +608,14 @@ export class SearchScreen extends Component<Props, State> {
                 keyExtractor={(rec, index) => rec.id.toString()}
                 initialNumToRender={20}
                 renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
-                  <View style={styles.recSectionHeader}>
-                    <Text numberOfLines={1}>{species_com_name}</Text>
-                    {settings.showDebug && (
-                      <Text numberOfLines={1} style={[{marginLeft: 'auto'}, settings.debugText]}>({recs_for_sp} recs)</Text>
-                    )}
-                  </View>
+                  settings.showMetadata === 'none' ? null : (
+                    <View style={styles.recSectionHeader}>
+                      <Text numberOfLines={1}>{species_com_name}</Text>
+                      {settings.showDebug && (
+                        <Text numberOfLines={1} style={[{marginLeft: 'auto'}, settings.debugText]}>({recs_for_sp} recs)</Text>
+                      )}
+                    </View>
+                  )
                 )}
                 renderItem={({item: rec, index}) => (
                   <Animated.View style={styles.recRow}>
@@ -663,7 +644,16 @@ export class SearchScreen extends Component<Props, State> {
                         {/* <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}> */}
                           {/* <BorderlessButton onPress={this.onPress(rec)}> */}
 
-                            <Animated.View collapsable={false}>
+                            <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
+
+                              {settings.showMetadata !== 'none' ? null : (
+                                <View style={styles.recSpeciesVerticalView}>
+                                  <Text style={styles.recSpeciesVerticalText} numberOfLines={1}>
+                                    {rec.species}
+                                  </Text>
+                                </View>
+                              )}
+
                               <Animated.Image
                                 style={[{
                                   // XXX Can't animate height
@@ -687,7 +677,13 @@ export class SearchScreen extends Component<Props, State> {
                           {/* </BorderlessButton> */}
                         {/* </LongPressGestureHandler> */}
 
-                        <View style={styles.recCaption}>
+                      </Animated.View>
+                    </PanGestureHandler>
+
+                    {match(settings.showMetadata,
+                      ['none', null],
+                      ['oneline', (
+                        <View style={styles.recMetadataOneline}>
                           <RecText flex={3}>{rec.xc_id}</RecText>
                           <RecText flex={1}>{rec.quality}</RecText>
                           <RecText flex={2}>{rec.month_day}</RecText>
@@ -695,9 +691,18 @@ export class SearchScreen extends Component<Props, State> {
                           {ccIcon({style: styles.recTextFont})}
                           <RecText flex={4}> {rec.recordist}</RecText>
                         </View>
-
-                      </Animated.View>
-                    </PanGestureHandler>
+                      )],
+                      ['full', (
+                        <View style={styles.recMetadataFull}>
+                          <RecText flex={3}>{rec.xc_id}</RecText>
+                          <RecText flex={1}>{rec.quality}</RecText>
+                          <RecText flex={2}>{rec.month_day}</RecText>
+                          <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
+                          {ccIcon({style: styles.recTextFont})}
+                          <RecText flex={4}> {rec.recordist}</RecText>
+                        </View>
+                      )],
+                    )}
 
                   </Animated.View>
                 )}
@@ -713,49 +718,66 @@ export class SearchScreen extends Component<Props, State> {
 
           <View style={styles.bottomControls}>
             {/* Filters */}
-            <BottomControlsButton onPress={() => this.setState({showFilters: true})}
-              name='filter'
+            <this.BottomControlsButton
+              help='Filters'
+              onPress={() => this.setState({showFilters: true})}
+              iconProps={{name: 'filter'}}
             />
             {/* Save as new list / add all to saved list / share list */}
-            <BottomControlsButton onPress={() => this.saveActionSheet.current!.show()}
-              name='star'
-              // name='share'
+            <this.BottomControlsButton
+              help='Save'
+              onPress={() => this.saveActionSheet.current!.show()}
+              iconProps={{name: 'star'}}
+              // iconProps={{name: 'share'}}
             />
             {/* Add species (select species manually) */}
-            <BottomControlsButton onPress={() => this.addActionSheet.current!.show()}
-              // name='user-plus'
-              // name='file-plus'
-              // name='folder-plus'
-              name='plus-circle'
-              // name='plus'
+            <this.BottomControlsButton
+              help='Add'
+              onPress={() => this.addActionSheet.current!.show()}
+              // iconProps={{name: 'user-plus'}}
+              // iconProps={{name: 'file-plus'}}
+              // iconProps={{name: 'folder-plus'}}
+              iconProps={{name: 'plus-circle'}}
+              // iconProps={{name: 'plus'}}
             />
             {/* Toggle sort: species probs / rec dist / manual list */}
-            <BottomControlsButton onPress={() => this.sortActionSheet.current!.show()}
-              // name='chevrons-down'
-              // name='chevron-down'
-              name='arrow-down'
-              // name='arrow-down-circle'
+            <this.BottomControlsButton
+              help='Sort'
+              onPress={() => this.sortActionSheet.current!.show()}
+              // iconProps={{name: 'chevrons-down'}}
+              // iconProps={{name: 'chevron-down'}}
+              iconProps={{name: 'arrow-down'}}
+              // iconProps={{name: 'arrow-down-circle'}}
             />
             {/* Cycle metadata: none / oneline / full */}
-            <BottomControlsButton onPress={() => {}}
-              name='credit-card' style={Styles.flipVertical}
-              // name='sidebar' style={Styles.rotate270}
-              // name='file-text'
+            <this.BottomControlsButton
+              help='Info'
+              onPress={() => this.cycleMetadata(settings)}
+              iconProps={{name: 'credit-card', style: Styles.flipVertical,}}
+              // iconProps={{name: 'sidebar', style: Styles.rotate270,}}
+              // iconProps={{name: 'file-text'}}
             />
-            {/* Zoom more/fewer recs (spectro height)  */}
-            <BottomControlsButton onPress={() => this.zoomSpectroHeight(-1)}
-              name='align-justify' // 4 horizontal lines
+            {/* Zoom more/fewer recs (spectro height) */}
+            {/* - TODO Disable when spectroScaleY is min/max */}
+            <this.BottomControlsButton
+              help='Denser'
+              onPress={() => this.zoomSpectroHeight(-1)}
+              iconProps={{name: 'align-justify'}} // 4 horizontal lines
             />
-            <BottomControlsButton onPress={() => this.zoomSpectroHeight(+1)}
-              name='menu'          // 3 horizontal lines
+            <this.BottomControlsButton
+              help='Taller'
+              onPress={() => this.zoomSpectroHeight(+1)}
+              iconProps={{name: 'menu'}}          // 3 horizontal lines
             />
             {/* Toggle controls for rec/species */}
-            <BottomControlsButton onPress={() => {}}
-              name='sliders'
-              // name='edit'
-              // name='edit-2'
-              // name='edit-3'
-              // name='layout' style={Styles.flipBoth}
+            <this.BottomControlsButton
+              help='Edit'
+              onPress={() => {}}
+              iconProps={{name: 'sliders'}}
+              // iconProps={{name: 'edit'}}
+              // iconProps={{name: 'edit-2'}}
+              // iconProps={{name: 'edit-3'}}
+              // iconProps={{name: 'layout', style: Styles.flipBoth,}}
             />
           </View>
 
@@ -763,7 +785,7 @@ export class SearchScreen extends Component<Props, State> {
             visible={this.state.showFilters}
             animationType='none' // 'none' | 'slide' | 'fade'
             transparent={true}
-            children={this.renderFilters()}
+            children={this.Filters()}
           />
 
           <ActionSheetBasic
@@ -779,10 +801,10 @@ export class SearchScreen extends Component<Props, State> {
             innerRef={this.addActionSheet}
             options={[
               ['Add a species manually', () => {}],
-              ['More species',           () => {}],
-              ['Fewer species',          () => {}],
-              ['More recs',              () => {}],
-              ['Fewer recs',             () => {}],
+              ['+ num species',          () => {}],
+              ['– num species',          () => {}],
+              ['+ num recs per species', () => {}],
+              ['– num recs per species', () => {}],
             ]}
           />
 
@@ -806,23 +828,6 @@ export class SearchScreen extends Component<Props, State> {
     );
   }
 
-}
-
-type BottomControlsButtonProps = {
-  style?: ViewStyle | TextStyle,
-  name: string,
-  onPress?: (pointerInside: boolean) => void,
-}
-
-function BottomControlsButton<X extends BottomControlsButtonProps>(_props: X) {
-  // Type assertion else "rest types may only be created from object types" [https://github.com/Microsoft/TypeScript/issues/16780]
-  const {style, onPress, ...props} = _props as BottomControlsButtonProps;
-  return (
-    // TODO Disable when spectroScaleY is min/max
-    <BorderlessButton style={styles.bottomControlsButton} onPress={onPress}>
-      <Feather style={[styles.bottomControlsIcon, style]} {...props} />
-    </BorderlessButton>
-  );
 }
 
 function sectionsForRecs(recs: Array<Rec>): Array<SectionListData<Rec>> {
@@ -890,11 +895,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     backgroundColor: iOSColors.midGray,
   },
-  bottomControlsButton: {
+  bottomControlButton: {
     flex: 1,
     alignItems: 'center',
   },
-  bottomControlsIcon: {
+  bottomControlHelp: {
+    ...material.captionObject,
+  },
+  bottomControlIcon: {
     ...material.headlineObject,
   },
   queryInput: {
@@ -916,8 +924,26 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'gray',
     flex: 1, flexDirection: 'column',
   },
-  recCaption: {
+  recSpeciesVerticalView: {
+    backgroundColor: iOSColors.tealBlue, // TODO Map rec.species -> color
+    width: 15, // Else widths are variable [why?]
+    justifyContent: 'center',
+    // padding: 0, margin: 0, // Nope, doesn't help
+  },
+  recSpeciesVerticalText: {
+    alignSelf: 'center',
+    // ...material.captionObject,
+    fontSize: 8,
+    // fontSize: 12, // TODO How to not ellip with width:15?
+    transform: [{rotate: '270deg'}],
+    // padding: 0, margin: 0, // Nope, doesn't help
+  },
+  recMetadataOneline: {
     flex: 2, flexDirection: 'row', // TODO Eh...
+  },
+  recMetadataFull: {
+    flex: 1,
+    flexDirection: 'column',
   },
   recText: {
     ...material.captionObject,

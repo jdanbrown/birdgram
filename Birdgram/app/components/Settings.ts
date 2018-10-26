@@ -5,27 +5,41 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 
 import { log, puts } from '../log';
 
+export type ShowMetadata = 'none' | 'oneline' | 'full';
+
 // All 5 of these lists of attrs (4 here + constructor) must be kept in sync, else load/setItem/etc. aren't typesafe
 export interface Props {
   // NOTE Keep attrs in sync (1/5)
+  readonly allowUploads: boolean;
   readonly showDebug: boolean;
   readonly debugTextColor: string; // XXX Junk setting (so we can have more than one)
+  // For SearchScreen
+  readonly showMetadata: ShowMetadata;
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
+  allowUploads: true,
   showDebug: false,
   debugTextColor: 'green',
+  // For SearchScreen
+  showMetadata: 'oneline',
 };
 export const TYPES: {[key: string]: string} = {
   // NOTE Keep attrs in sync (3/5)
+  allowUploads: 'boolean',
   showDebug: 'boolean',
   debugTextColor: 'string',
+  // For SearchScreen
+  showMetadata: 'string',
 };
 export const KEYS = [
   // NOTE Keep attrs in sync (4/5)
   //  - Keys in the order expected by the constructor
+  'allowUploads',
   'showDebug',
   'debugTextColor',
+  // For SearchScreen
+  'showMetadata',
 ];
 
 export class Settings implements Props {
@@ -35,8 +49,11 @@ export class Settings implements Props {
     // Callback to trigger App.setState when settings change
     public readonly appSetState: (settings: Settings) => void,
     // NOTE Keep attrs in sync (4/5)
+    public readonly allowUploads: boolean,
     public readonly showDebug: boolean,
     public readonly debugTextColor: string,
+  // For SearchScreen
+    public readonly showMetadata: ShowMetadata,
   ) {}
 
   withProps(props: object): Settings {

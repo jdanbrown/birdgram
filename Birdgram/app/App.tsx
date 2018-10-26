@@ -1,5 +1,6 @@
 import React, { Component } from 'React';
 import { Animated, AsyncStorage, Dimensions, Platform, StatusBar, Text, View } from 'react-native';
+import KeepAwake from 'react-native-keep-awake';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import ReactNav from 'react-navigation';
@@ -127,6 +128,9 @@ class App extends Component<Props, State> {
 
         {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
         <StatusBar hidden />
+
+        {/* TODO Does this work at top level? (Used to work when present in each screen) */}
+        {__DEV__ && <KeepAwake/>}
 
         <AppNavigator
           persistenceKey={__DEV__ ? '_dev_NavigationState_v4' : null}

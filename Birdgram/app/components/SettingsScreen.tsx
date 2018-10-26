@@ -2,7 +2,6 @@ import React, { Component } from 'react';
 import {
   Alert, AsyncStorage, Dimensions, Easing, Image, Modal, Platform, ScrollView, Text, TouchableHighlight, View, WebView,
 } from 'react-native';
-import KeepAwake from 'react-native-keep-awake';
 import SettingsList from 'react-native-settings-list';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { BorderlessButton, RectButton } from 'react-native-gesture-handler';
@@ -30,19 +29,23 @@ export class SettingsScreen extends Component<Props, State> {
     <Settings.Context.Consumer children={settings => (
       <View style={styles.container}>
 
-        {__DEV__ && <KeepAwake/>}
-
         <View style={styles.settingsList}>
           <SettingsList>
+
+            <SettingsList.Item
+              title='Allow uploads'
+              hasNavArrow={false}
+              hasSwitch={true}
+              switchState={settings.allowUploads}
+              switchOnValueChange={async x => await settings.set('allowUploads', x)}
+            />
 
             <SettingsList.Item
               title='Show debug info'
               hasNavArrow={false}
               hasSwitch={true}
               switchState={settings.showDebug}
-              switchOnValueChange={async showDebug => {
-                await settings.set('showDebug', showDebug);
-              }}
+              switchOnValueChange={async x => await settings.set('showDebug', x)}
             />
 
             {/* FIXME Well, this is a pretty horrible UX. Looks like we'll need to redo react-native-settings-list ourselves. */}
@@ -52,9 +55,7 @@ export class SettingsScreen extends Component<Props, State> {
               id='Debug text color'
               title='Debug text color'
               value={settings.debugTextColor}
-              onTextChange={async color => {
-                await settings.set('debugTextColor', color);
-              }}
+              onTextChange={async x => await settings.set('debugTextColor', x)}
             />
 
             <SettingsList.Item
