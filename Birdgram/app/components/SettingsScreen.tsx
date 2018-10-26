@@ -1,17 +1,29 @@
 import React, { Component } from 'react';
-import { Alert, AsyncStorage, Dimensions, Image, Platform, ScrollView, Text, View, WebView } from 'react-native';
+import {
+  Alert, AsyncStorage, Dimensions, Easing, Image, Modal, Platform, ScrollView, Text, TouchableHighlight, View, WebView,
+} from 'react-native';
 import KeepAwake from 'react-native-keep-awake';
 import SettingsList from 'react-native-settings-list';
-import { getStatusBarHeight } from 'react-native-status-bar-height';
+import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
+import { BorderlessButton, RectButton } from 'react-native-gesture-handler';
 
 import { Settings } from './Settings';
 import { StyleSheet } from '../stylesheet';
 import { global } from '../utils';
 
 type Props = {};
-type State = {};
+type State = {
+  showModal: boolean;
+};
 
 export class SettingsScreen extends Component<Props, State> {
+
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      showModal: false,
+    };
+  }
 
   // TODO https://github.com/evetstech/react-native-settings-list#a-more-realistic-example
   render = () => (
@@ -24,12 +36,7 @@ export class SettingsScreen extends Component<Props, State> {
           <SettingsList>
 
             <SettingsList.Item
-              title='Subthings'
-              onPress={() => Alert.alert('Need some subthings')}
-            />
-
-            <SettingsList.Item
-              title='Show debugging info'
+              title='Show debug info'
               hasNavArrow={false}
               hasSwitch={true}
               switchState={settings.showDebug}
@@ -50,8 +57,38 @@ export class SettingsScreen extends Component<Props, State> {
               }}
             />
 
+            <SettingsList.Item
+              title='Test modal'
+              onPress={() => this.setState({showModal: true})}
+            />
+
           </SettingsList>
         </View>
+
+        <Modal
+          animationType='none' // 'none' | 'slide' | 'fade'
+          transparent={true}
+          visible={this.state.showModal}
+        >
+          <View style={{
+            flex: 1,
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginTop: 300,
+            marginBottom: 50,
+            backgroundColor: iOSColors.midGray,
+          }}>
+            <View>
+              <Text>This is a modal</Text>
+              <RectButton onPress={() => this.setState({showModal: !this.state.showModal})}>
+                <View style={{padding: 20, backgroundColor: iOSColors.orange}}>
+                  <Text>Close</Text>
+                </View>
+              </RectButton>
+            </View>
+          </View>
+        </Modal>
 
         {settings.showDebug && (
           <View style={settings.debugView}>
@@ -69,7 +106,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: 'column',
-    marginTop: getStatusBarHeight(),
   },
   settingsList: {
     flexGrow: 1,

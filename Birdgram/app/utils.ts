@@ -75,3 +75,11 @@ export const Styles = {
   flipVertical:   {transform: [{scaleY: -1}]},
   flipBoth:       {transform: [{scaleX: -1}, {scaleY: -1}]},
 };
+
+// Copy hard-coded params for react-navigation tab bar
+//  - https://github.com/react-navigation/react-navigation-tabs/blob/v0.5.1/src/views/BottomTabBar.js#L199-L201
+//  - https://github.com/react-navigation/react-navigation-tabs/blob/v0.5.1/src/views/BottomTabBar.js#L261-L266
+export const TabBarBottomConstants = {
+  DEFAULT_HEIGHT: 49,
+  COMPACT_HEIGHT: 29,
+}

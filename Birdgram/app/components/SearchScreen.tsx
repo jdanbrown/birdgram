@@ -1,31 +1,30 @@
 // @ts-ignore
 import animated from "animated.macro";
 import _ from 'lodash';
-import React from 'React';
-import { Component, ReactNode, RefObject } from 'react';
+import React, { Component, ReactNode, RefObject } from 'react';
 import {
-  Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, LayoutChangeEvent, Platform, SectionList,
-  SectionListData, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
+  Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, LayoutChangeEvent, Modal, Platform,
+  SectionList, SectionListData, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
 } from 'react-native';
-import RNFB from 'rn-fetch-blob';
+import ActionSheet from 'react-native-actionsheet'; // [Must `import ActionSheet` i/o `import { ActionSheet }`, else barf]
 import FastImage from 'react-native-fast-image';
 import * as Gesture from 'react-native-gesture-handler';
 import {
   BorderlessButton, LongPressGestureHandler, PanGestureHandler, PinchGestureHandler, RectButton, TapGestureHandler,
   // FlatList, ScrollView, Slider, Switch, TextInput, // TODO Needed?
 } from 'react-native-gesture-handler';
-import DrawerLayout from 'react-native-gesture-handler/DrawerLayout';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import KeepAwake from 'react-native-keep-awake';
 import SQLite from 'react-native-sqlite-storage';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
-import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
+import RNFB from 'rn-fetch-blob';
 import { sprintf } from 'sprintf-js';
 const fs = RNFB.fs;
 
+import { ActionSheetBasic } from './ActionSheets';
 import { Settings } from './Settings';
 import { config } from '../config';
 import { log, puts } from '../log';
@@ -33,7 +32,7 @@ import { Places } from '../places';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
-import { finallyAsync, getOrSet, global, match, Styles } from '../utils';
+import { finallyAsync, getOrSet, global, match, Styles, TabBarBottomConstants } from '../utils';
 
 const SearchRecs = {
 
@@ -236,12 +235,14 @@ class PanTranslateX {
         //  - HACK Workaround: if .decay moved us the wrong direction, reset to the _value before .decay
         //  - When you do trip the bug the animation displays incorrectly, but ._value ends up correct
         //  - Without the workaround you'd reset to .value=0 anytime you trip the bug
-        // @ts-ignore (._value isn't exposed)
-        const _valueAfter = this.inTranslationX._value;
-        const sgn = Math.sign(velocityX);
-        if (sgn * _valueAfter < sgn * _valueBefore) {
-          this.inTranslationX.setValue(_valueBefore);
-          // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
+        if (_valueBefore !== undefined) {
+          // @ts-ignore (._value isn't exposed)
+          const _valueAfter = this.inTranslationX._value;
+          const sgn = Math.sign(velocityX);
+          if (sgn * _valueAfter < sgn * _valueBefore) {
+            this.inTranslationX.setValue(_valueBefore);
+            // this._log(log.info, 'decay.finished', ['_value[%7.2f]', 'e.finished[%5s]'], [_value, finished]);
+          }
         }
 
         // Extract offset <- value now that .decay is done using offset for momentum
@@ -258,6 +259,7 @@ class PanTranslateX {
 }
 
 type State = {
+  showFilters: boolean,
   totalRecs?: number,
   queryText: string,
   query?: string,
@@ -288,8 +290,10 @@ export class SearchScreen extends Component<Props, State> {
 
   db?: SQLiteDatabase;
   soundsCache: Map<RecId, Promise<Sound> | Sound>;
+  saveActionSheet: RefObject<ActionSheet>;
+  addActionSheet: RefObject<ActionSheet>;
+  sortActionSheet: RefObject<ActionSheet>;
   pinchRef: RefObject<PinchGestureHandler>;
-  drawerLayoutRef: RefObject<DrawerLayout>;
   pinchScaleX: PinchScaleX;
   panTranslateX: Map<RecId, PanTranslateX>;
   panRefs: Map<RecId, RefObject<PanGestureHandler>>;
@@ -298,6 +302,7 @@ export class SearchScreen extends Component<Props, State> {
     super(props);
 
     this.state = {
+      showFilters: false,
       queryText: '',
       queryConfig: { // TODO Move to (global) SettingsScreen.state
         quality: ['A', 'B'],
@@ -309,8 +314,10 @@ export class SearchScreen extends Component<Props, State> {
     };
 
     this.soundsCache = new Map();
+    this.saveActionSheet = React.createRef();
+    this.addActionSheet = React.createRef();
+    this.sortActionSheet = React.createRef();
     this.pinchRef = React.createRef();
-    this.drawerLayoutRef = React.createRef();
     this.pinchScaleX = new PinchScaleX(this.props.spectroBase,
       // 2, {min: 1, max: 10}, // TODO TODO Restore
       // .5, {min: .5, max: 10},
@@ -557,9 +564,12 @@ export class SearchScreen extends Component<Props, State> {
     console.log('renderLeftAction.onMockPress');
   }
 
-  renderFiltersDrawer = (): ReactNode => {
+  renderFilters = (): ReactNode => {
     return (
-      <View style={styles.filtersDrawer}>
+      <View style={[
+        styles.filtersModal,
+        {marginBottom: TabBarBottomConstants.DEFAULT_HEIGHT},
+      ]}>
         <Text>Filters</Text>
         <Text>- quality</Text>
         <Text>- month</Text>
@@ -578,12 +588,13 @@ export class SearchScreen extends Component<Props, State> {
           returnKeyType='search'
         />
         */}
+        <RectButton onPress={() => this.setState({showFilters: false})}>
+          <View style={{padding: 10, backgroundColor: iOSColors.blue}}>
+            <Text>Done</Text>
+          </View>
+        </RectButton>
       </View>
     );
-  }
-
-  openFiltersDrawer = () => {
-    this.drawerLayoutRef.current && this.drawerLayoutRef.current.openDrawer();
   }
 
   zoomSpectroHeight = (step: number) => {
@@ -599,168 +610,197 @@ export class SearchScreen extends Component<Props, State> {
   render = () => {
     return (
       <Settings.Context.Consumer children={settings => (
-        <View style={styles.containerOutsideDrawer}>
-          <DrawerLayout
-            ref={this.drawerLayoutRef}
-            drawerWidth={250}
-            drawerPosition='left'
-            drawerType='slide'
-            edgeWidth={0}
-            drawerBackgroundColor={iOSColors.gray}
-            overlayColor='rgba(0,0,0,0)'
-            renderNavigationView={this.renderFiltersDrawer}
+        <View style={styles.container}>
+
+          {__DEV__ && <KeepAwake/>}
+
+          <PinchGestureHandler
+            ref={this.pinchRef}
+            onGestureEvent={this.pinchScaleX.onPinchGesture}
+            onHandlerStateChange={this.pinchScaleX.onPinchState}
+            // TODO TODO Make this waitFor work!
+            waitFor={Array.from(this.panRefs.values())}
           >
-            <Animated.View style={styles.containerInsideDrawer}>
+            <Animated.View style={{flex: 1}}>
 
-              {__DEV__ && <KeepAwake/>}
-
-              <PinchGestureHandler
-                ref={this.pinchRef}
-                onGestureEvent={this.pinchScaleX.onPinchGesture}
-                onHandlerStateChange={this.pinchScaleX.onPinchState}
-                // TODO TODO Make this waitFor work!
-                waitFor={Array.from(this.panRefs.values())}
-              >
-                <Animated.View style={{flex: 1}}>
-
-                  <SectionList
-                    style={styles.recList}
-                    sections={sectionsForRecs(this.state.recs)}
-                    keyExtractor={(rec, index) => rec.id.toString()}
-                    initialNumToRender={20}
-                    renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
-                      <View style={styles.recSectionHeader}>
-                        <Text numberOfLines={1}>{species_com_name}</Text>
-                        {settings.showDebug && (
-                          <Text numberOfLines={1} style={[{marginLeft: 'auto'}, settings.debugText]}>({recs_for_sp} recs)</Text>
-                        )}
-                      </View>
+              <SectionList
+                style={styles.recList}
+                sections={sectionsForRecs(this.state.recs)}
+                keyExtractor={(rec, index) => rec.id.toString()}
+                initialNumToRender={20}
+                renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
+                  <View style={styles.recSectionHeader}>
+                    <Text numberOfLines={1}>{species_com_name}</Text>
+                    {settings.showDebug && (
+                      <Text numberOfLines={1} style={[{marginLeft: 'auto'}, settings.debugText]}>({recs_for_sp} recs)</Text>
                     )}
-                    renderItem={({item: rec, index}) => (
-                      <Animated.View style={styles.recRow}>
+                  </View>
+                )}
+                renderItem={({item: rec, index}) => (
+                  <Animated.View style={styles.recRow}>
 
-                        <PanGestureHandler
-                          ref={getOrSet(this.panRefs, rec.id, () => React.createRef())}
-                          // [Why do these trigger undefined.onPanGesture on init?]
-                          onGestureEvent       = {(this.panTranslateX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
-                          onHandlerStateChange = {(this.panTranslateX.get(rec.id) || {onPanState:   undefined}).onPanState}
-                          // @ts-ignore [TODO PR: add waitFor to react-native-gesture-handler/react-native-gesture-handler.d.ts]
-                          // waitFor={this.pinchRef}
-                          // XXX Nope, doesn't control for multiple pointers on separate spectros
-                          // maxPointers={1}
+                    <PanGestureHandler
+                      ref={getOrSet(this.panRefs, rec.id, () => React.createRef())}
+                      // [Why do these trigger undefined.onPanGesture on init?]
+                      onGestureEvent       = {(this.panTranslateX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
+                      onHandlerStateChange = {(this.panTranslateX.get(rec.id) || {onPanState:   undefined}).onPanState}
+                      // @ts-ignore [TODO PR: add waitFor to react-native-gesture-handler/react-native-gesture-handler.d.ts]
+                      // waitFor={this.pinchRef}
+                      // XXX Nope, doesn't control for multiple pointers on separate spectros
+                      // maxPointers={1}
 
-                          // TODO TODO Does this prevent multiple simultaneous pans?
-                          //  - TODO TODO Keep debugging -- all arrays are still empty...
-                          // waitFor={puts(
-                          //   Array.from(this.panRefs.entries())
-                          //   .filter(([recId, ref]) => puts(recId) < puts(rec.id))
-                          //   .map(([recId, ref]) => ref)
-                          // )}
+                      // TODO TODO Does this prevent multiple simultaneous pans?
+                      //  - TODO TODO Keep debugging -- all arrays are still empty...
+                      // waitFor={puts(
+                      //   Array.from(this.panRefs.entries())
+                      //   .filter(([recId, ref]) => puts(recId) < puts(rec.id))
+                      //   .map(([recId, ref]) => ref)
+                      // )}
 
-                        >
-                          <Animated.View>
+                    >
+                      <Animated.View>
 
-                            {/* <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}> */}
-                              {/* <BorderlessButton onPress={this.onPress(rec)}> */}
+                        {/* <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}> */}
+                          {/* <BorderlessButton onPress={this.onPress(rec)}> */}
 
-                                <Animated.View collapsable={false}>
-                                  <Animated.Image
-                                    style={[{
-                                      // XXX Can't animate height
-                                      //  - "Error: Style property 'height' is not supported by native animated module"
-                                      // height: this.pinchScaleX.outScaleY.interpolate({
-                                      //   inputRange: [0, 1],
-                                      //   outputRange: [0, this.pinchScaleX.spectroBase.h],
-                                      // }),
-                                      width:  this.pinchScaleX.spectroBase.w,
-                                      height: this.pinchScaleX.spectroBase.h * this.state.spectroScaleY,
-                                      transform: [
-                                        ...this.pinchScaleX.transform,
-                                        ...(this.panTranslateX.get(rec.id) || {transform: []}).transform,
-                                      ],
-                                    }]}
-                                    resizeMode='stretch'
-                                    source={{uri: Rec.spectroPath(rec)}}
-                                  />
-                                </Animated.View>
+                            <Animated.View collapsable={false}>
+                              <Animated.Image
+                                style={[{
+                                  // XXX Can't animate height
+                                  //  - "Error: Style property 'height' is not supported by native animated module"
+                                  // height: this.pinchScaleX.outScaleY.interpolate({
+                                  //   inputRange: [0, 1],
+                                  //   outputRange: [0, this.pinchScaleX.spectroBase.h],
+                                  // }),
+                                  width:  this.pinchScaleX.spectroBase.w,
+                                  height: this.pinchScaleX.spectroBase.h * this.state.spectroScaleY,
+                                  transform: [
+                                    ...this.pinchScaleX.transform,
+                                    ...(this.panTranslateX.get(rec.id) || {transform: []}).transform,
+                                  ],
+                                }]}
+                                resizeMode='stretch'
+                                source={{uri: Rec.spectroPath(rec)}}
+                              />
+                            </Animated.View>
 
-                              {/* </BorderlessButton> */}
-                            {/* </LongPressGestureHandler> */}
+                          {/* </BorderlessButton> */}
+                        {/* </LongPressGestureHandler> */}
 
-                            <View style={styles.recCaption}>
-                              <RecText flex={3}>{rec.xc_id}</RecText>
-                              <RecText flex={1}>{rec.quality}</RecText>
-                              <RecText flex={2}>{rec.month_day}</RecText>
-                              <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
-                              {ccIcon({style: styles.recTextFont})}
-                              <RecText flex={4}> {rec.recordist}</RecText>
-                            </View>
-
-                          </Animated.View>
-                        </PanGestureHandler>
+                        <View style={styles.recCaption}>
+                          <RecText flex={3}>{rec.xc_id}</RecText>
+                          <RecText flex={1}>{rec.quality}</RecText>
+                          <RecText flex={2}>{rec.month_day}</RecText>
+                          <RecText flex={4}>{Rec.placeNorm(rec)}</RecText>
+                          {ccIcon({style: styles.recTextFont})}
+                          <RecText flex={4}> {rec.recordist}</RecText>
+                        </View>
 
                       </Animated.View>
-                    )}
-                  />
+                    </PanGestureHandler>
 
-                </Animated.View>
-              </PinchGestureHandler>
-
-              <View style={settings.debugView}>
-                <Text style={settings.debugText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
-                <Text style={settings.debugText}>{JSON.stringify(this.state.queryConfig)}</Text>
-              </View>
-
-              <View style={styles.bottomControls}>
-                {/* Filters */}
-                <BottomControlsButton onPress={this.openFiltersDrawer}
-                  name='filter'
-                />
-                {/* Save as new list / add all to saved list / share list */}
-                <BottomControlsButton onPress={() => {}}
-                  name='star'
-                  // name='share'
-                />
-                {/* Add species (select species manually) */}
-                <BottomControlsButton onPress={() => {}}
-                  // name='user-plus'
-                  // name='file-plus'
-                  // name='folder-plus'
-                  name='plus-circle'
-                  // name='plus'
-                />
-                {/* Toggle sort: species probs / rec dist / manual list */}
-                <BottomControlsButton onPress={() => {}}
-                  // name='chevrons-down'
-                  // name='chevron-down'
-                  name='arrow-down'
-                  // name='arrow-down-circle'
-                />
-                {/* Cycle metadata: none / oneline / full */}
-                <BottomControlsButton onPress={() => {}}
-                  name='credit-card' style={Styles.flipVertical}
-                  // name='sidebar' style={Styles.rotate270}
-                  // name='file-text'
-                />
-                {/* Zoom more/fewer recs (spectro height)  */}
-                <BottomControlsButton onPress={() => this.zoomSpectroHeight(-1)}
-                  name='align-justify' // 4 horizontal lines
-                />
-                <BottomControlsButton onPress={() => this.zoomSpectroHeight(+1)}
-                  name='menu'          // 3 horizontal lines
-                />
-                {/* Toggle controls for rec/species */}
-                <BottomControlsButton onPress={() => {}}
-                  name='sliders'
-                  // name='edit'
-                  // name='edit-2'
-                  // name='edit-3'
-                  // name='layout' style={Styles.flipBoth}
-                />
-              </View>
+                  </Animated.View>
+                )}
+              />
 
             </Animated.View>
-          </DrawerLayout>
+          </PinchGestureHandler>
+
+          <View style={settings.debugView}>
+            <Text style={settings.debugText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
+            <Text style={settings.debugText}>{JSON.stringify(this.state.queryConfig)}</Text>
+          </View>
+
+          <View style={styles.bottomControls}>
+            {/* Filters */}
+            <BottomControlsButton onPress={() => this.setState({showFilters: true})}
+              name='filter'
+            />
+            {/* Save as new list / add all to saved list / share list */}
+            <BottomControlsButton onPress={() => this.saveActionSheet.current!.show()}
+              name='star'
+              // name='share'
+            />
+            {/* Add species (select species manually) */}
+            <BottomControlsButton onPress={() => this.addActionSheet.current!.show()}
+              // name='user-plus'
+              // name='file-plus'
+              // name='folder-plus'
+              name='plus-circle'
+              // name='plus'
+            />
+            {/* Toggle sort: species probs / rec dist / manual list */}
+            <BottomControlsButton onPress={() => this.sortActionSheet.current!.show()}
+              // name='chevrons-down'
+              // name='chevron-down'
+              name='arrow-down'
+              // name='arrow-down-circle'
+            />
+            {/* Cycle metadata: none / oneline / full */}
+            <BottomControlsButton onPress={() => {}}
+              name='credit-card' style={Styles.flipVertical}
+              // name='sidebar' style={Styles.rotate270}
+              // name='file-text'
+            />
+            {/* Zoom more/fewer recs (spectro height)  */}
+            <BottomControlsButton onPress={() => this.zoomSpectroHeight(-1)}
+              name='align-justify' // 4 horizontal lines
+            />
+            <BottomControlsButton onPress={() => this.zoomSpectroHeight(+1)}
+              name='menu'          // 3 horizontal lines
+            />
+            {/* Toggle controls for rec/species */}
+            <BottomControlsButton onPress={() => {}}
+              name='sliders'
+              // name='edit'
+              // name='edit-2'
+              // name='edit-3'
+              // name='layout' style={Styles.flipBoth}
+            />
+          </View>
+
+          <Modal
+            visible={this.state.showFilters}
+            animationType='none' // 'none' | 'slide' | 'fade'
+            transparent={true}
+            children={this.renderFilters()}
+          />
+
+          <ActionSheetBasic
+            innerRef={this.saveActionSheet}
+            options={[
+              ['Save as new list',      () => {}],
+              ['Add all to saved list', () => {}],
+              ['Share list',            () => {}],
+            ]}
+          />
+
+          <ActionSheetBasic
+            innerRef={this.addActionSheet}
+            options={[
+              ['Add a species manually', () => {}],
+              ['More species',           () => {}],
+              ['Fewer species',          () => {}],
+              ['More recs',              () => {}],
+              ['Fewer recs',             () => {}],
+            ]}
+          />
+
+          <ActionSheetBasic
+            innerRef={this.sortActionSheet}
+            options={
+              // this.state.queryRec ? [ // TODO queryRec
+              true ? [
+                ['Sort by species, then by recs', () => {}],
+                ['Sort by recs only',             () => {}],
+                ['Order manually',                () => {}],
+              ] : [
+                ['Sort recs by similarity',       () => {}],
+                ['Order manually',                () => {}],
+              ]
+            }
+          />
+
         </View>
       )}/>
     );
@@ -833,15 +873,16 @@ function licenseTypeIcons(license_type: string, props?: object): Array<Element> 
 }
 
 const styles = StyleSheet.create({
-  containerOutsideDrawer: {
+  container: {
     flex: 1,
   },
-  filtersDrawer: {
-    marginTop: getStatusBarHeight(),
-  },
-  containerInsideDrawer: {
+  filtersModal: {
     flex: 1,
-    marginTop: getStatusBarHeight(),
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 300,
+    backgroundColor: iOSColors.green,
   },
   bottomControls: {
     flexDirection: 'row',

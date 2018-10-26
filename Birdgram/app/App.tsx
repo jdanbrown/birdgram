@@ -1,5 +1,5 @@
 import React, { Component } from 'React';
-import { Animated, AsyncStorage, Dimensions, Platform, Text, View } from 'react-native';
+import { Animated, AsyncStorage, Dimensions, Platform, StatusBar, Text, View } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import ReactNav from 'react-navigation';
@@ -48,9 +48,9 @@ timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));   
 // timed('sj.savePixels',   () => global.sj.savePixels   = require('save-pixels'));             // 30ms // XXX Doesn't work in RN
 global.fs = global.RNFB.fs;
 
-const Navigator = ReactNav.createBottomTabNavigator(
+const AppNavigator = ReactNav.createBottomTabNavigator(
   {
-    // NOTE Must bump the Navigator persistenceKey version when changing these keys (below)
+    // NOTE Must bump the AppNavigator persistenceKey version when changing these keys (below)
     Record:   { screen: RecordScreen },
     Search:   { screen: SearchScreen },
     Recent:   { screen: RecentScreen },
@@ -122,11 +122,16 @@ class App extends Component<Props, State> {
       </View>
     ) : (
       // https://reactnavigation.org/docs/en/state-persistence.html
-      //  - NOTE Must bump this persistenceKey version when changing the Navigator keys (above)
+      //  - NOTE Must bump this persistenceKey version when changing the AppNavigator keys (above)
       <Settings.Context.Provider value={this.state.settings!}>
-        <Navigator
+
+        {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
+        <StatusBar hidden />
+
+        <AppNavigator
           persistenceKey={__DEV__ ? '_dev_NavigationState_v4' : null}
         />
+
       </Settings.Context.Provider>
     )
   );
