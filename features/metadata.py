@@ -19,6 +19,7 @@ from util import cache_to_file_forever, df_rows, singleton
 metadata_dir = f'{data_dir}/metadata'
 ebird_taxa_path = f'{metadata_dir}/ebird-ws1.1-taxa-species.csv'
 ebird_clements_checklist_path = f'{metadata_dir}/eBird-Clements-v2018-integrated-checklist-August-2018.csv.gz'
+df_cache_file = f'{metadata_dir}/cache/df-v0'
 
 
 @singleton
@@ -85,7 +86,7 @@ class ebird:
 
     @property
     @lru_cache()
-    @cache_to_file_forever(f'{metadata_dir}/cache/_taxa-v2')  # Avoid ~250ms (on a MBP)
+    @cache_to_file_forever(df_cache_file)  # Avoid ~250ms (local MBP)
     def df(self):
         """The full species df (based on http://ebird.org/ws1.1/ref/taxa/ebird?cat=species&fmt=csv)"""
 
@@ -350,7 +351,7 @@ class ebird:
 
     @property
     @lru_cache()
-    @cache_to_file_forever(f'{metadata_dir}/cache/_df_lookup-v2')  # Avoid ~12s (on a MBP)
+    @cache_to_file_forever(f'{df_cache_file}._df_lookup')  # Avoid ~12s (local MBP)
     def _df_lookup(self) -> dict:
         out = dict([
             (self._normalize_query(query), Species(**row))

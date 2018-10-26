@@ -161,6 +161,9 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
         species_sci_name=species.sci_name,
         species_taxon_order=species.taxon_order,
         species_taxon_id=species.taxon_id,
+        species_species_group=species.species_group,
+        species_family=species.family,
+        species_order=species.order,
         species_query=species_query,
         basename=basename,
     )

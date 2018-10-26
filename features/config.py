@@ -83,7 +83,7 @@ config = AttrDict(
                 # refresh=True,  # Uncomment to refresh cache (force miss)
                 params=dict(
                     # Global params for precomputed search_recs
-                    version=7,   # Manually bump to invalidate cache
+                    version=8,   # Manually bump to invalidate cache
                     limit=3500,  # XXX Faster dev (declared here for cache invalidation)
                     audio_s=10,  # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
                 ),

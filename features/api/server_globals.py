@@ -27,8 +27,8 @@ log = structlog.get_logger(__name__)
 #   - See details in util.Log
 class _sg:
 
-    def init(self, app, **kwargs):
-        if not hasattr(self, '_init_done'):
+    def init(self, app, reload=False, **kwargs):
+        if not hasattr(self, '_init_done') or reload:
             log.info()
             sg_load.load(self, **kwargs)
             log.info('done')
