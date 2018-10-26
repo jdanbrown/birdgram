@@ -28,7 +28,7 @@ import { ActionSheetBasic } from './ActionSheets';
 import { Settings, ShowMetadata } from './Settings';
 import { config } from '../config';
 import { Quality, Rec, RecId, SearchRecs } from '../datatypes';
-import { log, puts } from '../log';
+import { log, puts, tap } from '../log';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
@@ -72,7 +72,7 @@ export class SearchScreen extends Component<Props, State> {
   pinchRef: RefObject<PinchGestureHandler>;
   pinchScaleX: PinchScaleX;
   panTranslateX: Map<RecId, PanTranslateX>;
-  panRefs: Map<RecId, RefObject<PanGestureHandler>>;
+  // panRefs: Map<RecId, RefObject<PanGestureHandler>>; // XXX Didn't work
 
   constructor(props: Props) {
     super(props);
@@ -100,7 +100,7 @@ export class SearchScreen extends Component<Props, State> {
       1, {min: .5, max: 10},
     );
     this.panTranslateX = new Map();
-    this.panRefs = new Map();
+    // this.panRefs = new Map(); // XXX Didn't work
 
     global.SearchScreen = this; // XXX Debug
   }
@@ -118,8 +118,11 @@ export class SearchScreen extends Component<Props, State> {
     ]));
     log.info('panTranslateX = new Map', this.panTranslateX); // TODO TODO XXX Debug
 
-    // TODO TODO Does this work?
-    this.panRefs = new Map();
+    // // XXX Didn't work
+    // this.panRefs = new Map(this.state.recs.map<[RecId, RefObject<PanGestureHandler>]>(rec => [
+    //   rec.id,
+    //   React.createRef<PanGestureHandler>(),
+    // ]));
 
   }
 
@@ -510,6 +513,40 @@ export class SearchScreen extends Component<Props, State> {
     return sections;
   }
 
+  SpeciesEditingButtons = () => (
+    <View style={styles.sectionSpeciesEditingView}>
+      <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
+        <Feather style={styles.sectionSpeciesEditingIcon} name='move' />
+      </BorderlessButton>
+      <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
+        <Feather style={styles.sectionSpeciesEditingIcon} name='search' />
+      </BorderlessButton>
+      <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
+        <Feather style={styles.sectionSpeciesEditingIcon} name='user-x' />
+      </BorderlessButton>
+      <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
+        <Feather style={styles.sectionSpeciesEditingIcon} name='plus-circle' />
+      </BorderlessButton>
+    </View>
+  );
+
+  RecEditingButtons = () => (
+    <View style={styles.recEditingView}>
+      <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
+        <Feather style={styles.recEditingIcon} name='move' />
+      </BorderlessButton>
+      <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
+        <Feather style={styles.recEditingIcon} name='search' />
+      </BorderlessButton>
+      <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
+        <Feather style={styles.recEditingIcon} name='x' />
+      </BorderlessButton>
+      <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
+        <Feather style={styles.recEditingIcon} name='star' />
+      </BorderlessButton>
+    </View>
+  );
+
   RecText = <X extends {children: any, flex?: number}>(props: X) => {
     const flex = props.flex || 1;
     return (<Text
@@ -563,19 +600,16 @@ export class SearchScreen extends Component<Props, State> {
     </View>
   );
 
-  render = () => {
-    return (
-      <Settings.Context.Consumer children={settings => (
-        <View style={styles.container}>
+  render = () => (
+    <Settings.Context.Consumer children={settings => (
+      <View style={styles.container}>
 
-          <PinchGestureHandler
-            ref={this.pinchRef}
-            onGestureEvent={this.pinchScaleX.onPinchGesture}
-            onHandlerStateChange={this.pinchScaleX.onPinchState}
-            // TODO TODO Make this waitFor work!
-            waitFor={Array.from(this.panRefs.values())}
-          >
-            <Animated.View style={{flex: 1}}>
+        <PinchGestureHandler
+          ref={this.pinchRef}
+          onGestureEvent={this.pinchScaleX.onPinchGesture}
+          onHandlerStateChange={this.pinchScaleX.onPinchState}
+        >
+          <Animated.View style={{flex: 1}}>
 
               <SectionList
                 style={styles.recList}
@@ -585,83 +619,51 @@ export class SearchScreen extends Component<Props, State> {
                 renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
                   settings.showMetadata === 'none' ? null : (
                     <View style={styles.sectionSpecies}>
-
                       {!settings.editing ? null : (
-                        <View style={styles.sectionSpeciesEditingView}>
-                          <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
-                            <Feather style={styles.sectionSpeciesEditingIcon} name='move' />
-                          </BorderlessButton>
-                          <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
-                            <Feather style={styles.sectionSpeciesEditingIcon} name='search' />
-                          </BorderlessButton>
-                          <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
-                            <Feather style={styles.sectionSpeciesEditingIcon} name='user-x' />
-                          </BorderlessButton>
-                          <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
-                            <Feather style={styles.sectionSpeciesEditingIcon} name='plus-circle' />
-                          </BorderlessButton>
-                        </View>
+                        <this.SpeciesEditingButtons />
                       )}
-
                       <Text numberOfLines={1} style={styles.sectionSpeciesText}>
                         {species_com_name}
                       </Text>
-
                       {settings.showDebug && (
                         <Text numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}, settings.debugText]}>
                           ({recs_for_sp} recs)
                         </Text>
                       )}
-
                     </View>
                   )
                 )}
                 renderItem={({item: rec, index}) => (
                   <Animated.View style={styles.recRow}>
 
-                    {/* TODO Flex image width so we can show these on the right (as is they'd be pushed off screen) */}
+                    {/* TODO Flex image width so we can show these on the right (as is, they'd be pushed off screen) */}
                     {!settings.editing ? null : (
-                      <View style={styles.recEditingView}>
-                        <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
-                          <Feather style={styles.recEditingIcon} name='move' />
-                        </BorderlessButton>
-                        <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
-                          <Feather style={styles.recEditingIcon} name='search' />
-                        </BorderlessButton>
-                        <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
-                          <Feather style={styles.recEditingIcon} name='x' />
-                        </BorderlessButton>
-                        <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
-                          <Feather style={styles.recEditingIcon} name='star' />
-                        </BorderlessButton>
-                      </View>
+                      <this.RecEditingButtons />
                     )}
 
                     <Animated.View style={styles.recRowInner}>
 
                       <PanGestureHandler
-                        ref={getOrSet(this.panRefs, rec.id, () => React.createRef())}
                         // [Why do these trigger undefined.onPanGesture on init?]
                         onGestureEvent       = {(this.panTranslateX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
                         onHandlerStateChange = {(this.panTranslateX.get(rec.id) || {onPanState:   undefined}).onPanState}
-                        // @ts-ignore [TODO PR: add waitFor to react-native-gesture-handler/react-native-gesture-handler.d.ts]
-                        // waitFor={this.pinchRef}
-                        // XXX Nope, doesn't control for multiple pointers on separate spectros
-                        // maxPointers={1}
-
-                        // TODO TODO Does this prevent multiple simultaneous pans?
-                        //  - TODO TODO Keep debugging -- all arrays are still empty...
-                        // waitFor={puts(
-                        //   Array.from(this.panRefs.entries())
-                        //   .filter(([recId, ref]) => puts(recId) < puts(rec.id))
-                        //   .map(([recId, ref]) => ref)
-                        // )}
-
+                        minDeltaX={10} // Else rec pans eat all the up/down scroll events (copied from Swipeable)
+                        // FIXME How to pinch instead of 2x pan when fingers are on different spectros?
+                        // waitFor={this.pinchRef} // XXX Close! -- but makes one-finger pans slow to register [why?]
+                        // maxPointers={1}         // XXX Nope, doesn't control for multiple pointers on separate spectros
+                        // XXX Nope, doesn't prevent multiple pointers on separate spectros [why not?]
+                        // ref={this.panRefs.get(rec.id)} waitFor={[
+                        //   ...tap((
+                        //       Array.from(this.panRefs.entries())
+                        //       .filter(([recId, ref]) => recId < rec.id)
+                        //       .map(([recId, ref]) => ref)
+                        //   ), xs => puts(rec.xc_id, xs))
+                        // ]}
                       >
                         <Animated.View>
 
-                          {/* <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}> */}
-                            {/* <BorderlessButton onPress={this.toggleRecPlaying(rec)}> */}
+                          <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
+                            <BorderlessButton onPress={this.toggleRecPlaying(rec)}>
 
                               <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
 
@@ -701,8 +703,8 @@ export class SearchScreen extends Component<Props, State> {
 
                               </Animated.View>
 
-                            {/* </BorderlessButton> */}
-                          {/* </LongPressGestureHandler> */}
+                            </BorderlessButton>
+                          </LongPressGestureHandler>
 
                         </Animated.View>
                       </PanGestureHandler>
@@ -737,21 +739,20 @@ export class SearchScreen extends Component<Props, State> {
                 )}
               />
 
-            </Animated.View>
-          </PinchGestureHandler>
+          </Animated.View>
+        </PinchGestureHandler>
 
-          <View style={settings.debugView}>
-            <Text style={settings.debugText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
-            <Text style={settings.debugText}>{JSON.stringify(this.state.queryConfig)}</Text>
-          </View>
-
-          <this.BottomControls/>
-          <this.ModalsAndActionSheets/>
-
+        <View style={settings.debugView}>
+          <Text style={settings.debugText}>{this.state.status} ({this.state.totalRecs || '?'} total)</Text>
+          <Text style={settings.debugText}>{JSON.stringify(this.state.queryConfig)}</Text>
         </View>
-      )}/>
-    );
-  }
+
+        <this.BottomControls/>
+        <this.ModalsAndActionSheets/>
+
+      </View>
+    )}/>
+  );
 
 }
 
