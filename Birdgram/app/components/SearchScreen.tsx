@@ -666,10 +666,17 @@ export class SearchScreen extends Component<Props, State> {
                               <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
 
                                 {settings.showMetadata !== 'none' ? null : (
-                                  <View style={styles.recSpeciesVerticalView}>
-                                    <Text style={styles.recSpeciesVerticalText} numberOfLines={1}>
-                                      {rec.species}
-                                    </Text>
+                                  <View style={styles.recSpeciesSidewaysView}>
+                                    <View style={styles.recSpeciesSidewaysViewInner}>
+                                      <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
+                                        fontSize: match<number, number, number>(this.state.spectroScaleY,
+                                          [1,             6], // Compact species label to fit within tiny rows
+                                          [match.default, 11],
+                                        ),
+                                      }]}>
+                                        {rec.species}
+                                      </Text>
+                                    </View>
                                   </View>
                                 )}
 
@@ -996,21 +1003,25 @@ const styles = StyleSheet.create({
     flex: 1, flexDirection: 'column',
     borderBottomWidth: 1, borderColor: 'gray',
   },
-  recSpeciesVerticalView: {
+
+  recSpeciesSidewaysView: {
     backgroundColor: iOSColors.gray, // TODO Map rec.species -> color
-    width: 15, // Else widths are variable [why?]
-    justifyContent: 'center',
-    // padding: 0, margin: 0, // Nope, doesn't help
-    zIndex: 1, // Over spectro image
+    justifyContent: 'center',        // Else sideways text is to the above
+    alignItems: 'center',            // Else sideways text is to the right
+    width: 14,                       // HACK Manually shrink outer view width to match height of sideways text
+    zIndex: 1,                       // Over spectro image
   },
-  recSpeciesVerticalText: {
-    alignSelf: 'center',
-    // ...material.captionObject,
-    fontSize: 8,
-    // fontSize: 12, // TODO How to not ellip with width:15?
-    transform: [{rotate: '270deg'}],
-    // padding: 0, margin: 0, // Nope, doesn't help
+  recSpeciesSidewaysViewInner: {     // View>View>Text else the text aligment doesn't work
+    transform: [{rotate: '270deg'}], // Rotate text sideways
+    width: 100,                      // Else text is clipped to outer view's (smaller) width
+    // borderWidth: 1, borderColor: 'black', // XXX Debug
   },
+  recSpeciesSidewaysText: {
+    alignSelf: 'center',             // Else sideways text is to the bottom
+    // fontSize: ...,                // Set dynamically in code
+    // ...material.captionObject,    // (Sticking with default color:'black')
+  },
+
   recMetadataOneline: {
     flex: 2, flexDirection: 'row', // TODO Eh...
   },
