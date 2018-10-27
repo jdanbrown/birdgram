@@ -112,12 +112,13 @@ export class SearchScreen extends Component<Props, State> {
     this.panTranslateX = new Map(this.state.recs.map<[RecId, PanTranslateX]>(rec => [
       rec.id,
       this.panTranslateX.get(rec.id) || new PanTranslateX(
-        this.pinchScaleX.outScale, // scale
+        this.pinchScaleX.outScale,
+        this.pinchScaleX.outTranslate,
         0, {min: 0, max: 0},
         // 0, {min: -Rec.spectroWidthPx(rec), max: 0}, // TODO TODO Clamp
       ),
     ]));
-    log.info('panTranslateX = new Map', this.panTranslateX); // TODO TODO XXX Debug
+    // log.info('panTranslateX = new Map', this.panTranslateX); // TODO TODO XXX Debug
 
     // // XXX Didn't work
     // this.panRefs = new Map(this.state.recs.map<[RecId, RefObject<PanGestureHandler>]>(rec => [
@@ -711,8 +712,9 @@ export class SearchScreen extends Component<Props, State> {
                                     width:  this.pinchScaleX.spectroBase.w,
                                     height: this.pinchScaleX.spectroBase.h * settings.spectroScaleY,
                                     transform: [
+                                      ...(this.panTranslateX.get(rec.id) || {transformPreScale: []}).transformPreScale,
                                       ...this.pinchScaleX.transform,
-                                      ...(this.panTranslateX.get(rec.id) || {transform: []}).transform,
+                                      ...(this.panTranslateX.get(rec.id) || {transformPostScale: []}).transformPostScale,
                                     ],
                                   }]}
                                   resizeMode='stretch'
@@ -824,27 +826,41 @@ class PinchScaleX {
 // HACK This is a slightly less big poop
 class PanTranslateX {
 
-  listenTranslationX: number;
-  inTranslationX:  Animated.Value;
-  outTranslationX: Animated.Animated;
-  transform:       Array<object>;
-  onPanGesture:    (...args: Array<any>) => void;
+  inTranslationX:     Animated.Value;
+  outTranslationX:    Animated.Animated;
+  transformPreScale:  Array<object>;
+  transformPostScale: Array<object>;
+  onPanGesture:       (...args: Array<any>) => void;
 
   constructor(
-    public readonly scale:             Animated.Animated,
+    public readonly pinchOutScale:     Animated.Animated,
+    public readonly pinchOutTranslate: Animated.Animated,
     public          translationX:      number,
     public readonly translationXClamp: Clamp<number>, // TODO TODO
   ) {
 
-    this.listenTranslationX = 0;
     this.inTranslationX = new Animated.Value(0);
     this.outTranslationX = (
 
-      // Works (mostly)
-      this.inTranslationX
+      // TODO Want: scale-fixpoint = screen_l, pan = 1~scale
 
-      // TODO TODO Why does this do something funny?
-      // animated`${this.inTranslationX} / ${this.scale}`
+      this.inTranslationX                                                // XXX scale-fixpoint = spectro_l, pan = 1~scale
+      // animated`${this.inTranslationX} - ${this.pinchOutTranslate}`       // XXX scale-fixpoint = spectro_m, pan = 1~scale
+      // animated`${this.inTranslationX} - (2 * ${this.pinchOutTranslate})` // XXX scale-fixpoint = spectro_r, pan = 1~scale
+
+      // Zoom speed is right, but
+      //  - TODO TODO Zoom fixed point is wrong...
+      // animated`${this.inTranslationX} / ${this.pinchOutScale}`
+      // animated`(${this.inTranslationX} / ${this.pinchOutScale}) - ${this.pinchOutTranslate}` // XXX at 0
+      // animated`(${this.inTranslationX} / ${this.pinchOutScale}) + ${this.pinchOutTranslate}` // XXX at 0
+      // animated`(${this.inTranslationX} + ${this.pinchOutTranslate}) / ${this.pinchOutScale}` // XXX at 0
+      // animated`(${this.inTranslationX} - ${this.pinchOutTranslate}) / ${this.pinchOutScale}`
+      // animated`${this.inTranslationX} - ${this.pinchOutTranslate}`
+      // animated`${this.inTranslationX} + ${this.pinchOutTranslate}`
+      // animated`${this.inTranslationX} + (${this.pinchOutTranslate} / ${this.pinchOutScale})`
+      // animated`${this.inTranslationX} - (${this.pinchOutTranslate} / ${this.pinchOutScale})`
+      // animated`${this.inTranslationX} + (${this.pinchOutTranslate} * ${this.pinchOutScale})`
+      // animated`${this.inTranslationX} - (${this.pinchOutTranslate} * ${this.pinchOutScale})`
 
       // TODO TODO Clamp
       // Animated.diffClamp(this.inTranslationX,
@@ -854,9 +870,55 @@ class PanTranslateX {
       // )
 
     );
-    this.transform = [
-      {translateX: this.outTranslationX},
-    ];
+
+    const x = this.inTranslationX;
+    const s = this.pinchOutScale;
+    const t = this.pinchOutTranslate;
+
+    const [pre, post] = (
+
+        //
+        // [bad]  fixpoint is spectro_l
+        //
+
+        // [animated`100`, animated`0`]
+
+        // [good] pan = 1~scale
+        // [animated`0`, animated`${x}/${s}`]
+
+        // [good] pan = 1~scale
+        // [animated`-${x}`, animated`2 * ${x}/${s}`]
+
+        //
+        // [good] fixpoint is screen_l
+        //  - Valid: (0,  K)         (K !~ s)
+        //  - Valid: (-x, x/s + K)   (K !~ s)
+        //
+
+        // [animated`0`,     animated`${x}`]             // [bad] pan ~ scale
+        // [animated`0`,     animated`100`]              // [bad] pan = 0
+
+        // [animated`-${x}`, animated`${x}/${s} - 100`]  // [bad] pan = 0
+        // [animated`-${x}`, animated`${x}/${s} + 100`]  // [bad] pan = 0
+
+        // [animated`-${x}`, animated`${x}/${s} + ${x}`] // [bad] pan ~ scale
+
+        [animated`-${x}/${s}`, animated`${x}/${s}/${s} + ${x}/${s}`]
+
+        //
+        // XXX scratch
+        //
+
+        // Nope, junk
+        // [animated`-${x}/${s}`, animated`${x} + 100`]
+
+        // [animated`-${x}`, animated`${x} * 2`]
+        // [animated`-${x}`, animated`2 * ${x} * ${s}`]
+
+    );
+
+    this.transformPreScale  = [{translateX: pre}];
+    this.transformPostScale = [{translateX: post}];
     this.onPanGesture = Animated.event(
       [{nativeEvent: {translationX: this.inTranslationX}}],
       {useNativeDriver: config.useNativeDriver},
@@ -868,9 +930,9 @@ class PanTranslateX {
 
     // this._log = (log_f, desc, keys = [], values = []) => { // XXX Debug
     //   log_f(sprintf(
-    //     ['%21s :', 'inTranslationX[{_value[%7.2f], _offset[%7.2f]}]', 'listenTranslationX[%7.2f]', 'translationX[%7.2f]',
+    //     ['%21s :', 'inTranslationX[{_value[%7.2f], _offset[%7.2f]}]', 'translationX[%7.2f]',
     //      ...keys].join(' '),
-    //     desc, this.inTranslationX._value, this.inTranslationX._offset, this.listenTranslationX, this.translationX, ...values,
+    //     desc, this.inTranslationX._value, this.inTranslationX._offset, this.translationX, ...values,
     //   ));
     // }
 
@@ -892,7 +954,10 @@ class PanTranslateX {
       // @ts-ignore (._value isn't exposed)
       const _valueBefore = this.inTranslationX._value;
 
-      // this._log(log.info, 'onPanState', ['_value[%7.2f]', 'e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [_value, translationX, velocityX]);
+      // this._log(log.info, 'onPanState',
+      //   ['_value[%7.2f]', 'e.translationX[%7.2f]', 'e.velocityX[%7.2f]'],
+      //   [_value, translationX, velocityX],
+      // );
 
       // Scale velocityX waaaaay down, else it's ludicrous speed [Why? Maybe a unit mismatch?]
       const scaleVelocity = 1/1000;
