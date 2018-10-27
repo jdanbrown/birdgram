@@ -10,7 +10,8 @@ import ActionSheet from 'react-native-actionsheet'; // [Must `import ActionSheet
 import FastImage from 'react-native-fast-image';
 import * as Gesture from 'react-native-gesture-handler';
 import {
-  BorderlessButton, LongPressGestureHandler, PanGestureHandler, PinchGestureHandler, RectButton, TapGestureHandler,
+  BaseButton, BorderlessButton, LongPressGestureHandler, PanGestureHandler, PinchGestureHandler, RectButton,
+  TapGestureHandler,
   // FlatList, ScrollView, Slider, Switch, TextInput, // TODO Needed?
 } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -46,7 +47,7 @@ type State = {
   };
   status: string;
   recs: Array<Rec>;
-  currentlyPlaying?: {
+  playing?: {
     rec: Rec,
     sound: Sound,
   };
@@ -284,20 +285,20 @@ export class SearchScreen extends Component<Props, State> {
     return async (pointerInside: boolean) => {
       log.debug('toggleRecPlaying');
       log.debug('rec', rec);
-      log.debug('this.state.currentlyPlaying', this.state.currentlyPlaying);
+      log.debug('this.state.playing', this.state.playing);
 
       // FIXME Races? Tap a lot of spectros really quickly and watch the "Playing rec" logs pile up
 
-      const {currentlyPlaying} = this.state;
+      const {playing} = this.state;
 
       // Stop any recs that are currently playing
-      if (currentlyPlaying) {
-        const {rec, sound} = currentlyPlaying;
+      if (playing) {
+        const {rec, sound} = playing;
 
         // Stop sound playback
-        log.debug('Stopping currentlyPlaying rec', rec.id);
+        log.debug('Stopping playing rec', rec.id);
         this.setState({
-          currentlyPlaying: undefined,
+          playing: undefined,
         });
         await sound.stopAsync();
 
@@ -307,7 +308,7 @@ export class SearchScreen extends Component<Props, State> {
 
       // If touched rec was the currently playing rec, then we're done (it's stopped)
       // Else, play the (new) touched rec
-      if (!currentlyPlaying || currentlyPlaying.rec.id !== rec.id) {
+      if (!this.recIsPlaying(rec.id, playing)) {
 
         const sound = await soundAsync;
 
@@ -316,13 +317,13 @@ export class SearchScreen extends Component<Props, State> {
         // Play rec
         log.debug('Playing rec', rec.id);
         this.setState({
-          currentlyPlaying: {rec, sound},
+          playing: {rec, sound},
         });
         finallyAsync(sound.playAsync(), () => {
           // Promise fulfills after playback completes / is stopped / fails
           log.debug('Done playing rec', rec.id);
           this.setState({
-            currentlyPlaying: undefined,
+            playing: undefined,
           });
         });
 
@@ -330,6 +331,10 @@ export class SearchScreen extends Component<Props, State> {
 
       // log.debug('toggleRecPlaying: done');
     };
+  }
+
+  recIsPlaying = (recId: RecId, playing: undefined | {rec: Rec}): boolean => {
+    return !playing ? false : playing.rec.id === recId;
   }
 
   onLongPress = (rec: Rec) => async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
@@ -641,7 +646,13 @@ export class SearchScreen extends Component<Props, State> {
                       <this.RecEditingButtons />
                     )}
 
-                    <Animated.View style={styles.recRowInner}>
+                    <Animated.View style={[styles.recRowInner,
+                      // HACK Visual feedback for playing rec. Kill this after
+                      (!this.recIsPlaying(rec.id, this.state.playing)
+                        ? {borderColor: iOSColors.gray}
+                        : {borderColor: iOSColors.red, borderTopWidth: 1}
+                      ),
+                    ]}>
 
                       <PanGestureHandler
                         // [Why do these trigger undefined.onPanGesture on init?]
@@ -663,7 +674,14 @@ export class SearchScreen extends Component<Props, State> {
                         <Animated.View>
 
                           <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
-                            <BorderlessButton onPress={this.toggleRecPlaying(rec)}>
+                            <BaseButton
+                              onPress={this.toggleRecPlaying(rec)}
+                              style={{
+                                // ...(this.recIsPlaying(rec.id, this.state.playing) && {
+                                //   paddingVertical: 1, backgroundColor: 'red',
+                                // }),
+                              }}
+                            >
 
                               <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
 
@@ -703,7 +721,7 @@ export class SearchScreen extends Component<Props, State> {
 
                               </Animated.View>
 
-                            </BorderlessButton>
+                            </BaseButton>
                           </LongPressGestureHandler>
 
                         </Animated.View>
@@ -1002,9 +1020,9 @@ const styles = StyleSheet.create({
   },
   recRowInner: {
     flex: 1, flexDirection: 'column',
-    borderBottomWidth: 1, borderColor: 'gray',
+    borderBottomWidth: 1,
+    // borderColor: 'gray', // Set dynamically
   },
-
   recSpeciesSidewaysView: {
     backgroundColor: iOSColors.gray, // TODO Map rec.species -> color
     justifyContent: 'center',        // Else sideways text is to the above
@@ -1019,10 +1037,9 @@ const styles = StyleSheet.create({
   },
   recSpeciesSidewaysText: {
     alignSelf: 'center',             // Else sideways text is to the bottom
-    // fontSize: ...,                // Set dynamically in code
+    // fontSize: ...,                // Set dynamically
     // ...material.captionObject,    // (Sticking with default color:'black')
   },
-
   recMetadataOneline: {
     flex: 2, flexDirection: 'row', // TODO Eh...
   },
