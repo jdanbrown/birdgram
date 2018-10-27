@@ -112,8 +112,9 @@ export class SearchScreen extends Component<Props, State> {
     this.panTranslateX = new Map(this.state.recs.map<[RecId, PanTranslateX]>(rec => [
       rec.id,
       this.panTranslateX.get(rec.id) || new PanTranslateX(
-        this.pinchScaleX.outScale,
-        this.pinchScaleX.outTranslate,
+        // this.pinchScaleX.outScale,
+        // this.pinchScaleX.outTranslate,
+        this.pinchScaleX,
         0, {min: 0, max: 0},
         // 0, {min: -Rec.spectroWidthPx(rec), max: 0}, // TODO TODO Clamp
       ),
@@ -466,11 +467,13 @@ export class SearchScreen extends Component<Props, State> {
         {/* - TODO Disable when spectroScaleY is min/max */}
         <this.BottomControlsButton
           help='Denser'
+          disabled={settings.spectroScaleY === this.props.spectroScaleYClamp.min}
           onPress={() => this.zoomSpectroHeight(settings, -1)}
           iconProps={{name: 'align-justify'}} // 4 horizontal lines
         />
         <this.BottomControlsButton
           help='Taller'
+          disabled={settings.spectroScaleY === this.props.spectroScaleYClamp.max}
           onPress={() => this.zoomSpectroHeight(settings, +1)}
           iconProps={{name: 'menu'}}          // 3 horizontal lines
         />
@@ -480,17 +483,28 @@ export class SearchScreen extends Component<Props, State> {
 
   BottomControlsButton = (props: {
     help: string,
-    onPress?: (pointerInside: boolean) => void,
     iconProps: IconProps,
+    onPress?: (pointerInside: boolean) => void,
+    disabled?: boolean,
   }) => {
     const {style: iconStyle, ...iconProps} = props.iconProps;
     return (
       <LongPressGestureHandler onHandlerStateChange={this.onBottomControlsLongPress}>
-        <BorderlessButton style={styles.bottomControlsButton} onPress={props.onPress}>
+        <BorderlessButton
+          style={styles.bottomControlsButton}
+          onPress={props.disabled ? undefined : props.onPress}
+        >
           {this.state.showHelp && (
             <Text style={styles.bottomControlsButtonHelp}>{props.help}</Text>
           )}
-          <Feather style={[styles.bottomControlsButtonIcon, iconStyle]} {...iconProps} />
+          <Feather
+            style={[
+              styles.bottomControlsButtonIcon,
+              iconStyle,
+              !props.disabled ? {} : {color: iOSColors.gray},
+            ]}
+            {...iconProps}
+          />
         </BorderlessButton>
       </LongPressGestureHandler>
     );
@@ -712,9 +726,13 @@ export class SearchScreen extends Component<Props, State> {
                                     width:  this.pinchScaleX.spectroBase.w,
                                     height: this.pinchScaleX.spectroBase.h * settings.spectroScaleY,
                                     transform: [
-                                      ...(this.panTranslateX.get(rec.id) || {transformPreScale: []}).transformPreScale,
-                                      ...this.pinchScaleX.transform,
-                                      ...(this.panTranslateX.get(rec.id) || {transformPostScale: []}).transformPostScale,
+
+                                      // ...(this.panTranslateX.get(rec.id) || {transformPreScale: []}).transformPreScale,
+                                      // ...this.pinchScaleX.transform,
+                                      // ...(this.panTranslateX.get(rec.id) || {transformPostScale: []}).transformPostScale,
+
+                                      ...(this.panTranslateX.get(rec.id) || {transformTotal: []}).transformTotal,
+
                                     ],
                                   }]}
                                   resizeMode='stretch'
@@ -782,8 +800,8 @@ class PinchScaleX {
   inBase:         Animated.Value;
   inScale:        Animated.Value;
   outScale:       Animated.Value;
-  outTranslate:   Animated.Animated;
-  transform:      Array<object>;
+  // outTranslate:   Animated.Animated;
+  // transform:      Array<object>;
   onPinchGesture: (...args: Array<any>) => void;
 
   constructor(
@@ -794,14 +812,14 @@ class PinchScaleX {
     this.inBase       = new Animated.Value(base);
     this.inScale      = new Animated.Value(1);
     this.outScale     = animated`${Animated.diffClamp(this.inBase, baseClamp.min, baseClamp.max)} * ${this.inScale}`;
-    this.outTranslate = this.outScale.interpolate({
-      inputRange:  [0, 1],
-      outputRange: [-spectroBase.w / 2, 0],
-    });
-    this.transform = [
-      {translateX: this.outTranslate},
-      {scaleX: this.outScale},
-    ];
+    // this.outTranslate = this.outScale.interpolate({
+    //   inputRange:  [0, 1],
+    //   outputRange: [-spectroBase.w / 2, 0],
+    // });
+    // this.transform = [
+    //   {translateX: this.outTranslate},
+    //   {scaleX: this.outScale},
+    // ];
     this.onPinchGesture = Animated.event(
       [{nativeEvent: {scale: this.inScale}}],
       {useNativeDriver: config.useNativeDriver},
@@ -827,58 +845,64 @@ class PinchScaleX {
 class PanTranslateX {
 
   inTranslationX:     Animated.Value;
-  outTranslationX:    Animated.Animated;
-  transformPreScale:  Array<object>;
-  transformPostScale: Array<object>;
+  // outTranslationX:    Animated.Animated;
+  transformTotal:     Array<object>;
+  // transformPreScale:  Array<object>;
+  // transformPostScale: Array<object>;
   onPanGesture:       (...args: Array<any>) => void;
 
+  // _log: (...args: any[]) => void;
+
   constructor(
-    public readonly pinchOutScale:     Animated.Animated,
-    public readonly pinchOutTranslate: Animated.Animated,
+    // public readonly pinchOutScale:     Animated.Animated,
+    // public readonly pinchOutTranslate: Animated.Animated,
+    public readonly pinch:             PinchScaleX,
     public          translationX:      number,
     public readonly translationXClamp: Clamp<number>, // TODO TODO
   ) {
 
+    // TODO TODO Clamp
     this.inTranslationX = new Animated.Value(0);
-    this.outTranslationX = (
+    // this.outTranslationX = (
+    //   this.inTranslationX
+    //   // Animated.diffClamp(this.inTranslationX,
+    //   //   // -500,
+    //   //   -Dimensions.get('window').width * 1.5,
+    //   //   0,
+    //   // )
+    // );
 
-      // TODO Want: scale-fixpoint = screen_l, pan = 1~scale
+    // const sx = this.pinch.outTranslate;
 
-      this.inTranslationX                                                // XXX scale-fixpoint = spectro_l, pan = 1~scale
-      // animated`${this.inTranslationX} - ${this.pinchOutTranslate}`       // XXX scale-fixpoint = spectro_m, pan = 1~scale
-      // animated`${this.inTranslationX} - (2 * ${this.pinchOutTranslate})` // XXX scale-fixpoint = spectro_r, pan = 1~scale
-
-      // Zoom speed is right, but
-      //  - TODO TODO Zoom fixed point is wrong...
-      // animated`${this.inTranslationX} / ${this.pinchOutScale}`
-      // animated`(${this.inTranslationX} / ${this.pinchOutScale}) - ${this.pinchOutTranslate}` // XXX at 0
-      // animated`(${this.inTranslationX} / ${this.pinchOutScale}) + ${this.pinchOutTranslate}` // XXX at 0
-      // animated`(${this.inTranslationX} + ${this.pinchOutTranslate}) / ${this.pinchOutScale}` // XXX at 0
-      // animated`(${this.inTranslationX} - ${this.pinchOutTranslate}) / ${this.pinchOutScale}`
-      // animated`${this.inTranslationX} - ${this.pinchOutTranslate}`
-      // animated`${this.inTranslationX} + ${this.pinchOutTranslate}`
-      // animated`${this.inTranslationX} + (${this.pinchOutTranslate} / ${this.pinchOutScale})`
-      // animated`${this.inTranslationX} - (${this.pinchOutTranslate} / ${this.pinchOutScale})`
-      // animated`${this.inTranslationX} + (${this.pinchOutTranslate} * ${this.pinchOutScale})`
-      // animated`${this.inTranslationX} - (${this.pinchOutTranslate} * ${this.pinchOutScale})`
-
-      // TODO TODO Clamp
-      // Animated.diffClamp(this.inTranslationX,
-      //   // -500,
-      //   -Dimensions.get('window').width * 1.5,
-      //   0,
-      // )
-
-    );
-
+    const w = Dimensions.get('window').width;
     const x = this.inTranslationX;
-    const s = this.pinchOutScale;
-    const t = this.pinchOutTranslate;
+    const s = this.pinch.outScale;
+    const sx = s.interpolate({
+      inputRange:  [0, 1],
+      outputRange: [-w / 2, 0],
+    });
 
     const [pre, post] = (
 
         //
-        // [bad]  fixpoint is spectro_l
+        // XXX junk
+        //
+
+        // [animated`-${x}/${s}`, animated`${x}/${s}/${s} + ${x}/${s}`]
+        // [animated`-${x}/${s}`, animated`0`]
+
+        // Nope, junk
+        // [animated`-${x}/${s}`, animated`${x} + 100`]
+
+        // [animated`-${x}`, animated`${x} * 2`]
+        // [animated`-${x}`, animated`2 * ${x} * ${s}`]
+
+        //
+        // TODO TODO Want: scale-fixpoint = screen_l, pan = 1~scale
+        //
+
+        //
+        // [bad] fixpoint is spectro_l
         //
 
         // [animated`100`, animated`0`]
@@ -896,29 +920,74 @@ class PanTranslateX {
         //
 
         // [animated`0`,     animated`${x}`]             // [bad] pan ~ scale
-        // [animated`0`,     animated`100`]              // [bad] pan = 0
+        // [animated`0`,     animated`-100`]             // [bad] pan = 0
+        // [animated`0`,     animated`+100`]             // [bad] pan = 0
 
         // [animated`-${x}`, animated`${x}/${s} - 100`]  // [bad] pan = 0
         // [animated`-${x}`, animated`${x}/${s} + 100`]  // [bad] pan = 0
 
+        // TODO Most usable approach so far
         // [animated`-${x}`, animated`${x}/${s} + ${x}`] // [bad] pan ~ scale
 
-        [animated`-${x}/${s}`, animated`${x}/${s}/${s} + ${x}/${s}`]
-
         //
-        // XXX scratch
+        // TODO Kill sx! Maybe that's our impediment
         //
 
-        // Nope, junk
-        // [animated`-${x}/${s}`, animated`${x} + 100`]
+        // [animated`-${w/2}`, animated`${w/2}`] // TODO TODO Progress! Simpler than sx and equivalent when pan=0
+        // [animated`-${w/2} - ${x}`, animated`${w/2} + 2 * ${x}/${s}`]
+        // [animated`-${x} - ${w/2}`, animated`(${x} + ${w/2})/${s}`]
 
-        // [animated`-${x}`, animated`${x} * 2`]
-        // [animated`-${x}`, animated`2 * ${x} * ${s}`]
+        // [animated`${x}`, animated`0`]
+        // [animated`-${w/2}`, animated`${w/2}`]
+        // [animated`0`, animated`${x}/${s}`] // TODO TODO Progress? [good] pan = 1~scale, [bad] fixpoint is spectro_m
+        // [animated`-${w/2}`,        animated`${w/2} + ${x}/${s}`]   // [good] pan = 1~scale, [bad] fixpoint is spectro_l
+        // [animated`-${w/2} - ${x}`, animated`${w/2} + ${x}/${s}*2`] // [good] pan = 1~scale, [bad] fixpoint is spectro_l
+        // [animated`-${w/2} - ${x}`, animated`${w/2} + ${x}/${s}`] // pan=0
+        // [animated`-${w/2} - ${x}/${s}`, animated`${w/2} + ${x}/${s}`] // Nonlinear fixpoint
+
+        // [animated`-${w}/2 + ${x}/${s}`, animated`+${w}/2 - ${x}*${s}`]
+        // [animated`-${w}/2`, animated`+${w}/2`]
+        // [animated`-${w}/2`, animated`0`]
+        // [animated`0`, animated`-${w}/2`]
+
+        // TODO TODO GAH WHY IS BASIC MATH SO HARD
+        //  - Maybe we can just .interpolate? e.g.
+        //      inputRange:  [-w/2, w/2]
+        //      outputRange: [...?]
+
+        // Can we redo sx manually?
+        // [animated`(${s} - 1) * ${w/2}`, animated`0`] // TODO TODO This is equivalent to sx = s.interpolate(...)
+        // [animated`(${s} - 1) * ${w/2}`, animated`100`]
+        // [animated`(${s} - 1) * ${w/2}`, animated`${x}/${s}`]
+        // [animated`(${s} - 1) * (${w/2} + ${x}/${s})`, animated`${x}/${s}`]
+        [animated`(${s} - 1) * (${w/2} + ${x})`, animated`${x}/${s}`] // TODO TODO [good] fixpoint, [bad] pan
+        // [animated`(${s} - 1) * (${w/2} + ${x}/${s})`, animated`${x}/${s}/${s}`] // TODO TODO [bad] fixpoint, [good] pan
+        // [animated`(${s}-1)*${w/2} + (${s}-1)*${x}`, animated`${x}/(...)`] // div by 0
 
     );
 
-    this.transformPreScale  = [{translateX: pre}];
-    this.transformPostScale = [{translateX: post}];
+    // const sx = s.interpolate({
+    //   inputRange:  [0, 1],
+    //   outputRange: [-w / 2, 0],
+    // });
+    // scale=0  -> sx = -w/2
+    // scale=.5 -> sx = -w/4
+    // scale=1  -> sx = 0
+
+    this.transformTotal = [
+        {translateX: pre},
+        // {translateX: sx}, // TODO TODO Comment this out for the "Kill sx" approaches
+        {scaleX: s},
+        {translateX: post},
+    ];
+
+    // XXX Nope, can only addListener on Animated.Value
+    // pre.addListener(({value}: {value: number}) => log.info(sprintf('pre[%-7.2f]', value)));
+    x.addListener(({value}: {value: number}) => log.info(sprintf('x[%7.2f]', value)));
+
+    // this.transformPreScale  = [{translateX: pre}];
+    // this.transformPostScale = [{translateX: post}];
+
     this.onPanGesture = Animated.event(
       [{nativeEvent: {translationX: this.inTranslationX}}],
       {useNativeDriver: config.useNativeDriver},
@@ -932,6 +1001,7 @@ class PanTranslateX {
     //   log_f(sprintf(
     //     ['%21s :', 'inTranslationX[{_value[%7.2f], _offset[%7.2f]}]', 'translationX[%7.2f]',
     //      ...keys].join(' '),
+    //     // @ts-ignore
     //     desc, this.inTranslationX._value, this.inTranslationX._offset, this.translationX, ...values,
     //   ));
     // }
