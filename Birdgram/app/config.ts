@@ -9,6 +9,7 @@ export const config = {
     'remote': 'http://35.230.68.91',
   },
 
+  // Animated/Gesture
   useNativeDriver: true,
   // useNativeDriver: false, // FIXME Buggy / exposes bugs in our gross gestures/animated logic (ugh)
 

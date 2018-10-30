@@ -37,6 +37,14 @@ export function deepEqual<X, Y extends X>(x: X, y: Y): boolean {
   return reactFastCompare(x, y);
 }
 
+// Nonstandard shorthands (apologies for breaking norms, but these are too useful and too verbose by default)
+export const json   = JSON.stringify;
+export const unjson = JSON.parse;
+
+// HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
+global.json = json;
+global.unjson = unjson;
+
 //
 // Promise
 //
@@ -84,7 +92,17 @@ export const TabBarBottomConstants = {
   COMPACT_HEIGHT: 29,
 }
 
+export type Point = {
+  x: number;
+  y: number;
+};
+
 export type Dim<X> = {
-  width:  X,
-  height: X,
+  width:  X;
+  height: X;
+};
+
+export type Clamp<X> = {
+  min: X;
+  max: X;
 };
