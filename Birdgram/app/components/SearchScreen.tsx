@@ -80,6 +80,7 @@ export class SearchScreen extends Component<Props, State> {
   sortActionSheet: RefObject<ActionSheet> = React.createRef();
 
   _sectionListContentOffset: Point = {x: 0, y: 0};
+  _correctContentOffset?:    Point = undefined;
 
   sectionListRef: RefObject<SectionListStatic<Rec>> = React.createRef();
 
@@ -676,35 +677,65 @@ export class SearchScreen extends Component<Props, State> {
           style={styles.recList}
 
           // Scroll/zoom
+          //  - FIXME Lots of hacky gross stuff here, and it stills jumps after zoom (uncomment log calls to debug)
           //  - Force re-layout on zoom change, else bad things (that I don't understand)
           key={this.state.sectionListKey}
           //  - Expand container width else we can't scroll horizontally
           contentContainerStyle={{
             width: this.props.spectroBase.width * this.state.spectroScaleY,
           }}
-          contentOffset={this.state.sectionListContentOffset}
+          contentOffset={tap(this.state.sectionListContentOffset, x => {
+            // log.debug('render.contentOffset', json(x)); // XXX Debug
+          })}
           bounces={false}
           bouncesZoom={false}
           minimumZoomScale={this.props.spectroScaleYClamp.min / this.state.spectroScaleY}
           maximumZoomScale={this.props.spectroScaleYClamp.max / this.state.spectroScaleY}
-          onMomentumScrollEnd={({nativeEvent: {contentOffset}}) => {
-            log.info('onMomentumScrollEnd', json({contentOffset}));
+          onScroll={({nativeEvent}) => {
+            // log.debug('onScroll', json(nativeEvent)); // XXX Debug
+            const {contentOffset, zoomScale, velocity, contentSize, layoutMeasurement} = nativeEvent;
+            this._sectionListContentOffset = contentOffset;
+            // HACK Elimate one source of jumps after zooming (uncomment log calls to see it in action)
+            if (
+              contentSize.width === 0 && contentSize.height === 0 &&
+              layoutMeasurement.width === 0 && layoutMeasurement.height === 0
+            ) {
+              this._correctContentOffset = contentOffset;
+              // log.debug('_correctContentOffset: saved', json(contentOffset), '->', json(this._correctContentOffset));
+            } else if (this._correctContentOffset) {
+              // log.debug('_correctContentOffset: scrollTo', json(contentOffset), '->', json(this._correctContentOffset));
+              const sectionList = this.sectionListRef.current!;
+              // @ts-ignore [.getScrollResponder isn't exposed]
+              const scrollView = sectionList.getScrollResponder();
+              scrollView.scrollTo({animated:false, ...this._correctContentOffset});
+              this._correctContentOffset = undefined;
+            }
+          }}
+          onMomentumScrollEnd={({nativeEvent}) => {
+            // log.debug('onMomentumScrollEnd', json(nativeEvent)); // XXX Debug
+            const {contentOffset, zoomScale, velocity} = nativeEvent;
             this._sectionListContentOffset = contentOffset;
           }}
-          onScrollEndDrag={async ({nativeEvent: {contentOffset, zoomScale, velocity}}) => {
-            log.info('onScrollEndDrag', json({contentOffset}));
+          onScrollEndDrag={async ({nativeEvent}) => {
+            // log.debug('onScrollEndDrag', json(nativeEvent)); // XXX Debug
+            const {contentOffset, zoomScale, velocity} = nativeEvent;
             this._sectionListContentOffset = contentOffset;
             if (
               zoomScale !== 1
               // && velocity !== undefined // [XXX bad] This seems to distinguish 2/2 vs. 1/2 fingers released (want 2/2)
             ) {
               const scale = zoomScale * this.state.spectroScaleY;
-              log.info('ZOOM', json({contentOffset, spectroScaleY: this.state.spectroScaleY, zoomScale, scale}));
+              // log.debug('ZOOM', json(nativeEvent)); // XXX Debug
               // Trigger re-layout so non-image components (e.g. text) redraw at non-zoomed size
-              //  - TODO Close, but params need more tweaking
+              const spectroScaleY = this.clampSpectroScaleY(scale);
               await setStateAsync(this, {
-                spectroScaleY: this.clampSpectroScaleY(scale),
-                sectionListContentOffset: this._sectionListContentOffset,
+                spectroScaleY,
+                sectionListContentOffset: {
+                  x: this._sectionListContentOffset.x,
+                  y: this._sectionListContentOffset.y,
+                    // Subtract excess y from scaled 1px row borders [XXX Very inaccurate]
+                    // this._sectionListContentOffset.y / (this.props.spectroBase.height + 1) * (spectroScaleY - 1)
+                },
                 sectionListKey: chance.hash(), // Else bad things (that I don't understand)
               });
             }
@@ -756,7 +787,7 @@ export class SearchScreen extends Component<Props, State> {
 
                 {/* Tap rec */}
                 <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
-                  {/* <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(settings, rec)}> */}
+                  <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(settings, rec)}>
                     <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
 
                       {/* Sideways species label (sometimes) */}
@@ -802,7 +833,7 @@ export class SearchScreen extends Component<Props, State> {
                       </View>
 
                     </Animated.View>
-                  {/* </TapGestureHandler> */}
+                  </TapGestureHandler>
                 </LongPressGestureHandler>
 
                 {/* Rec metadata */}
