@@ -16,6 +16,8 @@ export interface Props {
   // For SearchScreen
   readonly showMetadata: ShowMetadata;
   readonly editing: boolean;
+  readonly panOne: boolean;
+  readonly seekOnPlay: boolean;
   readonly spectroScaleY: number;
 }
 export const DEFAULTS: Props = {
@@ -26,6 +28,8 @@ export const DEFAULTS: Props = {
   // For SearchScreen
   showMetadata: 'oneline',
   editing: false,
+  panOne: false,
+  seekOnPlay: false,
   spectroScaleY: 2,
 };
 export const TYPES: {[key: string]: string} = {
@@ -36,6 +40,8 @@ export const TYPES: {[key: string]: string} = {
   // For SearchScreen
   showMetadata: 'string',
   editing: 'boolean',
+  panOne: 'boolean',
+  seekOnPlay: 'boolean',
   spectroScaleY: 'number',
 };
 export const KEYS = [
@@ -47,6 +53,8 @@ export const KEYS = [
   // For SearchScreen
   'showMetadata',
   'editing',
+  'panOne',
+  'seekOnPlay',
   'spectroScaleY',
 ];
 
@@ -63,6 +71,8 @@ export class Settings implements Props {
   // For SearchScreen
     public readonly showMetadata: ShowMetadata,
     public readonly editing: boolean,
+    public readonly panOne: boolean,
+    public readonly seekOnPlay: boolean,
     public readonly spectroScaleY: number,
   ) {}
 

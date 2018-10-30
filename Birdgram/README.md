@@ -115,6 +115,8 @@ android
     - ✅ Release build
   - Try toggling "Debug JS Remotely" back and forth
     - I've observed this make Debug build + no "Debug JS Remotely" go from blank screen to a working app...
+- App hangs/dies on startup and ios device logs show a bunch of tcp errors (when trying to connect to metro bundler)
+  - Solution: temporarily comment out `export SKIP_BUNDLING=true` in Build Phases: [...like below]
 - App fails on startup with "No bundle URL present" (Debug build)
   - Solution: temporarily comment out `export SKIP_BUNDLING=true` in Build Phases:
     - https://facebook.github.io/react-native/docs/running-on-device#3-configure-app-to-use-static-bundle

@@ -5,6 +5,7 @@ import React, { Component, ReactNode, RefObject } from 'react';
 import {
   Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, LayoutChangeEvent, Modal, Platform,
   SectionList, SectionListData, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
+  SectionListStatic,
 } from 'react-native';
 import ActionSheet from 'react-native-actionsheet'; // [Must `import ActionSheet` i/o `import { ActionSheet }`, else barf]
 import FastImage from 'react-native-fast-image';
@@ -34,6 +35,8 @@ import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import { finallyAsync, getOrSet, global, match, Styles, TabBarBottomConstants } from '../utils';
+
+const sidewaysTextWidth = 14;
 
 type State = {
   showFilters: boolean;
@@ -66,14 +69,20 @@ export class SearchScreen extends Component<Props, State> {
   };
 
   db?: SQLiteDatabase;
-  soundsCache: Map<RecId, Promise<Sound> | Sound>;
-  saveActionSheet: RefObject<ActionSheet>;
-  addActionSheet: RefObject<ActionSheet>;
-  sortActionSheet: RefObject<ActionSheet>;
-  pinchRef: RefObject<PinchGestureHandler>;
+  soundsCache: Map<RecId, Promise<Sound> | Sound> = new Map();
+
+  saveActionSheet: RefObject<ActionSheet> = React.createRef();
+  addActionSheet:  RefObject<ActionSheet> = React.createRef();
+  sortActionSheet: RefObject<ActionSheet> = React.createRef();
+
+  sectionListRef: RefObject<SectionListStatic<Rec>>  = React.createRef();
+  pinchRef: RefObject<PinchGestureHandler>           = React.createRef();
+  pansXRef: RefObject<PanGestureHandler>             = React.createRef();
+  panXRefs: Map<RecId, RefObject<PanGestureHandler>> = new Map(); // XXX Didn't work
+
   pinchX: PinchX;
-  panX: Map<RecId, PanX>;
-  // panRefs: Map<RecId, RefObject<PanGestureHandler>>; // XXX Didn't work
+  panX:   Map<RecId, PanX>;
+  pansX:  PanX;
 
   constructor(props: Props) {
     super(props);
@@ -90,18 +99,11 @@ export class SearchScreen extends Component<Props, State> {
       recs: [],
     };
 
-    this.soundsCache = new Map();
-    this.saveActionSheet = React.createRef();
-    this.addActionSheet = React.createRef();
-    this.sortActionSheet = React.createRef();
-    this.pinchRef = React.createRef();
-    this.pinchX = new PinchX(this.props.spectroBase,
-      // 2, {min: 1, max: 10}, // TODO TODO Restore
-      // .5, {min: .5, max: 10},
-      1, {min: .5, max: 10},
+    this.pinchX = new PinchX(this.props.spectroBase, 2, {min: 1, max: 10});
+    this.panX   = new Map(); // Populated from this.state in componentDidUpdate
+    this.pansX  = new PanX(this.pinchX,
+      0, {min: 0, max: 0}, // TODO Clamp
     );
-    this.panX = new Map();
-    // this.panRefs = new Map(); // XXX Didn't work
 
     global.SearchScreen = this; // XXX Debug
   }
@@ -113,17 +115,16 @@ export class SearchScreen extends Component<Props, State> {
       rec.id,
       this.panX.get(rec.id) || new PanX(
         this.pinchX,
-        0, {min: 0, max: 0},
-        // 0, {min: -Rec.spectroWidthPx(rec), max: 0}, // TODO TODO Clamp
+        0, {min: 0, max: 0}, // TODO Clamp
+        // 0, {min: -Rec.spectroWidthPx(rec), max: 0},
       ),
     ]));
-    // log.info('panX = new Map', this.panX); // TODO TODO XXX Debug
 
-    // // XXX Didn't work
-    // this.panRefs = new Map(this.state.recs.map<[RecId, RefObject<PanGestureHandler>]>(rec => [
-    //   rec.id,
-    //   React.createRef<PanGestureHandler>(),
-    // ]));
+    // XXX Didn't work
+    this.panXRefs = new Map(this.state.recs.map<[RecId, RefObject<PanGestureHandler>]>(rec => [
+      rec.id,
+      React.createRef<PanGestureHandler>(),
+    ]));
 
   }
 
@@ -394,6 +395,19 @@ export class SearchScreen extends Component<Props, State> {
       ['full',    'none'],
     );
     await settings.set('showMetadata', next(settings.showMetadata));
+
+    // Scroll SectionList so that same ~top recs are showing after drawing with new item/section heights
+    //  - TODO More experimentation required...
+    // requestAnimationFrame(() => {
+    //   if (this.sectionListRef.current) {
+    //     this.sectionListRef.current.scrollToLocation({
+    //       animated: false,
+    //       sectionIndex: 3, itemIndex: 3, // TODO Calculate real values to restore
+    //       viewPosition: 0, // 0: top, .5: middle, 1: bottom
+    //     });
+    //   }
+    // });
+
   }
 
   zoomSpectroHeight = async (settings: Settings, step: number) => {
@@ -455,22 +469,37 @@ export class SearchScreen extends Component<Props, State> {
         <this.BottomControlsButton
           help='Edit'
           onPress={() => settings.toggle('editing')}
+          active={settings.editing}
           iconProps={{name: 'sliders'}}
           // iconProps={{name: 'edit'}}
           // iconProps={{name: 'edit-2'}}
           // iconProps={{name: 'edit-3'}}
           // iconProps={{name: 'layout', style: Styles.flipBoth}}
         />
+        {/* [Toggle pan one/all] */}
+        <this.BottomControlsButton
+          help='Pan'
+          onPress={() => settings.toggle('panOne')}
+          active={settings.panOne}
+          iconProps={{name: 'move'}}
+        />
+        {/* [Toggle play/pause crosshairs] */}
+        <this.BottomControlsButton
+          help='Seek'
+          onPress={() => settings.toggle('seekOnPlay')}
+          active={settings.seekOnPlay}
+          iconProps={{name: 'crosshair'}}
+        />
         {/* Zoom more/fewer recs (spectro height) */}
         {/* - TODO Disable when spectroScaleY is min/max */}
         <this.BottomControlsButton
-          help='Denser'
+          help='Dense'
           disabled={settings.spectroScaleY === this.props.spectroScaleYClamp.min}
           onPress={() => this.zoomSpectroHeight(settings, -1)}
           iconProps={{name: 'align-justify'}} // 4 horizontal lines
         />
         <this.BottomControlsButton
-          help='Taller'
+          help='Tall'
           disabled={settings.spectroScaleY === this.props.spectroScaleYClamp.max}
           onPress={() => this.zoomSpectroHeight(settings, +1)}
           iconProps={{name: 'menu'}}          // 3 horizontal lines
@@ -483,6 +512,7 @@ export class SearchScreen extends Component<Props, State> {
     help: string,
     iconProps: IconProps,
     onPress?: (pointerInside: boolean) => void,
+    active?: boolean,
     disabled?: boolean,
   }) => {
     const {style: iconStyle, ...iconProps} = props.iconProps;
@@ -499,7 +529,11 @@ export class SearchScreen extends Component<Props, State> {
             style={[
               styles.bottomControlsButtonIcon,
               iconStyle,
-              !props.disabled ? {} : {color: iOSColors.gray},
+              (
+                props.disabled ? {color: iOSColors.gray} :
+                props.active   ? {color: iOSColors.blue} :
+                {}
+              ),
             ]}
             {...iconProps}
           />
@@ -624,150 +658,172 @@ export class SearchScreen extends Component<Props, State> {
 
         <PinchGestureHandler
           ref={this.pinchRef}
+          simultaneousHandlers={this.pansXRef}
           onGestureEvent={this.pinchX.onPinchGesture}
           onHandlerStateChange={this.pinchX.onPinchState}
         >
           <Animated.View style={{flex: 1}}>
 
-            <SectionList
-              style={styles.recList}
-              sections={this.sectionsForRecs(this.state.recs)}
-              keyExtractor={(rec, index) => rec.id.toString()}
-              initialNumToRender={20}
-              renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
-                settings.showMetadata === 'none' ? null : (
-                  <View style={styles.sectionSpecies}>
-                    {!settings.editing ? null : (
-                      <this.SpeciesEditingButtons />
-                    )}
-                    <Text numberOfLines={1} style={styles.sectionSpeciesText}>
-                      {species_com_name}
-                    </Text>
-                    {settings.showDebug && (
-                      <Text numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}, settings.debugText]}>
-                        ({recs_for_sp} recs)
-                      </Text>
-                    )}
-                  </View>
-                )
-              )}
-              renderItem={({item: rec, index}) => (
-                <Animated.View style={styles.recRow}>
+            <PanGestureHandler
+              ref={this.pansXRef}
+              enabled={!settings.panOne}
+              simultaneousHandlers={this.pinchRef}
+              onGestureEvent       = {this.pansX.onPanGesture}
+              onHandlerStateChange = {this.pansX.onPanState}
+              minDeltaX={10} // Else rec pans eat all the up/down scroll events (copied from Swipeable)
+            >
+              <Animated.View style={{flex: 1}}>
 
-                  {/* TODO Flex image width so we can show these on the right (as is, they'd be pushed off screen) */}
-                  {!settings.editing ? null : (
-                    <this.RecEditingButtons />
+                <SectionList
+                  // @ts-ignore (Why doesn't this typecheck?)
+                  ref={this.sectionListRef as RefObject<Component<SectionListStatic<Rec>, any, any>>}
+                  style={styles.recList}
+                  sections={this.sectionsForRecs(this.state.recs)}
+                  keyExtractor={(rec, index) => rec.id.toString()}
+                  initialNumToRender={20}
+                  renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
+                    settings.showMetadata === 'none' ? null : (
+                      <View style={styles.sectionSpecies}>
+                        {!settings.editing ? null : (
+                          <this.SpeciesEditingButtons />
+                        )}
+                        <Text numberOfLines={1} style={styles.sectionSpeciesText}>
+                          {species_com_name}
+                        </Text>
+                        {settings.showDebug && (
+                          <Text numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}, settings.debugText]}>
+                            ({recs_for_sp} recs)
+                          </Text>
+                        )}
+                      </View>
+                    )
                   )}
+                  renderItem={({item: rec, index}) => (
+                    <Animated.View style={styles.recRow}>
 
-                  <Animated.View style={[styles.recRowInner,
-                    // HACK Visual feedback for playing rec. Kill this after
-                    (!this.recIsPlaying(rec.id, this.state.playing)
-                      ? {borderColor: iOSColors.gray}
-                      : {borderColor: iOSColors.red, borderTopWidth: 1}
-                    ),
-                  ]}>
+                      {/* TODO Flex image width so we can show these on the right (as is, they'd be pushed off screen) */}
+                      {!settings.editing ? null : (
+                        <this.RecEditingButtons />
+                      )}
 
-                    <PanGestureHandler
-                      // [Why do these trigger undefined.onPanGesture on init?]
-                      onGestureEvent       = {(this.panX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
-                      onHandlerStateChange = {(this.panX.get(rec.id) || {onPanState:   undefined}).onPanState}
-                      minDeltaX={10} // Else rec pans eat all the up/down scroll events (copied from Swipeable)
-                      // FIXME How to pinch instead of 2x pan when fingers are on different spectros?
-                      // waitFor={this.pinchRef} // XXX Close! -- but makes one-finger pans slow to register [why?]
-                      // maxPointers={1}         // XXX Nope, doesn't control for multiple pointers on separate spectros
-                      // XXX Nope, doesn't prevent multiple pointers on separate spectros [why not?]
-                      // ref={this.panRefs.get(rec.id)} waitFor={[
-                      //   ...tap((
-                      //       Array.from(this.panRefs.entries())
-                      //       .filter(([recId, ref]) => recId < rec.id)
-                      //       .map(([recId, ref]) => ref)
-                      //   ), xs => puts(rec.xc_id, xs))
-                      // ]}
-                    >
-                      <Animated.View>
+                      <Animated.View style={[styles.recRowInner,
+                        // HACK Visual feedback for playing rec (kill after adding scrolling bar)
+                        (!this.recIsPlaying(rec.id, this.state.playing)
+                          ? {borderColor: iOSColors.gray}
+                          : {borderColor: iOSColors.red, borderTopWidth: 1}
+                        ),
+                      ]}>
 
-                        <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
-                          <BaseButton
-                            onPress={this.toggleRecPlaying(rec)}
-                            style={{
-                              // ...(this.recIsPlaying(rec.id, this.state.playing) && {
-                              //   paddingVertical: 1, backgroundColor: 'red',
-                              // }),
-                            }}
-                          >
+                        <PanGestureHandler
+                          ref={this.panXRefs.get(rec.id)}
+                          enabled={settings.panOne}
+                          // simultaneousHandlers={this.pansXRef}
+                          // [Why do these trigger undefined.onPanGesture on init?]
+                          onGestureEvent       = {(this.panX.get(rec.id) || {onPanGesture: undefined}).onPanGesture}
+                          onHandlerStateChange = {(this.panX.get(rec.id) || {onPanState:   undefined}).onPanState}
+                          minDeltaX={10} // Else rec pans eat all the up/down scroll events (copied from Swipeable)
+                          // FIXME How to pinch instead of 2x pan when fingers are on different spectros?
+                          // waitFor={this.pinchRef} // XXX Close! -- but makes one-finger pans slow to register [why?]
+                          // maxPointers={1}         // XXX Nope, doesn't control for multiple pointers on separate spectros
+                          // XXX Nope, doesn't prevent multiple pointers on separate spectros [why not?]
+                          // ref={this.panXRefs.get(rec.id)} waitFor={[
+                          //   ...tap((
+                          //       Array.from(this.panXRefs.entries())
+                          //       .filter(([recId, ref]) => recId < rec.id)
+                          //       .map(([recId, ref]) => ref)
+                          //   ), xs => puts(rec.xc_id, xs))
+                          // ]}
+                        >
+                          <Animated.View>
 
-                            <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
-
-                              {settings.showMetadata !== 'none' ? null : (
-                                <View style={styles.recSpeciesSidewaysView}>
-                                  <View style={styles.recSpeciesSidewaysViewInner}>
-                                    <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
-                                      fontSize: match<number, number, number>(settings.spectroScaleY,
-                                        [1,             6], // Compact species label to fit within tiny rows
-                                        [match.default, 11],
-                                      ),
-                                    }]}>
-                                      {rec.species}
-                                    </Text>
-                                  </View>
-                                </View>
-                              )}
-
-                              <Animated.Image
-                                style={[{
-                                  // XXX Can't animate height
-                                  //  - "Error: Style property 'height' is not supported by native animated module"
-                                  // height: this.pinchX.outScaleY.interpolate({
-                                  //   inputRange: [0, 1],
-                                  //   outputRange: [0, this.pinchX.spectroBase.h],
+                            <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
+                              <BaseButton
+                                onPress={this.toggleRecPlaying(rec)}
+                                style={{
+                                  // ...(this.recIsPlaying(rec.id, this.state.playing) && {
+                                  //   paddingVertical: 1, backgroundColor: 'red',
                                   // }),
-                                  width:  this.pinchX.spectroBase.w,
-                                  height: this.pinchX.spectroBase.h * settings.spectroScaleY,
-                                  transform: [
-                                    ...(this.panX.get(rec.id) || {transform: []}).transform,
-                                  ],
-                                }]}
-                                resizeMode='stretch'
-                                source={{uri: Rec.spectroPath(rec)}}
-                              />
+                                }}
+                              >
 
-                            </Animated.View>
+                                <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
 
-                          </BaseButton>
-                        </LongPressGestureHandler>
+                                  {settings.showMetadata !== 'none' ? null : (
+                                    <View style={styles.recSpeciesSidewaysView}>
+                                      <View style={styles.recSpeciesSidewaysViewInner}>
+                                        <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
+                                          fontSize: match<number, number, number>(settings.spectroScaleY,
+                                            [1,             6], // Compact species label to fit within tiny rows
+                                            [match.default, 11],
+                                          ),
+                                        }]}>
+                                          {rec.species}
+                                        </Text>
+                                      </View>
+                                    </View>
+                                  )}
+
+                                  <Animated.Image
+                                    style={[{
+                                      // XXX Can't animate height
+                                      //  - "Error: Style property 'height' is not supported by native animated module"
+                                      // height: this.pinchX.outScaleY.interpolate({
+                                      //   inputRange: [0, 1],
+                                      //   outputRange: [0, this.pinchX.spectroBase.h],
+                                      // }),
+                                      width:  this.pinchX.spectroBase.w,
+                                      height: this.pinchX.spectroBase.h * settings.spectroScaleY,
+                                      // transform: [
+                                      //   ...this.pinchX.transform,
+                                      //   ...this.pansX.transform,
+                                      //   ...(this.panX.get(rec.id) || {transform: []}).transform,
+                                      // ],
+                                      transform: recTransform(this.pinchX, this.pansX, this.panX.get(rec.id)),
+                                    }]}
+                                    resizeMode='stretch'
+                                    source={{uri: Rec.spectroPath(rec)}}
+                                  />
+
+                                </Animated.View>
+
+                              </BaseButton>
+                            </LongPressGestureHandler>
+
+                          </Animated.View>
+                        </PanGestureHandler>
+
+                        {match(settings.showMetadata,
+                          ['none', null],
+                          ['oneline', (
+                            <View style={styles.recMetadataOneline}>
+                              <this.RecText flex={3} children={rec.xc_id} />
+                              <this.RecText flex={1} children={rec.quality} />
+                              <this.RecText flex={2} children={rec.month_day} />
+                              <this.RecText flex={4} children={Rec.placeNorm(rec)} />
+                              {ccIcon({style: styles.recTextFont})}
+                              <this.RecText flex={4} children={` ${rec.recordist}`} />
+                            </View>
+                          )],
+                          ['full', (
+                            <View style={styles.recMetadataFull}>
+                              <this.RecText flex={3} children={rec.xc_id} />
+                              <this.RecText flex={1} children={rec.quality} />
+                              <this.RecText flex={2} children={rec.month_day} />
+                              <this.RecText flex={4} children={Rec.placeNorm(rec)} />
+                              {ccIcon({style: styles.recTextFont})}
+                              <this.RecText flex={4} children={` ${rec.recordist}`} />
+                            </View>
+                          )],
+                        )}
 
                       </Animated.View>
-                    </PanGestureHandler>
 
-                    {match(settings.showMetadata,
-                      ['none', null],
-                      ['oneline', (
-                        <View style={styles.recMetadataOneline}>
-                          <this.RecText flex={3} children={rec.xc_id} />
-                          <this.RecText flex={1} children={rec.quality} />
-                          <this.RecText flex={2} children={rec.month_day} />
-                          <this.RecText flex={4} children={Rec.placeNorm(rec)} />
-                          {ccIcon({style: styles.recTextFont})}
-                          <this.RecText flex={4} children={` ${rec.recordist}`} />
-                        </View>
-                      )],
-                      ['full', (
-                        <View style={styles.recMetadataFull}>
-                          <this.RecText flex={3} children={rec.xc_id} />
-                          <this.RecText flex={1} children={rec.quality} />
-                          <this.RecText flex={2} children={rec.month_day} />
-                          <this.RecText flex={4} children={Rec.placeNorm(rec)} />
-                          {ccIcon({style: styles.recTextFont})}
-                          <this.RecText flex={4} children={` ${rec.recordist}`} />
-                        </View>
-                      )],
-                    )}
+                    </Animated.View>
+                  )}
+                />
 
-                  </Animated.View>
-
-                </Animated.View>
-              )}
-            />
+              </Animated.View>
+            </PanGestureHandler>
 
           </Animated.View>
         </PinchGestureHandler>
@@ -786,26 +842,76 @@ export class SearchScreen extends Component<Props, State> {
 
 }
 
-// HACK This is a small poop
+function recTransform(
+  pinchX: PinchX,
+  pansX: PanX,
+  panX?: PanX,
+): Array<object> {
+  const panX_x = panX ? panX.x : new Animated.Value(0);
+
+  const w  = 375;
+
+  // const w  = 375 - sidewaysTextWidth;
+  // const w  = 375;
+  // const wv = new Animated.Value(w);
+  // const s  = pinchX.scale;
+  // const x  = animated`${panX_x} + ${pansX.x}`;
+
+  // const a = Animated.diffClamp(animated`${s}/(1-${s}) * ${x}`, 0, w);
+  // const b = animated`(1-${s})/${s} * ${a}`;
+
+  return [
+    // NOTE If pans go buggy, try just removing the diffClamp...
+
+    {scaleX:     pinchX.scale},
+    {translateX: pinchX.x},
+    {translateX: animated`${panX_x} + ${pansX.x}`},
+
+    // XXX Bugs bugs bugs, avoid diffClamp
+    // {translateX: animated`
+    //   ${Animated.diffClamp(panX_x,  -w, 0)} +
+    //   ${Animated.diffClamp(pansX.x, -w, 0)}
+    // `}
+
+    // XXX
+    // {translateX: Animated.diffClamp(animated`${panX_x} + ${pansX.x}`, -w, 0)},
+
+    // XXX
+    // {scaleX:     pinchX.scale},
+    // {translateX: b},
+    // {translateX: pinchX.x},
+
+  ];
+}
+
+// HACK A little gross
 class PinchX {
 
-  baseIn:         Animated.Value;
-  scaleIn:        Animated.Value;
-  scaleOut:       Animated.Value;
   onPinchGesture: (...args: Array<any>) => void;
+
+  baseIn:   Animated.Value;
+  scaleIn:  Animated.Value;
+  scale: Animated.Value;
+  x:     Animated.Value;
 
   constructor(
     public readonly spectroBase: WidthHeight<number>,
     public          base:        number,
     public readonly baseClamp:   Clamp<number>,
   ) {
-    this.baseIn       = new Animated.Value(base);
-    this.scaleIn      = new Animated.Value(1);
-    this.scaleOut     = animated`${Animated.diffClamp(this.baseIn, baseClamp.min, baseClamp.max)} * ${this.scaleIn}`;
+
+    const {width} = Dimensions.get('window');
+    this.baseIn   = new Animated.Value(base);
+    this.scaleIn  = new Animated.Value(1);
+    // this.scale    = animated`${Animated.diffClamp(this.baseIn, baseClamp.min, baseClamp.max)} * ${this.scaleIn}`;
+    this.scale    = animated`${this.baseIn} * ${this.scaleIn}`;
+    this.x        = animated`(1 - 1/${this.scale}) * ${width/2}`;
+
     this.onPinchGesture = Animated.event(
       [{nativeEvent: {scale: this.scaleIn}}],
       {useNativeDriver: config.useNativeDriver},
     );
+
   }
 
   onPinchState = (event: Gesture.PinchGestureHandlerStateChangeEvent) => {
@@ -823,10 +929,9 @@ class PinchX {
 
 }
 
-// HACK This is a big poop
+// HACK A lot gross
 class PanX {
 
-  transform:    Array<object>;
   onPanGesture: (...args: Array<any>) => void;
 
   // Two params:
@@ -838,6 +943,7 @@ class PanX {
   _xIn:  number;
   xAcc:  Animated.Value;
   _xAcc: number;
+  x:     Animated.Value;
 
   constructor(
     public readonly pinchX: PinchX,
@@ -845,32 +951,24 @@ class PanX {
     public readonly xClamp: Clamp<number>,
   ) {
 
-    this.xIn   = new Animated.Value(x0);
+    this.xIn   = new Animated.Value(0);
     this._xIn  = 0;
-    this.xAcc  = new Animated.Value(0);
-    this._xAcc = 0;
-    // Animated.diffClamp(this.xIn, xClamp.min, xClamp.max) // TODO TODO Clamp
-
-    this.onPanGesture = Animated.event(
-      [{nativeEvent: {translationX: this.xIn}}],
-      {useNativeDriver: config.useNativeDriver},
-    );
+    this.xAcc  = new Animated.Value(x0);
+    this._xAcc = x0;
+    // Animated.diffClamp(this.xIn, xClamp.min, xClamp.max) // TODO Clamp
 
     const {xIn, xAcc} = this;
-    const scale       = this.pinchX.scaleOut;
-    const {width}     = Dimensions.get('window');
-    const pre         = animated`(${scale} - 1) * ${width/2}`;
-    const post        = animated`${this.xAcc} + ${this.xIn}/${scale}`;
-    this.transform = [
-      {translateX: pre},
-      {scaleX:     scale},
-      {translateX: post},
-    ];
+    this.x            = animated`${xAcc} + ${xIn}/${pinchX.scale}`;
 
     // (Note: If you want Animated.Value ._value/._offset to update on the js side you have to call addListener, else 0)
     this.xIn.addListener(({value}) => {
       this._xIn = value;
     });
+
+    this.onPanGesture = Animated.event(
+      [{nativeEvent: {translationX: this.xIn}}],
+      {useNativeDriver: config.useNativeDriver},
+    );
 
   }
 
@@ -889,9 +987,7 @@ class PanX {
       //  - WARNING This only works if we've called .addListener (else it's always 0)
       const _valueBefore = this._xIn;
 
-      // this._log(log.info, 'onPanState',
-      //   ['e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [translationX, velocityX],
-      // );
+      // this._log(log.info, 'onPanState', ['e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [translationX, velocityX]);
 
       // Scale velocityX waaaaay down, else it's ludicrous speed [Why? Maybe a unit mismatch?]
       const scaleVelocity = 1/1000;
@@ -1040,7 +1136,7 @@ const styles = StyleSheet.create({
     backgroundColor: iOSColors.gray, // TODO Map rec.species -> color
     justifyContent: 'center',        // Else sideways text is to the above
     alignItems: 'center',            // Else sideways text is to the right
-    width: 14,                       // HACK Manually shrink outer view width to match height of sideways text
+    width: sidewaysTextWidth,        // HACK Manually shrink outer view width to match height of sideways text
     zIndex: 1,                       // Over spectro image
   },
   recSpeciesSidewaysViewInner: {     // View>View>Text else the text aligment doesn't work
