@@ -28,12 +28,12 @@ import { ActionSheetBasic } from './ActionSheets';
 import { Settings, ShowMetadata } from './Settings';
 import { config } from '../config';
 import { Quality, Rec, RecId, SearchRecs } from '../datatypes';
-import { Clamp, recTransform, PanX, PinchX } from '../gestures';
+import { Clamp, spectroTransform, PanX, PinchX } from '../gestures';
 import { log, puts, tap } from '../log';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
-import { chance, finallyAsync, getOrSet, global, match, Styles, TabBarBottomConstants, WidthHeight } from '../utils';
+import { chance, finallyAsync, getOrSet, global, match, Styles, TabBarBottomConstants, Dim } from '../utils';
 
 const sidewaysTextWidth = 14;
 
@@ -53,18 +53,19 @@ type State = {
   playing?: {
     rec: Rec,
     sound: Sound,
+    startTime?: number,
   };
 };
 
 type Props = {
-  spectroBase:        WidthHeight<number>;
+  spectroBase:        Dim<number>;
   spectroScaleYClamp: Clamp<number>;
 };
 
 export class SearchScreen extends Component<Props, State> {
 
   static defaultProps = {
-    spectroBase:        {h: 20, w: Dimensions.get('window').width},
+    spectroBase:        {height: 20, width: Dimensions.get('window').width},
     spectroScaleYClamp: {min: 1, max: 8},
   };
 
@@ -100,7 +101,7 @@ export class SearchScreen extends Component<Props, State> {
       recs: [],
     };
 
-    this.pinchX = new PinchX(this.props.spectroBase);
+    this.pinchX = new PinchX();
     this.pansX  = new PanX(this.pinchX);
     this.panX   = new Map(); // Populated from this.state in componentDidUpdate
 
@@ -112,7 +113,7 @@ export class SearchScreen extends Component<Props, State> {
     //  - Use to reset non-react attrs, e.g. gesture state (which is buggy as hell and a huge timesink)
     //  - https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html
     //  - https://reactjs.org/docs/reconciliation.html#keys
-    this.pinchX = new PinchX(this.props.spectroBase);
+    this.pinchX = new PinchX();
     this.pansX  = new PanX(this.pinchX);
     this.panX   = new Map(); // Populated from this.state in componentDidUpdate
     this.setState({resetKey: chance.hash()});
@@ -306,7 +307,7 @@ export class SearchScreen extends Component<Props, State> {
 
         // Stop any recs that are currently playing
         if (playing) {
-          const {rec, sound} = playing;
+          const {rec, sound, startTime} = playing;
 
           // Stop sound playback
           log.debug('Stopping playing rec', rec.id);
@@ -329,17 +330,16 @@ export class SearchScreen extends Component<Props, State> {
           global.sound = sound; // XXX Debug
 
           // Seek rec (if enabled)
+          let startTime;
           if (settings.seekOnPlay) {
-            const width = Dimensions.get('window').width; // TODO TODO Unmock
-            const seekFrac = x / width;
-            const seekTime = seekFrac * sound.getDuration();
-            sound.setCurrentTime(seekTime);
+            startTime = this.spectroTimeFromX(settings, sound, x);
+            sound.setCurrentTime(startTime);
           }
 
           // Play rec
           log.debug('Playing rec', rec.id);
           this.setState({
-            playing: {rec, sound},
+            playing: {rec, sound, startTime},
           });
           finallyAsync(sound.playAsync(), () => {
             // Promise fulfills after playback completes / is stopped / fails
@@ -356,8 +356,30 @@ export class SearchScreen extends Component<Props, State> {
     };
   }
 
+  spectroTimeFromX = (settings: Settings, sound: Sound, x: number): number => {
+    const width = Dimensions.get('window').width; // TODO TODO Unmock
+    return (x / width) * sound.getDuration();
+  }
+
+  spectroXFromTime = (settings: Settings, sound: Sound, time: number): number => {
+    return time / sound.getDuration() * this.spectroDimensions(settings).width;
+  }
+
   recIsPlaying = (recId: RecId, playing: undefined | {rec: Rec}): boolean => {
     return !playing ? false : playing.rec.id === recId;
+  }
+
+  spectroDimensions = (settings: Settings): Dim<number> => {
+    return {
+      width: _.sum([
+        this.props.spectroBase.width,
+        settings.showMetadata === 'none' ? -sidewaysTextWidth : 0,
+        1, // HACK To avoid what seems like 1 (or 1/2?) px of white on right edge (ios)
+      ]),
+      height: this.props.spectroBase.height * settings.spectroScaleY,
+      // XXX Can't animate height ("Error: Style property 'height' is not supported by native animated module")
+      // height: this.pinchX.outScaleY.interpolate({inputRange: [0, 1], outputRange: [0, this.pinchX.spectroBase.height]}),
+    };
   }
 
   onLongPress = (rec: Rec) => async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
@@ -685,6 +707,7 @@ export class SearchScreen extends Component<Props, State> {
     <Settings.Context.Consumer children={settings => (
       <View key={this.state.resetKey} style={styles.container}>
 
+        {/* Pinch (all recs) */}
         <PinchGestureHandler
           ref={this.pinchRef}
           simultaneousHandlers={this.pansXRef}
@@ -693,6 +716,7 @@ export class SearchScreen extends Component<Props, State> {
         >
           <Animated.View style={{flex: 1}}>
 
+            {/* Pan (all recs) */}
             <PanGestureHandler
               ref={this.pansXRef}
               enabled={!settings.panOne}
@@ -703,6 +727,7 @@ export class SearchScreen extends Component<Props, State> {
             >
               <Animated.View style={{flex: 1}}>
 
+                {/* Recs list + species sections */}
                 <SectionList
                   // @ts-ignore (Why doesn't this typecheck?)
                   ref={this.sectionListRef as RefObject<Component<SectionListStatic<Rec>, any, any>>}
@@ -710,15 +735,20 @@ export class SearchScreen extends Component<Props, State> {
                   sections={this.sectionsForRecs(this.state.recs)}
                   keyExtractor={(rec, index) => rec.id.toString()}
                   initialNumToRender={20}
+
+                  // Species section headers
                   renderSectionHeader={({section: {species_com_name, species_sci_name, recs_for_sp}}) => (
                     settings.showMetadata === 'none' ? null : (
                       <View style={styles.sectionSpecies}>
+                        {/* Species editing buttons */}
                         {!settings.editing ? null : (
                           <this.SpeciesEditingButtons />
                         )}
+                        {/* Species name */}
                         <Text numberOfLines={1} style={styles.sectionSpeciesText}>
                           {species_com_name}
                         </Text>
+                        {/* Debug info */}
                         {settings.showDebug && (
                           <Text numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}, settings.debugText]}>
                             ({recs_for_sp} recs)
@@ -727,14 +757,18 @@ export class SearchScreen extends Component<Props, State> {
                       </View>
                     )
                   )}
+
+                  // Rec row
                   renderItem={({item: rec, index}) => (
                     <Animated.View style={styles.recRow}>
 
-                      {/* TODO Flex image width so we can show these on the right (as is, they'd be pushed off screen) */}
+                      {/* Rec editing buttons */}
+                      {/* - TODO Flex image width so we can show these on the right (as is, they'd be pushed off screen) */}
                       {!settings.editing ? null : (
                         <this.RecEditingButtons />
                       )}
 
+                      {/* Rec region without the editing buttons  */}
                       <Animated.View style={[styles.recRowInner,
                         // HACK Visual feedback for playing rec (kill after adding scrolling bar)
                         (!this.recIsPlaying(rec.id, this.state.playing)
@@ -743,6 +777,7 @@ export class SearchScreen extends Component<Props, State> {
                         ),
                       ]}>
 
+                        {/* Pan (one rec) */}
                         <PanGestureHandler
                           ref={this.panXRefs.get(rec.id)}
                           enabled={settings.panOne}
@@ -765,10 +800,12 @@ export class SearchScreen extends Component<Props, State> {
                         >
                           <Animated.View>
 
+                            {/* Tap (one rec) */}
                             <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
                               <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(settings, rec)}>
                                 <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
 
+                                  {/* Sideways species label (sometimes) */}
                                   {settings.showMetadata !== 'none' ? null : (
                                     <View style={styles.recSpeciesSidewaysView}>
                                       <View style={styles.recSpeciesSidewaysViewInner}>
@@ -784,25 +821,37 @@ export class SearchScreen extends Component<Props, State> {
                                     </View>
                                   )}
 
-                                  <Animated.Image
-                                    style={[{
-                                      // XXX Can't animate height
-                                      //  - "Error: Style property 'height' is not supported by native animated module"
-                                      // height: this.pinchX.outScaleY.interpolate({
-                                      //   inputRange: [0, 1],
-                                      //   outputRange: [0, this.pinchX.spectroBase.h],
-                                      // }),
-                                      width: _.sum([
-                                        this.pinchX.spectroBase.w,
-                                        settings.showMetadata === 'none' ? -sidewaysTextWidth : 0,
-                                        1, // HACK To avoid what seems like 1 (or 1/2?) px of white on right edge (ios)
-                                      ]),
-                                      height: this.pinchX.spectroBase.h * settings.spectroScaleY,
-                                      transform: recTransform(this.pinchX, this.pansX, this.panX.get(rec.id)),
-                                    }]}
-                                    resizeMode='stretch'
-                                    source={{uri: Rec.spectroPath(rec)}}
-                                  />
+                                  {/* Spectro */}
+                                  <View style={{flex: 1}}>
+
+                                    {/* Image */}
+                                    <Animated.Image
+                                      style={[{
+                                        ...this.spectroDimensions(settings),
+                                        transform: spectroTransform(this.pinchX, this.pansX, this.panX.get(rec.id)),
+                                      }]}
+                                      resizeMode='stretch'
+                                      source={{uri: Rec.spectroPath(rec)}}
+                                    />
+
+                                    {/* Current time cursor (if playing + startTime) */}
+                                    {this.recIsPlaying(rec.id, this.state.playing) && (
+                                      this.state.playing!.startTime && (
+                                        <View style={{
+                                          position: 'absolute',
+                                          left: this.spectroXFromTime(
+                                            settings,
+                                            this.state.playing!.sound,
+                                            this.state.playing!.startTime!,
+                                          ),
+                                          width: 1,
+                                          height: '100%',
+                                          backgroundColor: 'black',
+                                        }}/>
+                                      )
+                                    )}
+
+                                  </View>
 
                                 </Animated.View>
                               </TapGestureHandler>
@@ -811,6 +860,7 @@ export class SearchScreen extends Component<Props, State> {
                           </Animated.View>
                         </PanGestureHandler>
 
+                        {/* Rec metadata */}
                         {match(settings.showMetadata,
                           ['none', null],
                           ['oneline', (
@@ -839,6 +889,7 @@ export class SearchScreen extends Component<Props, State> {
 
                     </Animated.View>
                   )}
+
                 />
 
               </Animated.View>
@@ -847,12 +898,16 @@ export class SearchScreen extends Component<Props, State> {
           </Animated.View>
         </PinchGestureHandler>
 
+        {/* Debug info */}
         <View style={settings.debugView}>
           <Text style={settings.debugText}>Status: {this.state.status} ({this.state.totalRecs || '?'} total)</Text>
           <Text style={settings.debugText}>Filters: {JSON.stringify(this.state.queryConfig)}</Text>
         </View>
 
+        {/* Bottom controls */}
         <this.BottomControls/>
+
+        {/* Modals + action sheets */}
         <this.ModalsAndActionSheets/>
 
       </View>

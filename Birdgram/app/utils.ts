@@ -84,7 +84,7 @@ export const TabBarBottomConstants = {
   COMPACT_HEIGHT: 29,
 }
 
-export type WidthHeight<X> = {
-  w: X,
-  h: X,
+export type Dim<X> = {
+  width:  X,
+  height: X,
 };

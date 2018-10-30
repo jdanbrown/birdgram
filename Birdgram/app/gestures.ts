@@ -6,9 +6,8 @@ import * as Gesture from 'react-native-gesture-handler';
 import { sprintf } from 'sprintf-js';
 
 import { config } from './config';
-import { WidthHeight } from './utils';
 
-export function recTransform(
+export function spectroTransform(
   pinchX: PinchX,
   pansX: PanX,
   panX?: PanX,
@@ -41,9 +40,8 @@ export class PinchX {
   x:       Animated.Value;
 
   constructor(
-    public readonly spectroBase: WidthHeight<number>,
-    public          base:        number              = 1,
-    public readonly clamp:       Clamp<number>       = {min: 1, max: 10},
+    public          base:  number        = 1,
+    public readonly clamp: Clamp<number> = {min: 1, max: 10},
   ) {
 
     const {width} = Dimensions.get('window');

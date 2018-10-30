@@ -10,5 +10,6 @@ export const config = {
   },
 
   useNativeDriver: true,
+  // useNativeDriver: false, // FIXME Buggy / exposes bugs in our gross gestures/animated logic (ugh)
 
 }
