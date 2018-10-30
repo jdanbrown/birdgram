@@ -283,60 +283,76 @@ export class SearchScreen extends Component<Props, State> {
     return await soundAsync!;
   }
 
-  toggleRecPlaying = (rec: Rec) => {
+  toggleRecPlaying = (settings: Settings, rec: Rec) => {
 
     // Eagerly allocate Sound resource for rec
     //  - TODO How eagerly should we cache this? What are the cpu/mem costs and tradeoffs?
     const soundAsync = this.getOrAllocateSoundAsync(rec);
 
-    return async (pointerInside: boolean) => {
-      log.debug('toggleRecPlaying');
-      log.debug('rec', rec);
-      log.debug('this.state.playing', this.state.playing);
+    return async (event: Gesture.TapGestureHandlerStateChangeEvent) => {
+      const {nativeEvent: {state, oldState, x}} = event; // Unpack SyntheticEvent (before async)
+      if (
+        // [Mimic Gesture.BaseButton]
+        oldState === Gesture.State.ACTIVE &&
+        state !== Gesture.State.CANCELLED
+      ) {
+        log.debug('toggleRecPlaying', `x[${x}]`);
+        log.debug('rec', rec);
+        log.debug('this.state.playing', this.state.playing);
 
-      // FIXME Races? Tap a lot of spectros really quickly and watch the "Playing rec" logs pile up
+        // FIXME Races? Tap a lot of spectros really quickly and watch the "Playing rec" logs pile up
 
-      const {playing} = this.state;
+        const {playing} = this.state;
 
-      // Stop any recs that are currently playing
-      if (playing) {
-        const {rec, sound} = playing;
+        // Stop any recs that are currently playing
+        if (playing) {
+          const {rec, sound} = playing;
 
-        // Stop sound playback
-        log.debug('Stopping playing rec', rec.id);
-        this.setState({
-          playing: undefined,
-        });
-        await sound.stopAsync();
-
-        global.sound = sound; // XXX Debug
-
-      }
-
-      // If touched rec was the currently playing rec, then we're done (it's stopped)
-      // Else, play the (new) touched rec
-      if (!this.recIsPlaying(rec.id, playing)) {
-
-        const sound = await soundAsync;
-
-        global.sound = sound; // XXX Debug
-
-        // Play rec
-        log.debug('Playing rec', rec.id);
-        this.setState({
-          playing: {rec, sound},
-        });
-        finallyAsync(sound.playAsync(), () => {
-          // Promise fulfills after playback completes / is stopped / fails
-          log.debug('Done playing rec', rec.id);
+          // Stop sound playback
+          log.debug('Stopping playing rec', rec.id);
           this.setState({
             playing: undefined,
           });
-        });
+          await sound.stopAsync();
 
+          global.sound = sound; // XXX Debug
+
+        }
+
+        // If touched rec was the currently playing rec, then we're done (it's stopped)
+        // Else, play the (new) touched rec
+        //  - HACK Override if seekOnPlay, so we can tap with abandon
+        if (!this.recIsPlaying(rec.id, playing) || settings.seekOnPlay) {
+
+          const sound = await soundAsync;
+
+          global.sound = sound; // XXX Debug
+
+          // Seek rec (if enabled)
+          if (settings.seekOnPlay) {
+            const width = Dimensions.get('window').width; // TODO TODO Unmock
+            const seekFrac = x / width;
+            const seekTime = seekFrac * sound.getDuration();
+            sound.setCurrentTime(seekTime);
+          }
+
+          // Play rec
+          log.debug('Playing rec', rec.id);
+          this.setState({
+            playing: {rec, sound},
+          });
+          finallyAsync(sound.playAsync(), () => {
+            // Promise fulfills after playback completes / is stopped / fails
+            log.debug('Done playing rec', rec.id);
+            this.setState({
+              playing: undefined,
+            });
+          });
+
+        }
+
+        // log.debug('toggleRecPlaying: done');
       }
-
-      // log.debug('toggleRecPlaying: done');
     };
   }
 
@@ -750,15 +766,7 @@ export class SearchScreen extends Component<Props, State> {
                           <Animated.View>
 
                             <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
-                              <BaseButton
-                                onPress={this.toggleRecPlaying(rec)}
-                                style={{
-                                  // ...(this.recIsPlaying(rec.id, this.state.playing) && {
-                                  //   paddingVertical: 1, backgroundColor: 'red',
-                                  // }),
-                                }}
-                              >
-
+                              <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(settings, rec)}>
                                 <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
 
                                   {settings.showMetadata !== 'none' ? null : (
@@ -797,8 +805,7 @@ export class SearchScreen extends Component<Props, State> {
                                   />
 
                                 </Animated.View>
-
-                              </BaseButton>
+                              </TapGestureHandler>
                             </LongPressGestureHandler>
 
                           </Animated.View>
