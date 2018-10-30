@@ -7,7 +7,7 @@ export function querySql<Row>(
   db: SQLiteDatabase,
   sql: string,
   params?: any[],
-): <X>(onResults: (results: ResultSet<Row>) => X) => Promise<X> {
+): <X>(onResults: (results: ResultSet<Row>) => Promise<X>) => Promise<X> {
   console.debug('[querySql]', 'sql:', sql, 'params:', params);
   return onResults => new Promise((resolve, reject) => {
     // TODO How to also `await db.transaction`? (Do we even want to?)

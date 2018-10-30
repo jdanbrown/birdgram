@@ -51,11 +51,11 @@ global.unjson = unjson;
 
 // TODO How to polyfill Promise.finally in react-native?
 //  - Maybe: https://github.com/facebook/fbjs/pull/293
-export async function finallyAsync<X>(p: Promise<X>, f: () => void): Promise<X> {
+export async function finallyAsync<X>(p: Promise<X>, f: () => Promise<void>): Promise<X> {
   try {
     return await p;
   } finally {
-    f();
+    await f();
   }
 }
 
@@ -67,6 +67,21 @@ import Chance from 'chance';
 
 // Instantiate a global Chance
 export const chance = new Chance();
+
+//
+// react
+//
+
+import { Component } from 'react';
+
+export function setStateAsync<P, S, K extends keyof S>(
+  component: Component<P, S>,
+  state: ((prevState: Readonly<S>, props: Readonly<P>) => (Pick<S, K> | S | null)) | (Pick<S, K> | S | null),
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    component.setState(state, () => resolve());
+  });
+}
 
 //
 // react-native

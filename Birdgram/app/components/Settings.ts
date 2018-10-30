@@ -4,6 +4,7 @@ import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { log, puts } from '../log';
+import { setStateAsync } from '../utils';
 
 export type ShowMetadata = 'none' | 'oneline' | 'full';
 
@@ -17,7 +18,7 @@ export interface Props {
   readonly showMetadata: ShowMetadata;
   readonly editing: boolean;
   readonly seekOnPlay: boolean;
-  readonly spectroScaleY: number;
+  // readonly spectroScaleY: number; // XXX Moved to SearchScreen.state to simplify local/global setState interactions (unbatched update)
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
@@ -28,7 +29,7 @@ export const DEFAULTS: Props = {
   showMetadata: 'oneline',
   editing: false,
   seekOnPlay: false,
-  spectroScaleY: 2,
+  // spectroScaleY: 2,
 };
 export const TYPES: {[key: string]: string} = {
   // NOTE Keep attrs in sync (3/5)
@@ -39,7 +40,7 @@ export const TYPES: {[key: string]: string} = {
   showMetadata: 'string',
   editing: 'boolean',
   seekOnPlay: 'boolean',
-  spectroScaleY: 'number',
+  // spectroScaleY: 'number',
 };
 export const KEYS = [
   // NOTE Keep attrs in sync (4/5)
@@ -51,15 +52,15 @@ export const KEYS = [
   'showMetadata',
   'editing',
   'seekOnPlay',
-  'spectroScaleY',
+  // 'spectroScaleY',
 ];
 
 export class Settings implements Props {
   // WARNING Declare all functions as methods i/o attrs, else they will sneak into serdes
 
   constructor(
-    // Callback to trigger App.setState when settings change
-    public readonly appSetState: (settings: Settings) => void,
+    // Callback to trigger setStateAsync(App, ...) when settings change
+    public readonly appSetStateAsync: (settings: Settings) => Promise<void>,
     // NOTE Keep attrs in sync (4/5)
     public readonly allowUploads: boolean,
     public readonly showDebug: boolean,
@@ -68,19 +69,19 @@ export class Settings implements Props {
     public readonly showMetadata: ShowMetadata,
     public readonly editing: boolean,
     public readonly seekOnPlay: boolean,
-    public readonly spectroScaleY: number,
+    // public readonly spectroScaleY: number,
   ) {}
 
   withProps(props: object): Settings {
     props = _.assign({}, this, props);
     // @ts-ignore (Possible to do this typesafe-ly?)
     return new Settings(
-      this.appSetState,
+      this.appSetStateAsync,
       ...KEYS.map(key => (props as {[key: string]: any})[key]),
     );
   }
 
-  static async load(appSetState: (settings: Settings) => void): Promise<Settings> {
+  static async load(appSetStateAsync: (settings: Settings) => Promise<void>): Promise<Settings> {
 
     // Load whatever junk we might have saved last
     //  - Fallback to DEFAULTS (via {}) if we can't load it at all
@@ -125,7 +126,7 @@ export class Settings implements Props {
 
     // @ts-ignore (Possible to do this typesafe-ly?)
     const settings = new Settings(
-      appSetState,
+      appSetStateAsync,
       ...values,
     );
 
@@ -138,7 +139,7 @@ export class Settings implements Props {
     // Persist in AsyncStorage
     await Settings.setItem(key, value);
     // Set locally (only if persist worked)
-    this.appSetState(this.withProps({
+    await this.appSetStateAsync(this.withProps({
       [key]: value,
     }));
   }

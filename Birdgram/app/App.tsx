@@ -13,7 +13,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { Settings } from './components/Settings';
 import { config } from './config';
 import { log } from './log';
-import { deepEqual, global, match } from './utils';
+import { deepEqual, global, match, setStateAsync } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Animated = Animated;
@@ -99,9 +99,9 @@ class App extends Component<Props, State> {
     // Load settings (async) on app startup
     //  - TODO Show loading screen until load completes
     const settings = await Settings.load(
-      settings => this.setState({settings}), // Callback for when Settings updates
+      settings => setStateAsync(this, {settings}), // Callback for when Settings updates
     );
-    this.setState({
+    await setStateAsync(this, {
       loading: false,
       settings,
     });

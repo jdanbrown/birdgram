@@ -8,7 +8,7 @@ import { BorderlessButton, RectButton } from 'react-native-gesture-handler';
 
 import { Settings } from './Settings';
 import { StyleSheet } from '../stylesheet';
-import { global } from '../utils';
+import { global, setStateAsync } from '../utils';
 
 type Props = {};
 type State = {
@@ -42,7 +42,7 @@ export class SettingsScreen extends Component<Props, State> {
 
             <SettingsList.Item
               title='Test modal'
-              onPress={() => this.setState({showModal: true})}
+              onPress={async () => await setStateAsync(this, {showModal: true})}
             />
 
             {/* FIXME Well, this is a pretty horrible UX. Looks like we'll need to redo react-native-settings-list ourselves. */}
@@ -82,7 +82,7 @@ export class SettingsScreen extends Component<Props, State> {
           }}>
             <View>
               <Text>This is a modal</Text>
-              <RectButton onPress={() => this.setState({showModal: !this.state.showModal})}>
+              <RectButton onPress={async () => await setStateAsync(this, {showModal: !this.state.showModal})}>
                 <View style={{padding: 20, backgroundColor: iOSColors.orange}}>
                   <Text>Close</Text>
                 </View>
