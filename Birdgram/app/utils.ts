@@ -83,3 +83,8 @@ export const TabBarBottomConstants = {
   DEFAULT_HEIGHT: 49,
   COMPACT_HEIGHT: 29,
 }
+
+export type WidthHeight<X> = {
+  w: X,
+  h: X,
+};

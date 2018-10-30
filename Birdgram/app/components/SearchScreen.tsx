@@ -1,11 +1,9 @@
-// @ts-ignore
-import animated from "animated.macro";
 import _ from 'lodash';
 import React, { Component, ReactNode, RefObject } from 'react';
 import {
   Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, LayoutChangeEvent, Modal, Platform,
-  SectionList, SectionListData, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
-  SectionListStatic,
+  SectionList, SectionListData, SectionListStatic, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle,
+  WebView,
 } from 'react-native';
 import ActionSheet from 'react-native-actionsheet'; // [Must `import ActionSheet` i/o `import { ActionSheet }`, else barf]
 import FastImage from 'react-native-fast-image';
@@ -30,15 +28,17 @@ import { ActionSheetBasic } from './ActionSheets';
 import { Settings, ShowMetadata } from './Settings';
 import { config } from '../config';
 import { Quality, Rec, RecId, SearchRecs } from '../datatypes';
+import { Clamp, recTransform, PanX, PinchX } from '../gestures';
 import { log, puts, tap } from '../log';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
-import { finallyAsync, getOrSet, global, match, Styles, TabBarBottomConstants } from '../utils';
+import { chance, finallyAsync, getOrSet, global, match, Styles, TabBarBottomConstants, WidthHeight } from '../utils';
 
 const sidewaysTextWidth = 14;
 
 type State = {
+  resetKey: string;
   showFilters: boolean;
   showHelp: boolean;
   totalRecs?: number;
@@ -78,16 +78,17 @@ export class SearchScreen extends Component<Props, State> {
   sectionListRef: RefObject<SectionListStatic<Rec>>  = React.createRef();
   pinchRef: RefObject<PinchGestureHandler>           = React.createRef();
   pansXRef: RefObject<PanGestureHandler>             = React.createRef();
-  panXRefs: Map<RecId, RefObject<PanGestureHandler>> = new Map(); // XXX Didn't work
+  panXRefs: Map<RecId, RefObject<PanGestureHandler>> = new Map();
 
   pinchX: PinchX;
-  panX:   Map<RecId, PanX>;
   pansX:  PanX;
+  panX:   Map<RecId, PanX>;
 
   constructor(props: Props) {
     super(props);
 
     this.state = {
+      resetKey: '',
       showFilters: false,
       showHelp: false,
       queryText: '',
@@ -99,13 +100,22 @@ export class SearchScreen extends Component<Props, State> {
       recs: [],
     };
 
-    this.pinchX = new PinchX(this.props.spectroBase, 2, {min: 1, max: 10});
+    this.pinchX = new PinchX(this.props.spectroBase);
+    this.pansX  = new PanX(this.pinchX);
     this.panX   = new Map(); // Populated from this.state in componentDidUpdate
-    this.pansX  = new PanX(this.pinchX,
-      0, {min: 0, max: 0}, // TODO Clamp
-    );
 
     global.SearchScreen = this; // XXX Debug
+  }
+
+  resetComponent = () => {
+    // Reset the component
+    //  - Use to reset non-react attrs, e.g. gesture state (which is buggy as hell and a huge timesink)
+    //  - https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html
+    //  - https://reactjs.org/docs/reconciliation.html#keys
+    this.pinchX = new PinchX(this.props.spectroBase);
+    this.pansX  = new PanX(this.pinchX);
+    this.panX   = new Map(); // Populated from this.state in componentDidUpdate
+    this.setState({resetKey: chance.hash()});
   }
 
   componentDidUpdate = (prevProps: Props, prevState: State) => {
@@ -113,14 +123,10 @@ export class SearchScreen extends Component<Props, State> {
     // Drop PanX resources for recs we no longer have, and preserve PanX state for recs we still have
     this.panX = new Map(this.state.recs.map<[RecId, PanX]>(rec => [
       rec.id,
-      this.panX.get(rec.id) || new PanX(
-        this.pinchX,
-        0, {min: 0, max: 0}, // TODO Clamp
-        // 0, {min: -Rec.spectroWidthPx(rec), max: 0},
-      ),
+      this.panX.get(rec.id) || new PanX(this.pinchX),
     ]));
 
-    // XXX Didn't work
+    // Recreate all panX refs
     this.panXRefs = new Map(this.state.recs.map<[RecId, RefObject<PanGestureHandler>]>(rec => [
       rec.id,
       React.createRef<PanGestureHandler>(),
@@ -457,6 +463,13 @@ export class SearchScreen extends Component<Props, State> {
           iconProps={{name: 'arrow-down'}}
           // iconProps={{name: 'arrow-down-circle'}}
         />
+        {/* HACK HACK Reset pan/pinch */}
+        {/* - Ugh, this stuff is horrible and brittle (e.g. can't diffClamp without bugs) */}
+        <this.BottomControlsButton
+          help='Reset'
+          onPress={() => this.resetComponent()}
+          iconProps={{name: 'power'}}
+        />
         {/* Cycle metadata: none / oneline / full */}
         <this.BottomControlsButton
           help='Info'
@@ -654,7 +667,7 @@ export class SearchScreen extends Component<Props, State> {
 
   render = () => (
     <Settings.Context.Consumer children={settings => (
-      <View style={styles.container}>
+      <View key={this.state.resetKey} style={styles.container}>
 
         <PinchGestureHandler
           ref={this.pinchRef}
@@ -726,7 +739,7 @@ export class SearchScreen extends Component<Props, State> {
                           // waitFor={this.pinchRef} // XXX Close! -- but makes one-finger pans slow to register [why?]
                           // maxPointers={1}         // XXX Nope, doesn't control for multiple pointers on separate spectros
                           // XXX Nope, doesn't prevent multiple pointers on separate spectros [why not?]
-                          // ref={this.panXRefs.get(rec.id)} waitFor={[
+                          // waitFor={[
                           //   ...tap((
                           //       Array.from(this.panXRefs.entries())
                           //       .filter(([recId, ref]) => recId < rec.id)
@@ -771,13 +784,12 @@ export class SearchScreen extends Component<Props, State> {
                                       //   inputRange: [0, 1],
                                       //   outputRange: [0, this.pinchX.spectroBase.h],
                                       // }),
-                                      width:  this.pinchX.spectroBase.w,
+                                      width: _.sum([
+                                        this.pinchX.spectroBase.w,
+                                        settings.showMetadata === 'none' ? -sidewaysTextWidth : 0,
+                                        1, // HACK To avoid what seems like 1 (or 1/2?) px of white on right edge (ios)
+                                      ]),
                                       height: this.pinchX.spectroBase.h * settings.spectroScaleY,
-                                      // transform: [
-                                      //   ...this.pinchX.transform,
-                                      //   ...this.pansX.transform,
-                                      //   ...(this.panX.get(rec.id) || {transform: []}).transform,
-                                      // ],
                                       transform: recTransform(this.pinchX, this.pansX, this.panX.get(rec.id)),
                                     }]}
                                     resizeMode='stretch'
@@ -841,215 +853,6 @@ export class SearchScreen extends Component<Props, State> {
   );
 
 }
-
-function recTransform(
-  pinchX: PinchX,
-  pansX: PanX,
-  panX?: PanX,
-): Array<object> {
-  const panX_x = panX ? panX.x : new Animated.Value(0);
-
-  const w  = 375;
-
-  // const w  = 375 - sidewaysTextWidth;
-  // const w  = 375;
-  // const wv = new Animated.Value(w);
-  // const s  = pinchX.scale;
-  // const x  = animated`${panX_x} + ${pansX.x}`;
-
-  // const a = Animated.diffClamp(animated`${s}/(1-${s}) * ${x}`, 0, w);
-  // const b = animated`(1-${s})/${s} * ${a}`;
-
-  return [
-    // NOTE If pans go buggy, try just removing the diffClamp...
-
-    {scaleX:     pinchX.scale},
-    {translateX: pinchX.x},
-    {translateX: animated`${panX_x} + ${pansX.x}`},
-
-    // XXX Bugs bugs bugs, avoid diffClamp
-    // {translateX: animated`
-    //   ${Animated.diffClamp(panX_x,  -w, 0)} +
-    //   ${Animated.diffClamp(pansX.x, -w, 0)}
-    // `}
-
-    // XXX
-    // {translateX: Animated.diffClamp(animated`${panX_x} + ${pansX.x}`, -w, 0)},
-
-    // XXX
-    // {scaleX:     pinchX.scale},
-    // {translateX: b},
-    // {translateX: pinchX.x},
-
-  ];
-}
-
-// HACK A little gross
-class PinchX {
-
-  onPinchGesture: (...args: Array<any>) => void;
-
-  baseIn:   Animated.Value;
-  scaleIn:  Animated.Value;
-  scale: Animated.Value;
-  x:     Animated.Value;
-
-  constructor(
-    public readonly spectroBase: WidthHeight<number>,
-    public          base:        number,
-    public readonly baseClamp:   Clamp<number>,
-  ) {
-
-    const {width} = Dimensions.get('window');
-    this.baseIn   = new Animated.Value(base);
-    this.scaleIn  = new Animated.Value(1);
-    // this.scale    = animated`${Animated.diffClamp(this.baseIn, baseClamp.min, baseClamp.max)} * ${this.scaleIn}`;
-    this.scale    = animated`${this.baseIn} * ${this.scaleIn}`;
-    this.x        = animated`(1 - 1/${this.scale}) * ${width/2}`;
-
-    this.onPinchGesture = Animated.event(
-      [{nativeEvent: {scale: this.scaleIn}}],
-      {useNativeDriver: config.useNativeDriver},
-    );
-
-  }
-
-  onPinchState = (event: Gesture.PinchGestureHandlerStateChangeEvent) => {
-    const {nativeEvent: {oldState, scale}} = event;
-    if (oldState === Gesture.State.ACTIVE) {
-      this.base = _.clamp( // TODO Wat. Why do we have to clamp twice?
-        this.base * scale,
-        this.baseClamp.min,
-        this.baseClamp.max,
-      );
-      this.baseIn.setValue(this.base);
-      this.scaleIn.setValue(1);
-    }
-  }
-
-}
-
-// HACK A lot gross
-class PanX {
-
-  onPanGesture: (...args: Array<any>) => void;
-
-  // Two params:
-  //  - xIn tracks the pan input (constant wrt. scale)
-  //  - xAcc tracks the cumulative pan (cumulative function of xIn/scale, for different values of scale over time)
-  //  - On gesture end, xAcc += xIn/scale, and xIn = 0
-  //  - .transform captures cumulative pan plus current animation via: xAcc + xIn/scale
-  xIn:   Animated.Value;
-  _xIn:  number;
-  xAcc:  Animated.Value;
-  _xAcc: number;
-  x:     Animated.Value;
-
-  constructor(
-    public readonly pinchX: PinchX,
-    public readonly x0:     number,
-    public readonly xClamp: Clamp<number>,
-  ) {
-
-    this.xIn   = new Animated.Value(0);
-    this._xIn  = 0;
-    this.xAcc  = new Animated.Value(x0);
-    this._xAcc = x0;
-    // Animated.diffClamp(this.xIn, xClamp.min, xClamp.max) // TODO Clamp
-
-    const {xIn, xAcc} = this;
-    this.x            = animated`${xAcc} + ${xIn}/${pinchX.scale}`;
-
-    // (Note: If you want Animated.Value ._value/._offset to update on the js side you have to call addListener, else 0)
-    this.xIn.addListener(({value}) => {
-      this._xIn = value;
-    });
-
-    this.onPanGesture = Animated.event(
-      [{nativeEvent: {translationX: this.xIn}}],
-      {useNativeDriver: config.useNativeDriver},
-    );
-
-  }
-
-  onPanState = (event: Gesture.PanGestureHandlerStateChangeEvent) => {
-    const {nativeEvent: {oldState, translationX, velocityX}} = event;
-    if (oldState === Gesture.State.ACTIVE) {
-
-      // log.info('-----------------------------');
-      // this._log(log.info, 'onPanState', ['e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [translationX, velocityX]);
-
-      // Flatten offset -> value so that .decay can use offset for momentum
-      //  - {value, offset} -> {value: value+offset, offset: 0}
-      this.xIn.flattenOffset();
-
-      // HACK Save ._xIn for workaround below
-      //  - WARNING This only works if we've called .addListener (else it's always 0)
-      const _valueBefore = this._xIn;
-
-      // this._log(log.info, 'onPanState', ['e.translationX[%7.2f]', 'e.velocityX[%7.2f]'], [translationX, velocityX]);
-
-      // Scale velocityX waaaaay down, else it's ludicrous speed [Why? Maybe a unit mismatch?]
-      const scaleVelocity = 1/1000;
-
-      Animated.decay(this.xIn, {
-        velocity: velocityX * scaleVelocity,
-        deceleration: .98, // (Usable in the range ~[.97, .997])
-        useNativeDriver: config.useNativeDriver,
-      }).start(({finished}) => {
-        // this._log(log.info, 'decay.finished', ['e.finished[%5s]'], [finished]);
-
-        // Bug: .decay resets ._value to 0 if you swipe multiple times really fast and make multiple .decay's race
-        //  - HACK Workaround: if .decay moved us the wrong direction, reset to the ._value before .decay
-        //  - When you do trip the bug the animation displays incorrectly, but ._value ends up correct
-        //  - Without the workaround you'd reset to .value=0 anytime you trip the bug
-        if (_valueBefore !== undefined) {
-          const _valueAfter = this._xIn;
-          const sgn = Math.sign(velocityX);
-          if (sgn * _valueAfter < sgn * _valueBefore) {
-            this.xIn.setValue(_valueBefore);
-            // this._log(log.info, 'decay.finished', ['e.finished[%5s]'], [finished]);
-          }
-        }
-
-        // Extract offset <- value now that .decay is done using offset for momentum
-        //  - {value, offset} -> {value: 0, offset: value+offset}
-        //  - Net effect: (0, offset) -[flatten]> (offset, 0) -[decay]> (offset, momentum) -[extract]> (0, offset+momentum)
-        this.xIn.extractOffset();
-
-        // Finalize all the updates before the next interaction
-        //  - Assumes xIn.extractOffset (offset!=0, value=0)
-        const finalX = this._xIn; // (i/o nativeEvent.translationX, else we don't include .decay)
-        this._xAcc += finalX / this.pinchX.base;
-        this.xAcc.setValue(this._xAcc);
-        this.xIn.setValue(0);
-        this.xIn.setOffset(0);
-
-        // this._log(log.info, 'decay.finished', ['e.finished[%5s]'], [finished]);
-      });
-
-    }
-  }
-
-  // Debug
-  _log = (log_f: (...args: any[]) => void, desc: string, keys: string[] = [], values: any[] = []) => {
-    log_f(sprintf(
-      ['%21s :', '_xIn[%7.2f]', '_xAcc[%7.2f]', ...keys].join(' '),
-      desc, this._xIn, this._xAcc, ...values,
-    ));
-  }
-
-}
-
-type Clamp<X> = {
-  min: X,
-  max: X,
-};
-
-type WidthHeight<X> = {
-  w: X,
-  h: X,
-};
 
 function ccIcon(props?: object): Element {
   const [icon] = licenseTypeIcons('cc', props);
