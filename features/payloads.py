@@ -227,89 +227,91 @@ def df_cache_hybrid(
                 #   - Solution 2: Stop using react-native-asset for search_recs/, since it's _way_ slower than manual xcode assets
                 mobile_files_dir(kind) / species / f"{kind}-{species}-{xc_id}.{format}"
             )
+            mobile_server_config_path = mobile_dir / 'server-config.json'
 
-            # Create and connect to sqlite file
-            with sqla_oneshot_eng_conn_tx(f'sqlite:///{ensure_parent_dir(mobile_db_path)}') as conn:
-                mobile_df = df
+            # We'll need to mutate (re-assign) as we go
+            mobile_df = df
 
-                # Write bytes_cols to files (one file per cell)
-                for bytes_col in bytes_cols:
-                    bytes_name = strip_endswith(bytes_col, '_bytes', check=True)
-                    mobile_files_df = (mobile_df
-                        .assign(mobile_file_path=lambda df: [
-                            mobile_file_path(
-                                kind=bytes_name,
-                                species=row.species,
-                                xc_id=row.xc_id,
-                                format=mimetype_to_format(row[f'{bytes_col}_mimetype']),
-                            )
-                            for row in df_rows(df)
-                        ])
-                    )
-                    # Ensure dirs (O(species))
-                    map_progress(desc=f'Mobile: Ensure dirs: {bytes_col}', use='dask', scheduler='threads',
-                        xs=mobile_files_df.mobile_file_path.map(lambda p: p.parent).drop_duplicates(),
-                        f=lambda dir: (
-                            # ensure_dir(dir)  # Known good, but forks
-                            dir.mkdir(parents=True, exist_ok=True)  # Doesn't fork, but might barf in some edge cases...?
-                        ),
-                    )
-                    # Write files (O(xc_id * bytes_cols))
-                    map_progress_df_rows(desc=f'Mobile: Write files: {bytes_col}', use='dask', scheduler='threads',
-                        df=mobile_files_df,
-                        f=lambda row: (
-                            write_file(row.mobile_file_path, 'wb', row[bytes_col])
-                        ),
-                    )
-                    # Shell out to du to measure the fs size of all the files we just wrote (bigger than sum(len(bytes)))
-                    dir_size = or_else(-1, lambda: 1024 * int(sh.du('-sk', mobile_files_dir(bytes_name)).split()[0]))
-                    mobile_file_sizes[rel(mobile_files_dir(bytes_name)) + '/'] = dir_size
-
-                # Expand mobile_feat_cols
-                #   - e.g. .f_preds -> .f_preds_0, .f_preds_1, ...
-                for k in mobile_feat_cols:
-                    n = one(df[k].map(len).drop_duplicates())
-                    with log_time_context(f'Mobile: Expand feat col: {k} ({n})'):
-                        mobile_df = (mobile_df
-                            .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
-                                f'{k}_{i}': df[k].map(lambda x: x[i])
-                                for i in range(n)
-                            }))
+            # Write bytes_cols to files (one file per cell)
+            for bytes_col in bytes_cols:
+                bytes_name = strip_endswith(bytes_col, '_bytes', check=True)
+                mobile_files_df = (mobile_df
+                    .assign(mobile_file_path=lambda df: [
+                        mobile_file_path(
+                            kind=bytes_name,
+                            species=row.species,
+                            xc_id=row.xc_id,
+                            format=mimetype_to_format(row[f'{bytes_col}_mimetype']),
                         )
+                        for row in df_rows(df)
+                    ])
+                )
+                # Ensure dirs (O(species))
+                map_progress(desc=f'Mobile: Ensure dirs: {bytes_col}', use='dask', scheduler='threads',
+                    xs=mobile_files_df.mobile_file_path.map(lambda p: p.parent).drop_duplicates(),
+                    f=lambda dir: (
+                        # ensure_dir(dir)  # Known good, but forks
+                        dir.mkdir(parents=True, exist_ok=True)  # Doesn't fork, but might barf in some edge cases...?
+                    ),
+                )
+                # Write files (O(xc_id * bytes_cols))
+                map_progress_df_rows(desc=f'Mobile: Write files: {bytes_col}', use='dask', scheduler='threads',
+                    df=mobile_files_df,
+                    f=lambda row: (
+                        write_file(row.mobile_file_path, 'wb', row[bytes_col])
+                    ),
+                )
+                # Shell out to du to measure the fs size of all the files we just wrote (bigger than sum(len(bytes)))
+                dir_size = or_else(-1, lambda: 1024 * int(sh.du('-sk', mobile_files_dir(bytes_name)).split()[0]))
+                mobile_file_sizes[rel(mobile_files_dir(bytes_name)) + '/'] = dir_size
 
-                # Drop non-sqlite cols
-                mobile_df = mobile_df.drop(columns=[
-                    # bytes_col are now in files
-                    *bytes_cols,
-                    *[f'{k}_mimetype' for k in bytes_cols],
-                    # All feat_cols (not just the mobile_feat_cols that we materialized as sqlite cols)
-                    *feat_cols,
-                ])
-
-                # Write sqlite .db file
-                #   - HACK Copy/pasted from the df_cache_sqlite write path [TODO Factor out common parts for reuse]
-                table = desc
-                # Convert cols to sql representation
-                col_conversions = {} if mobile_df.empty else {
-                    k: fg
-                    for k, v in mobile_df.iloc[0].items()
-                    for fg in [(
-                        (json_dumps_canonical, json.loads) if isinstance(v, (list, dict)) else  # list/dict <-> json (str)
-                        None
-                    )]
-                    if fg
-                }
-                mobile_df = mobile_df.assign(**{
-                    k: map_progress(use='log_time_all', desc=f'Mobile: Covert non-sql col: {to_sql.__name__}({k})',
-                        xs=mobile_df[k],
-                        f=to_sql,
+            # Expand mobile_feat_cols
+            #   - e.g. .f_preds -> .f_preds_0, .f_preds_1, ...
+            for k in mobile_feat_cols:
+                n = one(df[k].map(len).drop_duplicates())
+                with log_time_context(f'Mobile: Expand feat col: {k} ({n})'):
+                    mobile_df = (mobile_df
+                        .pipe(lambda df: df.assign(**{  # (.pipe to avoid error-prone lambda scoping inside dict comp)
+                            f'{k}_{i}': df[k].map(lambda x: x[i])
+                            for i in range(n)
+                        }))
                     )
-                    for k, (to_sql, _) in col_conversions.items()
-                })
-                # Write to sql
-                #   - Fail if nontrivial indexes, since they're error-prone to manage and we don't really benefit from them here
-                df_require_index_is_trivial(mobile_df)
-                with log_time_context(f'Mobile: Write {rel(mobile_db_path)}', lambda: naturalsize_path(mobile_db_path)):
+
+            # Drop non-sqlite cols
+            mobile_df = mobile_df.drop(columns=[
+                # bytes_col are now in files
+                *bytes_cols,
+                *[f'{k}_mimetype' for k in bytes_cols],
+                # All feat_cols (not just the mobile_feat_cols that we materialized as sqlite cols)
+                *feat_cols,
+            ])
+
+            # Write .sqlite3 file
+            #   - HACK Copy/pasted from the df_cache_sqlite write path [TODO Factor out common parts for reuse]
+            table = desc
+            # Convert cols to sql representation
+            col_conversions = {} if mobile_df.empty else {
+                k: fg
+                for k, v in mobile_df.iloc[0].items()
+                for fg in [(
+                    (json_dumps_canonical, json.loads) if isinstance(v, (list, dict)) else  # list/dict <-> json (str)
+                    None
+                )]
+                if fg
+            }
+            mobile_df = mobile_df.assign(**{
+                k: map_progress(use='log_time_all', desc=f'Mobile: Covert non-sql col: {to_sql.__name__}({k})',
+                    xs=mobile_df[k],
+                    f=to_sql,
+                )
+                for k, (to_sql, _) in col_conversions.items()
+            })
+            # Write to sql
+            #   - Fail if nontrivial indexes, since they're error-prone to manage and we don't really benefit from them here
+            df_require_index_is_trivial(mobile_df)
+            with log_time_context(f'Mobile: Write {rel(mobile_db_path)}', lambda: naturalsize_path(mobile_db_path)):
+                # Create and connect to sqlite file
+                with sqla_oneshot_eng_conn_tx(f'sqlite:///{ensure_parent_dir(mobile_db_path)}') as conn:
                     mobile_df.to_sql(table, conn,
                         index=False,  # Silently drop df index (we shouldn't have any)
                         if_exists='replace',
@@ -318,6 +320,12 @@ def df_cache_hybrid(
                         },
                     )
                     mobile_file_sizes[rel(mobile_db_path)] = size_path(mobile_db_path)
+
+            # Write server-config.json file
+            #   - TODO Trim down (see ServerConfig in app/datatypes.ts for first cut at contract with mobile)
+            with open(mobile_server_config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+                f.write('\n')
 
     # Debug: display/plot file sizes, if requested
     file_sizes_df = (
