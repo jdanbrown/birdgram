@@ -18,6 +18,7 @@ import SQLite from 'react-native-sqlite-storage';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { IconProps } from 'react-native-vector-icons/Icon';
+import timer from 'react-native-timer';
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import RNFB from 'rn-fetch-blob';
@@ -44,6 +45,7 @@ type ScrollViewState = {
   // (More fields available in NativeScrollEvent)
 }
 
+// TODO Keep shallow, else we have to mess with deepEqual
 type State = {
   scrollViewKey: string;
   scrollViewState: ScrollViewState;
@@ -62,7 +64,9 @@ type State = {
     rec: Rec,
     sound: Sound,
     startTime?: number,
+    // progressTime?: number,
   };
+  playingCurrentTime?: number,
   // Sync from/to Settings (1/3)
   spectroScale: number;
 };
@@ -181,6 +185,9 @@ export class SearchScreen extends Component<Props, State> {
 
     // Release cached sound resources
     await this.releaseSounds();
+
+    // Clear timers
+    timer.clearTimeout(this);
 
   }
 
@@ -304,21 +311,33 @@ export class SearchScreen extends Component<Props, State> {
           playing: this.state.playing && {recId: this.state.playing.rec.id},
         }));
 
-        // FIXME Races? Tap a lot of spectros really quickly and watch the "Playing rec" logs pile up
+        // FIXME Race conditions: tap many spectros really quickly and watch the "Playing rec" logs pile up
+        //  - Maybe have to replace react-native-audio with full expo, to get Expo.Audio?
+        //    - https://docs.expo.io/versions/latest/sdk/audio
+        //    - https://docs.expo.io/versions/latest/sdk/av.html
+        //    - https://github.com/expo/expo/tree/master/packages/expo/src/av
+        //    - https://github.com/expo/expo/blob/master/packages/expo/package.json
 
         const {playing} = this.state;
 
+        // Workaround: Manually clean up on done/stop b/c the .play done callback doesn't trigger on .stop
+        const onDone = async () => {
+          log.debug('Done: rec', rec.id);
+          timer.clearInterval(this, 'playingCurrentTime');
+          await setStateAsync(this, {
+            playing: undefined,
+          });
+        };
+
         // Stop any recs that are currently playing
         if (playing) {
-          const {rec, sound, startTime} = playing;
+          const {rec, sound} = playing;
           global.sound = sound; // XXX Debug
 
           // Stop sound playback
           log.debug('Stopping: rec', rec.id);
-          await setStateAsync(this, {
-            playing: undefined,
-          });
           await sound.stopAsync();
+          await onDone();
 
         }
 
@@ -338,19 +357,43 @@ export class SearchScreen extends Component<Props, State> {
           // Play rec (if startTime is valid)
           if (!startTime || startTime < sound.getDuration()) {
             log.debug('Playing: rec', rec.id);
-            if (startTime) {
-              sound.setCurrentTime(startTime);
-            }
+
+            // setState
             await setStateAsync(this, {
-              playing: {rec, sound, startTime},
+              playing: {
+                rec,
+                sound,
+                startTime,
+              },
+              playingCurrentTime: 0,
             });
+
+            // Update playingCurrentTime on interval (if enabled)
+            //  - HACK react-native-sound doesn't have an onProgress callback, so we have to hack it ourselves :/
+            //    - Ugh, waaay slow and cpu inefficient: 16ms (60fps) kills rndebugger in Debug and pegs cpu in Release
+            //    - TODO Explore alternatives: if setState->render is the bottleneck, then investigate Animated...
+            //  - WARNING Don't separate timers per rec.id until we resolve "FIXME Race conditions" above ("tap many")
+            if (this.settings.playingProgressEnable && this.settings.playingProgressInterval !== 0) {
+              timer.setInterval(this, 'playingCurrentTime',
+                async () => {
+                  const {seconds, isPlaying} = await sound.getCurrentTimeAsync();
+                  if (isPlaying) {
+                    await setStateAsync(this, {
+                      playingCurrentTime: seconds,
+                    });
+                  }
+                },
+                this.settings.playingProgressInterval,
+              );
+            }
+
+            // Seek + play + clean up when done
+            //  - Don't await: .playAsync promise fulfills after playback completes (/ is stopped / fails)
+            if (startTime) sound.setCurrentTime(startTime);
             finallyAsync(sound.playAsync(), async () => {
-              // Promise fulfills after playback completes / is stopped / fails
-              log.debug('Done: rec', rec.id);
-              await setStateAsync(this, {
-                playing: undefined,
-              });
+              await onDone();
             });
+
           }
 
         }
@@ -842,18 +885,24 @@ export class SearchScreen extends Component<Props, State> {
                             source={{uri: Rec.spectroPath(rec)}}
                           />
 
-                          {/* Current time cursor (if playing + startTime) */}
+                          {/* Start time cursor (if playing + startTime) */}
                           {this.recIsPlaying(rec.id, this.state.playing) && (
                             this.state.playing!.startTime && (
                               <View style={{
-                                position: 'absolute',
-                                left: this.spectroXFromTime(
-                                  this.state.playing!.sound,
-                                  this.state.playing!.startTime!,
-                                ),
-                                width: 1,
-                                height: '100%',
-                                backgroundColor: 'black',
+                                position: 'absolute', width: 1, height: '100%',
+                                left: this.spectroXFromTime(this.state.playing!.sound, this.state.playing!.startTime!),
+                                backgroundColor: iOSColors.gray,
+                              }}/>
+                            )
+                          )}
+
+                          {/* Progress time cursor (if playing + playingCurrentTime) */}
+                          {this.recIsPlaying(rec.id, this.state.playing) && (
+                            this.state.playing!.startTime && this.state.playingCurrentTime !== undefined && (
+                              <View style={{
+                                position: 'absolute', width: 1, height: '100%',
+                                left: this.spectroXFromTime(this.state.playing!.sound, this.state.playingCurrentTime),
+                                backgroundColor: iOSColors.black,
                               }}/>
                             )
                           )}

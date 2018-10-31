@@ -18,6 +18,8 @@ export interface Props {
   readonly showMetadata: ShowMetadata;
   readonly editing: boolean;
   readonly seekOnPlay: boolean;
+  readonly playingProgressEnable: boolean;
+  readonly playingProgressInterval: number;
   readonly spectroScale: number;
 }
 export const DEFAULTS: Props = {
@@ -29,6 +31,9 @@ export const DEFAULTS: Props = {
   showMetadata: 'oneline',
   editing: false,
   seekOnPlay: false,
+  playingProgressEnable: true,
+  // playingProgressInterval: 16, // ~frame rate (60fps), but kills rndebugger in dev
+  playingProgressInterval: 250,   // Usable in dev
   spectroScale: 2,
 };
 export const TYPES: {[key: string]: string} = {
@@ -40,6 +45,8 @@ export const TYPES: {[key: string]: string} = {
   showMetadata: 'string',
   editing: 'boolean',
   seekOnPlay: 'boolean',
+  playingProgressEnable: 'boolean',
+  playingProgressInterval: 'number',
   spectroScale: 'number',
 };
 export const KEYS = [
@@ -52,6 +59,8 @@ export const KEYS = [
   'showMetadata',
   'editing',
   'seekOnPlay',
+  'playingProgressEnable',
+  'playingProgressInterval',
   'spectroScale',
 ];
 
@@ -69,6 +78,8 @@ export class Settings implements Props {
     public readonly showMetadata: ShowMetadata,
     public readonly editing: boolean,
     public readonly seekOnPlay: boolean,
+    public readonly playingProgressEnable: boolean,
+    public readonly playingProgressInterval: number,
     public readonly spectroScale: number,
   ) {}
 

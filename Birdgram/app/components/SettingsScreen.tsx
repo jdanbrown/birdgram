@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import React, { Component } from 'react';
 import {
   Alert, AsyncStorage, Dimensions, Easing, Image, Modal, Platform, ScrollView, Text, TouchableHighlight, View, WebView,
@@ -33,6 +34,7 @@ export class SettingsScreen extends Component<Props, State> {
           <SettingsList>
 
             <SettingsList.Item
+              id='Allow uploads'
               title='Allow uploads'
               hasNavArrow={false}
               hasSwitch={true}
@@ -41,22 +43,46 @@ export class SettingsScreen extends Component<Props, State> {
             />
 
             <SettingsList.Item
+              id='Test modal'
               title='Test modal'
               onPress={async () => await setStateAsync(this, {showModal: true})}
             />
 
-            {/* FIXME Well, this is a pretty horrible UX. Looks like we'll need to redo react-native-settings-list ourselves. */}
             <SettingsList.Item
+              id='Playback progress (high cpu)'
+              title='Playback progress (high cpu)'
+              hasNavArrow={false}
+              hasSwitch={true}
+              switchState={settings.playingProgressEnable}
+              switchOnValueChange={async x => await settings.set('playingProgressEnable', x)}
+            />
+
+            {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
+            <SettingsList.Item
+              id='Playback progress interval (ms)'
+              title='Playback progress interval (ms)'
               isEditable={true}
               hasNavArrow={false}
-              id='Debug text color'
-              title='Debug text color'
+              value={(settings.playingProgressInterval || '').toString()}
+              onTextChange={async str => {
+                const x = parseInt(str);
+                await settings.set('playingProgressInterval', _.isNaN(x) ? 0 : x);
+              }}
+            />
+
+            {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
+            <SettingsList.Item
+              id='Debug: Text color in debug info'
+              title='Debug: Text color in debug info'
+              isEditable={true}
+              hasNavArrow={false}
               value={settings.debugTextColor}
               onTextChange={async x => await settings.set('debugTextColor', x)}
             />
 
             <SettingsList.Item
-              title='Show debug info'
+              id='Debug: Show debug info'
+              title='Debug: Show debug info'
               hasNavArrow={false}
               hasSwitch={true}
               switchState={settings.showDebug}
