@@ -1,7 +1,7 @@
 // Polyfill console.{time,timeEnd} for jsc (works in rndebugger v8)
 import 'react-native-console-time-polyfill';
 
-import { global, match } from './utils';
+import { global, match, pretty } from './utils';
 
 // Config
 const defaultLevel: Level = 'debug';
@@ -88,7 +88,8 @@ export function puts<X>(x: X, ...args: any[]): X {
 global.log   = log;
 global.tap   = tap;
 global.puts  = puts;
-global.print = log.info.bind(log); // Shorthand for interactive dev
+global.print = log.info.bind(log);
+global.pp    = (...xs: any[]) => log.info(...xs.map(pretty));
 
 // Greppable + tsc-unhappy shorthand for trace debugging [copy of puts, but different printed string]
 global.debugPrint = <X>(x: X, ...args: any[]): X => {

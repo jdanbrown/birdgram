@@ -8,7 +8,7 @@ export function querySql<Row>(
   sql: string,
   params?: any[],
 ): <X>(onResults: (results: ResultSet<Row>) => Promise<X>) => Promise<X> {
-  console.debug('[querySql]', 'sql:', sql, 'params:', params);
+  log.debug('[querySql]', 'sql:', sql, 'params:', params);
   return onResults => new Promise((resolve, reject) => {
     // TODO How to also `await db.transaction`? (Do we even want to?)
     db.transaction(tx => {
@@ -17,7 +17,7 @@ export function querySql<Row>(
         SqlString.format(sql, params || []),
         [],
         (tx, {rows, rowsAffected, insertId}) => {
-          console.info('[querySql]', 'results:', rows.length, 'sql:', sql, 'params:', params);
+          log.info('[querySql]', 'results:', rows.length, 'sql:', sql, 'params:', params);
           resolve(onResults({
             rows: {
               length: rows.length,

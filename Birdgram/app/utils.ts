@@ -39,10 +39,12 @@ export function deepEqual<X, Y extends X>(x: X, y: Y): boolean {
 
 // Nonstandard shorthands (apologies for breaking norms, but these are too useful and too verbose by default)
 export const json   = JSON.stringify;
+export const pretty = (x: any) => JSON.stringify(x, null, 2);
 export const unjson = JSON.parse;
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
-global.json = json;
+global.json   = json;
+global.pretty = pretty;
 global.unjson = unjson;
 
 //

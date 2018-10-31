@@ -4,6 +4,8 @@ import KeepAwake from 'react-native-keep-awake';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import ReactNav from 'react-navigation';
+import RNFB from 'rn-fetch-blob';
+const fs = RNFB.fs;
 
 import { RecentScreen } from './components/RecentScreen';
 import { RecordScreen } from './components/RecordScreen';
@@ -12,6 +14,7 @@ import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { Settings } from './components/Settings';
 import { config } from './config';
+import { ScreenProps, SearchRecs, ServerConfig } from './datatypes';
 import { log } from './log';
 import { deepEqual, global, match, setStateAsync } from './utils';
 
@@ -49,40 +52,11 @@ timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));   
 // timed('sj.savePixels',   () => global.sj.savePixels   = require('save-pixels'));             // 30ms // XXX Doesn't work in RN
 global.fs = global.RNFB.fs;
 
-const AppNavigator = ReactNav.createBottomTabNavigator(
-  {
-    // NOTE Must bump the AppNavigator persistenceKey version when changing these keys (below)
-    Record:   { screen: RecordScreen },
-    Search:   { screen: SearchScreen },
-    Recent:   { screen: RecentScreen },
-    Saved:    { screen: SavedScreen },
-    Settings: { screen: SettingsScreen },
-  },
-  {
-    navigationOptions: ({navigation}) => ({
-      tabBarIcon: ({focused, horizontal, tintColor}) => {
-        const size = horizontal ? 20 : 25;
-        return match(navigation.state.key,
-          ['Record',   (<Feather name='activity'  size={size} color={tintColor || undefined} />)],
-          ['Search',   (<Feather name='search'    size={size} color={tintColor || undefined} />)],
-          ['Recent',   (<Feather name='list'      size={size} color={tintColor || undefined} />)],
-          ['Saved',    (<Feather name='star'      size={size} color={tintColor || undefined} />)],
-          ['Settings', (<Feather name='settings'  size={size} color={tintColor || undefined} />)],
-        );
-      },
-    }),
-    tabBarOptions: {
-      showLabel: false,
-      // activeTintColor: 'tomato',
-      // inactiveTintColor: 'gray',
-    },
-  },
-);
-
 type Props = {};
 
 type State = {
   loading: boolean;
+  serverConfig?: ServerConfig;
   settings?: Settings;
 };
 
@@ -93,18 +67,27 @@ class App extends Component<Props, State> {
     this.state = {
       loading: true,
     };
+    global.App = this; // XXX Debug
   }
 
   componentDidMount = async () => {
+
+    // Load serverConfig (async) on app startup
+    const serverConfigJson = await fs.readFile(`${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`, 'utf8');
+    const serverConfig = JSON.parse(serverConfigJson);
+
     // Load settings (async) on app startup
-    //  - TODO Show loading screen until load completes
     const settings = await Settings.load(
       settings => setStateAsync(this, {settings}), // Callback for when Settings updates
     );
+
+    // TODO Show loading screen until loads complete
     await setStateAsync(this, {
       loading: false,
+      serverConfig,
       settings,
     });
+
   }
 
   shouldComponentUpdate(nextProps: Props, nextState: State): boolean {
@@ -123,7 +106,7 @@ class App extends Component<Props, State> {
       </View>
     ) : (
       // https://reactnavigation.org/docs/en/state-persistence.html
-      //  - NOTE Must bump this persistenceKey version when changing the AppNavigator keys (above)
+      //  - NOTE Must bump this persistenceKey version when changing the AppNavigator keys
       <Settings.Context.Provider value={this.state.settings!}>
 
         {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
@@ -132,12 +115,47 @@ class App extends Component<Props, State> {
         {/* TODO Does this work at top level? (Used to work when present in each screen) */}
         {__DEV__ && <KeepAwake/>}
 
-        <AppNavigator
+        <this.AppNavigator
           persistenceKey={__DEV__ ? '_dev_NavigationState_v4' : null}
+          // Pass props to screens (as props.screenProps)
+          screenProps={{
+            serverConfig: this.state.serverConfig,
+            settings: this.state.settings,
+          } as ScreenProps}
         />
 
       </Settings.Context.Provider>
     )
+  );
+
+  AppNavigator = ReactNav.createBottomTabNavigator(
+    {
+      // NOTE Must bump the AppNavigator persistenceKey version when changing these keys (below)
+      Record:   { screen: RecordScreen },
+      Search:   { screen: SearchScreen },
+      Recent:   { screen: RecentScreen },
+      Saved:    { screen: SavedScreen },
+      Settings: { screen: SettingsScreen },
+    },
+    {
+      navigationOptions: ({navigation}) => ({
+        tabBarIcon: ({focused, horizontal, tintColor}) => {
+          const size = horizontal ? 20 : 25;
+          return match(navigation.state.key,
+            ['Record',   (<Feather name='activity'  size={size} color={tintColor || undefined} />)],
+            ['Search',   (<Feather name='search'    size={size} color={tintColor || undefined} />)],
+            ['Recent',   (<Feather name='list'      size={size} color={tintColor || undefined} />)],
+            ['Saved',    (<Feather name='star'      size={size} color={tintColor || undefined} />)],
+            ['Settings', (<Feather name='settings'  size={size} color={tintColor || undefined} />)],
+          );
+        },
+      }),
+      tabBarOptions: {
+        showLabel: false,
+        // activeTintColor: 'tomato',
+        // inactiveTintColor: 'gray',
+      },
+    },
   );
 
 }

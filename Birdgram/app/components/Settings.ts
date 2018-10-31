@@ -18,7 +18,7 @@ export interface Props {
   readonly showMetadata: ShowMetadata;
   readonly editing: boolean;
   readonly seekOnPlay: boolean;
-  // readonly spectroScaleY: number; // XXX Moved to SearchScreen.state to simplify local/global setState interactions (unbatched update)
+  readonly spectroScale: number;
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
@@ -29,7 +29,7 @@ export const DEFAULTS: Props = {
   showMetadata: 'oneline',
   editing: false,
   seekOnPlay: false,
-  // spectroScaleY: 2,
+  spectroScale: 2,
 };
 export const TYPES: {[key: string]: string} = {
   // NOTE Keep attrs in sync (3/5)
@@ -40,7 +40,7 @@ export const TYPES: {[key: string]: string} = {
   showMetadata: 'string',
   editing: 'boolean',
   seekOnPlay: 'boolean',
-  // spectroScaleY: 'number',
+  spectroScale: 'number',
 };
 export const KEYS = [
   // NOTE Keep attrs in sync (4/5)
@@ -52,7 +52,7 @@ export const KEYS = [
   'showMetadata',
   'editing',
   'seekOnPlay',
-  // 'spectroScaleY',
+  'spectroScale',
 ];
 
 export class Settings implements Props {
@@ -69,7 +69,7 @@ export class Settings implements Props {
     public readonly showMetadata: ShowMetadata,
     public readonly editing: boolean,
     public readonly seekOnPlay: boolean,
-    // public readonly spectroScaleY: number,
+    public readonly spectroScale: number,
   ) {}
 
   withProps(props: object): Settings {

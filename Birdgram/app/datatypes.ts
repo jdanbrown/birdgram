@@ -1,3 +1,4 @@
+import { Settings } from './components/settings';
 import { Places } from './places';
 
 export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
@@ -44,6 +45,8 @@ export const Rec = {
 
 export const SearchRecs = {
 
+  serverConfigPath: 'search_recs/server-config.json',
+
   // TODO Test asset paths on android (see notes in README)
   dbPath: 'search_recs/search_recs.sqlite3',
 
@@ -52,4 +55,46 @@ export const SearchRecs = {
     `search_recs/${kind}/${species}/${kind}-${species}-${xc_id}.${format}`
   ),
 
+};
+
+export type ServerConfig = {
+  server_globals: {
+    sg_load: {
+      search: object,
+      xc_meta: {
+        countries_k: string | null,
+        com_names_k: string | null,
+        num_recs:    number | null,
+      },
+    },
+  },
+  api: {
+    recs: {
+      search_recs: {
+        params: {
+          limit: number,
+          audio_s: number,
+        },
+      },
+      spectro_bytes: {
+        format: string,
+        convert?: object,
+        save?: object,
+      },
+    },
+  },
+  audio: {
+    audio_persist: {
+      audio_kwargs: {
+        format: string,
+        bitrate?: string,
+        codec?: string,
+      },
+    },
+  },
+};
+
+export type ScreenProps = {
+  serverConfig: ServerConfig,
+  settings: Settings,
 };
