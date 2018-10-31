@@ -38,9 +38,14 @@ import {
 
 const sidewaysTextWidth = 14;
 
+type ScrollViewState = {
+  contentOffset: Point,
+  // (More fields available in NativeScrollEvent)
+}
+
 type State = {
   scrollViewKey: string;
-  scrollViewContentOffset: Point;
+  scrollViewState: ScrollViewState;
   spectroScale: number; // XXX Moved from Settings to simplify local/global setState interactions (unbatched update)
   showFilters: boolean;
   showHelp: boolean;
@@ -61,15 +66,15 @@ type State = {
 };
 
 type Props = {
-  spectroBase:        Dim<number>;
-  spectroScaleYClamp: Clamp<number>;
+  spectroBase:       Dim<number>;
+  spectroScaleClamp: Clamp<number>;
 };
 
 export class SearchScreen extends Component<Props, State> {
 
   static defaultProps = {
-    spectroBase:        {height: 20, width: Dimensions.get('window').width},
-    spectroScaleYClamp: {min: 1, max: 8},
+    spectroBase:       {height: 20, width: Dimensions.get('window').width},
+    spectroScaleClamp: {min: 1, max: 8},
   };
 
   db?: SQLiteDatabase;
@@ -79,7 +84,10 @@ export class SearchScreen extends Component<Props, State> {
   addActionSheet:  RefObject<ActionSheet> = React.createRef();
   sortActionSheet: RefObject<ActionSheet> = React.createRef();
 
-  _scrollViewContentOffset: Point = {x: 0, y: 0};
+  // Else we have to do too many setState's, which makes animations jump (e.g. ScrollView momentum)
+  _scrollViewState: ScrollViewState = {
+    contentOffset: {x: 0, y: 0},
+  };
 
   scrollViewRef: RefObject<SectionListStatic<Rec>> = React.createRef();
 
@@ -88,7 +96,7 @@ export class SearchScreen extends Component<Props, State> {
 
     this.state = {
       scrollViewKey: '',
-      scrollViewContentOffset: this._scrollViewContentOffset,
+      scrollViewState: this._scrollViewState,
       spectroScale: 2,
       showFilters: false,
       showHelp: false,
@@ -167,8 +175,8 @@ export class SearchScreen extends Component<Props, State> {
   }
 
   componentDidUpdate = (prevProps: Props, prevState: State) => {
-    // Save _scrollViewContentOffset on state update (in addition to scroll event), else scaleSpectros falls behind
-    this._scrollViewContentOffset = this.state.scrollViewContentOffset;
+    // Else _scrollViewState falls behind on non-scroll/non-zoom events (e.g. +/- buttons)
+    this._scrollViewState = this.state.scrollViewState;
   }
 
   editQueryText = async (queryText: string) => {
@@ -265,7 +273,7 @@ export class SearchScreen extends Component<Props, State> {
     const soundAsync = this.getOrAllocateSoundAsync(rec);
 
     return async (event: Gesture.TapGestureHandlerStateChangeEvent) => {
-      const {nativeEvent: {state, oldState, x}} = event; // Unpack SyntheticEvent (before async)
+      const {nativeEvent: {state, oldState, x, absoluteX}} = event; // Unpack SyntheticEvent (before async)
       if (
         // [Mimic Gesture.BaseButton]
         oldState === Gesture.State.ACTIVE &&
@@ -306,7 +314,7 @@ export class SearchScreen extends Component<Props, State> {
           // Seek rec (if enabled)
           let startTime;
           if (settings.seekOnPlay) {
-            startTime = this.spectroTimeFromX(settings, sound, x);
+            startTime = this.spectroTimeFromX(settings, sound, x, absoluteX);
             sound.setCurrentTime(startTime);
           }
 
@@ -330,13 +338,24 @@ export class SearchScreen extends Component<Props, State> {
     };
   }
 
-  spectroTimeFromX = (settings: Settings, sound: Sound, x: number): number => {
-    const width = Dimensions.get('window').width; // TODO TODO Unmock
-    return (x / width) * sound.getDuration();
+  spectroTimeFromX = (settings: Settings, sound: Sound, x: number, absoluteX: number): number => {
+    const {contentOffset} = this._scrollViewState;
+    const {spectroScale} = this.state;
+    const {width} = this.spectroDimensions(settings);
+    const duration = sound.getDuration();
+    const time = x / width * duration;
+    // log.debug('spectroTimeFromX', json({time, x, absoluteX, contentOffset, width, spectroScale, duration}));
+    return time;
   }
 
   spectroXFromTime = (settings: Settings, sound: Sound, time: number): number => {
-    return time / sound.getDuration() * this.spectroDimensions(settings).width;
+    const {contentOffset} = this._scrollViewState;
+    const {spectroScale} = this.state;
+    const {width} = this.spectroDimensions(settings);
+    const duration = sound.getDuration();
+    const x = time / duration * width;
+    // log.debug('spectroXFromTime', json({x, time, contentOffset, width, spectroScale, duration}));
+    return x;
   }
 
   recIsPlaying = (recId: RecId, playing: undefined | {rec: Rec}): boolean => {
@@ -347,7 +366,6 @@ export class SearchScreen extends Component<Props, State> {
     return {
       width: _.sum([
         this.props.spectroBase.width * this.state.spectroScale,
-        // this.props.spectroBase.width,
         settings.showMetadata === 'none' ? -sidewaysTextWidth : 0,
       ]),
       height: this.props.spectroBase.height * this.state.spectroScale,
@@ -378,12 +396,6 @@ export class SearchScreen extends Component<Props, State> {
       styles.filtersModal,
       {marginBottom: TabBarBottomConstants.DEFAULT_HEIGHT},
     ]}>
-      <Text>Filters</Text>
-      <Text>- quality</Text>
-      <Text>- month</Text>
-      <Text>- species likelihood [bucketed ebird priors]</Text>
-      <Text>- rec text search [conflate fields]</Text>
-      {/* XXX For reference
       <TextInput
         style={styles.queryInput}
         value={this.state.queryText}
@@ -395,7 +407,11 @@ export class SearchScreen extends Component<Props, State> {
         placeholder='Species'
         returnKeyType='search'
       />
-      */}
+      <Text>Filters</Text>
+      <Text>- quality</Text>
+      <Text>- month</Text>
+      <Text>- species likelihood [bucketed ebird priors]</Text>
+      <Text>- rec text search [conflate fields]</Text>
       <RectButton onPress={async () => await setStateAsync(this, {showFilters: false})}>
         <View style={{padding: 10, backgroundColor: iOSColors.blue}}>
           <Text>Done</Text>
@@ -432,9 +448,12 @@ export class SearchScreen extends Component<Props, State> {
       const spectroScale = this.clampSpectroScaleY(Math.round(state.spectroScale) + delta);
       return {
         spectroScale,
-        scrollViewContentOffset: {
-          x: this._scrollViewContentOffset.x * spectroScale / state.spectroScale,
-          y: this._scrollViewContentOffset.y * spectroScale / state.spectroScale,
+        scrollViewState: {
+          // FIXME Zoom in -> scroll far down+right -> use '-' button to zoom out -> scroll view clipped b/c contentOffset nonzero
+          contentOffset: {
+            x: this._scrollViewState.contentOffset.x * spectroScale / state.spectroScale,
+            y: this._scrollViewState.contentOffset.y * spectroScale / state.spectroScale,
+          },
         },
       };
     });
@@ -442,8 +461,8 @@ export class SearchScreen extends Component<Props, State> {
 
   clampSpectroScaleY = (spectroScale: number): number => _.clamp(
     spectroScale,
-    this.props.spectroScaleYClamp.min,
-    this.props.spectroScaleYClamp.max,
+    this.props.spectroScaleClamp.min,
+    this.props.spectroScaleClamp.max,
   );
 
   BottomControls = (props: {}) => (
@@ -511,13 +530,13 @@ export class SearchScreen extends Component<Props, State> {
         {/* - TODO Disable when spectroScale is min/max */}
         <this.BottomControlsButton
           help='Dense'
-          disabled={this.state.spectroScale === this.props.spectroScaleYClamp.min}
+          disabled={this.state.spectroScale === this.props.spectroScaleClamp.min}
           onPress={async () => await this.scaleSpectros(-1)}
           iconProps={{name: 'align-justify'}} // 4 horizontal lines
         />
         <this.BottomControlsButton
           help='Tall'
-          disabled={this.state.spectroScale === this.props.spectroScaleYClamp.max}
+          disabled={this.state.spectroScale === this.props.spectroScaleClamp.max}
           onPress={async () => await this.scaleSpectros(+1)}
           iconProps={{name: 'menu'}}          // 3 horizontal lines
         />
@@ -688,38 +707,28 @@ export class SearchScreen extends Component<Props, State> {
           contentContainerStyle={{
             width: this.props.spectroBase.width * this.state.spectroScale,
           }}
-          contentOffset={tap(this.state.scrollViewContentOffset, x => {
-            // log.debug('render.contentOffset', json(x)); // XXX Debug
+          // This is (currently) the only place we use state.scrollViewState i/o this._scrollViewState
+          contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
+            log.debug('render.contentOffset', json(x)); // XXX Debug
           })}
           bounces={false}
           bouncesZoom={false}
-          minimumZoomScale={this.props.spectroScaleYClamp.min / this.state.spectroScale}
-          maximumZoomScale={this.props.spectroScaleYClamp.max / this.state.spectroScale}
-          onMomentumScrollEnd={({nativeEvent}) => {
-            // log.debug('onMomentumScrollEnd', json(nativeEvent)); // XXX Debug
-            const {contentOffset, zoomScale, velocity} = nativeEvent;
-            this._scrollViewContentOffset = contentOffset;
-          }}
+          minimumZoomScale={this.props.spectroScaleClamp.min / this.state.spectroScale}
+          maximumZoomScale={this.props.spectroScaleClamp.max / this.state.spectroScale}
           onScrollEndDrag={async ({nativeEvent}) => {
-            // log.debug('onScrollEndDrag', json(nativeEvent)); // XXX Debug
+            log.debug('onScrollEndDrag', json(nativeEvent)); // XXX Debug
             const {contentOffset, zoomScale, velocity} = nativeEvent;
-            this._scrollViewContentOffset = contentOffset;
+            this._scrollViewState = {contentOffset};
             if (
-              zoomScale !== 1           // Don't trigger zoom if no zooming happened (e.g. only scrolling)
-              && velocity !== undefined // Don't trigger zoom on 1/2 fingers released, wait for 2/2
+              zoomScale !== 1              // Don't trigger zoom if no zooming happened (e.g. only scrolling)
+              // && velocity !== undefined // [XXX Unreliable] Don't trigger zoom on 1/2 fingers released, wait for 2/2
             ) {
               const scale = zoomScale * this.state.spectroScale;
-              // log.debug('ZOOM', json(nativeEvent)); // XXX Debug
+              log.debug('ZOOM', json(nativeEvent)); // XXX Debug
               // Trigger re-layout so non-image components (e.g. text) redraw at non-zoomed size
-              const spectroScale = this.clampSpectroScaleY(scale);
               await setStateAsync(this, {
-                spectroScale,
-                scrollViewContentOffset: {
-                  x: this._scrollViewContentOffset.x,
-                  y: this._scrollViewContentOffset.y,
-                  // TODO Subtract excess y from scaled 1px row borders [First cut was very inaccurate]
-                  // [y] - this._scrollViewContentOffset.y / (this.props.spectroBase.height + 1) * (spectroScale - 1)
-                },
+                scrollViewState: this._scrollViewState,
+                spectroScale: this.clampSpectroScaleY(scale),
                 scrollViewKey: chance.hash(), // Else bad things (that I don't understand)
               });
             }
@@ -784,26 +793,27 @@ export class SearchScreen extends Component<Props, State> {
                     ),
                   ]}>
 
-                    {/* Tap rec */}
-                    <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
-                      <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(settings, rec)}>
-                        <Animated.View style={{flexDirection: 'row'}} collapsable={false}>
+                    {/* Rec row */}
+                    <View style={{flexDirection: 'row'}} collapsable={false}>
 
-                          {/* Sideways species label (sometimes) */}
-                          {settings.showMetadata !== 'none' ? null : (
-                            <View style={styles.recSpeciesSidewaysView}>
-                              <View style={styles.recSpeciesSidewaysViewInner}>
-                                <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
-                                  fontSize: this.state.spectroScale < 2 ? 6 : 11, // Compact species label to fit within tiny rows
-                                }]}>
-                                  {rec.species}
-                                </Text>
-                              </View>
-                            </View>
-                          )}
+                      {/* Sideways species label (sometimes) */}
+                      {/* - NOTE Outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
+                      {settings.showMetadata !== 'none' ? null : (
+                        <View style={styles.recSpeciesSidewaysView}>
+                          <View style={styles.recSpeciesSidewaysViewInner}>
+                            <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
+                              fontSize: this.state.spectroScale < 2 ? 6 : 11, // Compact species label to fit within tiny rows
+                            }]}>
+                              {rec.species}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
 
-                          {/* Spectro */}
-                          <View style={{flex: 1}}>
+                      {/* Spectro (tap) */}
+                      <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
+                        <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(settings, rec)}>
+                          <Animated.View style={{flex: 1}}>
 
                             {/* Image */}
                             <Animated.Image
@@ -829,11 +839,11 @@ export class SearchScreen extends Component<Props, State> {
                               )
                             )}
 
-                          </View>
+                          </Animated.View>
+                        </TapGestureHandler>
+                      </LongPressGestureHandler>
 
-                        </Animated.View>
-                      </TapGestureHandler>
-                    </LongPressGestureHandler>
+                    </View>
 
                     {/* Rec metadata */}
                     {match(settings.showMetadata,
