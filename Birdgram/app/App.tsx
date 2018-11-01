@@ -178,36 +178,4 @@ const AppNav = createBottomTabNavigator(
   },
 );
 
-// HOC to route react-navigation props.navigation.state.params to a component's props
-//  - Code based on: https://github.com/vonovak/react-navigation-props-mapper/blob/master/index.js
-//  - Types based on: https://medium.com/@jrwebdev/react-higher-order-component-patterns-in-typescript-42278f7590fb
-function navProps<
-  Props extends {navParams: NavParams},
->(C: ComponentType<Props>): ComponentType<
-  Props & NavigationScreenProps<NavParams>
-> {
-  return class extends Component<Props & NavigationScreenProps<NavParams>> {
-    render() {
-
-      // Unpack nav params
-      let params = !this.props.navigation ? {} : this.props.navigation.state.params || {};
-
-      // Ensure params.passProps
-      //  - [Why does typechecking not catch this?]
-      if (!('passProps' in params)) {
-        params = {...params, passProps: {}};
-      }
-
-      // Construct C with nav stuff as props
-      return (
-        <C
-          {...this.props}
-          navParams={params}
-        />
-      );
-
-    }
-  };
-}
-
 export default App;
