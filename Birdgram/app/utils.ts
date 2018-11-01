@@ -2,13 +2,14 @@
 // Utils
 //
 
-import reactFastCompare from 'react-fast-compare';
-
 // Export global:any, which would have otherwise come from DOM but we disable DOM for react-native (tsconfig -> "lib")
 //  - Fallback to a mock `{}` for release builds, which run in jsc instead of chrome v8 and don't have window.global
 //  - https://facebook.github.io/react-native/docs/javascript-environment
 // @ts-ignore
 export const global: any = window.global || {};
+
+export function all(...xs: Array<any>): boolean { return xs.every(Boolean); }
+export function any(...xs: Array<any>): boolean { return xs.some(Boolean); }
 
 // `X0 extends X` so that x0 can't (quietly) generalize the type of the case patterns (e.g. to include null)
 //  - e.g. fail on `match(X | null, ...)` if the case patterns don't include null
@@ -30,11 +31,6 @@ export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
     map.set(k, v());
   }
   return map.get(k)!;
-}
-
-// Typesafe wrapper around react-fast-compare
-export function deepEqual<X, Y extends X>(x: X, y: Y): boolean {
-  return reactFastCompare(x, y);
 }
 
 // Nonstandard shorthands (apologies for breaking norms, but these are too useful and too verbose by default)
@@ -75,6 +71,11 @@ export const chance = new Chance();
 //
 
 import { Component } from 'react';
+import reactFastCompare from 'react-fast-compare';
+import { ImageStyle, RegisteredStyle, TextStyle, ViewStyle } from 'react-native';
+
+// This seems to do the trick for passing StyleSheet parts around
+export type Style = RegisteredStyle<ViewStyle | TextStyle | ImageStyle>
 
 export function setStateAsync<P, S, K extends keyof S>(
   component: Component<P, S>,
@@ -83,6 +84,11 @@ export function setStateAsync<P, S, K extends keyof S>(
   return new Promise((resolve, reject) => {
     component.setState(state, () => resolve());
   });
+}
+
+// Typesafe wrapper around react-fast-compare
+export function deepEqual<X, Y extends X>(x: X, y: Y): boolean {
+  return reactFastCompare(x, y);
 }
 
 //

@@ -94,7 +94,26 @@ export type ServerConfig = {
   },
 };
 
-export type ScreenProps = {
+//
+// react-navigation
+//
+
+import { NavigationRoute, NavigationScreenProp } from 'react-navigation';
+
+export type Nav = NavigationScreenProp<NavigationRoute<NavParams>, NavParams>;
+
+export interface ScreenProps {
   serverConfig: ServerConfig,
   settings: Settings,
-};
+}
+
+// One type shared across all screens (boo)
+export interface NavParams {
+  // Use passProps when you want to overwrite previous params
+  passProps: {
+    recId?: string,
+    species?: string,
+  },
+  // Use other keys when you want previous params to accumulate
+  //  - TODO What's up with this? When would we want this behavior?
+}

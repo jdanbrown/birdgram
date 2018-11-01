@@ -2,15 +2,15 @@ import _ from 'lodash';
 import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import {
   Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, LayoutChangeEvent, Modal, Platform,
-  ScrollView, SectionList, SectionListData, SectionListStatic, Text, TextInput, TextStyle, TouchableHighlight, View,
-  ViewStyle, WebView,
+  RegisteredStyle, ScrollView, SectionList, SectionListData, SectionListStatic, StyleProp, Text, TextInput, TextStyle,
+  TouchableHighlight, View, ViewStyle, WebView,
 } from 'react-native';
 import ActionSheet from 'react-native-actionsheet'; // [Must `import ActionSheet` i/o `import { ActionSheet }`, else barf]
 import FastImage from 'react-native-fast-image';
 import * as Gesture from 'react-native-gesture-handler';
 import {
-  BaseButton, BorderlessButton, LongPressGestureHandler, PanGestureHandler, PinchGestureHandler, RectButton,
-  TapGestureHandler,
+  BaseButton, BorderlessButton, BorderlessButtonProperties, LongPressGestureHandler, PanGestureHandler,
+  PinchGestureHandler, RectButton, TapGestureHandler,
   // FlatList, ScrollView, Slider, Switch, TextInput, // TODO Needed?
 } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -21,6 +21,7 @@ import { IconProps } from 'react-native-vector-icons/Icon';
 import timer from 'react-native-timer';
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
+import { NavigationScreenProps } from 'react-navigation';
 import RNFB from 'rn-fetch-blob';
 import { sprintf } from 'sprintf-js';
 const fs = RNFB.fs;
@@ -28,17 +29,18 @@ const fs = RNFB.fs;
 import { ActionSheetBasic } from './ActionSheets';
 import { Settings, ShowMetadata } from './Settings';
 import { config } from '../config';
-import { Quality, Rec, RecId, ScreenProps, SearchRecs, ServerConfig } from '../datatypes';
+import { Nav, NavParams, Quality, Rec, RecId, ScreenProps, SearchRecs, ServerConfig } from '../datatypes';
 import { log, puts, tap } from '../log';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import {
-  chance, Clamp, Dim, finallyAsync, getOrSet, global, json, match, Point, pretty, setStateAsync, Styles,
+  all, any, chance, Clamp, Dim, finallyAsync, getOrSet, global, json, match, Point, pretty, setStateAsync, Style, Styles,
   TabBarBottomConstants,
 } from '../utils';
 
 const sidewaysTextWidth = 14;
+const aHandfulOfSpecies = 'GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW' // XXX Dev
 
 type ScrollViewState = {
   contentOffset: Point,
@@ -71,11 +73,13 @@ type State = {
   spectroScale: number;
 };
 
-type Props = {
+interface Props extends NavigationScreenProps<NavParams, any> {
+  navigation:        Nav;
+  screenProps:       ScreenProps;
+  navParams:         NavParams;
   spectroBase:       Dim<number>;
   spectroScaleClamp: Clamp<number>;
-  screenProps:       ScreenProps;
-};
+}
 
 export class SearchScreen extends Component<Props, State> {
 
@@ -98,13 +102,9 @@ export class SearchScreen extends Component<Props, State> {
 
   scrollViewRef: RefObject<SectionListStatic<Rec>> = React.createRef();
 
-  get serverConfig(): ServerConfig {
-    return this.props.screenProps.serverConfig;
-  }
-
-  get settings(): Settings {
-    return this.props.screenProps.settings;
-  }
+  get serverConfig(): ServerConfig { return this.props.screenProps.serverConfig; }
+  get settings(): Settings { return this.props.screenProps.settings; }
+  get nav(): Nav { return this.props.navigation; }
 
   constructor(props: Props) {
     super(props);
@@ -113,7 +113,9 @@ export class SearchScreen extends Component<Props, State> {
       scrollViewState: this._scrollViewState,
       showFilters: false,
       showHelp: false,
-      queryText: '',
+      queryText: props.navParams.passProps.species || (
+        aHandfulOfSpecies // XXX Dev
+      ),
       queryConfig: { // TODO Move to (global) SettingsScreen.state
         quality: ['A', 'B'],
         limit: 100,
@@ -171,10 +173,6 @@ export class SearchScreen extends Component<Props, State> {
       });
     });
 
-    // XXX Faster dev
-    await this.editQueryText('GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW');
-    this.submitQuery();
-
   }
 
   componentWillUnmount = async () => {
@@ -192,7 +190,8 @@ export class SearchScreen extends Component<Props, State> {
   }
 
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    // log.debug('SearchScreen.componentDidUpdate');
+    log.debug('SearchScreen.componentDidUpdate', this.props, this.state);
+    log.debug('nav.state', pretty(this.nav.state));
 
     // Else _scrollViewState falls behind on non-scroll/non-zoom events (e.g. +/- buttons)
     this._scrollViewState = this.state.scrollViewState;
@@ -204,6 +203,28 @@ export class SearchScreen extends Component<Props, State> {
     await Promise.all([
       this.settings.set('spectroScale', this.state.spectroScale),
     ]);
+
+    // TODO TODO Why is querySql triggering ~2 times? (see logs)
+    // TODO TODO Oops, hit an infinite update loop: [nav -> nav -> play -> crosshairs -> play -> ...?]
+
+    log.debug('prevProps', prevProps);
+    log.debug('prevState', prevState);
+    log.debug('props', this.props);
+    log.debug('state', this.state);
+
+    // Set state.queryText <- navParams.species
+    const {species} = this.props.navParams.passProps;
+    if (species && species !== prevProps.navParams.passProps.species) {
+      await setStateAsync(this, {
+        queryText: species,
+      });
+    }
+
+    // Query recs <- state.queryText
+    const {query, queryText} = this.state;
+    if (!query || queryText && queryText !== prevState.queryText) {
+      await this.submitQuery();
+    }
 
   }
 
@@ -553,16 +574,16 @@ export class SearchScreen extends Component<Props, State> {
         // iconProps={{name: 'user-plus'}}
         // iconProps={{name: 'file-plus'}}
         // iconProps={{name: 'folder-plus'}}
-        iconProps={{name: 'plus-circle'}}
-        // iconProps={{name: 'plus'}}
+        // iconProps={{name: 'plus-circle'}}
+        iconProps={{name: 'plus'}}
       />
       {/* Toggle sort: species probs / rec dist / manual list */}
       <this.BottomControlsButton
         help='Sort'
         onPress={() => this.sortActionSheet.current!.show()}
-        // iconProps={{name: 'chevrons-down'}}
+        iconProps={{name: 'chevrons-down'}}
         // iconProps={{name: 'chevron-down'}}
-        iconProps={{name: 'arrow-down'}}
+        // iconProps={{name: 'arrow-down'}}
         // iconProps={{name: 'arrow-down-circle'}}
       />
       {/* Cycle metadata: none / oneline / full */}
@@ -597,13 +618,15 @@ export class SearchScreen extends Component<Props, State> {
         help='Dense'
         disabled={this.state.spectroScale === this.props.spectroScaleClamp.min}
         onPress={async () => await this.scaleSpectros(-1)}
-        iconProps={{name: 'align-justify'}} // 4 horizontal lines
+        // iconProps={{name: 'align-justify'}} // 4 horizontal lines
+        iconProps={{name: 'zoom-out'}}
       />
       <this.BottomControlsButton
         help='Tall'
         disabled={this.state.spectroScale === this.props.spectroScaleClamp.max}
         onPress={async () => await this.scaleSpectros(+1)}
-        iconProps={{name: 'menu'}}          // 3 horizontal lines
+        // iconProps={{name: 'menu'}}          // 3 horizontal lines
+        iconProps={{name: 'zoom-in'}}
       />
     </View>
   );
@@ -665,38 +688,63 @@ export class SearchScreen extends Component<Props, State> {
     return sections;
   }
 
-  SpeciesEditingButtons = () => (
+  SpeciesEditingButtons = (props: {species: string}) => (
     <View style={styles.sectionSpeciesEditingView}>
-      <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
-        <Feather style={styles.sectionSpeciesEditingIcon} name='move' />
-      </BorderlessButton>
-      <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
-        <Feather style={styles.sectionSpeciesEditingIcon} name='search' />
-      </BorderlessButton>
-      <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
-        <Feather style={styles.sectionSpeciesEditingIcon} name='user-x' />
-      </BorderlessButton>
-      <BorderlessButton style={styles.sectionSpeciesEditingButton} onPress={() => {}}>
-        <Feather style={styles.sectionSpeciesEditingIcon} name='plus-circle' />
-      </BorderlessButton>
+      {/* <this.EditingButton buttonStyle={styles.sectionSpeciesEditingButton} iconStyle={styles.sectionSpeciesEditingIcon}
+        iconName='move'
+        onPress={() => {}}
+      /> */}
+      {/* XXX Dev: a temporary way to reset to recs from >1 species */}
+      <this.EditingButton buttonStyle={styles.sectionSpeciesEditingButton} iconStyle={styles.sectionSpeciesEditingIcon}
+        iconName='refresh-ccw'
+        onPress={() => this.nav.navigate('Search', {passProps: {species: aHandfulOfSpecies}})}
+      />
+      <this.EditingButton buttonStyle={styles.sectionSpeciesEditingButton} iconStyle={styles.sectionSpeciesEditingIcon}
+        iconName='search'
+        onPress={() => this.nav.navigate('Search', {passProps: {species: props.species}})}
+      />
+      <this.EditingButton buttonStyle={styles.sectionSpeciesEditingButton} iconStyle={styles.sectionSpeciesEditingIcon}
+        // iconName='user-x'
+        iconName='x'
+        onPress={() => {}}
+      />
+      <this.EditingButton buttonStyle={styles.sectionSpeciesEditingButton} iconStyle={styles.sectionSpeciesEditingIcon}
+        iconName='plus'
+        onPress={() => {}}
+      />
     </View>
   );
 
-  RecEditingButtons = () => (
+  RecEditingButtons = (props: {rec: Rec}) => (
     <View style={styles.recEditingView}>
-      <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
-        <Feather style={styles.recEditingIcon} name='move' />
-      </BorderlessButton>
-      <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
-        <Feather style={styles.recEditingIcon} name='search' />
-      </BorderlessButton>
-      <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
-        <Feather style={styles.recEditingIcon} name='x' />
-      </BorderlessButton>
-      <BorderlessButton style={styles.recEditingButton} onPress={() => {}}>
-        <Feather style={styles.recEditingIcon} name='star' />
-      </BorderlessButton>
+      {/* <this.EditingButton buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
+        iconName='move'
+        onPress={() => {}}
+      /> */}
+      <this.EditingButton buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
+        iconName='search'
+        onPress={() => this.nav.navigate('Search', {passProps: {recId: props.rec.id}})}
+      />
+      <this.EditingButton buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
+        iconName='x'
+        onPress={() => {}}
+      />
+      <this.EditingButton buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
+        iconName='star'
+        onPress={() => this.nav.navigate('Recent', {passProps: {}})}
+      />
     </View>
+  );
+
+  EditingButton = (props: {
+    buttonStyle?: Style,
+    iconStyle?: Style,
+    iconName: string,
+    onPress: (pointerInside: boolean) => void,
+  }) => (
+    <BorderlessButton style={props.buttonStyle} onPress={props.onPress}>
+      <Feather style={props.iconStyle} name={props.iconName} />
+    </BorderlessButton>
   );
 
   RecText = <X extends {children: any, flex?: number}>(props: X) => {
@@ -810,14 +858,14 @@ export class SearchScreen extends Component<Props, State> {
           }) => [
 
             // Species header
-            this.settings.showMetadata === 'none' ? null : (
+            this.settings.showMetadata !== 'none' && (
               <View
                 key={`section-${title}`}
                 style={styles.sectionSpecies}
               >
                 {/* Species editing buttons */}
-                {!this.settings.editing ? null : (
-                  <this.SpeciesEditingButtons />
+                {this.settings.editing && (
+                  <this.SpeciesEditingButtons species={species} />
                 )}
                 {/* Species name */}
                 <Text numberOfLines={1} style={styles.sectionSpeciesText}>
@@ -841,10 +889,14 @@ export class SearchScreen extends Component<Props, State> {
                 style={styles.recRow}
               >
 
+                {/* Species editing buttons */}
+                {this.settings.editing && this.settings.showMetadata === 'none' && (
+                  <this.SpeciesEditingButtons species={rec.species} />
+                )}
                 {/* Rec editing buttons */}
                 {/* - TODO Flex image width so we can show these on the right (as is, they'd be pushed off screen) */}
-                {!this.settings.editing ? null : (
-                  <this.RecEditingButtons />
+                {this.settings.editing && (
+                  <this.RecEditingButtons rec={rec} />
                 )}
 
                 {/* Rec region without the editing buttons  */}
@@ -861,7 +913,7 @@ export class SearchScreen extends Component<Props, State> {
 
                     {/* Sideways species label (sometimes) */}
                     {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
-                    {this.settings.showMetadata !== 'none' ? null : (
+                    {this.settings.showMetadata === 'none' && (
                       <View style={styles.recSpeciesSidewaysView}>
                         <View style={styles.recSpeciesSidewaysViewInner}>
                           <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
@@ -1031,7 +1083,8 @@ const styles = StyleSheet.create({
     zIndex: 1, // Over spectro image
   },
   sectionSpeciesEditingButton: {
-    width: 35, // Need explicit width (i/o flex:1) else view shows with width:0
+    width:  35, // Need explicit width (i/o flex:1) else view shows with width:0
+    minHeight: 40, // Bigger hit box
     justifyContent: 'center', // Align icon vertically
     backgroundColor: iOSColors.gray,
   },
