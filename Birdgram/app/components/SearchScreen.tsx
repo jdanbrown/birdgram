@@ -1,9 +1,9 @@
 import _ from 'lodash';
 import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
-import {
-  Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, LayoutChangeEvent, Modal, Platform,
-  RegisteredStyle, ScrollView, SectionList, SectionListData, SectionListStatic, StyleProp, Text, TextInput, TextStyle,
-  TouchableHighlight, View, ViewStyle, WebView,
+import RN, {
+  Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Keyboard, KeyboardAvoidingView,
+  LayoutChangeEvent, Modal, Platform, RegisteredStyle, ScrollView, SectionList, SectionListData, SectionListStatic,
+  StyleProp, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
 } from 'react-native';
 import ActionSheet from 'react-native-actionsheet'; // [Must `import ActionSheet` i/o `import { ActionSheet }`, else barf]
 import FastImage from 'react-native-fast-image';
@@ -27,39 +27,46 @@ import { sprintf } from 'sprintf-js';
 const fs = RNFB.fs;
 
 import { ActionSheetBasic } from './ActionSheets';
-import { Settings, ShowMetadata } from './Settings';
+import { Settings, ShowMetadata } from '../settings';
 import { config } from '../config';
-import { Nav, NavParams, Quality, Rec, RecId, ScreenProps, SearchRecs, ServerConfig } from '../datatypes';
+import { Quality, Rec, RecId, SearchRecs, ServerConfig } from '../datatypes';
 import { log, puts, tap } from '../log';
+import { Nav, navigate, NavParams, NavParamsSearch, ScreenProps } from '../nav';
 import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import {
-  all, any, chance, Clamp, Dim, finallyAsync, getOrSet, global, json, match, Point, pretty, setStateAsync, Style, Styles,
-  TabBarBottomConstants,
+  all, any, chance, Clamp, Dim, finallyAsync, getOrSet, global, json, match, noawait, Point, pretty, setStateAsync,
+  Style, Styles, TabBarBottomConstants,
 } from '../utils';
 
 const sidewaysTextWidth = 14;
-const aHandfulOfSpecies = 'GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW' // XXX Dev
+const someExampleSpecies = 'GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW' // XXX Dev
 
 type ScrollViewState = {
   contentOffset: Point,
   // (More fields available in NativeScrollEvent)
 }
 
-// TODO Keep shallow, else we have to mess with deepEqual
+interface Props extends NavigationScreenProps<NavParams, any> {
+  navigation:        Nav;
+  screenProps:       ScreenProps;
+  spectroBase:       Dim<number>;
+  spectroScaleClamp: Clamp<number>;
+}
+
 type State = {
   scrollViewKey: string;
   scrollViewState: ScrollViewState;
   showFilters: boolean;
   showHelp: boolean;
   totalRecs?: number;
-  queryText: string;
-  query?: string;
-  queryConfig: {
-    quality: Array<Quality>,
-    limit: number,
-  };
+  // TODO Persist filters with settings
+  //  - Top-level fields instead of nested object so we can use state merging when updating them in isolation
+  filterQueryText?: string,
+  filterQuality: Array<Quality>,
+  filterLimit: number,
+  lastQuery?: string;
   status: string;
   recs: Array<Rec>;
   playing?: {
@@ -73,19 +80,44 @@ type State = {
   spectroScale: number;
 };
 
-interface Props extends NavigationScreenProps<NavParams, any> {
-  navigation:        Nav;
-  screenProps:       ScreenProps;
-  navParams:         NavParams;
-  spectroBase:       Dim<number>;
-  spectroScaleClamp: Clamp<number>;
-}
-
+// TODO shouldComponentUpdate: PureComponent (shallow eq)? manual with deepEqual? currently always true (default)
 export class SearchScreen extends Component<Props, State> {
+
+  // Getters for prevProps
+  _serverConfig = (props?: Props): ServerConfig    => { return (props || this.props).screenProps.serverConfig; }
+  _settings     = (props?: Props): Settings        => { return (props || this.props).screenProps.settings; }
+  _nav          = (props?: Props): Nav             => { return (props || this.props).navigation; }
+  _navParamsAll = (props?: Props): NavParams       => { return this._nav(props).state.params || {}; }
+  _navParams    = (props?: Props): NavParamsSearch => { return this._navParamsAll(props).search || {}; }
+
+  // Getters for this.props
+  get serverConfig (): ServerConfig    { return this._serverConfig(); }
+  get settings     (): Settings        { return this._settings(); }
+  get nav          (): Nav             { return this._nav(); }
+  get navParamsAll (): NavParams       { return this._navParamsAll(); }
+  get navParams    (): NavParamsSearch { return this._navParams(); }
 
   static defaultProps = {
     spectroBase:       {height: 20, width: Dimensions.get('window').width},
     spectroScaleClamp: {min: 1, max: 8},
+  };
+
+  // Else we have to do too many setState's, which makes animations jump (e.g. ScrollView momentum)
+  _scrollViewState: ScrollViewState = {
+    contentOffset: {x: 0, y: 0},
+  };
+
+  state: State = {
+    scrollViewKey: '',
+    scrollViewState: this._scrollViewState,
+    showFilters: false,
+    showHelp: false,
+    filterQuality: ['A', 'B'],
+    filterLimit: 100,
+    status: '',
+    recs: [],
+    // Sync from/to Settings (2/3)
+    spectroScale: this.settings.spectroScale,
   };
 
   db?: SQLiteDatabase;
@@ -95,41 +127,33 @@ export class SearchScreen extends Component<Props, State> {
   addActionSheet:  RefObject<ActionSheet> = React.createRef();
   sortActionSheet: RefObject<ActionSheet> = React.createRef();
 
-  // Else we have to do too many setState's, which makes animations jump (e.g. ScrollView momentum)
-  _scrollViewState: ScrollViewState = {
-    contentOffset: {x: 0, y: 0},
-  };
-
   scrollViewRef: RefObject<SectionListStatic<Rec>> = React.createRef();
 
-  get serverConfig(): ServerConfig { return this.props.screenProps.serverConfig; }
-  get settings(): Settings { return this.props.screenProps.settings; }
-  get nav(): Nav { return this.props.navigation; }
+  // Avoid constructor
+  //  - "If you don't initialize state and you don't bind methods, you don't need to implement a constructor"
+  //  - https://reactjs.org/docs/react-component.html#constructor
+  // constructor(props) { ... }
 
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      scrollViewKey: '',
-      scrollViewState: this._scrollViewState,
-      showFilters: false,
-      showHelp: false,
-      queryText: props.navParams.passProps.species || (
-        aHandfulOfSpecies // XXX Dev
-      ),
-      queryConfig: { // TODO Move to (global) SettingsScreen.state
-        quality: ['A', 'B'],
-        limit: 100,
-      },
-      status: '',
-      recs: [],
-      // Sync from/to Settings (2/3)
-      spectroScale: this.settings.spectroScale,
-    };
-    global.SearchScreen = this; // XXX Debug
-  }
+  // Avoid getDerivedStateFromProps
+  //  - Use only to update state derived from (changed) props -- but avoid deriving state from props!
+  //  - Prefer componentDidUpdate to side effect in response to changed props (e.g. fetch data, start animation)
+  //  - Prefer memoization to re-run an expensive computation when a prop changes
+  //  - Prefer fully controlled / fully uncontrolled with key to reset state when a prop changes
+  //  - https://reactjs.org/docs/react-component.html#static-getderivedstatefromprops
+  //  - https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html
+  // static getDerivedStateFromProps(props, state) { ... }
 
+  // After component is first inserted into the DOM
+  //  - Commit phase (impure, may read/write DOM, called once per commit)
+  //  - Best practices
+  //    - Do fetch data (-> setState() -> additional render(), which is ok)
+  //    - Do subscribe listeners / scheduler timers (clean up in componentWillUnmount)
+  //  - Details
+  //    - First render() happens before this (don't try to avoid it, it's ok)
+  //    - Immediate setState() will trigger render() a second time before the first screen draw
   componentDidMount = async () => {
     log.debug('SearchScreen.componentDidMount');
+    global.SearchScreen = this; // XXX Debug
 
     // Configure react-native-sound
     //  - TODO Experiment to figure out which "playback mode" and "audio session mode" we want
@@ -173,8 +197,16 @@ export class SearchScreen extends Component<Props, State> {
       });
     });
 
+    // Query recs (from navParams.species)
+    await this.queryRecs();
+
   }
 
+  // Before a component is removed from the DOM and destroyed
+  //  - Commit phase (impure, may read/write DOM, called once per commit)
+  //  - Best practices
+  //    - Do unsubscribe listeners / cancel timers (created in componentDidMount)
+  //    - Don't setState(), since no more render() will happen for this instance
   componentWillUnmount = async () => {
     log.debug('SearchScreen.componentWillUnmount');
 
@@ -189,9 +221,22 @@ export class SearchScreen extends Component<Props, State> {
 
   }
 
+  // After props/state change; not called for the initial render()
+  //  - Commit phase (impure, may read/write DOM, called once per commit)
+  //  - Best practices
+  //    - Do operate on DOM in response to changed props/state
+  //    - Do fetch data, conditioned on changed props/state (else update loops)
+  //    - Do setState(), conditioned on changed props (else update loops)
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
     log.debug('SearchScreen.componentDidUpdate', this.props, this.state);
-    log.debug('nav.state', pretty(this.nav.state));
+
+    // Reset state (selectively) if props changed
+    //  - NOTE Use key to reset _all_ state [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
+    if (this.queryText !== this._queryText(prevProps)) {
+      await setStateAsync(this, {
+        filterQueryText: undefined,
+      });
+    }
 
     // Else _scrollViewState falls behind on non-scroll/non-zoom events (e.g. +/- buttons)
     this._scrollViewState = this.state.scrollViewState;
@@ -200,57 +245,40 @@ export class SearchScreen extends Component<Props, State> {
     //  - These aren't typical: we only use this for (global) settings keys that we also keep locally in state so we can
     //    batch-update them with other local state keys (e.g. global spectroScale + local scrollViewKey)
     //  - TODO Is this a good pattern for "setState(x,y,z) locally + settings.set(x) globally"?
-    await Promise.all([
-      this.settings.set('spectroScale', this.state.spectroScale),
-    ]);
+    noawait(this.settings.set('spectroScale', this.state.spectroScale));
 
-    // TODO TODO Why is querySql triggering ~2 times? (see logs)
-    // TODO TODO Oops, hit an infinite update loop: [nav -> nav -> play -> crosshairs -> play -> ...?]
-
-    log.debug('prevProps', prevProps);
-    log.debug('prevState', prevState);
-    log.debug('props', this.props);
-    log.debug('state', this.state);
-
-    // Set state.queryText <- navParams.species
-    const {species} = this.props.navParams.passProps;
-    if (species && species !== prevProps.navParams.passProps.species) {
-      await setStateAsync(this, {
-        queryText: species,
-      });
-    }
-
-    // Query recs <- state.queryText
-    const {query, queryText} = this.state;
-    if (!query || queryText && queryText !== prevState.queryText) {
-      await this.submitQuery();
-    }
+    // Query recs (from updated navParams.species)
+    await this.queryRecs();
 
   }
 
-  editQueryText = async (queryText: string) => {
-    await setStateAsync(this, {
-      queryText,
-    });
-  }
+  // TODO Generalize species -> {species?, recId?} (like NavParams)
+  get queryText(): string { return this._queryText(); }
+  _queryText = (props?: Props): string => {
+    // We ignore state.filterQueryText b/c onSubmitEditing -> navigate -> navParams.species
+    return this._navParams(props || this.props).species || someExampleSpecies;
+  };
 
-  submitQuery = async () => {
-    let {queryText, query} = this.state;
-    if (queryText && queryText !== query) {
-      query = queryText;
+  queryRecs = async () => {
+    if (
+      // Noop if query already in progress
+      this.state.status !== '[Loading...]' &&
+      // Noop if query wouldn't return new/useful results
+      this.queryText !== '' &&
+      this.queryText !== this.state.lastQuery
+    ) {
 
-      // Record query + clear previous results
+      // Set loading state
       await this.releaseSounds();
       await setStateAsync(this, {
-        query,
-        recs: [],
         status: '[Loading...]',
+        recs: [], // TODO Fade previous recs instead of showing a blank screen while loading
       });
 
       // Can't use window functions until sqlite ≥3.25.x
       //  - TODO Waiting on: https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
 
-      log.debug('query', query);
+      log.debug('query', this.queryText);
       await querySql<Rec>(this.db!, `
         select *
         from (
@@ -269,12 +297,13 @@ export class SearchScreen extends Component<Props, State> {
           taxon_order_num asc,
           xc_id desc
       `, [
-        query.split(',').map(x => _.trim(x).toUpperCase()),
-        this.state.queryConfig.quality,
-        this.state.queryConfig.limit,
+        this.queryText.split(',').map(x => _.trim(x).toUpperCase()),
+        this.state.filterQuality,
+        this.state.filterLimit,
       ])(async results => {
         const recs = results.rows.raw();
         await setStateAsync(this, {
+          lastQuery: this.queryText,
           recs,
           status: `${recs.length} recs`,
         });
@@ -479,32 +508,34 @@ export class SearchScreen extends Component<Props, State> {
   }
 
   Filters = () => (
-    <View style={[
-      styles.filtersModal,
-      {marginBottom: TabBarBottomConstants.DEFAULT_HEIGHT},
-    ]}>
-      <TextInput
-        style={styles.queryInput}
-        value={this.state.queryText}
-        onChangeText={this.editQueryText}
-        onSubmitEditing={this.submitQuery}
-        autoCorrect={false}
-        autoCapitalize='characters'
-        enablesReturnKeyAutomatically={true}
-        placeholder='Species'
-        returnKeyType='search'
-      />
-      <Text>Filters</Text>
-      <Text>- quality</Text>
-      <Text>- month</Text>
-      <Text>- species likelihood [bucketed ebird priors]</Text>
-      <Text>- rec text search [conflate fields]</Text>
-      <RectButton onPress={async () => await setStateAsync(this, {showFilters: false})}>
-        <View style={{padding: 10, backgroundColor: iOSColors.blue}}>
-          <Text>Done</Text>
-        </View>
-      </RectButton>
-    </View>
+    <KeyboardDismissingView style={{width: '100%', height: '100%'}}>
+      <View style={[
+        styles.filtersModal,
+        {marginBottom: TabBarBottomConstants.DEFAULT_HEIGHT},
+      ]}>
+        <TextInput
+          style={styles.queryInput}
+          value={this.state.filterQueryText}
+          onChangeText={async x => await setStateAsync(this, {filterQueryText: x})}
+          onSubmitEditing={() => this.state.filterQueryText && navigate.search(this.nav, {species: this.state.filterQueryText})}
+          autoCorrect={false}
+          autoCapitalize='characters'
+          enablesReturnKeyAutomatically={true}
+          placeholder={this.queryText}
+          returnKeyType='search'
+        />
+        <Text>Filters</Text>
+        <Text>- quality</Text>
+        <Text>- month</Text>
+        <Text>- species likelihood [bucketed ebird priors]</Text>
+        <Text>- rec text search [conflate fields]</Text>
+        <RectButton onPress={async () => await setStateAsync(this, {showFilters: false})}>
+          <View style={{padding: 10, backgroundColor: iOSColors.blue}}>
+            <Text>Done</Text>
+          </View>
+        </RectButton>
+      </View>
+    </KeyboardDismissingView>
   );
 
   cycleMetadata = async () => {
@@ -585,6 +616,12 @@ export class SearchScreen extends Component<Props, State> {
         // iconProps={{name: 'chevron-down'}}
         // iconProps={{name: 'arrow-down'}}
         // iconProps={{name: 'arrow-down-circle'}}
+      />
+      {/* XXX Dev: a temporary way to reset to recs from >1 species */}
+      <this.BottomControlsButton
+        help='Reset'
+        onPress={() => navigate.search(this.nav, {})}
+        iconProps={{name: 'refresh-ccw'}}
       />
       {/* Cycle metadata: none / oneline / full */}
       <this.BottomControlsButton
@@ -694,14 +731,9 @@ export class SearchScreen extends Component<Props, State> {
         iconName='move'
         onPress={() => {}}
       /> */}
-      {/* XXX Dev: a temporary way to reset to recs from >1 species */}
-      <this.EditingButton buttonStyle={styles.sectionSpeciesEditingButton} iconStyle={styles.sectionSpeciesEditingIcon}
-        iconName='refresh-ccw'
-        onPress={() => this.nav.navigate('Search', {passProps: {species: aHandfulOfSpecies}})}
-      />
       <this.EditingButton buttonStyle={styles.sectionSpeciesEditingButton} iconStyle={styles.sectionSpeciesEditingIcon}
         iconName='search'
-        onPress={() => this.nav.navigate('Search', {passProps: {species: props.species}})}
+        onPress={() => navigate.search(this.nav, {species: props.species})}
       />
       <this.EditingButton buttonStyle={styles.sectionSpeciesEditingButton} iconStyle={styles.sectionSpeciesEditingIcon}
         // iconName='user-x'
@@ -723,7 +755,7 @@ export class SearchScreen extends Component<Props, State> {
       /> */}
       <this.EditingButton buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
         iconName='search'
-        onPress={() => this.nav.navigate('Search', {passProps: {recId: props.rec.id}})}
+        onPress={() => navigate.search(this.nav, {recId: props.rec.id})}
       />
       <this.EditingButton buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
         iconName='x'
@@ -731,7 +763,7 @@ export class SearchScreen extends Component<Props, State> {
       />
       <this.EditingButton buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
         iconName='star'
-        onPress={() => this.nav.navigate('Recent', {passProps: {}})}
+        onPress={() => navigate.recent(this.nav, {})}
       />
     </View>
   );
@@ -800,6 +832,8 @@ export class SearchScreen extends Component<Props, State> {
     </View>
   );
 
+  // Map props/state to a DOM node
+  //  - Render phase (pure, no read/write DOM, may be called multiple times per commit or interrupted)
   render = () => (
     <View style={styles.container}>
 
@@ -873,9 +907,10 @@ export class SearchScreen extends Component<Props, State> {
                 </Text>
                 {/* Debug info */}
                 {this.settings.showDebug && (
-                  <Text numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}, this.settings.debugText]}>
+                  // FIXME Off screen unless zoom=1
+                  <this.DebugText numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}]}>
                     ({recs_for_sp} recs)
-                  </Text>
+                  </this.DebugText>
                 )}
               </View>
             ),
@@ -1002,10 +1037,11 @@ export class SearchScreen extends Component<Props, State> {
       />
 
       {/* Debug info */}
-      <View style={this.settings.debugView}>
-        <Text style={this.settings.debugText}>Status: {this.state.status} ({this.state.totalRecs || '?'} total)</Text>
-        <Text style={this.settings.debugText}>Filters: {JSON.stringify(this.state.queryConfig)}</Text>
-      </View>
+      <this.DebugView>
+        <this.DebugText>Status: {this.state.status} ({this.state.totalRecs || '?'} total)</this.DebugText>
+        <this.DebugText>Filters: {json(this.filters)}</this.DebugText>
+        <this.DebugText>NavParams: {json(this.navParamsAll)}</this.DebugText>
+      </this.DebugView>
 
       {/* Bottom controls */}
       <this.BottomControls/>
@@ -1016,6 +1052,30 @@ export class SearchScreen extends Component<Props, State> {
     </View>
   );
 
+  get filters(): object {
+    return _.pickBy(this.state, (v, k) => k.startsWith('filter'));
+  }
+
+  // Debug components
+  //  - [Tried and gave up once to make well-typed generic version of these (DebugFoo = addStyle(Foo, ...) = withProps(Foo, ...))]
+  DebugView = (props: RN.ViewProps & {children: Element[]}) => {
+    props = {...props, style: [this.settings.debugView, ...sanitizeStyle(props.style)]};
+    return (<View {...props} />);
+  };
+  DebugText = (props: RN.TextProps & {children: Element[]}) => {
+    props = {...props, style: [this.settings.debugText, ...sanitizeStyle(props.style)]};
+    return (<Text {...props} />);
+  };
+
+}
+
+// (Not sure about this type)
+function sanitizeStyle<X extends {}>(style: undefined | null | X | Array<X>): Array<X> {
+  return (
+    !style ? [] :
+    style instanceof Array ? style :
+    [style]
+  );
 }
 
 function ccIcon(props?: object): Element {
@@ -1031,6 +1091,53 @@ function licenseTypeIcons(license_type: string, props?: object): Array<Element> 
     {...props}
   />));
 }
+
+// TODO Why is this slow to respond after keyboard shows? -- adding logging to find the bottleneck
+interface KeyboardDismissingViewState {
+  isKeyboardShown: boolean;
+}
+export class KeyboardDismissingView extends Component<RN.ViewProps, KeyboardDismissingViewState> {
+  state = {
+    isKeyboardShown: false,
+  };
+  _keyboardDidShowListener?: {remove: () => void};
+  _keyboardDidHideListener?: {remove: () => void};
+  componentDidMount = () => {
+    this._keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', this.keyboardDidShow);
+    this._keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', this.keyboardDidHide);
+  };
+  componentWillUnmount = () => {
+    this._keyboardDidShowListener!.remove();
+    this._keyboardDidHideListener!.remove();
+  };
+  keyboardDidShow = async () => {
+    await setStateAsync(this, {isKeyboardShown: true});
+  };
+  keyboardDidHide = async () => {
+    await setStateAsync(this, {isKeyboardShown: false});
+  };
+  render = () => (
+    <TapGestureHandler
+      enabled={this.state.isKeyboardShown}
+      onHandlerStateChange={({nativeEvent: {state}}) => Keyboard.dismiss()}
+      // TODO Need to condition on state?
+      // onHandlerStateChange={({nativeEvent: {state}}) => state === Gesture.State.ACTIVE && Keyboard.dismiss()}
+    >
+      <Animated.View {...this.props} />
+    </TapGestureHandler>
+  );
+}
+
+// XXX
+// function KeyboardDismissingView(props: RN.ViewProps) {
+//   return (
+//     <TapGestureHandler
+//       onHandlerStateChange={({nativeEvent: {state}}) => state === Gesture.State.ACTIVE && Keyboard.dismiss()}
+//     >
+//       <Animated.View {...props} />
+//     </TapGestureHandler>
+//   );
+// }
 
 const styles = StyleSheet.create({
   container: {

@@ -1,4 +1,4 @@
-import { Settings } from './components/settings';
+import { Settings } from './settings';
 import { Places } from './places';
 
 export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
@@ -93,27 +93,3 @@ export type ServerConfig = {
     },
   },
 };
-
-//
-// react-navigation
-//
-
-import { NavigationRoute, NavigationScreenProp } from 'react-navigation';
-
-export type Nav = NavigationScreenProp<NavigationRoute<NavParams>, NavParams>;
-
-export interface ScreenProps {
-  serverConfig: ServerConfig,
-  settings: Settings,
-}
-
-// One type shared across all screens (boo)
-export interface NavParams {
-  // Use passProps when you want to overwrite previous params
-  passProps: {
-    recId?: string,
-    species?: string,
-  },
-  // Use other keys when you want previous params to accumulate
-  //  - TODO What's up with this? When would we want this behavior?
-}

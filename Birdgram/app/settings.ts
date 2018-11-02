@@ -3,8 +3,8 @@ import React from 'react';
 import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import { log, puts } from '../log';
-import { setStateAsync } from '../utils';
+import { log, puts } from './log';
+import { setStateAsync } from './utils';
 
 export type ShowMetadata = 'none' | 'oneline' | 'full';
 

@@ -15,9 +15,10 @@ import { RecordScreen } from './components/RecordScreen';
 import { SavedScreen } from './components/SavedScreen';
 import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
-import { Settings } from './components/Settings';
+import { Settings } from './settings';
 import { config } from './config';
-import { NavParams, ScreenProps, SearchRecs, ServerConfig } from './datatypes';
+import { SearchRecs, ServerConfig } from './datatypes';
+import { NavParams, ScreenProps } from './nav';
 import { log } from './log';
 import { deepEqual, global, match, setStateAsync } from './utils';
 
@@ -123,7 +124,7 @@ class App extends Component<Props, State> {
         <AppNav
           // @ts-ignore [Why doesn't this typecheck?]
           ref={this.appNavRef}
-          persistenceKey={__DEV__ ? '_dev_NavigationState_v5' : null}
+          persistenceKey={__DEV__ ? '_dev_NavigationState_v6' : null}
           // Pass props to screens (as props.screenProps)
           screenProps={{
             serverConfig: this.state.serverConfig,
@@ -139,23 +140,14 @@ class App extends Component<Props, State> {
 
 const AppNav = createBottomTabNavigator(
   {
-    // passProps via https://medium.com/react-native-training/react-native-navigator-navigating-like-a-pro-in-react-native-3cb1b6dc1e30
     // NOTE Must bump the AppNav persistenceKey version when changing these keys (below)
-    Record:   {screen: RecordScreen,             params: {passProps: {}}},
-    Search:   {screen: navProps(SearchScreen), params: {passProps: {}}},
-    // XXX
-    // Search: {
-    //   // screen: (props: object) => (<SearchScreen {...props} />), // https://github.com/react-navigation/react-navigation/issues/2392
-    //   screen: SearchScreen,
-    //   params: { // https://github.com/react-navigation/react-navigation/issues/441#issuecomment-294728622
-    //     passProps: {
-    //       species: 'GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW',
-    //     },
-    //   },
-    // },
-    Recent:   {screen: RecentScreen,   params: {passProps: {}}},
-    Saved:    {screen: SavedScreen,    params: {passProps: {}}},
-    Settings: {screen: SettingsScreen, params: {passProps: {}}},
+    Record:   {screen: RecordScreen,   params: {}},
+    Search:   {screen: SearchScreen,   params: {}},
+    Recent:   {screen: RecentScreen,   params: {}},
+    Saved:    {screen: SavedScreen,    params: {}},
+    Settings: {screen: SettingsScreen, params: {}},
+    // How to pass props down [https://github.com/zeit/next.js/blob/7.0.0/lib/dynamic.js#L55]:
+    //  screen: (props: object) => (<SearchScreen {...props} />),
   },
   {
     navigationOptions: ({navigation}) => ({

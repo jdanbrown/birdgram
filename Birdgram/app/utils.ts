@@ -47,6 +47,11 @@ global.unjson = unjson;
 // Promise
 //
 
+// Noop marker to indicate that we didn't forget to await a promise
+export function noawait<X>(p: Promise<X>): Promise<X> {
+  return p;
+}
+
 // TODO How to polyfill Promise.finally in react-native?
 //  - Maybe: https://github.com/facebook/fbjs/pull/293
 export async function finallyAsync<X>(p: Promise<X>, f: () => Promise<void>): Promise<X> {
@@ -74,7 +79,7 @@ import { Component } from 'react';
 import reactFastCompare from 'react-fast-compare';
 import { ImageStyle, RegisteredStyle, TextStyle, ViewStyle } from 'react-native';
 
-// This seems to do the trick for passing StyleSheet parts around
+// Evolving approach to how to pass StyleSheet parts around
 export type Style = RegisteredStyle<ViewStyle | TextStyle | ImageStyle>
 
 export function setStateAsync<P, S, K extends keyof S>(

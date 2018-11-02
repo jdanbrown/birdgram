@@ -7,7 +7,7 @@ import SettingsList from 'react-native-settings-list';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { BorderlessButton, RectButton } from 'react-native-gesture-handler';
 
-import { Settings } from './Settings';
+import { Settings } from '../settings';
 import { StyleSheet } from '../stylesheet';
 import { global, setStateAsync } from '../utils';
 
