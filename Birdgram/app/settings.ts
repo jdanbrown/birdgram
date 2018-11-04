@@ -6,7 +6,7 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 import { log, puts } from './log';
 import { setStateAsync } from './utils';
 
-export type ShowMetadata = 'none' | 'oneline' | 'full';
+export type ShowMetadata = 'none' | 'inline' | 'full';
 
 // All 5 of these lists of attrs (4 here + constructor) must be kept in sync, else load/setItem/etc. aren't typesafe
 export interface Props {
@@ -28,7 +28,7 @@ export const DEFAULTS: Props = {
   showDebug: false,
   debugTextColor: 'green',
   // For SearchScreen
-  showMetadata: 'oneline',
+  showMetadata: 'inline',
   editing: false,
   seekOnPlay: false,
   playingProgressEnable: true,
@@ -98,16 +98,12 @@ export class Settings implements Props {
     //  - Fallback to DEFAULTS (via {}) if we can't load it at all
     let saved: {[key: string]: any};
     try {
-
       saved = (
         _.chain(await AsyncStorage.multiGet(KEYS.map(Settings.prefixKey)))
         .map(([k, v]) => [Settings.unprefixKey(k), JSON.parse(v)])
         .fromPairs()
         .value()
       );
-
-      // saved = sett
-
     } catch (e) {
       log.warn(`Settings: Failed to load saved state, using defaults: keys[${KEYS}]`, e);
       saved = {};

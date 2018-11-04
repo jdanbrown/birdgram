@@ -29,8 +29,8 @@ export const Rec = {
   spectroPath: (rec: Rec): string => SearchRecs.assetPath('spectro', rec.species, rec.xc_id, 'png'),
   audioPath:   (rec: Rec): string => SearchRecs.assetPath('audio',   rec.species, rec.xc_id, 'mp4'),
 
-  placeNorm: (rec: Rec): string => {
-    return rec.place.split(', ').reverse().map(x => Rec.placePartAbbrev(x)).join(', ');
+  placeNorm: (placeLike: string): string => {
+    return placeLike.split(', ').reverse().map(x => Rec.placePartAbbrev(x)).join(', ');
   },
   placePartAbbrev: (part: string): string => {
     const ret = (

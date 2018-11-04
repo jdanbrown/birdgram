@@ -245,9 +245,12 @@ export class SearchScreen extends Component<Props, State> {
     //  - These aren't typical: we only use this for (global) settings keys that we also keep locally in state so we can
     //    batch-update them with other local state keys (e.g. global spectroScale + local scrollViewKey)
     //  - TODO Is this a good pattern for "setState(x,y,z) locally + settings.set(x) globally"?
-    noawait(this.settings.set('spectroScale', this.state.spectroScale));
+    if (this.state.spectroScale !== prevState.spectroScale) {
+      noawait(this.settings.set('spectroScale', this.state.spectroScale));
+    }
 
     // Query recs (from updated navParams.species)
+    //  - Noops if queryText != state.lastQuery
     await this.queryRecs();
 
   }
@@ -393,8 +396,7 @@ export class SearchScreen extends Component<Props, State> {
 
         // If touched rec was the currently playing rec, then we're done (it's stopped)
         // Else, play the (new) touched rec
-        //  - HACK Override if seekOnPlay, so we can tap with abandon
-        if (!this.recIsPlaying(rec.id, playing) || this.settings.seekOnPlay) {
+        if (!this.recIsPlaying(rec.id, playing)) {
           const sound = await soundAsync;
           global.sound = sound; // XXX Debug
 
@@ -455,7 +457,7 @@ export class SearchScreen extends Component<Props, State> {
   spectroTimeFromX = (sound: Sound, x: number, absoluteX: number): number => {
     const {contentOffset} = this._scrollViewState;
     const {spectroScale} = this.state;
-    const {width} = this.spectroDimensions();
+    const {width} = this.spectroImageDims();
     const {audio_s} = this.serverConfig.api.recs.search_recs.params;
     const duration = sound.getDuration();
     const time = x / width * audio_s;
@@ -466,7 +468,7 @@ export class SearchScreen extends Component<Props, State> {
   spectroXFromTime = (sound: Sound, time: number): number => {
     const {contentOffset} = this._scrollViewState;
     const {spectroScale} = this.state;
-    const {width} = this.spectroDimensions();
+    const {width} = this.spectroImageDims();
     const {audio_s} = this.serverConfig.api.recs.search_recs.params;
     const duration = sound.getDuration();
     const x = time / audio_s * width;
@@ -478,11 +480,15 @@ export class SearchScreen extends Component<Props, State> {
     return !playing ? false : playing.rec.id === recId;
   }
 
-  spectroDimensions = (): Dim<number> => {
+  spectroRowDims   = (): Dim<number> => this.spectroDims();
+  spectroImageDims = (): Dim<number> => this.spectroDims({squish: true});
+  spectroDims = (opts: {squish?: boolean} = {}): Dim<number> => {
+    let {squish} = opts;
+    squish = squish || false;
     return {
       width: _.sum([
         this.props.spectroBase.width * this.state.spectroScale,
-        this.settings.showMetadata === 'none' ? -sidewaysTextWidth : 0,
+        squish && this.settings.showMetadata !== 'full' ? -sidewaysTextWidth : 0,
       ]),
       height: this.props.spectroBase.height * this.state.spectroScale,
     };
@@ -538,11 +544,29 @@ export class SearchScreen extends Component<Props, State> {
     </KeyboardDismissingView>
   );
 
+  cycleMetadataFull = async () => {
+    const next = (showMetadata: ShowMetadata) => match<ShowMetadata, ShowMetadata, ShowMetadata>(showMetadata,
+      ['none',   'full'],
+      ['inline', 'full'],
+      ['full',   'none'],
+    );
+    await this.settings.set('showMetadata', next(this.settings.showMetadata));
+  }
+
+  cycleMetadataInline = async () => {
+    const next = (showMetadata: ShowMetadata) => match<ShowMetadata, ShowMetadata, ShowMetadata>(showMetadata,
+      ['none',   'inline'],
+      ['inline', 'none'],
+      ['full',   'inline'],
+    );
+    await this.settings.set('showMetadata', next(this.settings.showMetadata));
+  }
+
   cycleMetadata = async () => {
     const next = (showMetadata: ShowMetadata) => match<ShowMetadata, ShowMetadata, ShowMetadata>(showMetadata,
-      ['none',    'oneline'],
-      ['oneline', 'full'],
-      ['full',    'none'],
+      ['none',   'inline'],
+      ['inline', 'full'],
+      ['full',   'none'],
     );
     await this.settings.set('showMetadata', next(this.settings.showMetadata));
 
@@ -623,13 +647,21 @@ export class SearchScreen extends Component<Props, State> {
         onPress={() => navigate.search(this.nav, {})}
         iconProps={{name: 'refresh-ccw'}}
       />
-      {/* Cycle metadata: none / oneline / full */}
+      {/* Cycle metadata: none / full */}
       <this.BottomControlsButton
         help='Info'
-        onPress={() => this.cycleMetadata()}
+        onPress={() => this.cycleMetadataFull()}
+        active={this.settings.showMetadata === 'full'}
         iconProps={{name: 'file-text'}}
         // iconProps={{name: 'credit-card', style: Styles.flipVertical}}
         // iconProps={{name: 'sidebar', style: Styles.rotate270}}
+      />
+      {/* Cycle metadata: none / inline */}
+      <this.BottomControlsButton
+        help='Info'
+        onPress={() => this.cycleMetadataInline()}
+        active={this.settings.showMetadata === 'inline'}
+        iconProps={{name: 'file-minus'}}
       />
       {/* Toggle editing controls for rec/species */}
       <this.BottomControlsButton
@@ -850,7 +882,12 @@ export class SearchScreen extends Component<Props, State> {
         key={this.state.scrollViewKey}
         //  - Expand container width else we can't scroll horizontally
         contentContainerStyle={{
-          width: this.props.spectroBase.width * this.state.spectroScale,
+          // TODO TODO Don't truncate spectro width
+          // width: this.props.spectroBase.width * this.state.spectroScale,
+        }}
+        // TODO TODO Don't truncate spectro width
+        onContentSizeChange={(width, height) => {
+          log.debug('Scrollview.onContentSizeChange', json({width, height}));
         }}
         // This is (currently) the only place we use state.scrollViewState i/o this._scrollViewState
         contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
@@ -858,6 +895,7 @@ export class SearchScreen extends Component<Props, State> {
         })}
         bounces={false}
         bouncesZoom={false}
+        directionalLockEnabled={true} // Don't scroll vertical and horizontal at the same time (ios only)
         minimumZoomScale={this.props.spectroScaleClamp.min / this.state.spectroScale}
         maximumZoomScale={this.props.spectroScaleClamp.max / this.state.spectroScale}
         onScrollEndDrag={async ({nativeEvent}) => {
@@ -892,7 +930,7 @@ export class SearchScreen extends Component<Props, State> {
           }) => [
 
             // Species header
-            this.settings.showMetadata !== 'none' && (
+            this.settings.showMetadata === 'full' && (
               <View
                 key={`section-${title}`}
                 style={styles.sectionSpecies}
@@ -921,11 +959,14 @@ export class SearchScreen extends Component<Props, State> {
               // Rec row
               <Animated.View
                 key={`row-${rec.id.toString()}`}
-                style={styles.recRow}
+                style={[styles.recRow, {
+                  height: this.spectroRowDims().height, // Compact controls/labels when zoom makes image smaller than controls/labels
+                  // width: 501, // TODO TODO Don't truncate spectro width [dummy to figure out which RCTView]
+                }]}
               >
 
                 {/* Species editing buttons */}
-                {this.settings.editing && this.settings.showMetadata === 'none' && (
+                {this.settings.editing && this.settings.showMetadata !== 'full' && (
                   <this.SpeciesEditingButtons species={rec.species} />
                 )}
                 {/* Rec editing buttons */}
@@ -941,14 +982,19 @@ export class SearchScreen extends Component<Props, State> {
                     ? {borderColor: iOSColors.gray}
                     : {borderColor: iOSColors.red, borderTopWidth: 1}
                   ),
+                  // {width: 502}, // TODO TODO Don't truncate spectro width [dummy to figure out which RCTView]
                 ]}>
 
                   {/* Rec row */}
-                  <View style={{flexDirection: 'row'}} collapsable={false}>
+                  <View style={{
+                    flexDirection: 'row',
+                    height: this.spectroRowDims().height, // Compact controls/labels when zoom makes image smaller than controls/labels
+                    // width: this.spectroRowDims().width, // TODO TODO Don't truncate spectro width [FIXME + metadata width]
+                  }} collapsable={false}>
 
                     {/* Sideways species label (sometimes) */}
                     {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
-                    {this.settings.showMetadata === 'none' && (
+                    {this.settings.showMetadata !== 'full' && (
                       <View style={styles.recSpeciesSidewaysView}>
                         <View style={styles.recSpeciesSidewaysViewInner}>
                           <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
@@ -960,14 +1006,24 @@ export class SearchScreen extends Component<Props, State> {
                       </View>
                     )}
 
+                    {/* Rec metadata */}
+                    {this.settings.showMetadata === 'inline' && (
+                      <View style={styles.recMetadataInlineLeft}>
+                        <this.RecText children={Rec.placeNorm(rec.state)} />
+                        <this.RecText children={rec.month_day} />
+                      </View>
+                    )}
+
                     {/* Spectro (tap) */}
                     <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
                       <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(rec)}>
-                        <Animated.View style={{flex: 1}}>
+                        <Animated.View style={{
+                          // flex: 1, // XXX Truncates spectro width
+                        }}>
 
                           {/* Image */}
                           <Animated.Image
-                            style={this.spectroDimensions()}
+                            style={this.spectroImageDims()}
                             resizeMode='stretch'
                             source={{uri: Rec.spectroPath(rec)}}
                           />
@@ -1001,28 +1057,25 @@ export class SearchScreen extends Component<Props, State> {
                   </View>
 
                   {/* Rec metadata */}
-                  {match(this.settings.showMetadata,
-                    ['none', null],
-                    ['oneline', (
-                      <View style={styles.recMetadataOneline}>
-                        <this.RecText flex={3} children={rec.xc_id} />
-                        <this.RecText flex={1} children={rec.quality} />
-                        <this.RecText flex={2} children={rec.month_day} />
-                        <this.RecText flex={4} children={Rec.placeNorm(rec)} />
-                        {ccIcon({style: styles.recTextFont})}
-                        <this.RecText flex={4} children={` ${rec.recordist}`} />
-                      </View>
-                    )],
-                    ['full', (
-                      <View style={styles.recMetadataFull}>
-                        <this.RecText flex={3} children={rec.xc_id} />
-                        <this.RecText flex={1} children={rec.quality} />
-                        <this.RecText flex={2} children={rec.month_day} />
-                        <this.RecText flex={4} children={Rec.placeNorm(rec)} />
-                        {ccIcon({style: styles.recTextFont})}
-                        <this.RecText flex={4} children={` ${rec.recordist}`} />
-                      </View>
-                    )],
+                  {/* {this.settings.showMetadata === 'inline' && (
+                    <View style={styles.recMetadataInlineBelow}>
+                      <this.RecText flex={3} children={rec.xc_id} />
+                      <this.RecText flex={1} children={rec.quality} />
+                      <this.RecText flex={2} children={rec.month_day} />
+                      <this.RecText flex={4} children={Rec.placeNorm(rec.place)} />
+                      {ccIcon({style: styles.recTextFont})}
+                      <this.RecText flex={4} children={` ${rec.recordist}`} />
+                    </View>
+                  )} */}
+                  {this.settings.showMetadata === 'full' && (
+                    <View style={styles.recMetadataFull}>
+                      <this.RecText flex={3} children={rec.xc_id} />
+                      <this.RecText flex={1} children={rec.quality} />
+                      <this.RecText flex={2} children={rec.month_day} />
+                      <this.RecText flex={4} children={Rec.placeNorm(rec.place)} />
+                      {ccIcon({style: styles.recTextFont})}
+                      <this.RecText flex={4} children={` ${rec.recordist}`} />
+                    </View>
                   )}
 
                 </Animated.View>
@@ -1191,8 +1244,8 @@ const styles = StyleSheet.create({
   },
   sectionSpeciesEditingButton: {
     width:  35, // Need explicit width (i/o flex:1) else view shows with width:0
-    minHeight: 40, // Bigger hit box
     justifyContent: 'center', // Align icon vertically
+    // minHeight: 40, // Bigger hit box [TODO Only when showMetadata === 'full', when species controls/label are their own row]
     backgroundColor: iOSColors.gray,
   },
   sectionSpeciesEditingIcon: {
@@ -1224,7 +1277,11 @@ const styles = StyleSheet.create({
     // fontSize: ...,                // Set dynamically
     // ...material.captionObject,    // (Sticking with default color:'black')
   },
-  recMetadataOneline: {
+  recMetadataInlineLeft: {
+    flexDirection: 'column',
+    width: 50,
+  },
+  recMetadataInlineBelow: {
     flex: 2, flexDirection: 'row', // TODO Eh...
   },
   recMetadataFull: {

@@ -96,9 +96,10 @@ class App extends Component<Props, State> {
 
   }
 
-  shouldComponentUpdate(nextProps: Props, nextState: State): boolean {
-    return !(deepEqual(this.props, nextProps) && deepEqual(this.state, nextState));
-  }
+  // TODO
+  // shouldComponentUpdate(nextProps: Props, nextState: State): boolean {
+  //   return !(deepEqual(this.props, nextProps) && deepEqual(this.state, nextState));
+  // }
 
   componentDidUpdate = (prevProps: Props, prevState: State) => {
     log.debug('App.componentDidUpdate', this.state.settings);
