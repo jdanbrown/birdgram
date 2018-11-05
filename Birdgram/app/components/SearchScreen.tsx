@@ -263,8 +263,13 @@ export class SearchScreen extends Component<Props, State> {
     };
   }
 
-  // ScrollView needs manually computed width to scroll in overflow direction (horizontal)
+  // Manually specify widths of all components that add up to the ScrollView content width so we can explicitly compute
+  // and set it, else the ScrollView won't scroll horizontally (the overflow direction)
   //  - https://github.com/facebook/react-native/issues/8579#issuecomment-233162695
+  //  - I also tried using onLayout to automatically get subcomponent widths from the DOM instead of manually
+  //    maintaining them all here, but that got gnarly and I bailed (bad onLayout/setState interactions causing infinite
+  //    update loops, probably because I'm missing conditions in lifecycle methods like componentDidUpdate)
+  get scrollViewContentWidth() { return _.sum(_.values(this.scrollViewContentWidths)); }
   get scrollViewContentWidths() {
     return {
       // NOTE Conditions duplicated elsewhere (render, spectroDim, ...)
@@ -289,7 +294,7 @@ export class SearchScreen extends Component<Props, State> {
   // TODO Generalize species -> {species?, recId?} (like NavParams)
   get queryText(): string { return this._queryText(); }
   _queryText = (props?: Props): string => {
-    // We ignore state.filterQueryText b/c onSubmitEditing -> navigate -> navParams.species
+    // We ignore state.filterQueryText b/c TextInput.onSubmitEditing -> navigate.search -> navParams.species
     return this._navParams(props || this.props).species || someExampleSpecies;
   };
 
@@ -930,7 +935,7 @@ export class SearchScreen extends Component<Props, State> {
         contentContainerStyle={{
           // ScrollView needs manually computed width to scroll in overflow direction (horizontal)
           //  - https://github.com/facebook/react-native/issues/8579#issuecomment-233162695
-          width: _.sum(_.values(this.scrollViewContentWidths)),
+          width: this.scrollViewContentWidth,
         }}
         // This is (currently) the only place we use state.scrollViewState i/o this._scrollViewState
         contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
