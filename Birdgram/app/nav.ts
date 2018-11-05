@@ -37,8 +37,8 @@ export interface NavParamsRecord {
 }
 
 export interface NavParamsSearch {
-  recId?: string;
   species?: string;
+  recId?: string;
 }
 
 export interface NavParamsRecent {

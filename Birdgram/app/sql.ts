@@ -5,9 +5,19 @@ import { log } from './log';
 
 export function querySql<Row>(
   db: SQLiteDatabase,
-  sql: string,
-  params?: any[],
+  _sql: string | BindSql,
 ): <X>(onResults: (results: ResultSet<Row>) => Promise<X>) => Promise<X> {
+
+  // Unpack args
+  let sql: string;
+  let params: any[] | undefined;
+  if (typeof _sql !== 'string') {
+    ({sql, params} = _sql);
+  } else {
+    sql = _sql;
+    params = undefined;
+  }
+
   log.debug('[querySql]', 'sql:', sql, 'params:', params);
   return onResults => new Promise((resolve, reject) => {
     // TODO How to also `await db.transaction`? (Do we even want to?)
@@ -32,6 +42,15 @@ export function querySql<Row>(
       );
     });
   });
+
+}
+
+export interface BindSql {
+  sql: string;
+  params?: any[];
+}
+export function bindSql(sql: string, params?: any[]): BindSql {
+  return {sql, params}
 }
 
 // Mimic @types/react-native-sqlite-storage, but add <Row>

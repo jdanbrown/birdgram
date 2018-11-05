@@ -33,7 +33,7 @@ import { Quality, Rec, RecId, SearchRecs, ServerConfig } from '../datatypes';
 import { log, puts, tap } from '../log';
 import { Nav, navigate, NavParams, NavParamsSearch, ScreenProps } from '../nav';
 import Sound from '../sound';
-import { querySql } from '../sql';
+import { bindSql, querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, match, noawait, Point, pretty,
@@ -44,9 +44,22 @@ const sidewaysTextWidth = 14;
 const editingButtonWidth = 35;
 const someExampleSpecies = 'GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW' // XXX Dev
 
-type ScrollViewState = {
-  contentOffset: Point,
+interface ScrollViewState {
+  contentOffset: Point;
   // (More fields available in NativeScrollEvent)
+}
+
+type Query = QuerySpecies | QueryRecId;
+type QuerySpecies = {kind: 'species', species: string};
+type QueryRecId   = {kind: 'recId',   recId: string};
+function matchQuery<X>(query: Query, cases: {
+  species: (query: QuerySpecies) => X,
+  recId:   (query: QueryRecId)   => X,
+}): X {
+  switch (query.kind) {
+    case 'species': return cases.species(query);
+    case 'recId':   return cases.recId(query);
+  }
 }
 
 interface Props extends NavigationScreenProps<NavParams, any> {
@@ -67,7 +80,7 @@ type State = {
   filterQueryText?: string,
   filterQuality: Array<Quality>,
   filterLimit: number,
-  lastQuery?: string;
+  lastQuery?: Query;
   status: string;
   recs: Array<Rec>;
   playing?: {
@@ -199,7 +212,7 @@ export class SearchScreen extends Component<Props, State> {
     });
 
     // Query recs (from navParams.species)
-    await this.queryRecs();
+    await this.loadRecsFromQuery();
 
   }
 
@@ -237,9 +250,9 @@ export class SearchScreen extends Component<Props, State> {
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
     log.debug('SearchScreen.componentDidUpdate', this.props, this.state);
 
-    // Reset state (selectively) if props changed
-    //  - NOTE Use key to reset _all_ state [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
-    if (this.queryText !== this._queryText(prevProps)) {
+    // Reset state.filterQueryText if query (= props.navigation.state.params.{search,recId}) changed
+    //  - TODO Pass props.key to reset _all_ state? [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
+    if (!deepEqual(this.query, this._query(prevProps))) {
       await setStateAsync(this, {
         filterQueryText: undefined,
       });
@@ -257,8 +270,8 @@ export class SearchScreen extends Component<Props, State> {
     }
 
     // Query recs (from updated navParams.species)
-    //  - Noops if queryText != state.lastQuery
-    await this.queryRecs();
+    //  - (Will noop if deepEqual(query, state.lastQuery))
+    await this.loadRecsFromQuery();
 
   }
 
@@ -297,58 +310,102 @@ export class SearchScreen extends Component<Props, State> {
     };
   }
 
-  // TODO Generalize species -> {species?, recId?} (like NavParams)
-  get queryText(): string { return this._queryText(); }
-  _queryText = (props?: Props): string => {
+  get query(): Query { return this._query(); }
+  _query = (props?: Props): Query => {
+    const {species, recId} = this._navParams(props || this.props);
+    return (
+      species ? {kind: 'species', species} :
+      recId ? {kind: 'recId', recId} :
+      {kind: 'species', species: someExampleSpecies}
+    );
     // We ignore state.filterQueryText b/c TextInput.onSubmitEditing -> navigate.search -> navParams.species
-    return this._navParams(props || this.props).species || someExampleSpecies;
   };
 
-  queryRecs = async () => {
+  get queryDesc(): string {
+    // TODO Make match() typecheck in this use case
+    switch (this.query.kind) {
+      case 'species': return this.query.species;
+      case 'recId':   return this.query.recId;
+    }
+  }
+
+  loadRecsFromQuery = async () => {
     if (
       // Noop if query already in progress
       this.state.status !== '[Loading...]' &&
       // Noop if query wouldn't return new/useful results
-      this.queryText !== '' &&
-      this.queryText !== this.state.lastQuery
+      !deepEqual(this.query, this.state.lastQuery) &&
+      matchQuery(this.query, {
+        species: ({species}) => species !== '',
+        recId:   ({recId})   => recId   !== '',
+      })
     ) {
 
       // Set loading state
+      //  - TODO Fade previous recs instead of showing a blank screen while loading
       await this.releaseSounds();
       await setStateAsync(this, {
         status: '[Loading...]',
-        recs: [], // TODO Fade previous recs instead of showing a blank screen while loading
+        recs: [],
       });
 
       // Can't use window functions until sqlite ≥3.25.x
       //  - TODO Waiting on: https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
 
-      log.debug('query', this.queryText);
-      await querySql<Rec>(this.db!, `
-        select *
-        from (
-          select
-            *,
-            cast(taxon_order as real) as taxon_order_num
-          from search_recs
-          where
-            species in (?) and
-            quality in (?)
+      // TODO(nav_rec_id)
+      const sql = matchQuery(this.query, {
+        species: ({species}) => bindSql(`
+          select *
+          from (
+            select
+              *,
+              cast(taxon_order as real) as taxon_order_num
+            from search_recs
+            where
+              species in (?) and
+              quality in (?)
+            order by
+              xc_id desc
+            limit ?
+          )
           order by
+            taxon_order_num asc,
             xc_id desc
-          limit ?
-        )
-        order by
-          taxon_order_num asc,
-          xc_id desc
-      `, [
-        this.queryText.split(',').map(x => _.trim(x).toUpperCase()),
-        this.state.filterQuality,
-        this.state.filterLimit,
-      ])(async results => {
+        `, [
+          species.split(',').map(x => _.trim(x).toUpperCase()),
+          this.state.filterQuality,
+          this.state.filterLimit,
+        ]),
+        recId: ({recId}) => bindSql(`
+          select *
+          from (
+            select
+              *,
+              cast(taxon_order as real) as taxon_order_num
+            from search_recs
+            where
+              id in (?) and
+              quality in (?)
+            order by
+              xc_id desc
+            limit ?
+          )
+          order by
+            taxon_order_num asc,
+            xc_id desc
+        `, [
+          recId,
+          this.state.filterQuality,
+          this.state.filterLimit,
+        ]),
+      });
+
+      // Run query
+      log.debug('loadRecsFromQuery', json({query: this.query, ...sql}));
+      await querySql<Rec>(this.db!, sql)(async results => {
         const recs = results.rows.raw();
         await setStateAsync(this, {
-          lastQuery: this.queryText,
+          lastQuery: this.query,
           recs,
           status: `${recs.length} recs`,
         });
@@ -553,11 +610,11 @@ export class SearchScreen extends Component<Props, State> {
           style={styles.queryInput}
           value={this.state.filterQueryText}
           onChangeText={async x => await setStateAsync(this, {filterQueryText: x})}
-          onSubmitEditing={() => this.state.filterQueryText && navigate.search(this.nav, {species: this.state.filterQueryText})}
+          onSubmitEditing={() => navigate.search(this.nav, {species: this.state.filterQueryText})}
           autoCorrect={false}
           autoCapitalize='characters'
           enablesReturnKeyAutomatically={true}
-          placeholder={this.queryText}
+          placeholder={this.queryDesc}
           returnKeyType='search'
         />
         <Text>Filters</Text>
