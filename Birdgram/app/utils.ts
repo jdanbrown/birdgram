@@ -92,7 +92,7 @@ export function setStateAsync<P, S, K extends keyof S>(
 }
 
 // Typesafe wrapper around react-fast-compare
-export function deepEqual<X, Y extends X>(x: X, y: Y): boolean {
+export function deepEqual<X, Y extends X>(x: X, y: Y | null | undefined): boolean {
   return reactFastCompare(x, y);
 }
 

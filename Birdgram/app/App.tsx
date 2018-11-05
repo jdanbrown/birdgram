@@ -25,6 +25,7 @@ import { deepEqual, global, match, setStateAsync } from './utils';
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Animated = Animated;
 global.AsyncStorage = AsyncStorage;
+global.deepEqual = deepEqual;
 global.Dimensions = Dimensions;
 global.Platform = Platform;
 global.iOSColors = iOSColors;
@@ -96,9 +97,9 @@ class App extends Component<Props, State> {
 
   }
 
-  // TODO
+  // TODO Want? (cf. SearchScreen.shouldComponentUpdate)
   // shouldComponentUpdate(nextProps: Props, nextState: State): boolean {
-  //   return !(deepEqual(this.props, nextProps) && deepEqual(this.state, nextState));
+  //   return !deepEqual(this.props, nextProps) || !deepEqual(this.state, nextState);
   // }
 
   componentDidUpdate = (prevProps: Props, prevState: State) => {

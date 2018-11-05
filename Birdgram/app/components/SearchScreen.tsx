@@ -36,8 +36,8 @@ import Sound from '../sound';
 import { querySql } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import {
-  all, any, chance, Clamp, Dim, finallyAsync, getOrSet, global, json, match, noawait, Point, pretty, setStateAsync,
-  Style, Styles, TabBarBottomConstants,
+  all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, match, noawait, Point, pretty,
+  setStateAsync, Style, Styles, TabBarBottomConstants,
 } from '../utils';
 
 const sidewaysTextWidth = 14;
@@ -220,6 +220,12 @@ export class SearchScreen extends Component<Props, State> {
     // Clear timers
     timer.clearTimeout(this);
 
+  }
+
+  // Update on !deepEqual instead of default (any setState() / props change, even if data is the same) else any setState
+  // in componentDidUpdate would trigger an infinite update loop
+  shouldComponentUpdate(nextProps: Props, nextState: State): boolean {
+    return !deepEqual(this.props, nextProps) || !deepEqual(this.state, nextState);
   }
 
   // After props/state change; not called for the initial render()
