@@ -58,6 +58,12 @@ export class Timer {
   };
 }
 
+// When you want Object.keys(x): Array<keyof typeof x> i/o Array<string>
+//  - https://github.com/Microsoft/TypeScript/pull/12253#issuecomment-263132208
+export function objectKeysTyped<X extends {}>(x: X): Array<keyof X> {
+  return Object.keys(x) as unknown as Array<keyof X>;
+}
+
 // Nonstandard shorthands (apologies for breaking norms, but these are too useful and too verbose by default)
 export const json   = JSON.stringify;
 export const pretty = (x: any) => JSON.stringify(x, null, 2);

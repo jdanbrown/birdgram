@@ -32,7 +32,8 @@ import { ActionSheetBasic } from './ActionSheets';
 import { Settings, ShowMetadata } from '../settings';
 import { config } from '../config';
 import {
-  ModelsSearch, Quality, Rec, rec_f_preds, Rec_f_preds, RecId, SearchRecs, ServerConfig, shortRecId,
+  InlineMetadataColumn, InlineMetadataColumns, ModelsSearch, Quality, Rec, rec_f_preds, Rec_f_preds, RecId, SearchRecs,
+  ServerConfig, shortRecId,
 } from '../datatypes';
 import { log, puts, tap } from '../log';
 import { Nav, navigate, NavParams, NavParamsSearch, ScreenProps } from '../nav';
@@ -42,8 +43,8 @@ import SqlString from 'sqlstring-sqlite';
 import { StyleSheet } from '../stylesheet';
 import { debugStyle, LabelStyle, labelStyles } from '../styles';
 import {
-  all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait, Point,
-  pretty, round, setStateAsync, Style, Styles, TabBarBottomConstants, zipSame,
+  all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait,
+  objectKeysTyped, Point, pretty, round, setStateAsync, Style, Styles, TabBarBottomConstants, zipSame,
 } from '../utils';
 
 const sidewaysTextWidth = 14;
@@ -865,6 +866,22 @@ export class SearchScreen extends Component<Props, State> {
       <this.BottomControlsButton
         help='Info'
         onPress={() => this.cycleMetadataInline()}
+        onLongPress={() => setStateAsync(this, {
+          showGenericModal: () => (
+            <this.GenericModal title='Show columns' actions={
+              objectKeysTyped(InlineMetadataColumns).map(c => ({
+                label: c,
+                textColor: iOSColors.black,
+                buttonColor: this.settings.inlineMetadataColumns.includes(c) ? iOSColors.tealBlue : iOSColors.customGray,
+                marginVertical: 2,
+                dismiss: false,
+                onPress: () => this.settings.update('inlineMetadataColumns', cs => (
+                  cs.includes(c) ? _.without(cs, c) : [...cs, c]
+                )),
+              }))
+            } />
+          )
+        })}
         active={this.settings.showMetadata === 'inline'}
         iconProps={{name: 'file-minus'}}
       />
@@ -907,12 +924,19 @@ export class SearchScreen extends Component<Props, State> {
     help: string,
     iconProps: IconProps,
     onPress?: (pointerInside: boolean) => void,
+    onLongPress?: () => Promise<void>,
     active?: boolean,
     disabled?: boolean,
   }) => {
     const {style: iconStyle, ...iconProps} = props.iconProps;
     return (
-      <LongPressGestureHandler onHandlerStateChange={this.onBottomControlsLongPress}>
+      <LongPressGestureHandler
+        onHandlerStateChange={async event => (
+          props.onLongPress
+            ? event.nativeEvent.state === Gesture.State.ACTIVE && await props.onLongPress()
+            : await this.onBottomControlsLongPress(event)
+        )}
+      >
         <BorderlessButton
           style={styles.bottomControlsButton}
           onPress={props.disabled ? undefined : props.onPress}
@@ -1086,9 +1110,11 @@ export class SearchScreen extends Component<Props, State> {
     title: string,
     actions: Array<{
       label: string,
-      iconName: string,
-      buttonColor: string,
+      iconName?: string,
+      buttonColor?: string,
       textColor?: string,
+      marginVertical?: number,
+      dismiss?: boolean,
       onPress: () => Promise<void>,
     }>,
   }) => (
@@ -1115,32 +1141,45 @@ export class SearchScreen extends Component<Props, State> {
         }}>
           {props.title}
         </Text>
-        {props.actions.map(({label, iconName, buttonColor, textColor, onPress}, index) => (
+        {props.actions.map(({
+          label,
+          iconName,
+          buttonColor,
+          textColor,
+          marginVertical,
+          dismiss,
+          onPress,
+        }, i) => (
           <RectButton
-            key={index}
+            key={i}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              padding: 10, marginVertical: 10, marginHorizontal: 10,
-              backgroundColor: buttonColor,
+              padding: 10, marginHorizontal: 10,
+              marginVertical: marginVertical !== undefined ? marginVertical : 10,
+              backgroundColor: buttonColor || iOSColors.customGray,
             }}
             onPress={async () => {
               await Promise.all([
-                setStateAsync(this, {
-                  showGenericModal: null, // Dismiss modal
-                }),
+                ...(!(dismiss !== undefined ? dismiss : true) ? [] : [
+                  setStateAsync(this, {
+                    showGenericModal: null, // Dismiss modal
+                  }),
+                ]),
                 onPress(),
               ]);
             }}
           >
-            <Feather
-              style={{
-                ...material.headlineObject,
-                marginRight: 5,
-                color: textColor || iOSColors.white,
-              }}
-              name={iconName}
-            />
+            {iconName && (
+              <Feather
+                style={{
+                  ...material.headlineObject,
+                  marginRight: 5,
+                  color: textColor || iOSColors.white,
+                }}
+                name={iconName}
+              />
+            )}
             <Text
               style={{
                 ...material.buttonObject,
@@ -1320,7 +1359,7 @@ export class SearchScreen extends Component<Props, State> {
                 ),
 
                 // Rec rows
-                ...recs.map((rec, index) => [
+                ...recs.map(rec => [
 
                   // Rec row
                   <Animated.View
@@ -1364,13 +1403,14 @@ export class SearchScreen extends Component<Props, State> {
                           </this.DebugView>
                         )}
 
-                        {/* Rec metadata */}
+                        {/* Rec inline metadata */}
                         {this.settings.showMetadata === 'inline' && (
                           <View style={[styles.recMetadataInlineLeft, {
                             width: this.scrollViewContentWidths.inlineMetadata,
                           }]}>
-                            <this.RecText children={Rec.placeNorm(rec.state)} />
-                            <this.RecText children={rec.month_day} />
+                            {this.settings.inlineMetadataColumns.map(c => (
+                              <this.RecText key={c} children={InlineMetadataColumns[c](rec)} />
+                            ))}
                           </View>
                         )}
 

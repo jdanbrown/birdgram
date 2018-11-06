@@ -1,4 +1,3 @@
-import { Settings } from './settings';
 import { Places } from './places';
 
 export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
@@ -67,6 +66,19 @@ export const Rec = {
   },
 
 };
+
+export const InlineMetadataColumns = {
+  xc_id:            (rec: Rec) => rec.xc_id,
+  species_com_name: (rec: Rec) => rec.species_com_name,
+  species_sci_name: (rec: Rec) => rec.species_sci_name,
+  recs_for_sp:      (rec: Rec) => rec.recs_for_sp,
+  quality:          (rec: Rec) => rec.quality,
+  month_day:        (rec: Rec) => rec.month_day,
+  place:            (rec: Rec) => Rec.placeNorm(rec.place),
+  state:            (rec: Rec) => Rec.placeNorm(rec.state),
+};
+
+export type InlineMetadataColumn = keyof typeof InlineMetadataColumns;
 
 export const Models = {
   search: {

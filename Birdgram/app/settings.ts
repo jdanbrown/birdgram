@@ -3,6 +3,7 @@ import React from 'react';
 import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
+import { InlineMetadataColumn, InlineMetadataColumns } from './datatypes';
 import { log, puts } from './log';
 import { debugStyle } from './styles';
 import { json, setStateAsync } from './utils';
@@ -16,6 +17,7 @@ export interface Props {
   readonly showDebug: boolean;
   // For SearchScreen
   readonly showMetadata: ShowMetadata;
+  readonly inlineMetadataColumns: Array<InlineMetadataColumn>;
   readonly editing: boolean;
   readonly seekOnPlay: boolean;
   readonly playingProgressEnable: boolean;
@@ -28,6 +30,7 @@ export const DEFAULTS: Props = {
   showDebug: false,
   // For SearchScreen
   showMetadata: 'inline',
+  inlineMetadataColumns: ['state', 'month_day'] as Array<InlineMetadataColumn>,
   editing: false,
   seekOnPlay: false,
   playingProgressEnable: true,
@@ -41,6 +44,7 @@ export const TYPES: {[key: string]: string} = {
   showDebug: 'boolean',
   // For SearchScreen
   showMetadata: 'string',
+  inlineMetadataColumns: 'object',
   editing: 'boolean',
   seekOnPlay: 'boolean',
   playingProgressEnable: 'boolean',
@@ -54,6 +58,7 @@ export const KEYS = [
   'showDebug',
   // For SearchScreen
   'showMetadata',
+  'inlineMetadataColumns',
   'editing',
   'seekOnPlay',
   'playingProgressEnable',
@@ -72,6 +77,7 @@ export class Settings implements Props {
     public readonly showDebug: boolean,
   // For SearchScreen
     public readonly showMetadata: ShowMetadata,
+    public readonly inlineMetadataColumns: Array<InlineMetadataColumn>,
     public readonly editing: boolean,
     public readonly seekOnPlay: boolean,
     public readonly playingProgressEnable: boolean,
@@ -138,7 +144,7 @@ export class Settings implements Props {
 
   }
 
-  async set(key: string, value: any): Promise<void> {
+  async set<K extends keyof Props>(key: K, value: Props[K]): Promise<void> {
     log.info('Settings.set', json({key, value}));
     // Persist in AsyncStorage
     await Settings.setItem(key, value);
@@ -148,7 +154,7 @@ export class Settings implements Props {
     }));
   }
 
-  async get(key: string): Promise<any> {
+  async get<K extends keyof Props>(key: K): Promise<Props[K]> {
     // Read from AsyncStorage
     const value = await Settings.getItem(key)
     if (value === null) {
@@ -156,6 +162,10 @@ export class Settings implements Props {
     } else {
       return value;
     }
+  }
+
+  async update<K extends keyof Props>(key: K, f: (v: Props[K]) => Props[K]): Promise<void> {
+    await this.set(key, f(this[key]));
   }
 
   // Prefix keys in AsyncStorage
@@ -170,9 +180,9 @@ export class Settings implements Props {
     return key.substr(Settings._prefix.length);
   };
 
-  async toggle(key: string): Promise<boolean> {
+  async toggle<K extends keyof Props>(key: K): Promise<boolean> {
     Settings.assertKeyHasType(key, 'boolean');
-    const value = (this as {[key: string]: any})[key];
+    const value = this[key];
     await this.set(key, !value);
     return !value;
   }
