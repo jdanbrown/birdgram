@@ -3,9 +3,10 @@ import React, { Component } from 'react';
 import {
   Alert, AsyncStorage, Dimensions, Easing, Image, Modal, Platform, ScrollView, Text, TouchableHighlight, View, WebView,
 } from 'react-native';
+import { BorderlessButton, RectButton } from 'react-native-gesture-handler';
 import SettingsList from 'react-native-settings-list';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
-import { BorderlessButton, RectButton } from 'react-native-gesture-handler';
+import { getStatusBarHeight } from 'react-native-status-bar-height';
 
 import { Settings } from '../settings';
 import { StyleSheet } from '../stylesheet';
@@ -28,10 +29,36 @@ export class SettingsScreen extends Component<Props, State> {
   // TODO https://github.com/evetstech/react-native-settings-list#a-more-realistic-example
   render = () => (
     <Settings.Context.Consumer children={settings => (
-      <View style={styles.container}>
+      <View style={{
+        flex: 1,
+        backgroundColor: iOSColors.white,
+      }}>
 
-        <View style={styles.settingsList}>
-          <SettingsList>
+        <View style={{
+          borderBottomWidth: 1,
+          borderColor: iOSColors.midGray,
+        }}>
+          <Text style={{
+            alignSelf: 'center',
+            marginTop: 30 - getStatusBarHeight(), // No status bar
+            marginBottom: 10,
+            ...material.titleObject,
+          }}>
+            Settings
+          </Text>
+        </View>
+
+        <View style={{
+          // flexGrow: 1, // TODO Do we need flexGrow i/o flex? Used to have flexGrow
+          flex: 1,
+          backgroundColor: iOSColors.customGray,
+        }}>
+          <SettingsList
+            defaultItemSize={50}
+            borderColor={iOSColors.midGray}
+          >
+
+            <SettingsList.Header headerStyle={{marginTop: 15}} />
 
             <SettingsList.Item
               id='Allow uploads'
@@ -69,6 +96,8 @@ export class SettingsScreen extends Component<Props, State> {
                 await settings.set('playingProgressInterval', _.isNaN(x) ? 0 : x);
               }}
             />
+
+            <SettingsList.Header headerStyle={{marginTop: 15}} />
 
             <SettingsList.Item
               id='Debug: Show debug info'
@@ -120,11 +149,4 @@ export class SettingsScreen extends Component<Props, State> {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    flexDirection: 'column',
-  },
-  settingsList: {
-    flexGrow: 1,
-  },
 });
