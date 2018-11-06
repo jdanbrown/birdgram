@@ -16,6 +16,7 @@ import structlog
 
 from config import config
 from datasets import *
+from json_ import json_dump_path
 from util import *
 
 log = structlog.get_logger(__name__)
@@ -228,6 +229,8 @@ def df_cache_hybrid(
                 mobile_files_dir(kind) / species / f"{kind}-{species}-{xc_id}.{format}"
             )
             mobile_server_config_path = mobile_dir / 'server-config.json'
+            mobile_models_dir = ensure_dir(mobile_dir / 'models')
+            mobile_models_search_path = mobile_models_dir / 'search.json'
 
             # We'll need to mutate (re-assign) as we go
             mobile_df = df
@@ -265,7 +268,7 @@ def df_cache_hybrid(
                 dir_size = or_else(-1, lambda: 1024 * int(sh.du('-sk', mobile_files_dir(bytes_name)).split()[0]))
                 mobile_file_sizes[rel(mobile_files_dir(bytes_name)) + '/'] = dir_size
 
-            # Expand mobile_feat_cols
+            # mobile_feat_cols: Expand vector -> one col per component
             #   - e.g. .f_preds -> .f_preds_0, .f_preds_1, ...
             for k in mobile_feat_cols:
                 n = one(df[k].map(len).drop_duplicates())
@@ -275,6 +278,16 @@ def df_cache_hybrid(
                             f'{k}_{i}': df[k].map(lambda x: x[i])
                             for i in range(n)
                         }))
+                    )
+
+            # mobile_feat_cols: Add .norm_* col (simpler than having to do it in sql on the client)
+            #   - e.g. .f_preds -> .norm_f_preds
+            for k in mobile_feat_cols:
+                with log_time_context(f'Mobile: Norm feat col: {k}'):
+                    mobile_df = (mobile_df
+                        .assign(**{
+                            f'norm_{k}': df[k].map(np.linalg.norm),
+                        })
                     )
 
             # Drop non-sqlite cols
@@ -321,11 +334,22 @@ def df_cache_hybrid(
                     )
                     mobile_file_sizes[rel(mobile_db_path)] = size_path(mobile_db_path)
 
-            # Write server-config.json file
+            # Write file: server-config.json
             #   - TODO Trim down (see ServerConfig in app/datatypes.ts for first cut at contract with mobile)
-            with open(mobile_server_config_path, 'w') as f:
-                json.dump(config, f, indent=2)
-                f.write('\n')
+            json_dump_path(indent=2,
+                path=mobile_server_config_path,
+                obj=config,
+            )
+
+            # Write file: models/search.json
+            #   - HACK Grab sg.search
+            from api.server_globals import sg
+            json_dump_path(indent=2,
+                path=mobile_models_search_path,
+                obj=dict(
+                    classes_=list(sg.search.classes_),
+                ),
+            )
 
     # Debug: display/plot file sizes, if requested
     file_sizes_df = (

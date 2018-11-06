@@ -17,10 +17,10 @@ import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { Settings } from './settings';
 import { config } from './config';
-import { SearchRecs, ServerConfig } from './datatypes';
+import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { NavParams, ScreenProps } from './nav';
 import { log } from './log';
-import { deepEqual, global, match, setStateAsync } from './utils';
+import { deepEqual, global, match, readJsonFile, setStateAsync } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Animated = Animated;
@@ -35,11 +35,10 @@ global.systemWeights = systemWeights;
 global.Settings = Settings;
 const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
 global.sj = {};
-global.d3 = {};
 timed('AudioUtils',         () => global.AudioUtils      = require('../third-party/magenta/music/transcription/audio_utils'));
 // timed('d3',              () => global.d3              = require('d3'));                      // 50ms [heavy, don't need full d3]
-timed('d3-color',           () => Object.assign(global.d3, require('d3-color')));               // 2ms
-timed('d3-scale-chromatic', () => Object.assign(global.d3, require('d3-scale-chromatic')));     // 6ms
+timed('d3-color',           () => global.d3c             = require('d3-color'));                // 2ms
+timed('d3-scale-chromatic', () => global.d3sc            = require('d3-scale-chromatic'));      // 6ms
 timed('jimp',               () => global.Jimp            = require('jimp'));                    // 170ms
 timed('lodash',             () => global._               = require('lodash'));                  // 0ms
 timed('ndarray',            () => global.ndarray         = require('ndarray'));                 // 1ms
@@ -62,6 +61,7 @@ type Props = {};
 type State = {
   loading: boolean;
   serverConfig?: ServerConfig;
+  modelsSearch?: ModelsSearch;
   settings?: Settings;
 };
 
@@ -78,10 +78,13 @@ class App extends Component<Props, State> {
   }
 
   componentDidMount = async () => {
+    log.debug('App.componentDidMount');
 
     // Load serverConfig (async) on app startup
-    const serverConfigJson = await fs.readFile(`${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`, 'utf8');
-    const serverConfig = JSON.parse(serverConfigJson);
+    const serverConfig = await readJsonFile<ServerConfig>(`${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`);
+
+    // Load modelsSearch (async) on app startup
+    const modelsSearch = await readJsonFile<ModelsSearch>(`${fs.dirs.MainBundleDir}/${Models.search.path}`);
 
     // Load settings (async) on app startup
     const settings = await Settings.load(
@@ -92,6 +95,7 @@ class App extends Component<Props, State> {
     await setStateAsync(this, {
       loading: false,
       serverConfig,
+      modelsSearch,
       settings,
     });
 
@@ -130,6 +134,7 @@ class App extends Component<Props, State> {
           // Pass props to screens (as props.screenProps)
           screenProps={{
             serverConfig: this.state.serverConfig,
+            modelsSearch: this.state.modelsSearch,
             settings: this.state.settings,
           } as ScreenProps}
         />

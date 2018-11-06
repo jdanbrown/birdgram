@@ -70,16 +70,6 @@ export class SettingsScreen extends Component<Props, State> {
               }}
             />
 
-            {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
-            <SettingsList.Item
-              id='Debug: Text color in debug info'
-              title='Debug: Text color in debug info'
-              isEditable={true}
-              hasNavArrow={false}
-              value={settings.debugTextColor}
-              onTextChange={async x => await settings.set('debugTextColor', x)}
-            />
-
             <SettingsList.Item
               id='Debug: Show debug info'
               title='Debug: Show debug info'

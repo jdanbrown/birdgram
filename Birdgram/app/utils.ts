@@ -33,6 +33,22 @@ export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
   return map.get(k)!;
 }
 
+export function round(x: number, prec: number = 0): number {
+  return Math.round(x * 10**prec) / 10**prec;
+}
+
+export function mapMapKeys<K, V, L>(map: Map<K, V>, f: (k: K) => L): Map<L, V> {
+  return new Map(Array.from(map).map<[L, V]>(([k, v]) => [f(k), v]));
+}
+
+export function mapMapValues<K, V, U>(map: Map<K, V>, f: (v: V) => U): Map<K, U> {
+  return new Map(Array.from(map).map<[K, U]>(([k, v]) => [k, f(v)]));
+}
+
+export function mapMapEntries<K, V, L, U>(map: Map<K, V>, f: (k: K, v: V) => [L, U]): Map<L, U> {
+  return new Map(Array.from(map).map<[L, U]>(([k, v]) => f(k, v)));
+}
+
 // Nonstandard shorthands (apologies for breaking norms, but these are too useful and too verbose by default)
 export const json   = JSON.stringify;
 export const pretty = (x: any) => JSON.stringify(x, null, 2);
@@ -60,6 +76,18 @@ export async function finallyAsync<X>(p: Promise<X>, f: () => Promise<void>): Pr
   } finally {
     await f();
   }
+}
+
+//
+// lodash
+//
+
+import _, { List } from 'lodash';
+
+// Like _.zip, but refuse arrays of different lengths, and coerce _.zip return element types from (X | undefined) back to X
+export function zipSame<X, Y>(xs: List<X>, ys: List<Y>): Array<[X, Y]> {
+  if (xs.length !== ys.length) throw `zipSameLength: lengths don't match: xs.length[${xs.length}] !== ys.length[${ys.length}]`;
+  return _.zip(xs, ys) as unknown as Array<[X, Y]>;
 }
 
 //
@@ -134,3 +162,15 @@ export type Clamp<X> = {
   min: X;
   max: X;
 };
+
+//
+// fs (via rn-fetch-blob)
+//
+
+import RNFB from 'rn-fetch-blob';
+const fs = RNFB.fs;
+
+export async function readJsonFile<X extends {}>(path: string): Promise<X> {
+  const json = await fs.readFile(path, 'utf8');
+  return JSON.parse(json);
+}

@@ -28,3 +28,9 @@ def json_sanitize(x: any) -> any:
     Sanitize (deep) contents of x so it's json safe
     """
     return json.loads(json_dumps_safe(x))
+
+
+def json_dump_path(obj: any, path: str, **kwargs):
+    with open(path, 'w') as f:
+        json.dump(obj, f, **kwargs)
+        f.write('\n')

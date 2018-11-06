@@ -4,6 +4,7 @@ import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { log, puts } from './log';
+import { debugStyle } from './styles';
 import { setStateAsync } from './utils';
 
 export type ShowMetadata = 'none' | 'inline' | 'full';
@@ -13,7 +14,6 @@ export interface Props {
   // NOTE Keep attrs in sync (1/5)
   readonly allowUploads: boolean;
   readonly showDebug: boolean;
-  readonly debugTextColor: string; // XXX Junk setting (so we can have more than one)
   // For SearchScreen
   readonly showMetadata: ShowMetadata;
   readonly editing: boolean;
@@ -26,7 +26,6 @@ export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
   allowUploads: true,
   showDebug: false,
-  debugTextColor: 'green',
   // For SearchScreen
   showMetadata: 'inline',
   editing: false,
@@ -40,7 +39,6 @@ export const TYPES: {[key: string]: string} = {
   // NOTE Keep attrs in sync (3/5)
   allowUploads: 'boolean',
   showDebug: 'boolean',
-  debugTextColor: 'string',
   // For SearchScreen
   showMetadata: 'string',
   editing: 'boolean',
@@ -54,7 +52,6 @@ export const KEYS = [
   //  - Keys in the order expected by the constructor
   'allowUploads',
   'showDebug',
-  'debugTextColor',
   // For SearchScreen
   'showMetadata',
   'editing',
@@ -73,7 +70,6 @@ export class Settings implements Props {
     // NOTE Keep attrs in sync (4/5)
     public readonly allowUploads: boolean,
     public readonly showDebug: boolean,
-    public readonly debugTextColor: string,
   // For SearchScreen
     public readonly showMetadata: ShowMetadata,
     public readonly editing: boolean,
@@ -251,14 +247,14 @@ export class Settings implements Props {
   get debugView(): object {
     return {
       display: this.showDebug ? undefined : 'none',
-      backgroundColor: iOSColors.black,
       padding: 3,
+      backgroundColor: debugStyle.backgroundColor,
     };
   }
   get debugText(): object {
     return {
-      color: (iOSColors as {[key: string]: any})[this.debugTextColor] || iOSColors.green,
-      backgroundColor: iOSColors.black,
+      color: debugStyle.color,
+      backgroundColor: debugStyle.backgroundColor,
     };
   }
 

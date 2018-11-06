@@ -1,14 +1,15 @@
 import { NavigationRoute, NavigationScreenProp } from 'react-navigation';
 
-import { ServerConfig } from './datatypes';
+import { ModelsSearch, ServerConfig } from './datatypes';
 import { Settings } from './settings';
 
 export type Nav = NavigationScreenProp<NavigationRoute<NavParams>, NavParams>;
 
 // QUESTION How should we use ScreenProps vs. NavParams?
 export interface ScreenProps {
-  serverConfig: ServerConfig,
-  settings: Settings,
+  serverConfig: ServerConfig;
+  modelsSearch: ModelsSearch;
+  settings: Settings;
 }
 
 // Wrappers for nav.navigate(route, params) to increase type safety

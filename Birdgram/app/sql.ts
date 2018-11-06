@@ -24,7 +24,7 @@ export function querySql<Row>(
     db.transaction(tx => {
       tx.executeSql( // [How do you use the Promise version of tx.executeSql without jumping out of the tx?]
         // Format using sqlstring-sqlite (e.g. array support) instead of react-native-sqlite-storage (e.g. no array support)
-        SqlString.format(sql, params || []),
+        formatSql(sql, params),
         [],
         (tx, {rows, rowsAffected, insertId}) => {
           log.info('[querySql]', 'results:', rows.length, 'sql:', sql, 'params:', params);
@@ -45,12 +45,17 @@ export function querySql<Row>(
 
 }
 
+// TODO Is this worthwhile given that we immediately formatSql in the impl anyway? Unlikely that impl will change soon.
 export interface BindSql {
   sql: string;
   params?: any[];
 }
 export function bindSql(sql: string, params?: any[]): BindSql {
   return {sql, params}
+}
+
+export function formatSql(sql: string, params?: any[]): string {
+  return SqlString.format(sql, params || []);
 }
 
 // Mimic @types/react-native-sqlite-storage, but add <Row>

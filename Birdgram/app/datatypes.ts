@@ -4,24 +4,41 @@ import { Places } from './places';
 export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
 export type RecId = string;
 
-export type Rec = {
-  id: RecId,
-  xc_id: number,
-  species: string,             // (From ebird)
-  species_taxon_order: string, // (From ebird)
-  species_com_name: string,    // (From xc)
-  species_sci_name: string,    // (From xc)
-  recs_for_sp: number,
-  quality: Quality,
-  lat: number,
-  lng: number,
-  month_day: string,
-  place: string,
-  place_only: string,
-  state: string,
-  state_only: string,
-  recordist: string,
-  license_type: string,
+export interface Rec {
+
+  // bubo
+  id: RecId;
+
+  // xc
+  xc_id: number;
+  species: string;             // (From ebird)
+  species_taxon_order: string; // (From ebird)
+  species_com_name: string;    // (From xc)
+  species_sci_name: string;    // (From xc)
+  recs_for_sp: number;
+  quality: Quality;
+  lat: number;
+  lng: number;
+  month_day: string;
+  place: string;
+  place_only: string;
+  state: string;
+  state_only: string;
+  recordist: string;
+  license_type: string;
+
+  // search_recs / search output
+  slp?: number;
+  d_pc?: number;
+
+}
+
+export interface Rec_f_preds {
+  [key: string]: number;
+}
+
+export function rec_f_preds(rec: Rec): Rec_f_preds {
+  return rec as unknown as Rec_f_preds;
 }
 
 export const Rec = {
@@ -43,6 +60,16 @@ export const Rec = {
 
 };
 
+export const Models = {
+  search: {
+    path: `search_recs/models/search.json`,
+  },
+};
+
+export interface ModelsSearch {
+  classes_: Array<string>;
+}
+
 export const SearchRecs = {
 
   serverConfigPath: 'search_recs/server-config.json',
@@ -57,7 +84,7 @@ export const SearchRecs = {
 
 };
 
-export type ServerConfig = {
+export interface ServerConfig {
   server_globals: {
     sg_load: {
       search: object,
@@ -67,7 +94,7 @@ export type ServerConfig = {
         num_recs:    number | null,
       },
     },
-  },
+  };
   api: {
     recs: {
       search_recs: {
@@ -82,7 +109,7 @@ export type ServerConfig = {
         save?: object,
       },
     },
-  },
+  };
   audio: {
     audio_persist: {
       audio_kwargs: {
@@ -91,5 +118,5 @@ export type ServerConfig = {
         codec?: string,
       },
     },
-  },
+  };
 };
