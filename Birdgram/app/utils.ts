@@ -49,6 +49,15 @@ export function mapMapEntries<K, V, L, U>(map: Map<K, V>, f: (k: K, v: V) => [L,
   return new Map(Array.from(map).map<[L, U]>(([k, v]) => f(k, v)));
 }
 
+export class Timer {
+  constructor(
+    public readonly startTime: Date = new Date(),
+  ) {}
+  time = (): number => {
+    return (new Date().getTime() - this.startTime.getTime()) / 1000; // Seconds
+  };
+}
+
 // Nonstandard shorthands (apologies for breaking norms, but these are too useful and too verbose by default)
 export const json   = JSON.stringify;
 export const pretty = (x: any) => JSON.stringify(x, null, 2);

@@ -1,5 +1,6 @@
 // Polyfill console.{time,timeEnd} for jsc (works in rndebugger v8)
 import 'react-native-console-time-polyfill';
+import { sprintf } from 'sprintf-js';
 
 import { global, match, pretty } from './utils';
 
@@ -14,6 +15,14 @@ export function levelOrder(level: Level): number {
     'info':  1,
     'warn':  2,
     'error': 3,
+  }[level];
+}
+export function levelStyle(level: Level): string {
+  return {
+    'debug': 'padding: 0 1px; color: white; background: #1f78b4', // Blue
+    'info':  'padding: 0 1px; color: white; background: #33a02c', // Green
+    'warn':  'padding: 0 1px; color: white; background: #fec44f', // Yellow/orange
+    'error': 'padding: 0 1px; color: white; background: #e31a1c', // Red
   }[level];
 }
 
@@ -50,13 +59,17 @@ export class Log {
   //  - Return a (bound) console method so that the caller's filename:lineno comes through instead of ours
   //  - Assume caller does ifDev
   logIfLevel = (level: Level): Do<any[]> => {
-    return levelOrder(level) < levelOrder(this.level) ? noop : (
+    const console_f = levelOrder(level) < levelOrder(this.level) ? noop : (
       match(level, // (Instead of console[level] because types)
         ['debug', console.debug],
         ['info',  console.info],
         ['warn',  console.warn],
         ['error', console.error],
       ).bind(console)
+    );
+    return (...args: any[]) => console_f(
+      '%c%s', levelStyle(level), sprintf('%-5s', level.toUpperCase()),
+      ...args,
     );
   }
 

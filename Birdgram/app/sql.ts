@@ -1,11 +1,14 @@
+import _ from 'lodash';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import SqlString from 'sqlstring-sqlite';
 
 import { log } from './log';
+import { Timer } from './utils';
 
 export function querySql<Row>(
   db: SQLiteDatabase,
   _sql: string | BindSql,
+  opts: {logTruncate: number} = {logTruncate: 200},
 ): <X>(onResults: (results: ResultSet<Row>) => Promise<X>) => Promise<X> {
 
   // Unpack args
@@ -18,16 +21,22 @@ export function querySql<Row>(
     params = undefined;
   }
 
-  log.debug('[querySql]', 'sql:', sql, 'params:', params);
+  // sql + params
+  //  - Format using sqlstring-sqlite (e.g. array support) instead of react-native-sqlite-storage (e.g. no array support)
+  sql = formatSql(sql, params);
+  params = undefined;
+
+  const timer = new Timer();
+  const sqlTrunc = _.truncate(sql, {length: opts.logTruncate});
+  log.debug('[querySql] Running...', sqlTrunc);
   return onResults => new Promise((resolve, reject) => {
     // TODO How to also `await db.transaction`? (Do we even want to?)
     db.transaction(tx => {
       tx.executeSql( // [How do you use the Promise version of tx.executeSql without jumping out of the tx?]
-        // Format using sqlstring-sqlite (e.g. array support) instead of react-native-sqlite-storage (e.g. no array support)
-        formatSql(sql, params),
+        sql,
         [],
         (tx, {rows, rowsAffected, insertId}) => {
-          log.info('[querySql]', 'results:', rows.length, 'sql:', sql, 'params:', params);
+          log.info('[querySql]', `time[${timer.time()}s]`, `rows[${rows.length}]`, sqlTrunc);
           resolve(onResults({
             rows: {
               length: rows.length,

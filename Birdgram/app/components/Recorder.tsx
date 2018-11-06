@@ -71,13 +71,13 @@ export class Recorder extends React.Component<Props, State> {
   }
 
   componentDidMount = () => {
-    log.debug('componentDidMount', this);
+    log.info('componentDidMount', this);
 
     // Request mic permissions
     Permissions.request('microphone').then(status => {
       // NOTE Buggy on ios simulator [https://github.com/yonahforst/react-native-permissions/issues/58]
       //  - Recording works, but permissions always return 'undetermined'
-      log.debug('Permissions.request: microphone', status);
+      log.info('Permissions.request: microphone', status);
     });
 
     // Register callbacks
@@ -92,7 +92,7 @@ export class Recorder extends React.Component<Props, State> {
 
   startRecording = async () => {
     if (this.state.recordingState === RecordingState.Stopped) {
-      log.debug('startRecording');
+      log.info('startRecording');
 
       // Update recordingState + reset audio chunks
       await setStateAsync(this, {
@@ -147,7 +147,7 @@ export class Recorder extends React.Component<Props, State> {
 
   stopRecording = async () => {
     if (this.state.recordingState === RecordingState.Recording) {
-      log.debug('stopRecording');
+      log.info('stopRecording');
 
       // Update recordingState
       await setStateAsync(this, {

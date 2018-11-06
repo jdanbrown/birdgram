@@ -33,6 +33,14 @@ export interface Rec {
 
 }
 
+// If xc, abbrev long path rec.id -> short '<species>/<xc_id>'
+export function shortRecId(id: RecId): RecId {
+  return (
+    id.startsWith('cache/audio/xc/data/') ? id.split('/').slice(4, 6).join('/') :
+    id
+  );
+}
+
 export interface Rec_f_preds {
   [key: string]: number;
 }

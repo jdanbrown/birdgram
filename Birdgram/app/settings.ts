@@ -5,7 +5,7 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 
 import { log, puts } from './log';
 import { debugStyle } from './styles';
-import { setStateAsync } from './utils';
+import { json, setStateAsync } from './utils';
 
 export type ShowMetadata = 'none' | 'inline' | 'full';
 
@@ -133,12 +133,13 @@ export class Settings implements Props {
       ...values,
     );
 
-    log.debug('Settings.load', settings);
+    log.info('Settings.load', settings);
     return settings;
 
   }
 
   async set(key: string, value: any): Promise<void> {
+    log.info('Settings.set', json({key, value}));
     // Persist in AsyncStorage
     await Settings.setItem(key, value);
     // Set locally (only if persist worked)

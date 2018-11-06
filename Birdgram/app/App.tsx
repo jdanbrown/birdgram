@@ -78,7 +78,7 @@ class App extends Component<Props, State> {
   }
 
   componentDidMount = async () => {
-    log.debug('App.componentDidMount');
+    log.info('App.componentDidMount');
 
     // Load serverConfig (async) on app startup
     const serverConfig = await readJsonFile<ServerConfig>(`${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`);
@@ -107,7 +107,7 @@ class App extends Component<Props, State> {
   // }
 
   componentDidUpdate = (prevProps: Props, prevState: State) => {
-    log.debug('App.componentDidUpdate', this.state.settings);
+    log.info('App.componentDidUpdate', this.state.settings);
     global.settings = this.state.settings; // XXX Debug
   }
 
@@ -164,7 +164,7 @@ const AppNav = createBottomTabNavigator(
           ['Record',   (<Feather name='activity'  size={size} color={tintColor || undefined} />)],
           ['Search',   (<Feather name='search'    size={size} color={tintColor || undefined} />)],
           ['Recent',   (<Feather name='list'      size={size} color={tintColor || undefined} />)],
-          ['Saved',    (<Feather name='star'      size={size} color={tintColor || undefined} />)],
+          ['Saved',    (<Feather name='bookmark'  size={size} color={tintColor || undefined} />)],
           ['Settings', (<Feather name='settings'  size={size} color={tintColor || undefined} />)],
         );
       },

@@ -2,9 +2,9 @@ import * as d3sc from 'd3-scale-chromatic';
 import _ from 'lodash';
 import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import RN, {
-  Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Keyboard, KeyboardAvoidingView,
-  LayoutChangeEvent, Modal, Platform, RegisteredStyle, ScrollView, SectionList, SectionListData, SectionListStatic,
-  StyleProp, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
+  ActivityIndicator, Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Keyboard,
+  KeyboardAvoidingView, LayoutChangeEvent, Modal, Platform, RegisteredStyle, ScrollView, SectionList, SectionListData,
+  SectionListStatic, StyleProp, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
 } from 'react-native';
 import ActionSheet from 'react-native-actionsheet'; // [Must `import ActionSheet` i/o `import { ActionSheet }`, else barf]
 import FastImage from 'react-native-fast-image';
@@ -31,7 +31,9 @@ const fs = RNFB.fs;
 import { ActionSheetBasic } from './ActionSheets';
 import { Settings, ShowMetadata } from '../settings';
 import { config } from '../config';
-import { ModelsSearch, Quality, Rec, rec_f_preds, Rec_f_preds, RecId, SearchRecs, ServerConfig } from '../datatypes';
+import {
+  ModelsSearch, Quality, Rec, rec_f_preds, Rec_f_preds, RecId, SearchRecs, ServerConfig, shortRecId,
+} from '../datatypes';
 import { log, puts, tap } from '../log';
 import { Nav, navigate, NavParams, NavParamsSearch, ScreenProps } from '../nav';
 import Sound from '../sound';
@@ -45,7 +47,7 @@ import {
 } from '../utils';
 
 const sidewaysTextWidth = 14;
-const editingButtonWidth = 35;
+const recEditingButtonWidth = 35;
 const someExampleSpecies = 'GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW' // XXX Dev
 
 interface ScrollViewState {
@@ -76,6 +78,7 @@ interface Props extends NavigationScreenProps<NavParams, any> {
 interface State {
   scrollViewKey: string;
   scrollViewState: ScrollViewState;
+  showGenericModal: null | (() => Element);
   showFilters: boolean;
   showHelp: boolean;
   totalRecs?: number;
@@ -85,8 +88,13 @@ interface State {
   filterQueryText?: string;
   filterQuality: Array<Quality>;
   filterLimit: number;
-  lastQuery?: Query;
-  status: string;
+  excludeSpecies: Array<string>;
+  excludeRecIds: Array<string>;
+  status: {
+    loading: boolean,
+    queryInProgress?: Query,
+    queryShown?: Query;
+  },
   recs: Array<Rec>;
   playing?: {
     rec: Rec,
@@ -133,11 +141,14 @@ export class SearchScreen extends Component<Props, State> {
   state: State = {
     scrollViewKey: '',
     scrollViewState: this._scrollViewState,
+    showGenericModal: null,
     showFilters: false,
     showHelp: false,
     filterQuality: ['A', 'B'],
     filterLimit: 30, // TODO How big vs. fast? (-> Settings with sane default)
-    status: '',
+    excludeSpecies: [],
+    excludeRecIds: [],
+    status: {loading: true},
     recs: [],
     // Sync from/to Settings (2/3)
     spectroScale: this.settings.spectroScale,
@@ -175,7 +186,7 @@ export class SearchScreen extends Component<Props, State> {
   //    - First render() happens before this (don't try to avoid it, it's ok)
   //    - Immediate setState() will trigger render() a second time before the first screen draw
   componentDidMount = async () => {
-    log.debug('SearchScreen.componentDidMount');
+    log.info('SearchScreen.componentDidMount');
     global.SearchScreen = this; // XXX Debug
 
     // Configure react-native-sound
@@ -214,6 +225,7 @@ export class SearchScreen extends Component<Props, State> {
       select count(*) as totalRecs
       from search_recs
     `)(async results => {
+      log.info('SearchScreen.componentDidMount: state.totalRecs');
       const [{totalRecs}] = results.rows.raw();
       await setStateAsync(this, {
         totalRecs,
@@ -226,6 +238,7 @@ export class SearchScreen extends Component<Props, State> {
       from search_recs
       limit 1
     `)(async results => {
+      log.info('SearchScreen.componentDidMount: state.f_preds_cols');
       const [rec] = results.rows.raw();
       const n = Object.keys(rec).filter(k => k.startsWith('f_preds_')).length;
       // Reconstruct strings from .length to enforce ordering
@@ -236,7 +249,7 @@ export class SearchScreen extends Component<Props, State> {
     });
 
     // Query recs (from navParams.species)
-    log.debug('componentDidMount: loadRecsFromQuery');
+    log.debug('componentDidMount -> loadRecsFromQuery');
     await this.loadRecsFromQuery();
 
   }
@@ -247,7 +260,7 @@ export class SearchScreen extends Component<Props, State> {
   //    - Do unsubscribe listeners / cancel timers (created in componentDidMount)
   //    - Don't setState(), since no more render() will happen for this instance
   componentWillUnmount = async () => {
-    log.debug('SearchScreen.componentWillUnmount');
+    log.info('SearchScreen.componentWillUnmount');
 
     // Tell other apps we're no longer using the audio device
     Sound.setActive(false);
@@ -275,13 +288,16 @@ export class SearchScreen extends Component<Props, State> {
   //    - Do fetch data, conditioned on changed props/state (else update loops)
   //    - Do setState(), conditioned on changed props (else update loops)
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    log.debug('SearchScreen.componentDidUpdate', this.props, this.state);
+    log.info('SearchScreen.componentDidUpdate', this.props, this.state);
 
-    // Reset state.filterQueryText if query (= props.navigation.state.params.{search,recId}) changed
+    // Reset view state if query (= props.navigation.state.params.{search,recId}) changed
     //  - TODO Pass props.key to reset _all_ state? [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
     if (!deepEqual(this.query, this._query(prevProps))) {
+      log.info('SearchScreen.componentDidUpdate: Reset view state');
       await setStateAsync(this, {
         filterQueryText: undefined,
+        excludeSpecies: [],
+        excludeRecIds: [],
       });
     }
 
@@ -297,8 +313,8 @@ export class SearchScreen extends Component<Props, State> {
     }
 
     // Query recs (from updated navParams.species)
-    //  - (Will noop if deepEqual(query, state.lastQuery))
-    log.debug('componentDidUpdate: loadRecsFromQuery');
+    //  - (Will noop if deepEqual(query, state.status.queryShown))
+    log.debug('componentDidUpdate -> loadRecsFromQuery');
     await this.loadRecsFromQuery();
 
   }
@@ -320,11 +336,8 @@ export class SearchScreen extends Component<Props, State> {
   get scrollViewContentWidths() {
     return {
       // NOTE Conditions duplicated elsewhere (render, spectroDim, ...)
-      speciesEditing: !(this.settings.editing && this.settings.showMetadata !== 'full') ? 0 : (
-        editingButtonWidth * this._speciesEditingButtons.length
-      ),
       recEditing:     !this.settings.editing ? 0 : (
-        editingButtonWidth * this._recEditingButtons.length
+        recEditingButtonWidth * this._recEditingButtons.length
       ),
       sidewaysText:   this.settings.showMetadata === 'full' ? 0 : (
         sidewaysTextWidth
@@ -351,50 +364,54 @@ export class SearchScreen extends Component<Props, State> {
   };
 
   get queryDesc(): string {
-    // TODO Make match() typecheck in this use case
+    // TODO Make match() typecheck for this use case
     switch (this.query.kind) {
       case 'species': return this.query.species;
-      case 'recId':   return (
-        this.query.recId.split('/').slice(4, 6).join('/') || // HACK If xc, abbrev rec.id -> '<species>/<xc_id>'
-        this.query.recId
-      );
+      case 'recId':   return shortRecId(this.query.recId);
     }
   }
 
   loadRecsFromQuery = async () => {
     if (
-      // Noop if query already in progress
-      //  - XXX Nope: ensure last call wins, not first call wins
-      // this.state.status !== '[Loading...]' &&
       // Noop if we don't know f_preds_cols yet (assume we'll be called again)
       this.state.f_preds_cols &&
-      // Noop if query wouldn't return new/useful results
-      !deepEqual(this.query, this.state.lastQuery) &&
+      // Noop if this.query is already shown
+      !deepEqual(this.query, this.state.status.queryShown) &&
+      // Noop if this.query is already in progress
+      !deepEqual(this.query, this.state.status.queryInProgress) &&
+      // Noop if this.query isn't valid
       matchQuery(this.query, {
         species: ({species}) => species !== '',
         recId:   ({recId})   => recId   !== '',
       })
     ) {
+      log.info('loadRecsFromQuery', pretty({query: this.query, status: this.state.status}));
 
       // Set loading state
       //  - TODO Fade previous recs instead of showing a blank screen while loading
-      await this.releaseSounds();
+      log.info('loadRecsFromQuery: state.status.loading = true');
       await setStateAsync(this, {
-        status: '[Loading...]',
+        status: {
+          loading: true,
+          queryInProgress: this.query,
+        },
         recs: [],
       });
+      await this.releaseSounds(); // (Safe to do after clearing state.recs, since it uses this.soundsCache)
 
       // Can't use window functions until sqlite ≥3.25.x
       //  - TODO Waiting on: https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
 
       const _loadRecs = async (sql: string): Promise<void> => {
-        log.debug('loadRecsFromQuery', json({query: this.query, sql}));
         await querySql<Rec>(this.db!, sql)(async results => {
           const recs = results.rows.raw();
+          log.info('loadRecsFromQuery: state.status.loading = false');
           await setStateAsync(this, {
-            lastQuery: this.query,
+            status: {
+              loading: false,
+              queryShown: this.query,
+            },
             recs,
-            status: `${recs.length} recs`,
           });
         });
       };
@@ -430,7 +447,6 @@ export class SearchScreen extends Component<Props, State> {
 
           // TODO(nav_rec_id)
           //  - TODO Top k by sp (w/o window functions)
-          //
 
           //  - Top k per sp without window functions (try one query per sp?)
           //    - `top k species by sp_probs` -> read sp_probs straight from rec.f_preds!
@@ -493,9 +509,6 @@ export class SearchScreen extends Component<Props, State> {
             this.state.filterLimit,
           ]));
 
-          //
-          // TODO(nav_rec_id)
-
         },
 
       });
@@ -517,11 +530,11 @@ export class SearchScreen extends Component<Props, State> {
   }
 
   releaseSounds = async () => {
-    log.info('Releasing cached sounds');
+    log.info(`Releasing ${this.soundsCache.size} cached sounds`);
     await Promise.all(
       Array.from(this.soundsCache).map(async ([recId, soundAsync]) => {
-        log.info('Releasing sound',
-          // recId, // Noisy
+        log.debug('Releasing sound',
+          shortRecId(recId), // Noisy (unless rndebugger timestamps are shown, in which case these log lines don't de-dupe anyway)
         );
         (await soundAsync).release();
       }),
@@ -534,7 +547,7 @@ export class SearchScreen extends Component<Props, State> {
     let soundAsync = this.soundsCache.get(rec.id);
     if (!soundAsync) {
       log.debug('Allocating sound',
-        // rec.id, // Noisy
+        shortRecId(rec.id), // Noisy (unless rndebugger timestamps are shown, in which case these log lines don't de-dupe anyway)
       );
       // Allocate + cache sound resource
       //  - Cache the promise so that get+set is atomic, else we race and allocate multiple sounds per rec.id
@@ -576,7 +589,7 @@ export class SearchScreen extends Component<Props, State> {
 
         // Workaround: Manually clean up on done/stop b/c the .play done callback doesn't trigger on .stop
         const onDone = async () => {
-          log.debug('Done: rec', rec.id);
+          log.info('Done: rec', rec.id);
           timer.clearInterval(this, 'playingCurrentTime');
           await setStateAsync(this, {
             playing: undefined,
@@ -589,7 +602,7 @@ export class SearchScreen extends Component<Props, State> {
           global.sound = sound; // XXX Debug
 
           // Stop sound playback
-          log.debug('Stopping: rec', rec.id);
+          log.info('Stopping: rec', rec.id);
           await sound.stopAsync();
           await onDone();
 
@@ -611,7 +624,7 @@ export class SearchScreen extends Component<Props, State> {
 
           // Play rec (if startTime is valid)
           if (!startTime || startTime < sound.getDuration()) {
-            log.debug('Playing: rec', rec.id);
+            log.info('Playing: rec', rec.id);
 
             // setState
             await setStateAsync(this, {
@@ -808,8 +821,9 @@ export class SearchScreen extends Component<Props, State> {
       <this.BottomControlsButton
         help='Save'
         onPress={() => this.saveActionSheet.current!.show()}
-        iconProps={{name: 'star'}}
         // iconProps={{name: 'share'}}
+        // iconProps={{name: 'star'}}
+        iconProps={{name: 'bookmark'}}
       />
       {/* Add species (select species manually) */}
       <this.BottomControlsButton
@@ -946,42 +960,6 @@ export class SearchScreen extends Component<Props, State> {
     return sections;
   }
 
-  SpeciesEditingButtons = (props: {species: string}) => (
-    <View style={styles.speciesEditingView}>
-      {this._speciesEditingButtons.map((f, i) => f(i, props.species))}
-    </View>
-  );
-
-  get _speciesEditingButtons() {
-    return [
-      // (i: number, species: string) => (
-      //   <this.EditingButton key={i} buttonStyle={styles.speciesEditingButton} iconStyle={styles.speciesEditingIcon}
-      //     iconName='move'
-      //     onPress={() => {}}
-      //   />
-      // ),
-      (i: number, species: string) => (
-        <this.EditingButton key={i} buttonStyle={styles.speciesEditingButton} iconStyle={styles.speciesEditingIcon}
-          iconName='search'
-          onPress={() => navigate.search(this.nav, {species})}
-        />
-      ),
-      (i: number, species: string) => (
-        <this.EditingButton key={i} buttonStyle={styles.speciesEditingButton} iconStyle={styles.speciesEditingIcon}
-          // iconName='user-x'
-          iconName='x'
-          onPress={() => {}}
-        />
-      ),
-      (i: number, species: string) => (
-        <this.EditingButton key={i} buttonStyle={styles.speciesEditingButton} iconStyle={styles.speciesEditingIcon}
-          iconName='plus'
-          onPress={() => {}}
-        />
-      ),
-    ];
-  }
-
   RecEditingButtons = (props: {rec: Rec}) => (
     <View style={styles.recEditingView}>
       {this._recEditingButtons.map((f, i) => f(i, props.rec))}
@@ -990,42 +968,190 @@ export class SearchScreen extends Component<Props, State> {
 
   get _recEditingButtons() {
     return [
+
       // (i: number, rec: Rec) => (
-      //   <this.EditingButton key={i} buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
+      //   <this.RecEditingButton
+      //     key={i}
       //     iconName='move'
       //     onPress={() => {}}
       //   />
       // ),
+
       (i: number, rec: Rec) => (
-        <this.EditingButton key={i} buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
+        <this.RecEditingButton
+          key={i}
           iconName='search'
-          onPress={() => navigate.search(this.nav, {recId: rec.id})}
+          // onPress={() => navigate.search(this.nav, {recId: rec.id})}
+          onPress={() => setStateAsync(this, {
+            showGenericModal: () => (
+              <this.GenericModal title='Open search' actions={[
+                {
+                  label: rec.species,
+                  iconName: 'search',
+                  buttonColor: iOSColors.blue,
+                  onPress: async () => { navigate.search(this.nav, {species: rec.species}); },
+                }, {
+                  label: shortRecId(rec.id),
+                  iconName: 'search',
+                  buttonColor: iOSColors.blue,
+                  onPress: async () => { navigate.search(this.nav, {recId: rec.id}); },
+                },
+              ]} />
+            )
+          })}
         />
       ),
+
       (i: number, rec: Rec) => (
-        <this.EditingButton key={i} buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
+        <this.RecEditingButton
+          key={i}
           iconName='x'
-          onPress={() => {}}
+          // iconName='slash'
+          onPress={() => setStateAsync(this, {
+            showGenericModal: () => (
+              <this.GenericModal title='Remove results' actions={[
+                {
+                  label: rec.species,
+                  iconName: 'x',
+                  buttonColor: iOSColors.red,
+                  onPress: async () => await setStateAsync(this, (state: State, props: Props) => ({
+                    excludeSpecies: [...state.excludeSpecies, rec.species],
+                  })),
+                }, {
+                  label: shortRecId(rec.id),
+                  iconName: 'x',
+                  buttonColor: iOSColors.red,
+                  onPress: async () => await setStateAsync(this, (state: State, props: Props) => ({
+                    excludeRecIds: [...state.excludeRecIds, rec.id],
+                  })),
+                },
+              ]} />
+            )
+          })}
         />
       ),
+
       (i: number, rec: Rec) => (
-        <this.EditingButton key={i} buttonStyle={styles.recEditingButton} iconStyle={styles.recEditingIcon}
-          iconName='star'
-          onPress={() => navigate.recent(this.nav, {})}
+        <this.RecEditingButton
+          key={i}
+          // iconName='star'
+          iconName='bookmark'
+          onPress={() => setStateAsync(this, {
+            showGenericModal: () => (
+              <this.GenericModal title='Save results' actions={[
+                {
+                  label: rec.species,
+                  iconName: 'bookmark',
+                  buttonColor: iOSColors.purple,
+                  onPress: async () => {},
+                }, {
+                  label: shortRecId(rec.id),
+                  iconName: 'bookmark',
+                  buttonColor: iOSColors.purple,
+                  onPress: async () => {},
+                },
+              ]} />
+            )
+          })}
         />
       ),
+
     ];
   }
 
-  EditingButton = (props: {
+  RecEditingButton = (props: {
     buttonStyle?: Style,
     iconStyle?: Style,
     iconName: string,
     onPress: (pointerInside: boolean) => void,
   }) => (
-    <BorderlessButton style={props.buttonStyle} onPress={props.onPress}>
-      <Feather style={props.iconStyle} name={props.iconName} />
+    <BorderlessButton
+      style={[styles.recEditingButton, props.buttonStyle]}
+      onPress={props.onPress}
+    >
+      <Feather
+        style={[styles.recEditingIcon, props.iconStyle,
+          // Compact icon to fit within tiny rows
+          this.state.spectroScale >= 2 ? {} : {
+            fontSize: this.state.spectroScale / 2 * material.headlineObject.fontSize!,
+            lineHeight: this.state.spectroScale / 2 * material.headlineObject.lineHeight!,
+          },
+        ]}
+        name={props.iconName}
+      />
     </BorderlessButton>
+  );
+
+  GenericModal = (props: {
+    title: string,
+    actions: Array<{
+      label: string,
+      iconName: string,
+      buttonColor: string,
+      textColor?: string,
+      onPress: () => Promise<void>,
+    }>,
+  }) => (
+    // Background overlay: semi-transparent background + tap outside modal to dismiss
+    <BaseButton
+      onPress={() => setStateAsync(this, {
+        showGenericModal: null, // Dismiss modal
+      })}
+      style={{
+        width: '100%', height: '100%', // Full screen
+        backgroundColor: `${iOSColors.black}88`, // Semi-transparent overlay
+        justifyContent: 'center', alignItems: 'center', // (vertical, horizontal)
+      }}
+    >
+      {/* Modal */}
+      <View style={{
+        backgroundColor: iOSColors.white,
+        padding: 15,
+      }}>
+        <Text style={{
+          alignSelf: 'center', // (horizontal)
+          marginBottom: 5,
+          ...material.titleObject,
+        }}>
+          {props.title}
+        </Text>
+        {props.actions.map(({label, iconName, buttonColor, textColor, onPress}, index) => (
+          <RectButton
+            key={index}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: 10, marginVertical: 10, marginHorizontal: 10,
+              backgroundColor: buttonColor,
+            }}
+            onPress={async () => {
+              await Promise.all([
+                setStateAsync(this, {
+                  showGenericModal: null, // Dismiss modal
+                }),
+                onPress(),
+              ]);
+            }}
+          >
+            <Feather
+              style={{
+                ...material.headlineObject,
+                marginRight: 5,
+                color: textColor || iOSColors.white,
+              }}
+              name={iconName}
+            />
+            <Text
+              style={{
+                ...material.buttonObject,
+                color: textColor || iOSColors.white,
+              }}
+              children={label}
+            />
+          </RectButton>
+        ))}
+      </View>
+    </BaseButton>
   );
 
   RecText = <X extends {children: any, flex?: number}>(props: X) => {
@@ -1056,6 +1182,12 @@ export class SearchScreen extends Component<Props, State> {
   ModalsAndActionSheets = () => (
     <View>
       <Modal
+        visible={!!this.state.showGenericModal}
+        animationType='none' // 'none' | 'slide' | 'fade'
+        transparent={true}
+        children={this.state.showGenericModal && this.state.showGenericModal()}
+      />
+      <Modal
         visible={this.state.showFilters}
         animationType='none' // 'none' | 'slide' | 'fade'
         transparent={true}
@@ -1072,11 +1204,11 @@ export class SearchScreen extends Component<Props, State> {
       <ActionSheetBasic
         innerRef={this.addActionSheet}
         options={[
-          ['Add a species manually', () => {}],
           ['+ num species',          () => {}],
           ['– num species',          () => {}],
           ['+ num recs per species', () => {}],
           ['– num recs per species', () => {}],
+          ['Add a species manually', () => {}],
         ]}
       />
       <ActionSheetBasic
@@ -1103,251 +1235,254 @@ export class SearchScreen extends Component<Props, State> {
     return (
       <View style={styles.container}>
 
+        {/* Loading spinner */}
+        {this.state.status.loading && (
+          <View style={styles.loadingView}>
+            <ActivityIndicator size='large' />
+          </View>
+        )}
+
         {/* Recs list (with pan/pinch) */}
         {/* - We use ScrollView instead of SectionList to avoid _lots_ of opaque pinch-to-zoom bugs */}
         {/* - We use ScrollView instead of manual gestures (react-native-gesture-handler) to avoid _lots_ of opaque animation bugs */}
-        <ScrollView
-          // @ts-ignore [Why doesn't this typecheck?]
-          ref={this.scrollViewRef as RefObject<Component<SectionListStatic<Rec>, any, any>>}
-          style={styles.recList}
+        {this.state.status.loading || (
+          <ScrollView
+            // @ts-ignore [Why doesn't this typecheck?]
+            ref={this.scrollViewRef as RefObject<Component<SectionListStatic<Rec>, any, any>>}
+            style={styles.recList}
 
-          // Scroll/zoom
-          //  - Force re-layout on zoom change, else bad things (that I don't understand)
-          key={this.state.scrollViewKey}
-          contentContainerStyle={{
-            // ScrollView needs manually computed width to scroll in overflow direction (horizontal)
-            //  - https://github.com/facebook/react-native/issues/8579#issuecomment-233162695
-            width: this.scrollViewContentWidth,
-          }}
-          // This is (currently) the only place we use state.scrollViewState i/o this._scrollViewState
-          contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
-            // log.debug('render.contentOffset', json(x)); // XXX Debug
-          })}
-          bounces={false}
-          bouncesZoom={false}
-          directionalLockEnabled={true} // Don't scroll vertical and horizontal at the same time (ios only)
-          minimumZoomScale={this.props.spectroScaleClamp.min / this.state.spectroScale}
-          maximumZoomScale={this.props.spectroScaleClamp.max / this.state.spectroScale}
-          onScrollEndDrag={async ({nativeEvent}) => {
-            // log.debug('onScrollEndDrag', json(nativeEvent)); // XXX Debug
-            const {contentOffset, zoomScale, velocity} = nativeEvent;
-            this._scrollViewState = {contentOffset};
-            if (
-              zoomScale !== 1              // Don't trigger zoom if no zooming happened (e.g. only scrolling)
-              // && velocity !== undefined // [XXX Unreliable] Don't trigger zoom on 1/2 fingers released, wait for 2/2
-            ) {
-              const scale = zoomScale * this.state.spectroScale;
-              // log.debug('ZOOM', json(nativeEvent)); // XXX Debug
-              // Trigger re-layout so non-image components (e.g. text) redraw at non-zoomed size
-              await setStateAsync(this, {
-                scrollViewState: this._scrollViewState,
-                spectroScale: this.clampSpectroScaleY(scale),
-                scrollViewKey: chance.hash(), // Else bad things (that I don't understand)
-              });
-            }
-          }}
+            // Scroll/zoom
+            //  - Force re-layout on zoom change, else bad things (that I don't understand)
+            key={this.state.scrollViewKey}
+            contentContainerStyle={{
+              // ScrollView needs manually computed width to scroll in overflow direction (horizontal)
+              //  - https://github.com/facebook/react-native/issues/8579#issuecomment-233162695
+              width: this.scrollViewContentWidth,
+            }}
+            // This is (currently) the only place we use state.scrollViewState i/o this._scrollViewState
+            contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
+              // log.debug('render.contentOffset', json(x)); // XXX Debug
+            })}
+            bounces={false}
+            bouncesZoom={false}
+            directionalLockEnabled={true} // Don't scroll vertical and horizontal at the same time (ios only)
+            minimumZoomScale={this.props.spectroScaleClamp.min / this.state.spectroScale}
+            maximumZoomScale={this.props.spectroScaleClamp.max / this.state.spectroScale}
+            onScrollEndDrag={async ({nativeEvent}) => {
+              // log.debug('onScrollEndDrag', json(nativeEvent)); // XXX Debug
+              const {contentOffset, zoomScale, velocity} = nativeEvent;
+              this._scrollViewState = {contentOffset};
+              if (
+                zoomScale !== 1              // Don't trigger zoom if no zooming happened (e.g. only scrolling)
+                // && velocity !== undefined // [XXX Unreliable] Don't trigger zoom on 1/2 fingers released, wait for 2/2
+              ) {
+                const scale = zoomScale * this.state.spectroScale;
+                // log.debug('ZOOM', json(nativeEvent)); // XXX Debug
+                // Trigger re-layout so non-image components (e.g. text) redraw at non-zoomed size
+                await setStateAsync(this, {
+                  scrollViewState: this._scrollViewState,
+                  spectroScale: this.clampSpectroScaleY(scale),
+                  scrollViewKey: chance.hash(), // Else bad things (that I don't understand)
+                });
+              }
+            }}
 
-          // Mimic a SectionList
-          children={
-            _.flatten(this.sectionsForRecs(this.state.recs).map(({
-              title,
-              data: recs,
-              species,
-              species_taxon_order,
-              species_com_name,
-              species_sci_name,
-              recs_for_sp,
-            }) => [
+            // Mimic a SectionList
+            children={
+              _.flatten(this.sectionsForRecs(this.state.recs).map(({
+                title,
+                data: recs,
+                species,
+                species_taxon_order,
+                species_com_name,
+                species_sci_name,
+                recs_for_sp,
+              }) => [
 
-              // Species header
-              this.settings.showMetadata === 'full' && (
-                <View
-                  key={`section-${title}`}
-                  style={styles.sectionSpecies}
-                >
-                  {/* Species editing buttons */}
-                  {this.settings.editing && (
-                    <this.SpeciesEditingButtons species={species} />
-                  )}
-                  {/* Species name */}
-                  <Text numberOfLines={1} style={styles.sectionSpeciesText}>
-                    {species_com_name}
-                  </Text>
-                  {/* Debug info */}
-                  {this.settings.showDebug && (
-                    // FIXME Off screen unless zoom=1
-                    <this.DebugText numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}]}>
-                      ({recs_for_sp} recs)
-                    </this.DebugText>
-                  )}
-                </View>
-              ),
+                // Species header
+                this.settings.showMetadata === 'full' && (
+                  <View
+                    key={`section-${title}`}
+                    style={styles.sectionSpecies}
+                  >
+                    {/* Species name */}
+                    <Text numberOfLines={1} style={styles.sectionSpeciesText}>
+                      {species_com_name}
+                    </Text>
+                    {/* Debug info */}
+                    {this.settings.showDebug && (
+                      // FIXME Off screen unless zoom=1
+                      <this.DebugText numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}]}>
+                        ({recs_for_sp} recs)
+                      </this.DebugText>
+                    )}
+                  </View>
+                ),
 
-              // Rec rows
-              ...recs.map((rec, index) => [
+                // Rec rows
+                ...recs.map((rec, index) => [
 
-                // Rec row
-                <Animated.View
-                  key={`row-${rec.id.toString()}`}
-                  style={[styles.recRow, {
-                    ...(this.settings.showMetadata === 'full' ? {} : {
-                      height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
-                    }),
-                  }]}
-                >
+                  // Rec row
+                  <Animated.View
+                    key={`row-${rec.id.toString()}`}
+                    style={[styles.recRow, {
+                      ...(this.settings.showMetadata === 'full' ? {} : {
+                        height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
+                      }),
+                    }]}
+                  >
 
-                  {/* Species editing buttons */}
-                  {/* - NOTE Condition duplicated in scrollViewContentWidths */}
-                  {this.settings.editing && this.settings.showMetadata !== 'full' && (
-                    <this.SpeciesEditingButtons species={rec.species} />
-                  )}
-                  {/* Rec editing buttons */}
-                  {/* - NOTE Condition duplicated in scrollViewContentWidths */}
-                  {this.settings.editing && (
-                    <this.RecEditingButtons rec={rec} />
-                  )}
+                    {/* Rec editing buttons */}
+                    {/* - NOTE Condition duplicated in scrollViewContentWidths */}
+                    {this.settings.editing && (
+                      <this.RecEditingButtons rec={rec} />
+                    )}
 
-                  {/* Rec region without the editing buttons  */}
-                  <Animated.View style={styles.recRowInner}>
+                    {/* Rec region without the editing buttons  */}
+                    <Animated.View style={styles.recRowInner}>
 
-                    {/* Rec row */}
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        ...(this.settings.showMetadata === 'full' ? {} : {
-                          height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
-                        }),
-                      }}
-                    >
+                      {/* Rec row */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          ...(this.settings.showMetadata === 'full' ? {} : {
+                            height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
+                          }),
+                        }}
+                      >
 
-                      {/* Rec debug info */}
-                      {this.settings.showMetadata === 'inline' && (
-                        <this.DebugView style={{
-                          padding: 0, // Reset padding:3 from settings.debugView
-                          width: this.scrollViewContentWidths.debugInfo,
-                        }}>
-                          {/* TODO(nav_rec_id) */}
-                          {/* <this.RecText style={this.recDebugText} children={rec.xc_id} /> */}
-                          <this.RecText style={this.recDebugText}>slp: {rec.slp && round(rec.slp, 2)}</this.RecText>
-                          <this.RecText style={this.recDebugText}>d_pc: {rec.d_pc && round(rec.d_pc, 2)}</this.RecText>
-                        </this.DebugView>
-                      )}
+                        {/* Rec debug info */}
+                        {this.settings.showMetadata === 'inline' && (
+                          <this.DebugView style={{
+                            padding: 0, // Reset padding:3 from settings.debugView
+                            width: this.scrollViewContentWidths.debugInfo,
+                          }}>
+                            {/* TODO(nav_rec_id) */}
+                            {/* <this.RecText style={this.recDebugText} children={rec.xc_id} /> */}
+                            <this.RecText style={this.recDebugText}>slp: {rec.slp && round(rec.slp, 2)}</this.RecText>
+                            <this.RecText style={this.recDebugText}>d_pc: {rec.d_pc && round(rec.d_pc, 2)}</this.RecText>
+                          </this.DebugView>
+                        )}
+
+                        {/* Rec metadata */}
+                        {this.settings.showMetadata === 'inline' && (
+                          <View style={[styles.recMetadataInlineLeft, {
+                            width: this.scrollViewContentWidths.inlineMetadata,
+                          }]}>
+                            <this.RecText children={Rec.placeNorm(rec.state)} />
+                            <this.RecText children={rec.month_day} />
+                          </View>
+                        )}
+
+                        {/* Sideways species label */}
+                        {/* - After controls/metadata so that label+spectro always abut (e.g. if scrolled all the way to the right) */}
+                        {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
+                        {this.settings.showMetadata !== 'full' && (
+                          <View style={[styles.recSpeciesSidewaysView, {
+                            backgroundColor: styleForSpecies.get(rec.species)!.backgroundColor,
+                          }]}>
+                            <View style={styles.recSpeciesSidewaysViewInner}>
+                              <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
+                                fontSize: this.state.spectroScale >= 2 ? 11 : 6, // Compact species label to fit within tiny rows
+                                color: styleForSpecies.get(rec.species)!.color,
+                              }]}>
+                                {rec.species}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+
+                        {/* Spectro (tap) */}
+                        <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
+                          <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(rec)}>
+                            <Animated.View>
+
+                              {/* Image */}
+                              <Animated.Image
+                                style={this.spectroDim}
+                                resizeMode='stretch'
+                                source={{uri: Rec.spectroPath(rec)}}
+                              />
+
+                              {/* Start time cursor (if playing + startTime) */}
+                              {this.recIsPlaying(rec.id, this.state.playing) && (
+                                this.state.playing!.startTime && (
+                                  <View style={{
+                                    position: 'absolute', width: 1, height: '100%',
+                                    left: this.spectroXFromTime(this.state.playing!.sound, this.state.playing!.startTime!),
+                                    backgroundColor: iOSColors.gray,
+                                  }}/>
+                                )
+                              )}
+
+                              {/* Progress time cursor (if playing + playingCurrentTime) */}
+                              {this.recIsPlaying(rec.id, this.state.playing) && (
+                                this.state.playing!.startTime && this.state.playingCurrentTime !== undefined && (
+                                  <View style={{
+                                    position: 'absolute', width: 1, height: '100%',
+                                    left: this.spectroXFromTime(this.state.playing!.sound, this.state.playingCurrentTime),
+                                    backgroundColor: iOSColors.black,
+                                  }}/>
+                                )
+                              )}
+
+                              {/* Visual feedback for playing rec [XXX after adding progress bar by default] */}
+                              {this.recIsPlaying(rec.id, this.state.playing) && (
+                                <View style={{
+                                  position: 'absolute', width: 2, height: '100%',
+                                  left: 0,
+                                  backgroundColor: iOSColors.red,
+                                }}/>
+                              )}
+
+                            </Animated.View>
+                          </TapGestureHandler>
+                        </LongPressGestureHandler>
+
+                      </View>
 
                       {/* Rec metadata */}
-                      {this.settings.showMetadata === 'inline' && (
-                        <View style={[styles.recMetadataInlineLeft, {
-                          width: this.scrollViewContentWidths.inlineMetadata,
-                        }]}>
-                          <this.RecText children={Rec.placeNorm(rec.state)} />
-                          <this.RecText children={rec.month_day} />
+                      {/* {this.settings.showMetadata === 'inline' && (
+                        <View style={styles.recMetadataInlineBelow}>
+                          <this.RecText flex={3} children={rec.xc_id} />
+                          <this.RecText flex={1} children={rec.quality} />
+                          <this.RecText flex={2} children={rec.month_day} />
+                          <this.RecText flex={4} children={Rec.placeNorm(rec.place)} />
+                          {ccIcon({style: styles.recTextFont})}
+                          <this.RecText flex={4} children={` ${rec.recordist}`} />
+                        </View>
+                      )} */}
+                      {this.settings.showMetadata === 'full' && (
+                        <View style={styles.recMetadataFull}>
+                          <this.RecText flex={3} children={rec.xc_id} />
+                          <this.RecText flex={1} children={rec.quality} />
+                          <this.RecText flex={2} children={rec.month_day} />
+                          <this.RecText flex={4} children={Rec.placeNorm(rec.place)} />
+                          {ccIcon({style: styles.recTextFont})}
+                          <this.RecText flex={4} children={` ${rec.recordist}`} />
                         </View>
                       )}
 
-                      {/* Sideways species label */}
-                      {/* - After controls/metadata so that label+spectro always abut (e.g. if scrolled all the way to the right) */}
-                      {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
-                      {this.settings.showMetadata !== 'full' && (
-                        <View style={[styles.recSpeciesSidewaysView, {
-                          backgroundColor: styleForSpecies.get(rec.species)!.backgroundColor,
-                        }]}>
-                          <View style={styles.recSpeciesSidewaysViewInner}>
-                            <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
-                              fontSize: this.state.spectroScale < 2 ? 6 : 11, // Compact species label to fit within tiny rows
-                              color: styleForSpecies.get(rec.species)!.color,
-                            }]}>
-                              {rec.species}
-                            </Text>
-                          </View>
-                        </View>
-                      )}
-
-                      {/* Spectro (tap) */}
-                      <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
-                        <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(rec)}>
-                          <Animated.View>
-
-                            {/* Image */}
-                            <Animated.Image
-                              style={this.spectroDim}
-                              resizeMode='stretch'
-                              source={{uri: Rec.spectroPath(rec)}}
-                            />
-
-                            {/* Start time cursor (if playing + startTime) */}
-                            {this.recIsPlaying(rec.id, this.state.playing) && (
-                              this.state.playing!.startTime && (
-                                <View style={{
-                                  position: 'absolute', width: 1, height: '100%',
-                                  left: this.spectroXFromTime(this.state.playing!.sound, this.state.playing!.startTime!),
-                                  backgroundColor: iOSColors.gray,
-                                }}/>
-                              )
-                            )}
-
-                            {/* Progress time cursor (if playing + playingCurrentTime) */}
-                            {this.recIsPlaying(rec.id, this.state.playing) && (
-                              this.state.playing!.startTime && this.state.playingCurrentTime !== undefined && (
-                                <View style={{
-                                  position: 'absolute', width: 1, height: '100%',
-                                  left: this.spectroXFromTime(this.state.playing!.sound, this.state.playingCurrentTime),
-                                  backgroundColor: iOSColors.black,
-                                }}/>
-                              )
-                            )}
-
-                            {/* Visual feedback for playing rec [XXX after adding progress bar by default] */}
-                            {this.recIsPlaying(rec.id, this.state.playing) && (
-                              <View style={{
-                                position: 'absolute', width: 2, height: '100%',
-                                left: 0,
-                                backgroundColor: iOSColors.red,
-                              }}/>
-                            )}
-
-                          </Animated.View>
-                        </TapGestureHandler>
-                      </LongPressGestureHandler>
-
-                    </View>
-
-                    {/* Rec metadata */}
-                    {/* {this.settings.showMetadata === 'inline' && (
-                      <View style={styles.recMetadataInlineBelow}>
-                        <this.RecText flex={3} children={rec.xc_id} />
-                        <this.RecText flex={1} children={rec.quality} />
-                        <this.RecText flex={2} children={rec.month_day} />
-                        <this.RecText flex={4} children={Rec.placeNorm(rec.place)} />
-                        {ccIcon({style: styles.recTextFont})}
-                        <this.RecText flex={4} children={` ${rec.recordist}`} />
-                      </View>
-                    )} */}
-                    {this.settings.showMetadata === 'full' && (
-                      <View style={styles.recMetadataFull}>
-                        <this.RecText flex={3} children={rec.xc_id} />
-                        <this.RecText flex={1} children={rec.quality} />
-                        <this.RecText flex={2} children={rec.month_day} />
-                        <this.RecText flex={4} children={Rec.placeNorm(rec.place)} />
-                        {ccIcon({style: styles.recTextFont})}
-                        <this.RecText flex={4} children={` ${rec.recordist}`} />
-                      </View>
-                    )}
+                    </Animated.View>
 
                   </Animated.View>
 
-                </Animated.View>
+                ]),
 
-              ]),
+              ]))
+            }
 
-            ]))
-          }
-
-        />
+          />
+        )}
 
         {/* Debug info */}
         <this.DebugView>
-          <this.DebugText>Status: {this.state.status} ({this.state.totalRecs || '?'} total)</this.DebugText>
+          <this.DebugText>queryDesc: {this.queryDesc}</this.DebugText>
+          <this.DebugText>
+            Recs: {this.state.status.loading ? '...' : this.state.recs.length}/{this.state.totalRecs || '?'}
+          </this.DebugText>
           <this.DebugText>Filters: {json(this.filters)}</this.DebugText>
-          <this.DebugText>NavParams: {json(this.navParamsAll)}</this.DebugText>
+          {/* <this.DebugText>NavParams: {json(this.navParamsAll)}</this.DebugText> */}
         </this.DebugView>
 
         {/* Bottom controls */}
@@ -1448,6 +1583,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  loadingView: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   filtersModal: {
     flex: 1,
     flexDirection: 'column',
@@ -1490,20 +1629,6 @@ const styles = StyleSheet.create({
   sectionSpeciesText: {
     alignSelf: 'center', // Align text vertically
   },
-  speciesEditingView: {
-    flexDirection: 'row',
-    zIndex: 1, // Over spectro image
-  },
-  speciesEditingButton: {
-    width: editingButtonWidth, // Need explicit width (i/o flex:1) else view shows with width:0
-    justifyContent: 'center', // Align icon vertically
-    // minHeight: 40, // Bigger hit box [TODO Only when showMetadata === 'full', when species controls/label are their own row]
-    backgroundColor: iOSColors.gray,
-  },
-  speciesEditingIcon: {
-    ...material.headlineObject,
-    alignSelf: 'center', // Align icon horizontally
-  },
   recRow: {
     flex: 1, flexDirection: 'row',
   },
@@ -1534,7 +1659,7 @@ const styles = StyleSheet.create({
   recMetadataFull: {
     flex: 1,
     flexDirection: 'column',
-    height: 100, // TODO TODO fix_rec_metadata
+    height: 100, // TODO(fix_rec_metadata)
   },
   recText: {
     ...material.captionObject,
@@ -1549,7 +1674,7 @@ const styles = StyleSheet.create({
     zIndex: 1, // Over spectro image
   },
   recEditingButton: {
-    width: editingButtonWidth, // Need explicit width (i/o flex:1) else view shows with width:0
+    width: recEditingButtonWidth, // Need explicit width (i/o flex:1) else view shows with width:0
     justifyContent: 'center', // Align icon vertically
     backgroundColor: iOSColors.midGray,
   },

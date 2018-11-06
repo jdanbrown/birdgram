@@ -1,7 +1,9 @@
 import { NavigationRoute, NavigationScreenProp } from 'react-navigation';
 
 import { ModelsSearch, ServerConfig } from './datatypes';
+import { log } from './log';
 import { Settings } from './settings';
+import { pretty } from './utils';
 
 export type Nav = NavigationScreenProp<NavigationRoute<NavParams>, NavParams>;
 
@@ -15,11 +17,18 @@ export interface ScreenProps {
 // Wrappers for nav.navigate(route, params) to increase type safety
 //  - Any object is a NavParams b/c all fields are optional, so typos don't trigger type errors
 export const navigate = {
-  record:   (nav: Nav, p: NavParamsRecord)   => nav.navigate('Record',   {record:   p}),
-  search:   (nav: Nav, p: NavParamsSearch)   => nav.navigate('Search',   {search:   p}),
-  recent:   (nav: Nav, p: NavParamsRecent)   => nav.navigate('Recent',   {recent:   p}),
-  saved:    (nav: Nav, p: NavParamsSaved)    => nav.navigate('Saved',    {saved:    p}),
-  settings: (nav: Nav, p: NavParamsSettings) => nav.navigate('Settings', {settings: p}),
+
+  record:   (nav: Nav, x: NavParamsRecord)   : boolean => navigate._navigate(nav, 'Record',   {record:   x}),
+  search:   (nav: Nav, x: NavParamsSearch)   : boolean => navigate._navigate(nav, 'Search',   {search:   x}),
+  recent:   (nav: Nav, x: NavParamsRecent)   : boolean => navigate._navigate(nav, 'Recent',   {recent:   x}),
+  saved:    (nav: Nav, x: NavParamsSaved)    : boolean => navigate._navigate(nav, 'Saved',    {saved:    x}),
+  settings: (nav: Nav, x: NavParamsSettings) : boolean => navigate._navigate(nav, 'Settings', {settings: x}),
+
+  _navigate: (nav: Nav, routeName: string, params: NavParams): boolean => {
+    log.info('[navigate]', routeName, pretty(params));
+    return nav.navigate(routeName, params);
+  },
+
 };
 
 // Shared navigation.params datatype across all navigation screens
