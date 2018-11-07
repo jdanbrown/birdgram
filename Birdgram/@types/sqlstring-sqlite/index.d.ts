@@ -6,9 +6,14 @@ declare module 'sqlstring-sqlite' {
 // Definitions: https://github.com/DefinitelyTyped/DefinitelyTyped
 // TypeScript Version: 2.3
 
-export function format(sql: string, args: object | any[]): string;
+export function format(sql: string, values: undefined | null | any[]): string;
 export function escape(value: any): string;
 export function escapeId(value: any, dotQualifier?: boolean): string;
-export function raw(sql: string): {toSqlString: () => string};
+export function raw(sql: string): Raw;
+
+export type Raw = ToSqlString;
+export interface ToSqlString {
+  toSqlString: () => string;
+}
 
 }

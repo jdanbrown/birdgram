@@ -1,9 +1,38 @@
 import _ from 'lodash';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
-import SqlString from 'sqlstring-sqlite';
+import _SQL from 'sqlstring-sqlite';
 
 import { log } from './log';
 import { Timer } from './utils';
+
+// Re-export sqlstring as SQL + add extra methods
+export const SQL = {..._SQL,
+
+  // Shorthand: SQL.id(x) ~ SQL.raw(SQL.escapeId(x))
+  id: (id: string): _SQL.ToSqlString => ({
+    toSqlString: () => _SQL.escapeId(id),
+  }),
+
+};
+
+// Template literal
+//  - Docs: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals
+//  - Example usage:
+//      querySql(db, sqlf`
+//        select *
+//        from ${SQL.id('table_name')}
+//        where x > ${y * 3}
+//        ${SQL.raw(!limit ? '' : 'limit 10')}
+//      `)
+export function sqlf(strs: TemplateStringsArray, ...args: any[]): string {
+  return (
+    _(strs)
+    .zip(args)
+    .flatMap(([str, arg]) => [str, arg === undefined ? '' : SQL.escape(arg)])
+    .value()
+    .join('')
+  );
+}
 
 export function querySql<Row>(
   db: SQLiteDatabase,
@@ -23,7 +52,7 @@ export function querySql<Row>(
 
   // sql + params
   //  - Format using sqlstring-sqlite (e.g. array support) instead of react-native-sqlite-storage (e.g. no array support)
-  sql = formatSql(sql, params);
+  sql = SQL.format(sql, params);
   params = undefined;
 
   const timer = new Timer();
@@ -54,17 +83,13 @@ export function querySql<Row>(
 
 }
 
-// TODO Is this worthwhile given that we immediately formatSql in the impl anyway? Unlikely that impl will change soon.
+// XXX Is this worthwhile given that we immediately SQL.format in the impl anyway? Unlikely that impl will change soon.
 export interface BindSql {
   sql: string;
   params?: any[];
 }
 export function bindSql(sql: string, params?: any[]): BindSql {
   return {sql, params}
-}
-
-export function formatSql(sql: string, params?: any[]): string {
-  return SqlString.format(sql, params || []);
 }
 
 // Mimic @types/react-native-sqlite-storage, but add <Row>

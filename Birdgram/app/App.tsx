@@ -4,8 +4,8 @@ import KeepAwake from 'react-native-keep-awake';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import {
-  createBottomTabNavigator, NavigationContainer, NavigationParams, NavigationRoute, NavigationScreenProp,
-  NavigationScreenProps,
+  createBottomTabNavigator, createStackNavigator, NavigationContainer, NavigationParams, NavigationRoute,
+  NavigationScreenProp, NavigationScreenProps,
  } from 'react-navigation';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
@@ -18,7 +18,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { Settings } from './settings';
 import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
-import { NavParams, ScreenProps } from './nav';
+import { navigate, NavParams, ScreenProps } from './nav';
 import { log } from './log';
 import { deepEqual, global, match, readJsonFile, setStateAsync } from './utils';
 
@@ -31,6 +31,7 @@ global.Platform = Platform;
 global.iOSColors = iOSColors;
 global.material = material;
 global.materialColors = materialColors;
+global.navigate = navigate;
 global.systemWeights = systemWeights;
 global.Settings = Settings;
 const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
@@ -130,7 +131,7 @@ class App extends Component<Props, State> {
         <AppNav
           // @ts-ignore [Why doesn't this typecheck?]
           ref={this.appNavRef}
-          persistenceKey={__DEV__ ? '_dev_NavigationState_v6' : null}
+          persistenceKey={__DEV__ ? '_dev_NavigationState_v7' : null}
           // Pass props to screens (as props.screenProps)
           screenProps={{
             serverConfig: this.state.serverConfig,
@@ -147,14 +148,31 @@ class App extends Component<Props, State> {
 
 const AppNav = createBottomTabNavigator(
   {
+
     // NOTE Must bump the AppNav persistenceKey version when changing these keys (below)
     Record:   {screen: RecordScreen,   params: {}},
-    Search:   {screen: SearchScreen,   params: {}},
+
+    // Stacks in tabs, so we can nav.goBack() within SearchScreen
+    //  - https://reactnavigation.org/docs/en/tab-based-navigation.html#a-stack-navigator-for-each-tab
+    // Search:   {screen: SearchScreen,   params: {}},
+    Search:   createStackNavigator(
+      {
+        Search: SearchScreen,
+      },
+      {
+        navigationOptions: {
+          header: null, // Hide header bar
+        },
+      },
+    ),
+
     Recent:   {screen: RecentScreen,   params: {}},
     Saved:    {screen: SavedScreen,    params: {}},
     Settings: {screen: SettingsScreen, params: {}},
+
     // How to pass props down [https://github.com/zeit/next.js/blob/7.0.0/lib/dynamic.js#L55]:
     //  screen: (props: object) => (<SearchScreen {...props} />),
+
   },
   {
     navigationOptions: ({navigation}) => ({

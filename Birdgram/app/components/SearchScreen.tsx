@@ -38,8 +38,7 @@ import {
 import { log, puts, tap } from '../log';
 import { Nav, navigate, NavParams, NavParamsSearch, ScreenProps } from '../nav';
 import Sound from '../sound';
-import { bindSql, formatSql, querySql } from '../sql';
-import SqlString from 'sqlstring-sqlite';
+import { querySql, SQL, sqlf } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import { debugStyle, LabelStyle, labelStyles } from '../styles';
 import {
@@ -403,24 +402,21 @@ export class SearchScreen extends Component<Props, State> {
       // Can't use window functions until sqlite ≥3.25.x
       //  - TODO Waiting on: https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
 
-      const _loadRecs = async (sql: string): Promise<void> => {
-        await querySql<Rec>(this.db!, sql)(async results => {
-          const recs = results.rows.raw();
-          log.info('loadRecsFromQuery: state.status.loading = false');
-          await setStateAsync(this, {
-            status: {
-              loading: false,
-              queryShown: this.query,
-            },
-            recs,
-          });
+      const _setRecs = async (recs: Array<Rec>): Promise<void> => {
+        log.info('loadRecsFromQuery: state.status.loading = false');
+        await setStateAsync(this, {
+          status: {
+            loading: false,
+            queryShown: this.query,
+          },
+          recs,
         });
       };
 
       await matchQuery(this.query, {
 
         species: async ({species}) => {
-          await _loadRecs(formatSql(`
+          await querySql<Rec>(this.db!, sqlf`
             select *
             from (
               select
@@ -428,43 +424,32 @@ export class SearchScreen extends Component<Props, State> {
                 cast(taxon_order as real) as taxon_order_num
               from search_recs
               where
-                species in (?) and
-                quality in (?)
+                species in (${species.split(',').map(x => _.trim(x).toUpperCase())}) and
+                quality in (${this.state.filterQuality})
               order by
                 xc_id desc
-              limit ?
+              limit ${this.state.filterLimit}
             )
             order by
               taxon_order_num asc,
               xc_id desc
-          `, [
-            species.split(',').map(x => _.trim(x).toUpperCase()),
-            this.state.filterQuality,
-            this.state.filterLimit,
-          ]));
+          `)(async results => {
+            const recs = results.rows.raw();
+            await _setRecs(recs);
+          });
         },
 
         recId: async ({recId}) => {
 
           // TODO(nav_rec_id)
           //  - TODO Top k by sp (w/o window functions)
-
-          //  - Top k per sp without window functions (try one query per sp?)
-          //    - `top k species by sp_probs` -> read sp_probs straight from rec.f_preds!
-          //    - `top r recs per k species by cosine dist` -> without window functions...
-          //  - Dot product (for search-style top recs by dist)
-          //    - Is the sqlite dot product performant enough? [Else we risk rabbit-holing with sqlite extensions]
-          //    - http://scikit-learn.org/stable/modules/metrics.html#cosine-similarity
-          //    - https://github.com/SeanTater/sqlite3-extras
-          //    - https://github.com/SeanTater/sqlite3-extras/blob/master/extras.cpp#L333
-
-          // Query query_rec from db.search_recs
-          //  - query_rec.preds is query_sp_p (preds from search model)
-          // Sort .preds and pick top n species (to query for)
-          // Query results from db.search_recs:
-          //  - union all for each species:
-          //    - select
-          //    - top k s
+          //    - [x] Query query_rec from db.search_recs
+          //      - query_rec.preds is query_sp_p (preds from search model)
+          //    - [ ] Sort .preds and pick top n species (to query for)
+          //    - [ ] Query results from db.search_recs:
+          //      - union all for each species:
+          //        - select
+          //        - top k s
 
           const f_preds_cols: string[] = this.state.f_preds_cols || [];
 
@@ -481,34 +466,45 @@ export class SearchScreen extends Component<Props, State> {
           const slp = (sp_p: number): number => Math.abs(-Math.log(sp_p)) // (abs for 1->0 i/o -0)
           const slps: Map<string, number> = mapMapValues(sp_ps, slp);
 
-          await _loadRecs(formatSql(`
+          const sqlSlp = SQL.raw(
+            Array.from(slps)
+            .map(([species, slp]) => sqlf`select ${species} as species, ${slp} as slp`)
+            .join(' union all ')
+          );
+
+          // Manually compute dot(S.f_preds_*, Q.f_preds_*)
+          const sqlDot = SQL.raw(
+            f_preds_cols.map(c => `S.${c}*Q.${c}`).join(' + ') || '0'
+          );
+
+          await querySql<Rec>(this.db!, sqlf`
             select
               S.*,
+              coalesce(slp.slp, 1e38) as slp,
               -- Manually compute cosine_distance(S.f_preds_*, Q.f_preds_*):
               --    cosine_distance(x,y) = 1 - dot(x,y) / norm(x) / norm(y)
-              1 - (?) / S.norm_f_preds / Q.norm_f_preds as d_pc,
-              slp.slp as slp
+              1 - (${sqlDot}) / S.norm_f_preds / Q.norm_f_preds as d_pc
             from search_recs S
-              left join (select * from search_recs where id = ?) Q -- No join on because only 1 row
-              left join (?) slp on S.species = slp.species
+              left join (select * from search_recs where id = ${recId}) Q on true -- Only 1 row in Q
+              left join (${sqlSlp}) slp on S.species = slp.species
             where true
-              and S.quality in (?)
+              and S.quality in (${this.state.filterQuality})
+              and S.id != ${recId} -- Exclude query_rec from results
             order by
               slp asc,
               d_pc asc
-            limit ?
-          `, [
-            // Manually compute dot(S.f_preds_*, Q.f_preds_*)
-            SqlString.raw(f_preds_cols.map(c => `S.${c}*Q.${c}`).join(' + ') || '0'),
-            recId,
-            SqlString.raw(
-              Array.from(slps)
-              .map(([species, slp]) => formatSql('select ? as species, ? as slp', [species, slp]))
-              .join(' union all ')
-            ),
-            this.state.filterQuality,
-            this.state.filterLimit,
-          ]));
+            limit ${this.state.filterLimit}
+          `)(async results => {
+            const recs = results.rows.raw();
+
+            // Add query_rec as first result
+            //  - TODO Replace this with a proper display of query_rec at the top
+            await _setRecs([
+              query_rec,
+              ...recs,
+            ]);
+
+          });
 
         },
 
@@ -518,13 +514,11 @@ export class SearchScreen extends Component<Props, State> {
   }
 
   loadRec = async (id: string): Promise<Rec> => {
-    return await querySql<Rec>(this.db!, formatSql(`
+    return await querySql<Rec>(this.db!, sqlf`
       select *
       from search_recs
-      where id = ?
-    `, [
-      id,
-    ]))(async results => {
+      where id = ${id}
+    `)(async results => {
       const [rec] = results.rows.raw();
       return rec;
     });
@@ -812,6 +806,17 @@ export class SearchScreen extends Component<Props, State> {
 
   BottomControls = (props: {}) => (
     <View style={styles.bottomControls}>
+      {/* Back */}
+      <this.BottomControlsButton
+        help='Back'
+        // TODO(nav_back): Add onLongPress to undo nav.goBack() [how?]
+        // TODO(nav_back): Disable when no screen to go back to
+        //  - How to detect whether nav.goBack() will do anything?
+        //  - e.g. https://stackoverflow.com/questions/47915572/how-to-check-if-i-can-go-back-use-pop-on-react-native-navigation
+        // disable={...}
+        onPress={() => this.nav.goBack()}
+        iconProps={{name: 'chevron-left'}}
+      />
       {/* Filters */}
       <this.BottomControlsButton
         help='Filters'
@@ -849,7 +854,8 @@ export class SearchScreen extends Component<Props, State> {
       <this.BottomControlsButton
         help='Reset'
         onPress={() => navigate.search(this.nav, {})}
-        iconProps={{name: 'refresh-ccw'}}
+        // iconProps={{name: 'refresh-ccw'}}
+        iconProps={{name: 'home'}}
       />
       {/* Toggle editing controls for rec/species */}
       <this.BottomControlsButton
@@ -1008,7 +1014,7 @@ export class SearchScreen extends Component<Props, State> {
           // onPress={() => navigate.search(this.nav, {recId: rec.id})}
           onPress={() => setStateAsync(this, {
             showGenericModal: () => (
-              <this.GenericModal title='Open search' actions={[
+              <this.GenericModal title='Search for' actions={[
                 {
                   label: rec.species,
                   iconName: 'search',

@@ -25,8 +25,20 @@ export const navigate = {
   settings: (nav: Nav, x: NavParamsSettings) : boolean => navigate._navigate(nav, 'Settings', {settings: x}),
 
   _navigate: (nav: Nav, routeName: string, params: NavParams): boolean => {
-    log.info('[navigate]', routeName, pretty(params));
-    return nav.navigate(routeName, params);
+
+    // log.info('[navigate]', routeName, pretty(params));
+    // return nav.navigate(routeName, params);
+
+    // HACK nav.push if we can, else nav.navigate
+    //  - TODO What's the right way to do this, i.e. in the caller code?
+    if (nav.state.routeName === routeName && nav.push) {
+      log.info('[nav.push]', routeName, pretty(params));
+      return nav.push(routeName, params);
+    } else {
+      log.info('[nav.navigate]', routeName, pretty(params));
+      return nav.navigate(routeName, params);
+    }
+
   },
 
 };
