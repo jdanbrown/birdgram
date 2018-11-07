@@ -37,8 +37,13 @@ export function sqlf(strs: TemplateStringsArray, ...args: any[]): string {
 export function querySql<Row>(
   db: SQLiteDatabase,
   _sql: string | BindSql,
-  opts: {logTruncate: number} = {logTruncate: 200},
+  opts: {logTruncate?: number | null} = {},
 ): <X>(onResults: (results: ResultSet<Row>) => Promise<X>) => Promise<X> {
+
+  // Default opts
+  opts = {
+    logTruncate: opts.logTruncate === undefined ? 200 : opts.logTruncate,
+  }
 
   // Unpack args
   let sql: string;
@@ -56,7 +61,7 @@ export function querySql<Row>(
   params = undefined;
 
   const timer = new Timer();
-  const sqlTrunc = _.truncate(sql, {length: opts.logTruncate});
+  const sqlTrunc = !opts.logTruncate ? sql : _.truncate(sql, {length: opts.logTruncate});
   log.debug('[querySql] Running...', sqlTrunc);
   return onResults => new Promise((resolve, reject) => {
     // TODO How to also `await db.transaction`? (Do we even want to?)

@@ -441,15 +441,15 @@ export class SearchScreen extends Component<Props, State> {
 
         recId: async ({recId}) => {
 
-          // TODO(nav_rec_id)
-          //  - TODO Top k by sp (w/o window functions)
-          //    - [x] Query query_rec from db.search_recs
-          //      - query_rec.preds is query_sp_p (preds from search model)
-          //    - [ ] Sort .preds and pick top n species (to query for)
-          //    - [ ] Query results from db.search_recs:
-          //      - union all for each species:
-          //        - select
-          //        - top k s
+          // Compute top n_per_sp recs per species by d_pc (cosine_distance)
+          //  - TODO Replace with window functions after sqlite upgrade
+          //    - https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
+          //  - Alternative approach w/o window functions:
+          //    - Query query_rec from db.search_recs
+          //      - (query_rec.preds is query_sp_p (= search.predict_probs(query_rec)))
+          //    - Take top n_recs/n_per_sp species from query_rec.preds
+          //    - Construct big sql query with one union per species (O(n_recs/n_per_sp)):
+          //      - (... where species=? order by d_pc limit n_per_sp) union all (...) ...
 
           const f_preds_cols: string[] = this.state.f_preds_cols || [];
 
@@ -462,42 +462,80 @@ export class SearchScreen extends Component<Props, State> {
             f_preds_cols.map(c => rec_f_preds(query_rec)[c]),
           ));
 
-          // slp: "species log prob"
+          // slp: "species (negative) log prob"
           const slp = (sp_p: number): number => Math.abs(-Math.log(sp_p)) // (abs for 1->0 i/o -0)
           const slps: Map<string, number> = mapMapValues(sp_ps, slp);
 
-          const sqlSlp = SQL.raw(
+          // Inject sql table: slps -> (species, slp)
+          const tableSlp = SQL.raw(
             Array.from(slps)
+            // .slice(0, 2) // XXX Debug: smaller query
             .map(([species, slp]) => sqlf`select ${species} as species, ${slp} as slp`)
             .join(' union all ')
           );
 
-          // Manually compute dot(S.f_preds_*, Q.f_preds_*)
+          // Compute in sql: cosine_distance(S.f_preds_*, Q.f_preds_*)
+          //  - cosine_distance(x,y) = 1 - dot(x,y) / norm(x) / norm(y)
           const sqlDot = SQL.raw(
-            f_preds_cols.map(c => `S.${c}*Q.${c}`).join(' + ') || '0'
+            f_preds_cols
+            // .slice(0, 2) // XXX Debug: smaller query
+            .map(c => sqlf`S.${SQL.raw(c)}*Q.${SQL.raw(c)}`).join(' + ') || '0'
+          );
+          const sqlCosineDist = SQL.raw(sqlf`
+            1 - (${sqlDot}) / S.norm_f_preds / Q.norm_f_preds
+          `);
+
+          const topSpecies = (
+            _(Array.from(slps.entries()))
+            .sortBy(([species, slp]) => slp)
+            .value()
+            .map(([species, slp]) => species)
           );
 
-          await querySql<Rec>(this.db!, sqlf`
+          const n_per_sp = 3; // TODO(nav_rec_id) -> param
+          const n_recs = this.state.filterLimit;
+
+          // Construct queries for each species
+          const sqlPerSpecies = (topSpecies
+            // .slice(0, 2) // XXX Debug: smaller query
+            .slice(0, n_recs / n_per_sp + 1) // Close enough
+            .map(species => sqlf`
+              select
+                S.*,
+                ${sqlCosineDist} as d_pc
+              from search_recs S
+                left join (select * from search_recs where id = ${recId}) Q on true -- Only 1 row in Q
+              where true
+                and S.species = ${species}
+                and S.quality in (${this.state.filterQuality})
+                and S.id != ${recId} -- Exclude query_rec from results
+              order by
+                d_pc asc
+              limit ${n_per_sp}
+            `)
+          );
+
+          // Construct query
+          const sql = sqlf`
             select
               S.*,
-              coalesce(slp.slp, 1e38) as slp,
-              -- Manually compute cosine_distance(S.f_preds_*, Q.f_preds_*):
-              --    cosine_distance(x,y) = 1 - dot(x,y) / norm(x) / norm(y)
-              1 - (${sqlDot}) / S.norm_f_preds / Q.norm_f_preds as d_pc
-            from search_recs S
-              left join (select * from search_recs where id = ${recId}) Q on true -- Only 1 row in Q
-              left join (${sqlSlp}) slp on S.species = slp.species
-            where true
-              and S.quality in (${this.state.filterQuality})
-              and S.id != ${recId} -- Exclude query_rec from results
+              coalesce(slp.slp, 1e38) as slp
+            -- Must select * from (...) else union complains about nested order by
+            from (${SQL.raw(sqlPerSpecies.map(x => `select * from (${x})`).join(' union all '))}) S
+              left join (${tableSlp}) slp on S.species = slp.species
             order by
               slp asc,
               d_pc asc
-            limit ${this.state.filterLimit}
-          `)(async results => {
+            limit ${n_recs}
+          `;
+
+          // Run query
+          await querySql<Rec>(this.db!, sql, {
+            // logTruncate: null, // XXX Debug: log full query
+          })(async results => {
             const recs = results.rows.raw();
 
-            // Add query_rec as first result
+            // HACK Inject query_rec as first result so it's visible at top
             //  - TODO Replace this with a proper display of query_rec at the top
             await _setRecs([
               query_rec,
