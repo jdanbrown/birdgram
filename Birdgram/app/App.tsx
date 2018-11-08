@@ -20,6 +20,7 @@ import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { navigate, NavParams, ScreenProps } from './nav';
 import { log } from './log';
+import { urlpack } from './urlpack';
 import { deepEqual, global, match, readJsonFile, setStateAsync } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
@@ -34,6 +35,7 @@ global.materialColors = materialColors;
 global.navigate = navigate;
 global.systemWeights = systemWeights;
 global.Settings = Settings;
+global.urlpack = urlpack;
 const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
 global.sj = {};
 timed('AudioUtils',         () => global.AudioUtils      = require('../third-party/magenta/music/transcription/audio_utils'));

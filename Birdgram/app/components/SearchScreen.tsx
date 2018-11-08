@@ -41,6 +41,7 @@ import Sound from '../sound';
 import { querySql, SQL, sqlf } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import { debugStyle, LabelStyle, labelStyles } from '../styles';
+import { urlpack } from '../urlpack';
 import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait,
   objectKeysTyped, Point, pretty, round, setStateAsync, Style, Styles, TabBarBottomConstants, zipSame,
