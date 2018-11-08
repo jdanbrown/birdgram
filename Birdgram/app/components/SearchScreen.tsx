@@ -291,7 +291,10 @@ export class SearchScreen extends Component<Props, State> {
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
     log.info('SearchScreen.componentDidUpdate', this.props, this.state);
 
-    // Reset view state if query (= props.navigation.state.params.{search,recId}) changed
+    // TODO(deep_link)
+    // log.info(await urlpack('lzma').stats(this.state)); // XXX Dev [slow, ~2-5s; why is this slower in Release than Debug?]
+
+    // Reset view state if query changed (i.e. props.navigation.state.params.{search,recId})
     //  - TODO Pass props.key to reset _all_ state? [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
     if (!deepEqual(this.query, this._query(prevProps))) {
       log.info('SearchScreen.componentDidUpdate: Reset view state');
@@ -452,18 +455,21 @@ export class SearchScreen extends Component<Props, State> {
           //    - Construct big sql query with one union per species (O(n_recs/n_per_sp)):
           //      - (... where species=? order by d_pc limit n_per_sp) union all (...) ...
 
-          const f_preds_cols: string[] = this.state.f_preds_cols || [];
+          // Params
+          const n_per_sp     = 3; // TODO(nav_rec_id) -> param
+          const n_recs       = this.state.filterLimit;
+          const f_preds_cols = this.state.f_preds_cols || [];
 
           // Load query_rec from db
           const query_rec = await this.loadRec(recId);
 
-          // sp_p: "species prob"
+          // Read sp_p's (species probs) from query_rec.f_preds_*
           const sp_ps: Map<string, number> = new Map(zipSame(
             this.modelsSearch.classes_,
             f_preds_cols.map(c => rec_f_preds(query_rec)[c]),
           ));
 
-          // slp: "species (negative) log prob"
+          // Compute slp's (species (negative) log prob) from sp_p's
           const slp = (sp_p: number): number => Math.abs(-Math.log(sp_p)) // (abs for 1->0 i/o -0)
           const slps: Map<string, number> = mapMapValues(sp_ps, slp);
 
@@ -486,15 +492,13 @@ export class SearchScreen extends Component<Props, State> {
             1 - (${sqlDot}) / S.norm_f_preds / Q.norm_f_preds
           `);
 
+          // Rank species by slp (slp asc b/c sgn(slp) ~ -sgn(sp_p))
           const topSpecies = (
             _(Array.from(slps.entries()))
             .sortBy(([species, slp]) => slp)
             .value()
             .map(([species, slp]) => species)
           );
-
-          const n_per_sp = 3; // TODO(nav_rec_id) -> param
-          const n_recs = this.state.filterLimit;
 
           // Construct queries for each species
           const sqlPerSpecies = (topSpecies
@@ -892,7 +896,7 @@ export class SearchScreen extends Component<Props, State> {
       {/* XXX Dev: a temporary way to reset to recs from >1 species */}
       <this.BottomControlsButton
         help='Reset'
-        onPress={() => navigate.search(this.nav, {})}
+        onPress={() => this.nav.popToTop()}
         // iconProps={{name: 'refresh-ccw'}}
         iconProps={{name: 'home'}}
       />
@@ -1371,6 +1375,13 @@ export class SearchScreen extends Component<Props, State> {
               }
             }}
 
+            // TODO Sticky headers: manually calculate indices of species header rows
+            // stickyHeaderIndices={this.settings.showMetadata !== 'full' ? undefined : ...}
+
+            // TODO Add footer with "Load more" button
+            //  - Mimic SectionList.ListFooterComponent [https://facebook.github.io/react-native/docs/sectionlist#listfootercomponent]
+            //  - Approach: add a final item to the sectionsForRecs() list
+
             // Mimic a SectionList
             children={
               _.flatten(this.sectionsForRecs(this.state.recs).map(({
@@ -1381,17 +1392,17 @@ export class SearchScreen extends Component<Props, State> {
                 species_com_name,
                 species_sci_name,
                 recs_for_sp,
-              }) => [
+              }, sectionIndex) => [
 
                 // Species header
                 this.settings.showMetadata === 'full' && (
                   <View
-                    key={`section-${title}`}
+                    key={`section-${sectionIndex}-${title}`}
                     style={styles.sectionSpecies}
                   >
                     {/* Species name */}
                     <Text numberOfLines={1} style={styles.sectionSpeciesText}>
-                      {species_com_name}
+                      {species_com_name} (<Text style={{fontStyle: 'italic'}}>{species_sci_name}</Text>)
                     </Text>
                     {/* Debug info */}
                     {this.settings.showDebug && (
@@ -1404,11 +1415,11 @@ export class SearchScreen extends Component<Props, State> {
                 ),
 
                 // Rec rows
-                ...recs.map(rec => [
+                ...recs.map((rec, recIndex) => [
 
                   // Rec row
                   <Animated.View
-                    key={`row-${rec.id.toString()}`}
+                    key={`row-${recIndex}-${rec.id}`}
                     style={[styles.recRow, {
                       ...(this.settings.showMetadata === 'full' ? {} : {
                         height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
