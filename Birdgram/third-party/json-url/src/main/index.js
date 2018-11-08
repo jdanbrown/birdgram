@@ -1,5 +1,6 @@
-import ALGORITHMS from 'main/codecs';
-import LOADERS from 'main/loaders';
+// HACK Edit vendored import paths: absolute -> relative
+import ALGORITHMS from './codecs';
+import LOADERS from './loaders';
 
 const twoDigitPercentage = val => Math.floor(val * 10000) / 10000;
 

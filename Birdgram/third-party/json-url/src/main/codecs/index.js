@@ -1,7 +1,8 @@
-import lzma from 'main/codecs/lzma';
-import lzstring from 'main/codecs/lzstring';
-import lzw from 'main/codecs/lzw';
-import pack from 'main/codecs/pack';
+// HACK Edit vendored import paths: absolute -> relative
+import lzma from './lzma';
+import lzstring from './lzstring';
+import lzw from './lzw';
+import pack from './pack';
 
 export default {
 	lzma, lzstring, lzw, pack
