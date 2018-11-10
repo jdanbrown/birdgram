@@ -2,6 +2,7 @@ import React from 'React';
 import { Component } from 'react';
 import { Dimensions, Image, Platform, Text, View } from 'react-native';
 
+import { log } from '../log';
 import { Recorder } from './Recorder';
 import { StyleSheet } from '../stylesheet';
 import { global } from '../utils';
@@ -9,6 +10,14 @@ import { global } from '../utils';
 type Props = {};
 
 export class RecordScreen extends Component<Props> {
+
+  componentDidMount = async () => {
+    log.info(`${this.constructor.name}.componentDidMount`);
+  }
+
+  componentWillUnmount = async () => {
+    log.info(`${this.constructor.name}.componentWillUnmount`);
+  }
 
   render = () => {
     return (

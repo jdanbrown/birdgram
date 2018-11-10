@@ -19,7 +19,7 @@ import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-par
 import nj from '../../third-party/numjs/dist/numjs.min';
 import { log } from '../log';
 import { StyleSheet } from '../stylesheet';
-import { chance, global, match, setStateAsync } from '../utils';
+import { chance, global, match } from '../utils';
 
 // Util: wrap `new Jimp` in a promise
 const JimpAsync = (...args: Array<any>): Promise<Jimp> => new Promise((resolve, reject) => {
@@ -95,7 +95,7 @@ export class Recorder extends React.Component<Props, State> {
       log.info('startRecording');
 
       // Update recordingState + reset audio chunks
-      await setStateAsync(this, {
+      this.setState({
         recordingState: RecordingState.Recording,
         audioSampleChunks: [],
         spectroChunksImageProps: [],
@@ -132,7 +132,7 @@ export class Recorder extends React.Component<Props, State> {
       // );
 
       // Buffer samples
-      await setStateAsync(this, (state, props) => ({
+      this.setState((state, props) => ({
         audioSampleChunks: ([...state.audioSampleChunks, samples]
           // HACK Trim audio for O(1) mem usage -- think harder how to buffer long durations of audio (e.g. files i/o ram)
           .slice(-this.spectroChunksPerScreenWidth)
@@ -150,7 +150,7 @@ export class Recorder extends React.Component<Props, State> {
       log.info('stopRecording');
 
       // Update recordingState
-      await setStateAsync(this, {
+      this.setState({
         recordingState: RecordingState.Stopped,
       });
 
@@ -231,7 +231,7 @@ export class Recorder extends React.Component<Props, State> {
     const pngPath = `${fs.dirs.CacheDir}/${filename}`;
     const pngBase64 = dataUrl.replace('data:image/png;base64,', '');
     await fs.createFile(pngPath, pngBase64, 'base64');
-    await setStateAsync(this, (state, props) => ({
+    this.setState((state, props) => ({
       spectroChunksImageProps: (
         [...state.spectroChunksImageProps, {
           source: {uri: `file://${pngPath}`},

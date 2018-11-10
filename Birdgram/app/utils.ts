@@ -125,14 +125,19 @@ import { ImageStyle, RegisteredStyle, TextStyle, ViewStyle } from 'react-native'
 // Evolving approach to how to pass StyleSheet parts around
 export type Style = RegisteredStyle<ViewStyle | TextStyle | ImageStyle>
 
-export function setStateAsync<P, S, K extends keyof S>(
-  component: Component<P, S>,
-  state: ((prevState: Readonly<S>, props: Readonly<P>) => (Pick<S, K> | S | null)) | (Pick<S, K> | S | null),
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    component.setState(state, () => resolve());
-  });
-}
+// Sounds like this is an anti-pattern
+//  - https://github.com/facebook/react/pull/9989#issuecomment-309141521
+//  - https://github.com/facebook/react/issues/2642#issuecomment-66676469
+//  - https://github.com/facebook/react/issues/2642#issuecomment-309142005
+//  - https://github.com/facebook/react/issues/2642#issuecomment-352135607
+// export function setStateAsync<P, S, K extends keyof S>(
+//   component: Component<P, S>,
+//   state: ((prevState: Readonly<S>, props: Readonly<P>) => (Pick<S, K> | S | null)) | (Pick<S, K> | S | null),
+// ): Promise<void> {
+//   return new Promise((resolve, reject) => {
+//     component.setState(state, () => resolve());
+//   });
+// }
 
 // Typesafe wrapper around react-fast-compare
 export function deepEqual<X, Y extends X>(x: X, y: Y | null | undefined): boolean {
@@ -154,14 +159,6 @@ export const Styles = {
   flipVertical:   {transform: [{scaleY: -1}]},
   flipBoth:       {transform: [{scaleX: -1}, {scaleY: -1}]},
 };
-
-// Copy hard-coded params for react-navigation tab bar
-//  - https://github.com/react-navigation/react-navigation-tabs/blob/v0.5.1/src/views/BottomTabBar.js#L199-L201
-//  - https://github.com/react-navigation/react-navigation-tabs/blob/v0.5.1/src/views/BottomTabBar.js#L261-L266
-export const TabBarBottomConstants = {
-  DEFAULT_HEIGHT: 49,
-  COMPACT_HEIGHT: 29,
-}
 
 export type Point = {
   x: number;

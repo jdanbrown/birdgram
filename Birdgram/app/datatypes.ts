@@ -140,3 +140,11 @@ export interface ServerConfig {
     },
   };
 };
+
+// TODO(nav_router): Salvage into some new shape of props
+import { Settings } from './settings';
+export interface ScreenProps {
+  serverConfig: ServerConfig;
+  modelsSearch: ModelsSearch;
+  settings: Settings;
+}

@@ -8,9 +8,10 @@ import SettingsList from 'react-native-settings-list';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 
+import { log } from '../log';
 import { Settings } from '../settings';
 import { StyleSheet } from '../stylesheet';
-import { global, setStateAsync } from '../utils';
+import { global } from '../utils';
 
 type Props = {};
 type State = {
@@ -24,6 +25,14 @@ export class SettingsScreen extends Component<Props, State> {
     this.state = {
       showModal: false,
     };
+  }
+
+  componentDidMount = async () => {
+    log.info(`${this.constructor.name}.componentDidMount`);
+  }
+
+  componentWillUnmount = async () => {
+    log.info(`${this.constructor.name}.componentWillUnmount`);
   }
 
   // TODO https://github.com/evetstech/react-native-settings-list#a-more-realistic-example
@@ -72,7 +81,7 @@ export class SettingsScreen extends Component<Props, State> {
             <SettingsList.Item
               id='Test modal'
               title='Test modal'
-              onPress={async () => await setStateAsync(this, {showModal: true})}
+              onPress={() => this.setState({showModal: true})}
             />
 
             <SettingsList.Item
@@ -127,7 +136,7 @@ export class SettingsScreen extends Component<Props, State> {
           }}>
             <View>
               <Text>This is a modal</Text>
-              <RectButton onPress={async () => await setStateAsync(this, {showModal: !this.state.showModal})}>
+              <RectButton onPress={() => this.setState({showModal: !this.state.showModal})}>
                 <View style={{padding: 20, backgroundColor: iOSColors.orange}}>
                   <Text>Close</Text>
                 </View>

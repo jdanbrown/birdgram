@@ -6,7 +6,7 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 import { InlineMetadataColumn, InlineMetadataColumns } from './datatypes';
 import { log, puts } from './log';
 import { debugStyle } from './styles';
-import { json, setStateAsync } from './utils';
+import { json } from './utils';
 
 export type ShowMetadata = 'none' | 'inline' | 'full';
 
@@ -70,8 +70,8 @@ export class Settings implements Props {
   // WARNING Declare all functions as methods i/o attrs, else they will sneak into serdes
 
   constructor(
-    // Callback to trigger setStateAsync(App, ...) when settings change
-    public readonly appSetStateAsync: (settings: Settings) => Promise<void>,
+    // Callback to trigger App.setState when settings change
+    public readonly appSetState: (settings: Settings) => void,
     // NOTE Keep attrs in sync (4/5)
     public readonly allowUploads: boolean,
     public readonly showDebug: boolean,
@@ -89,12 +89,12 @@ export class Settings implements Props {
     props = _.assign({}, this, props);
     // @ts-ignore (Possible to do this typesafe-ly?)
     return new Settings(
-      this.appSetStateAsync,
+      this.appSetState,
       ...KEYS.map(key => (props as {[key: string]: any})[key]),
     );
   }
 
-  static async load(appSetStateAsync: (settings: Settings) => Promise<void>): Promise<Settings> {
+  static async load(appSetState: (settings: Settings) => void): Promise<Settings> {
 
     // Load whatever junk we might have saved last
     //  - Fallback to DEFAULTS (via {}) if we can't load it at all
@@ -135,7 +135,7 @@ export class Settings implements Props {
 
     // @ts-ignore (Possible to do this typesafe-ly?)
     const settings = new Settings(
-      appSetStateAsync,
+      appSetState,
       ...values,
     );
 
@@ -149,7 +149,7 @@ export class Settings implements Props {
     // Persist in AsyncStorage
     await Settings.setItem(key, value);
     // Set locally (only if persist worked)
-    await this.appSetStateAsync(this.withProps({
+    this.appSetState(this.withProps({
       [key]: value,
     }));
   }

@@ -2,12 +2,26 @@ import React from 'React';
 import { Component } from 'react';
 import { Dimensions, Image, Platform, Text, View, WebView } from 'react-native';
 
+import { log } from '../log';
 import { StyleSheet } from '../stylesheet';
 import { global } from '../utils';
 
 type Props = {};
 
 export class SavedScreen extends Component<Props> {
+
+  constructor(props: Props) {
+    super(props);
+    log.info(`${this.constructor.name}.constructor`);
+  }
+
+  componentDidMount = async () => {
+    log.info(`${this.constructor.name}.componentDidMount`);
+  }
+
+  componentWillUnmount = async () => {
+    log.info(`${this.constructor.name}.componentWillUnmount`);
+  }
 
   render = () => {
     return (
