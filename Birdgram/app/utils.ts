@@ -75,6 +75,12 @@ global.pretty = pretty;
 global.unjson = unjson;
 
 //
+// Typescript
+//
+
+export type Omit<X, K> = Pick<X, Exclude<keyof X, K>>;
+
+//
 // Promise
 //
 

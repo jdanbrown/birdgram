@@ -13,7 +13,10 @@ import { Settings } from '../settings';
 import { StyleSheet } from '../stylesheet';
 import { global } from '../utils';
 
-type Props = {};
+type Props = {
+  settings: Settings;
+};
+
 type State = {
   showModal: boolean;
 };
@@ -37,122 +40,120 @@ export class SettingsScreen extends Component<Props, State> {
 
   // TODO https://github.com/evetstech/react-native-settings-list#a-more-realistic-example
   render = () => (
-    <Settings.Context.Consumer children={settings => (
+    <View style={{
+      flex: 1,
+      backgroundColor: iOSColors.white,
+    }}>
+
       <View style={{
-        flex: 1,
-        backgroundColor: iOSColors.white,
+        borderBottomWidth: 1,
+        borderColor: iOSColors.midGray,
       }}>
-
-        <View style={{
-          borderBottomWidth: 1,
-          borderColor: iOSColors.midGray,
+        <Text style={{
+          alignSelf: 'center',
+          marginTop: 30 - getStatusBarHeight(), // No status bar
+          marginBottom: 10,
+          ...material.titleObject,
         }}>
-          <Text style={{
-            alignSelf: 'center',
-            marginTop: 30 - getStatusBarHeight(), // No status bar
-            marginBottom: 10,
-            ...material.titleObject,
-          }}>
-            Settings
-          </Text>
-        </View>
-
-        <View style={{
-          // flexGrow: 1, // TODO Do we need flexGrow i/o flex? Used to have flexGrow
-          flex: 1,
-          backgroundColor: iOSColors.customGray,
-        }}>
-          <SettingsList
-            defaultItemSize={50}
-            borderColor={iOSColors.midGray}
-          >
-
-            <SettingsList.Header headerStyle={{marginTop: 15}} />
-
-            <SettingsList.Item
-              id='Allow uploads'
-              title='Allow uploads'
-              hasNavArrow={false}
-              hasSwitch={true}
-              switchState={settings.allowUploads}
-              switchOnValueChange={async x => await settings.set('allowUploads', x)}
-            />
-
-            <SettingsList.Item
-              id='Test modal'
-              title='Test modal'
-              onPress={() => this.setState({showModal: true})}
-            />
-
-            <SettingsList.Item
-              id='Playback progress (high cpu)'
-              title='Playback progress (high cpu)'
-              hasNavArrow={false}
-              hasSwitch={true}
-              switchState={settings.playingProgressEnable}
-              switchOnValueChange={async x => await settings.set('playingProgressEnable', x)}
-            />
-
-            {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
-            <SettingsList.Item
-              id='Playback progress interval (ms)'
-              title='Playback progress interval (ms)'
-              isEditable={true}
-              hasNavArrow={false}
-              value={(settings.playingProgressInterval || '').toString()}
-              onTextChange={async str => {
-                const x = parseInt(str);
-                await settings.set('playingProgressInterval', _.isNaN(x) ? 0 : x);
-              }}
-            />
-
-            <SettingsList.Header headerStyle={{marginTop: 15}} />
-
-            <SettingsList.Item
-              id='Debug: Show debug info'
-              title='Debug: Show debug info'
-              hasNavArrow={false}
-              hasSwitch={true}
-              switchState={settings.showDebug}
-              switchOnValueChange={async x => await settings.set('showDebug', x)}
-            />
-
-          </SettingsList>
-        </View>
-
-        <Modal
-          animationType='none' // 'none' | 'slide' | 'fade'
-          transparent={true}
-          visible={this.state.showModal}
-        >
-          <View style={{
-            flex: 1,
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginTop: 300,
-            marginBottom: 50,
-            backgroundColor: iOSColors.midGray,
-          }}>
-            <View>
-              <Text>This is a modal</Text>
-              <RectButton onPress={() => this.setState({showModal: !this.state.showModal})}>
-                <View style={{padding: 20, backgroundColor: iOSColors.orange}}>
-                  <Text>Close</Text>
-                </View>
-              </RectButton>
-            </View>
-          </View>
-        </Modal>
-
-        {settings.showDebug && (
-          <View style={settings.debugView}>
-            <Text style={settings.debugText}>DEBUG INFO</Text>
-          </View>
-        )}
-
+          Settings
+        </Text>
       </View>
-    )}/>
+
+      <View style={{
+        // flexGrow: 1, // TODO Do we need flexGrow i/o flex? Used to have flexGrow
+        flex: 1,
+        backgroundColor: iOSColors.customGray,
+      }}>
+        <SettingsList
+          defaultItemSize={50}
+          borderColor={iOSColors.midGray}
+        >
+
+          <SettingsList.Header headerStyle={{marginTop: 15}} />
+
+          <SettingsList.Item
+            id='Allow uploads'
+            title='Allow uploads'
+            hasNavArrow={false}
+            hasSwitch={true}
+            switchState={this.props.settings.allowUploads}
+            switchOnValueChange={async x => await this.props.settings.set('allowUploads', x)}
+          />
+
+          <SettingsList.Item
+            id='Test modal'
+            title='Test modal'
+            onPress={() => this.setState({showModal: true})}
+          />
+
+          <SettingsList.Item
+            id='Playback progress (high cpu)'
+            title='Playback progress (high cpu)'
+            hasNavArrow={false}
+            hasSwitch={true}
+            switchState={this.props.settings.playingProgressEnable}
+            switchOnValueChange={async x => await this.props.settings.set('playingProgressEnable', x)}
+          />
+
+          {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
+          <SettingsList.Item
+            id='Playback progress interval (ms)'
+            title='Playback progress interval (ms)'
+            isEditable={true}
+            hasNavArrow={false}
+            value={(this.props.settings.playingProgressInterval || '').toString()}
+            onTextChange={async str => {
+              const x = parseInt(str);
+              await this.props.settings.set('playingProgressInterval', _.isNaN(x) ? 0 : x);
+            }}
+          />
+
+          <SettingsList.Header headerStyle={{marginTop: 15}} />
+
+          <SettingsList.Item
+            id='Debug: Show debug info'
+            title='Debug: Show debug info'
+            hasNavArrow={false}
+            hasSwitch={true}
+            switchState={this.props.settings.showDebug}
+            switchOnValueChange={async x => await this.props.settings.set('showDebug', x)}
+          />
+
+        </SettingsList>
+      </View>
+
+      <Modal
+        animationType='none' // 'none' | 'slide' | 'fade'
+        transparent={true}
+        visible={this.state.showModal}
+      >
+        <View style={{
+          flex: 1,
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginTop: 300,
+          marginBottom: 50,
+          backgroundColor: iOSColors.midGray,
+        }}>
+          <View>
+            <Text>This is a modal</Text>
+            <RectButton onPress={() => this.setState({showModal: !this.state.showModal})}>
+              <View style={{padding: 20, backgroundColor: iOSColors.orange}}>
+                <Text>Close</Text>
+              </View>
+            </RectButton>
+          </View>
+        </View>
+      </Modal>
+
+      {this.props.settings.showDebug && (
+        <View style={this.props.settings.debugView}>
+          <Text style={this.props.settings.debugText}>DEBUG INFO</Text>
+        </View>
+      )}
+
+    </View>
   );
 
 }

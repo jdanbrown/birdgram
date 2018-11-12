@@ -247,12 +247,13 @@ export class Settings implements Props {
   // React
   //
 
-  // React Context (for components to consume the global Settings, provided by App)
-  static Context: React.Context<Settings> = React.createContext(
-    // HACK No default: constructing a real Settings with defaults here requires mangling the code, and we don't yet
-    // have a need for an uninitialized/defaulted Settings.Context [probably because we don't have enough tests]
-    undefined as unknown as Settings,
-  );
+  // XXX(nav_router)
+  // // React Context (for components to consume the global Settings, provided by App)
+  // static Context: React.Context<Settings> = React.createContext(
+  //   // HACK No default: constructing a real Settings with defaults here requires mangling the code, and we don't yet
+  //   // have a need for an uninitialized/defaulted Settings.Context [probably because we don't have enough tests]
+  //   undefined as unknown as Settings,
+  // );
 
   // Styles
   get debugView(): object {

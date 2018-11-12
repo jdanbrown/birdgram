@@ -1,12 +1,18 @@
+import { Location, MemoryHistory } from 'history';
 import React from 'React';
 import { Component } from 'react';
 import { Dimensions, Image, Platform, Text, View, WebView } from 'react-native';
 
 import { log } from '../log';
+import { Settings } from '../settings';
 import { StyleSheet } from '../stylesheet';
-import { global } from '../utils';
+import { global, json, pretty } from '../utils';
 
-type Props = {};
+type Props = {
+  settings: Settings;
+  location: Location;
+  history:  MemoryHistory;
+};
 
 export class RecentScreen extends Component<Props> {
 
@@ -24,6 +30,7 @@ export class RecentScreen extends Component<Props> {
 
         <Text style={styles.banner}>
           Recent
+          {pretty(this.props.history)}
         </Text>
 
       </View>

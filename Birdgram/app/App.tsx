@@ -6,7 +6,7 @@ import {
 import KeepAwake from 'react-native-keep-awake';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
-import { BackButton, Link, NativeRouter, Redirect, Route, Switch } from 'react-router-native';
+import { BackButton, Link, matchPath, NativeRouter, Redirect, Route, Switch } from 'react-router-native';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
@@ -19,7 +19,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { TabRoutes, TabLink } from './components/TabRoutes';
 import { Settings } from './settings';
 import { config } from './config';
-import { Models, ModelsSearch, ScreenProps, SearchRecs, ServerConfig } from './datatypes';
+import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { log } from './log';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
 import { StyleSheet } from './stylesheet';
@@ -34,6 +34,7 @@ global.Dimensions = Dimensions;
 global.Linking = Linking;
 global.Platform = Platform;
 global.iOSColors = iOSColors;
+global.matchPath = matchPath;
 global.material = material;
 global.materialColors = materialColors;
 // global.navigate = navigate; // XXX(nav_router)
@@ -48,6 +49,7 @@ timed('d3-color',           () => global.d3c             = require('d3-color'));
 timed('d3-scale-chromatic', () => global.d3sc            = require('d3-scale-chromatic'));      // 6ms
 timed('jimp',               () => global.Jimp            = require('jimp'));                    // 170ms
 timed('lodash',             () => global._               = require('lodash'));                  // 0ms
+// timed('path-to-regexp',     () => global.pathToRegexp    = require('path-to-regexp'));          // ?ms
 timed('ndarray',            () => global.ndarray         = require('ndarray'));                 // 1ms
 timed('nj',                 () => global.nj              = require('../third-party/numjs/dist/numjs.min')); // 130ms
 timed('sj.ops',             () => global.sj.ops          = require('ndarray-ops'));             // 50ms
@@ -63,16 +65,24 @@ timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));   
 // timed('sj.savePixels',   () => global.sj.savePixels   = require('save-pixels'));             // 30ms // XXX Doesn't work in RN
 global.fs = global.RNFB.fs;
 
-type Props = {};
+interface Props {}
 
-type State = {
+interface State {
   tabIndex: number;
   orientation: 'portrait' | 'landscape';
   loading: boolean;
-  serverConfig?: ServerConfig;
-  modelsSearch?: ModelsSearch;
-  settings?: Settings;
-};
+  serverConfig?: ServerConfig,
+  modelsSearch?: ModelsSearch,
+  settings?: Settings,
+  appContext?: AppContext,
+}
+
+interface AppContext {
+  // TODO Use context for anything? Or just keep passing stuff as props?
+}
+
+const AppContext = React.createContext({
+});
 
 export default class App extends Component<Props, State> {
 
@@ -100,12 +110,16 @@ export default class App extends Component<Props, State> {
       settings => this.setState({settings}), // Callback for when Settings updates
     );
 
+    const appContext = {
+    };
+
     // TODO Show loading screen until loads complete
     this.setState({
       loading: false,
       serverConfig,
       modelsSearch,
       settings,
+      appContext,
     });
 
   }
@@ -125,14 +139,6 @@ export default class App extends Component<Props, State> {
 
   render = () => (
 
-    // TODO(nav_router) -> Context?
-    // Pass props to screens (as props.screenProps)
-    // screenProps={{
-    //   serverConfig: this.state.serverConfig,
-    //   modelsSearch: this.state.modelsSearch,
-    //   settings: this.state.settings,
-    // } as ScreenProps}
-
     // Avoid rounded corners and camera notches (ios ≥11)
     //  - https://facebook.github.io/react-native/docs/safeareaview
     <SafeAreaView style={{
@@ -150,8 +156,8 @@ export default class App extends Component<Props, State> {
           </View>
         ) : (
 
-          // Provide Settings via context
-          <Settings.Context.Provider value={this.state.settings!}>
+          // Provide app-global stuff via context
+          <AppContext.Provider value={this.state.appContext!}>
 
             {/* Keep screen awake (in dev) */}
             {__DEV__ && <KeepAwake/>}
@@ -191,16 +197,46 @@ export default class App extends Component<Props, State> {
                 />
 
                 {/* Tabs + screen pager */}
-                <TabRoutes
-                  defaultPath='/recent'
-                  routes={[
-                    {route: {path: '/record'},   label: 'Record',   iconName: 'activity', component: RecordScreen,   },
-                    {route: {path: '/search'},   label: 'Search',   iconName: 'search',   component: SearchScreen,   },
-                    {route: {path: '/recent'},   label: 'Recent',   iconName: 'list',     component: RecentScreen,   },
-                    {route: {path: '/saved'},    label: 'Saved',    iconName: 'bookmark', component: SavedScreen,    },
-                    {route: {path: '/settings'}, label: 'Settings', iconName: 'settings', component: SettingsScreen, },
-                  ]}
-                />
+                <Route children={({location, history}: {location: Location, history: MemoryHistory}) => (
+                  <TabRoutes
+                    defaultPath='/recent'
+                    routes={[
+                      {
+                        route: {path: '/record'}, label: 'Record', iconName: 'activity', render: props => (
+                          <RecordScreen {...props} />
+                        ),
+                      }, {
+                        route: {path: '/search'}, label: 'Search', iconName: 'search', render: props => (
+                          <SearchScreen {...props}
+                            serverConfig={this.state.serverConfig!}
+                            modelsSearch={this.state.modelsSearch!}
+                            settings={this.state.settings!}
+                            location={location}
+                            history={history}
+                          />
+                        ),
+                      }, {
+                        route: {path: '/recent'}, label: 'Recent', iconName: 'list', render: props => (
+                          <RecentScreen {...props}
+                            settings={this.state.settings!}
+                            location={location}
+                            history={history}
+                          />
+                        ),
+                      }, {
+                        route: {path: '/saved'}, label: 'Saved', iconName: 'bookmark', render: props => (
+                          <SavedScreen {...props} />
+                        ),
+                      }, {
+                        route: {path: '/settings'}, label: 'Settings', iconName: 'settings', render: props => (
+                          <SettingsScreen {...props}
+                            settings={this.state.settings!}
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                )}/>
 
                 {/* [Examples of] Global redirects */}
                 <Route exact path='/test-redir-fixed' render={() => (
@@ -216,7 +252,7 @@ export default class App extends Component<Props, State> {
               </View>
             </NativeRouter>
 
-          </Settings.Context.Provider>
+          </AppContext.Provider>
 
         )}
 

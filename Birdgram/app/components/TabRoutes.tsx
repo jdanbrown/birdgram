@@ -2,7 +2,7 @@
 
 import _ from 'lodash';
 import { Location } from 'history';
-import React, { Component, ComponentClass } from 'React';
+import React, { Component, ComponentClass, ReactNode } from 'React';
 import { Dimensions, Platform, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
 import Feather from 'react-native-vector-icons/Feather';
@@ -28,9 +28,9 @@ export interface TabRoutesState {
 
 export interface TabRoute {
   route: TabRouteRoute;
-  label: string,
-  iconName: string,
-  component: ComponentClass,
+  label: string;
+  iconName: string;
+  render: (props: TabRouteProps) => ReactNode;
 }
 
 export interface TabRouteRoute {
@@ -40,7 +40,16 @@ export interface TabRouteRoute {
   strict?: boolean;
 }
 
+export interface TabRouteProps {
+  key: string;
+}
+
 export class TabRoutes extends Component<TabRoutesProps, TabRoutesState> {
+
+  // WARNING O(n_tabs^2) on each render, but should be harmless for small n_tabs (e.g. ~5)
+  routeByPath = (path: string): TabRoute | undefined => {
+    return _.find(this.props.routes, route => route.route.path === path);
+  }
 
   state = {
     orientation: getOrientation(),
@@ -93,10 +102,18 @@ export class TabRoutes extends Component<TabRoutesProps, TabRoutesState> {
             width: Dimensions.get('window').width,
             height: 0,
           }}
-          renderScene={SceneMap(_.fromPairs(this.props.routes.map(route => [
-            route.route.path,
-            route.component,
-          ])))}
+          renderScene={({
+            // SceneRendererProps [more fields in here]
+            layout, // {height, width, measured}
+            // Scene<T extends {key: string}>
+            route, // T
+            focused,
+            index,
+          }) => {
+            return this.routeByPath(route.key)!.render({
+              key: route.key,
+            });
+          }}
           renderTabBar={this.TabBarLikeIOS}
           // renderPager={...} // To customize the pager (e.g. override props)
         />
@@ -143,7 +160,7 @@ export class TabRoutes extends Component<TabRoutesProps, TabRoutesState> {
     });
   }
 
-  matchedRouteIndex = (location: Location) => {
+  matchedRouteIndex = (location: Location): number => {
     return _.findIndex(this.props.routes, route => routeMatchesLocation(route.route, location));
   }
 
