@@ -64,7 +64,7 @@ function matchPathParams<X>(pathParams: PathParams, cases: {
 }
 
 const sidewaysTextWidth = 14;
-const recEditingButtonWidth = 35;
+const recEditingButtonWidth = 30;
 const someExampleSpecies = 'GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW' // XXX Dev
 
 interface ScrollViewState {
