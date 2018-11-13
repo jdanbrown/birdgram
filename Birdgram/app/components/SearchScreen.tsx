@@ -1380,6 +1380,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   // Map props/state to a DOM node
   //  - Render phase (pure, no read/write DOM, may be called multiple times per commit or interrupted)
   render = () => {
+    log.info(`${this.constructor.name}.render`);
     const styleForSpecies = this.stylesForSpecies(_.uniq(this.state.recs.map(rec => rec.species)));
     return (
       <View style={styles.container}>

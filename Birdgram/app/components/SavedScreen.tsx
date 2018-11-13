@@ -32,27 +32,30 @@ export class SavedScreen extends PureComponent<Props, State> {
     log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
   }
 
-  render = () => (
-    <View style={{
-      flex: 1,
-    }}>
-
+  render = () => {
+    log.info(`${this.constructor.name}.render`);
+    return (
       <View style={{
-        borderBottomWidth: 1,
-        borderColor: iOSColors.midGray,
+        flex: 1,
       }}>
-        <Text style={{
-          alignSelf: 'center',
-          marginTop: 30 - getStatusBarHeight(), // No status bar
-          marginBottom: 10,
-          ...material.titleObject,
-        }}>
-          Saved Lists
-        </Text>
-      </View>
 
-    </View>
-  );
+        <View style={{
+          borderBottomWidth: 1,
+          borderColor: iOSColors.midGray,
+        }}>
+          <Text style={{
+            alignSelf: 'center',
+            marginTop: 30 - getStatusBarHeight(), // No status bar
+            marginBottom: 10,
+            ...material.titleObject,
+          }}>
+            Saved Lists
+          </Text>
+        </View>
+
+      </View>
+    );
+  }
 }
 
 const styles = StyleSheet.create({

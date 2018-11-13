@@ -24,6 +24,7 @@ export class RecordScreen extends PureComponent<Props, State> {
   }
 
   render = () => {
+    log.info(`${this.constructor.name}.render`);
     return (
       <View style={styles.container}>
 

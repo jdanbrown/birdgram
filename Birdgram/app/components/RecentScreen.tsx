@@ -82,79 +82,82 @@ export class RecentScreen extends PureComponent<Props, State> {
     log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
   }
 
-  render = () => (
-    <View style={{
-      flex: 1,
-    }}>
-
-      <View style={{
-        borderBottomWidth: 1,
-        borderColor: iOSColors.midGray,
-      }}>
-        <Text style={{
-          alignSelf: 'center',
-          marginTop: 30 - getStatusBarHeight(), // No status bar
-          marginBottom: 10,
-          ...material.titleObject,
-        }}>
-          Recent Searches
-        </Text>
-      </View>
-
+  render = () => {
+    log.info(`${this.constructor.name}.render`);
+    return (
       <View style={{
         flex: 1,
-        // backgroundColor: iOSColors.customGray,
       }}>
 
-        {/* TODO SectionList with dates as section headers */}
-        <FlatList <Recent>
-          style={{
-            ...Styles.fill,
-          }}
-          contentInset={{
-            top:    -1, // Hide top elem border under bottom border of title bar
-            bottom: -1, // Hide bottom elem border under top border of tab bar
-          }}
-          data={this.state.recents}
-          keyExtractor={(recent, index) => `${index}`}
-          ListHeaderComponent={(
-            // Simulate top border on first item
-            <View style={{
-              height: 0,
-              borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
-            }}/>
-          )}
-          renderItem={({item: recent, index}) => (
-            <RectButton
-              onPress={() => this.props.go('search', recent.location.pathname)}
-            >
+        <View style={{
+          borderBottomWidth: 1,
+          borderColor: iOSColors.midGray,
+        }}>
+          <Text style={{
+            alignSelf: 'center',
+            marginTop: 30 - getStatusBarHeight(), // No status bar
+            marginBottom: 10,
+            ...material.titleObject,
+          }}>
+            Recent Searches
+          </Text>
+        </View>
+
+        <View style={{
+          flex: 1,
+          // backgroundColor: iOSColors.customGray,
+        }}>
+
+          {/* TODO SectionList with dates as section headers */}
+          <FlatList <Recent>
+            style={{
+              ...Styles.fill,
+            }}
+            contentInset={{
+              top:    -1, // Hide top elem border under bottom border of title bar
+              bottom: -1, // Hide bottom elem border under top border of tab bar
+            }}
+            data={this.state.recents}
+            keyExtractor={(recent, index) => `${index}`}
+            ListHeaderComponent={(
+              // Simulate top border on first item
               <View style={{
-                flex: 1,
-                flexDirection: 'column',
-                backgroundColor: iOSColors.white,
-                padding: 5,
+                height: 0,
                 borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
-              }}>
-                <Text style={material.body1}>
-                  {matchSearchPathParams(searchPathParamsFromPath(recent.location.pathname), {
-                    none:    ()          => 'Home (/)',
-                    random:  ({seed})    => `Random (${seed})`,
-                    species: ({species}) => `Species: ${species}`,
-                    rec:     ({recId})   => `Rec: ${shortRecId(recId)}`,
-                  })}
-                </Text>
-                <Text style={material.caption}>
-                  {recent.timestamp.toDateString()}, {recent.timestamp.toLocaleTimeString()}
-                </Text>
-              </View>
-            </RectButton>
-          )}
-        />
+              }}/>
+            )}
+            renderItem={({item: recent, index}) => (
+              <RectButton
+                onPress={() => this.props.go('search', recent.location.pathname)}
+              >
+                <View style={{
+                  flex: 1,
+                  flexDirection: 'column',
+                  backgroundColor: iOSColors.white,
+                  padding: 5,
+                  borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
+                }}>
+                  <Text style={material.body1}>
+                    {matchSearchPathParams(searchPathParamsFromPath(recent.location.pathname), {
+                      none:    ()          => 'Home (/)',
+                      random:  ({seed})    => `Random (${seed})`,
+                      species: ({species}) => `Species: ${species}`,
+                      rec:     ({recId})   => `Rec: ${shortRecId(recId)}`,
+                    })}
+                  </Text>
+                  <Text style={material.caption}>
+                    {recent.timestamp.toDateString()}, {recent.timestamp.toLocaleTimeString()}
+                  </Text>
+                </View>
+              </RectButton>
+            )}
+          />
+
+        </View>
 
       </View>
-
-    </View>
-  );
+    );
+  }
 
 }
 

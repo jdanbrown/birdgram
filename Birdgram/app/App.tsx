@@ -158,147 +158,150 @@ export default class App extends PureComponent<Props, State> {
     global.settings = this.state.settings; // XXX Debug
   }
 
-  render = () => (
+  render = () => {
+    log.info(`${this.constructor.name}.render`);
+    return (
 
-    // Avoid rounded corners and camera notches (ios ≥11)
-    //  - https://facebook.github.io/react-native/docs/safeareaview
-    <SafeAreaView style={{
-      flex: 1,
-      backgroundColor: '#ffffff',
-    }}>
+      // Avoid rounded corners and camera notches (ios ≥11)
+      //  - https://facebook.github.io/react-native/docs/safeareaview
+      <SafeAreaView style={{
+        flex: 1,
+        backgroundColor: '#ffffff',
+      }}>
 
-      {/* For onLayout -> orientation */}
-      <View onLayout={this.onLayout}>
+        {/* For onLayout -> orientation */}
+        <View onLayout={this.onLayout}>
 
-        {/* Show loading spinner */}
-        {this.state.loading ? (
-          <View style={styles.loadingView}>
-            <ActivityIndicator size='large' />
-          </View>
-        ) : (
+          {/* Show loading spinner */}
+          {this.state.loading ? (
+            <View style={styles.loadingView}>
+              <ActivityIndicator size='large' />
+            </View>
+          ) : (
 
-          // Provide app-global stuff via context
-          <AppContext.Provider value={this.state.appContext!}>
+            // Provide app-global stuff via context
+            <AppContext.Provider value={this.state.appContext!}>
 
-            {/* Keep screen awake (in dev) */}
-            {__DEV__ && <KeepAwake/>}
+              {/* Keep screen awake (in dev) */}
+              {__DEV__ && <KeepAwake/>}
 
-            {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
-            <StatusBar hidden />
+              {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
+              <StatusBar hidden />
 
-            {/* Top-level tab router (nested stacks will have their own router) */}
-            <RouterWithHistory history={this.state.histories!.tabs}>
-              <View style={styles.fill}>
+              {/* Top-level tab router (nested stacks will have their own router) */}
+              <RouterWithHistory history={this.state.histories!.tabs}>
+                <View style={styles.fill}>
 
-                {/* Route the back button (android) */}
-                {/* - FIXME Update for multiple histories (will require moving into TabRoutes since it owns tab index state) */}
-                <BackButton/>
+                  {/* Route the back button (android) */}
+                  {/* - FIXME Update for multiple histories (will require moving into TabRoutes since it owns tab index state) */}
+                  <BackButton/>
 
-                {/* Route deep links */}
-                {/* - TODO(nav_router): Do Linking.openURL('birdgram-us://open/search/species/HOWR') twice -> /search/search/HOWR */}
-                <DeepLinking
-                  prefix='birdgram-us://open'
-                  onUrl={({path}) => {
-                    const match = matchPath(path, '/:tab/:tabPath*');
-                    if (match) {
-                      const {tab, tabPath} = match.params as {tab: TabName, tabPath: string};
-                      this.go(tab, '/' + (tabPath || '')); // (Leading '/' for absolute i/o relative)
-                    }
-                  }}
-                />
-
-                {/* Tabs + screen pager */}
-                {/* - NOTE Avoid history.location [https://reacttraining.com/react-router/native/api/history/history-is-mutable] */}
-                <HistoryConsumer children={({location: locationTabs, history: historyTabs}) => (
-                  <TabRoutes
-                    defaultPath='/search'
-                    histories={this.state.histories!}
-                    routes={[
-                      {
-                        key: 'record', route: {path: '/record'},
-                        label: 'Record', iconName: 'activity',
-                        render: props => (
-                          <RecordScreen {...props} />
-                        ),
-                      }, {
-                        key: 'search', route: {path: '/search'},
-                        label: 'Search', iconName: 'search',
-                        render: props => (
-                          <SearchScreen {...props}
-                            // App globals
-                            serverConfig            = {this.state.serverConfig!}
-                            modelsSearch            = {this.state.modelsSearch!}
-                            go                      = {this.go}
-                            // Settings
-                            settings                = {this.state.settingsWrites!}
-                            showDebug               = {this.state.settings!.showDebug}
-                            showMetadata            = {this.state.settings!.showMetadata}
-                            inlineMetadataColumns   = {this.state.settings!.inlineMetadataColumns}
-                            editing                 = {this.state.settings!.editing}
-                            seekOnPlay              = {this.state.settings!.seekOnPlay}
-                            playingProgressEnable   = {this.state.settings!.playingProgressEnable}
-                            playingProgressInterval = {this.state.settings!.playingProgressInterval}
-                            spectroScale            = {this.state.settings!.spectroScale}
-                          />
-                        ),
-                      }, {
-                        key: 'recent', route: {path: '/recent'},
-                        label: 'Recent', iconName: 'list',
-                        render: props => (
-                          <RecentScreen {...props}
-                            // App globals
-                            go        = {this.go}
-                            // Settings
-                            showDebug = {this.state.settings!.showDebug}
-                          />
-                        ),
-                      }, {
-                        key: 'saved', route: {path: '/saved'},
-                        label: 'Saved', iconName: 'bookmark',
-                        render: props => (
-                          <SavedScreen {...props} />
-                        ),
-                      }, {
-                        key: 'settings', route: {path: '/settings'},
-                        label: 'Settings', iconName: 'settings',
-                        render: props => (
-                          <SettingsScreen {...props}
-                            // Settings
-                            settings                = {this.state.settingsWrites!}
-                            showDebug               = {this.state.settings!.showDebug}
-                            allowUploads            = {this.state.settings!.allowUploads}
-                            playingProgressEnable   = {this.state.settings!.playingProgressEnable}
-                            playingProgressInterval = {this.state.settings!.playingProgressInterval}
-                          />
-                        ),
-                      },
-                    ]}
+                  {/* Route deep links */}
+                  {/* - TODO(nav_router): Do Linking.openURL('birdgram-us://open/search/species/HOWR') twice -> /search/search/HOWR */}
+                  <DeepLinking
+                    prefix='birdgram-us://open'
+                    onUrl={({path}) => {
+                      const match = matchPath(path, '/:tab/:tabPath*');
+                      if (match) {
+                        const {tab, tabPath} = match.params as {tab: TabName, tabPath: string};
+                        this.go(tab, '/' + (tabPath || '')); // (Leading '/' for absolute i/o relative)
+                      }
+                    }}
                   />
-                )}/>
 
-                {/* [Examples of] Global redirects */}
-                <Route exact path='/test-redir-fixed' render={() => (
-                  <Redirect to='/settings' />
-                )}/>
-                <Route exact path='/test-redir-part/:part' render={({match: {params: {part}}}) => (
-                  <Redirect to={`/${part}`} />
-                )}/>
-                <Route exact path='/test-redir-path/*' render={({match: {params: {0: path}}}) => (
-                  <Redirect to={`/${path}`} />
-                )}/>
+                  {/* Tabs + screen pager */}
+                  {/* - NOTE Avoid history.location [https://reacttraining.com/react-router/native/api/history/history-is-mutable] */}
+                  <HistoryConsumer children={({location: locationTabs, history: historyTabs}) => (
+                    <TabRoutes
+                      defaultPath='/search'
+                      histories={this.state.histories!}
+                      routes={[
+                        {
+                          key: 'record', route: {path: '/record'},
+                          label: 'Record', iconName: 'activity',
+                          render: props => (
+                            <RecordScreen {...props} />
+                          ),
+                        }, {
+                          key: 'search', route: {path: '/search'},
+                          label: 'Search', iconName: 'search',
+                          render: props => (
+                            <SearchScreen {...props}
+                              // App globals
+                              serverConfig            = {this.state.serverConfig!}
+                              modelsSearch            = {this.state.modelsSearch!}
+                              go                      = {this.go}
+                              // Settings
+                              settings                = {this.state.settingsWrites!}
+                              showDebug               = {this.state.settings!.showDebug}
+                              showMetadata            = {this.state.settings!.showMetadata}
+                              inlineMetadataColumns   = {this.state.settings!.inlineMetadataColumns}
+                              editing                 = {this.state.settings!.editing}
+                              seekOnPlay              = {this.state.settings!.seekOnPlay}
+                              playingProgressEnable   = {this.state.settings!.playingProgressEnable}
+                              playingProgressInterval = {this.state.settings!.playingProgressInterval}
+                              spectroScale            = {this.state.settings!.spectroScale}
+                            />
+                          ),
+                        }, {
+                          key: 'recent', route: {path: '/recent'},
+                          label: 'Recent', iconName: 'list',
+                          render: props => (
+                            <RecentScreen {...props}
+                              // App globals
+                              go        = {this.go}
+                              // Settings
+                              showDebug = {this.state.settings!.showDebug}
+                            />
+                          ),
+                        }, {
+                          key: 'saved', route: {path: '/saved'},
+                          label: 'Saved', iconName: 'bookmark',
+                          render: props => (
+                            <SavedScreen {...props} />
+                          ),
+                        }, {
+                          key: 'settings', route: {path: '/settings'},
+                          label: 'Settings', iconName: 'settings',
+                          render: props => (
+                            <SettingsScreen {...props}
+                              // Settings
+                              settings                = {this.state.settingsWrites!}
+                              showDebug               = {this.state.settings!.showDebug}
+                              allowUploads            = {this.state.settings!.allowUploads}
+                              playingProgressEnable   = {this.state.settings!.playingProgressEnable}
+                              playingProgressInterval = {this.state.settings!.playingProgressInterval}
+                            />
+                          ),
+                        },
+                      ]}
+                    />
+                  )}/>
 
-              </View>
-            </RouterWithHistory>
+                  {/* [Examples of] Global redirects */}
+                  <Route exact path='/test-redir-fixed' render={() => (
+                    <Redirect to='/settings' />
+                  )}/>
+                  <Route exact path='/test-redir-part/:part' render={({match: {params: {part}}}) => (
+                    <Redirect to={`/${part}`} />
+                  )}/>
+                  <Route exact path='/test-redir-path/*' render={({match: {params: {0: path}}}) => (
+                    <Redirect to={`/${path}`} />
+                  )}/>
 
-          </AppContext.Provider>
+                </View>
+              </RouterWithHistory>
 
-        )}
+            </AppContext.Provider>
 
-      </View>
+          )}
 
-    </SafeAreaView>
+        </View>
 
-  );
+      </SafeAreaView>
+
+    );
+  }
 
   onLayout = () => {
     // log.info('App.onLayout');

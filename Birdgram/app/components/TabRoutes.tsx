@@ -75,71 +75,74 @@ export class TabRoutes extends PureComponent<TabRoutesProps, TabRoutesState> {
     log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
   }
 
-  render = () => (
-    <Route children={({location}) => (
-      <View style={{flex: 1}}>
+  render = () => {
+    log.info(`${this.constructor.name}.render`);
+    return (
+      <Route children={({location}) => (
+        <View style={{flex: 1}}>
 
-        {/* NOTE Don't use Switch, else pager+screen components get unmounted/remounted on redir */}
-        {/*   - This is because Switch only renders matching Route's, and unrendered components get unmounted */}
-        {/* <Switch> */}
+          {/* NOTE Don't use Switch, else pager+screen components get unmounted/remounted on redir */}
+          {/*   - This is because Switch only renders matching Route's, and unrendered components get unmounted */}
+          {/* <Switch> */}
 
-        <Route exact path='/' component={this.RedirectToDefaultPath} />
+          <Route exact path='/' component={this.RedirectToDefaultPath} />
 
-        {/* NOTE Don't warn on unknown route, else we'd warn on every redirect (because we can't use Switch -- see above) */}
-        {/* {this.matchedRouteIndex(location) === -1 && (
-          <Warn msg={`No route for location (${pretty(location)})`}>
-            <this.RedirectToDefaultPath/>
-          </Warn>
-        )} */}
+          {/* NOTE Don't warn on unknown route, else we'd warn on every redirect (because we can't use Switch -- see above) */}
+          {/* {this.matchedRouteIndex(location) === -1 && (
+            <Warn msg={`No route for location (${pretty(location)})`}>
+              <this.RedirectToDefaultPath/>
+            </Warn>
+          )} */}
 
-        {/* Tabs + pager */}
-        {/* FIXME Pager sometimes doesn't update to navigationState.index: */}
-        {/* - Repro: quickly: Toggle 'Show debug info' -> Saved -> Recent -> observe Recent tab is blue but pager shows Saved screen */}
-        <TabView
-          tabBarPosition='bottom'
-          swipeEnabled={false}
-          animationEnabled={false}
-          onIndexChange={i => {}} // Noop: index tracked implicitly through location
-          navigationState={{
-            index: this.matchedRouteIndex(location),
-            routes: this.props.routes.map(route => ({
-              key: route.key,
-              label: route.label,
-              iconName: route.iconName,
-            })),
-          }}
-          initialLayout={{
-            width: Dimensions.get('window').width,
-            height: 0,
-          }}
-          renderScene={({
-            // SceneRendererProps [more fields in here]
-            layout, // {height, width, measured}
-            // Scene<T extends {key: string}>
-            route, // T
-            focused,
-            index,
-          }) => {
-            return (
-              <RouterWithHistory history={this.props.histories[route.key]}>
-                <HistoryConsumer children={({location, history}) => (
-                  this.routeByKey(route.key)!.render({
-                    key: route.key,
-                    location: location,
-                    history: history,
-                    histories: this.props.histories,
-                  })
-                )}/>
-              </RouterWithHistory>
-            );
-          }}
-          renderTabBar={this.TabBarLikeIOS}
-          // renderPager={...} // To customize the pager (e.g. override props)
-        />
+          {/* Tabs + pager */}
+          {/* FIXME Pager sometimes doesn't update to navigationState.index: */}
+          {/* - Repro: quickly: Toggle 'Show debug info' -> Saved -> Recent -> observe Recent tab is blue but pager shows Saved screen */}
+          <TabView
+            tabBarPosition='bottom'
+            swipeEnabled={false}
+            animationEnabled={false}
+            onIndexChange={i => {}} // Noop: index tracked implicitly through location
+            navigationState={{
+              index: this.matchedRouteIndex(location),
+              routes: this.props.routes.map(route => ({
+                key: route.key,
+                label: route.label,
+                iconName: route.iconName,
+              })),
+            }}
+            initialLayout={{
+              width: Dimensions.get('window').width,
+              height: 0,
+            }}
+            renderScene={({
+              // SceneRendererProps [more fields in here]
+              layout, // {height, width, measured}
+              // Scene<T extends {key: string}>
+              route, // T
+              focused,
+              index,
+            }) => {
+              return (
+                <RouterWithHistory history={this.props.histories[route.key]}>
+                  <HistoryConsumer children={({location, history}) => (
+                    this.routeByKey(route.key)!.render({
+                      key: route.key,
+                      location: location,
+                      history: history,
+                      histories: this.props.histories,
+                    })
+                  )}/>
+                </RouterWithHistory>
+              );
+            }}
+            renderTabBar={this.TabBarLikeIOS}
+            // renderPager={...} // To customize the pager (e.g. override props)
+          />
 
-      </View>
-    )} />
-  );
+        </View>
+      )} />
+    );
+  }
 
   RedirectToDefaultPath = () => (
     <Redirect to={this.props.defaultPath || this.props.routes[0].route.path} />
