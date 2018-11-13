@@ -170,12 +170,13 @@ export class Settings implements SettingsWrites, Props {
 
   async set<K extends keyof Props>(key: K, value: Props[K]): Promise<void> {
     log.info('Settings.set', json({key, value}));
-    // Persist in AsyncStorage
-    await Settings.setItem(key, value);
-    // Set locally (only if persist worked)
+    // Set locally
+    //  - Before persist: faster App.state response, async persist (which has high variance runtime)
     this.appSetState(this.withProps({
       [key]: value,
     }));
+    // Persist in AsyncStorage (async wrt. App.state)
+    await Settings.setItem(key, value);
   }
 
   async get<K extends keyof Props>(key: K): Promise<Props[K]> {
