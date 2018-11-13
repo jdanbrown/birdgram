@@ -1,4 +1,9 @@
 import { Places } from './places';
+import { Omit } from './utils';
+
+//
+// Rec
+//
 
 export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
 export type RecId = string;
@@ -66,6 +71,54 @@ export const Rec = {
   },
 
 };
+
+//
+// SearchPathParams
+//
+
+import { matchPath } from 'react-router-native';
+
+export type SearchPathParams =
+  | SearchPathParamsNone
+  | SearchPathParamsRandom
+  | SearchPathParamsSpecies
+  | SearchPathParamsRec;
+export type SearchPathParamsNone    = { kind: 'none' };
+export type SearchPathParamsRandom  = { kind: 'random', seed: number };
+export type SearchPathParamsSpecies = { kind: 'species', species: string };
+export type SearchPathParamsRec     = { kind: 'rec', recId: string };
+
+export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cases: {
+  none:    (searchPathParams: SearchPathParamsNone)    => X,
+  random:  (searchPathParams: SearchPathParamsRandom)  => X,
+  species: (searchPathParams: SearchPathParamsSpecies) => X,
+  rec:     (searchPathParams: SearchPathParamsRec)     => X,
+}): X {
+  switch (searchPathParams.kind) {
+    case 'none':    return cases.none(searchPathParams);
+    case 'random':  return cases.random(searchPathParams);
+    case 'species': return cases.species(searchPathParams);
+    case 'rec':     return cases.rec(searchPathParams);
+  }
+}
+
+export function searchPathParamsFromPath(path: string): SearchPathParams {
+  const tryParseInt = (_default: number, s: string): number => { try { return parseInt(s); } catch { return _default; } };
+  let match;
+  match = matchPath<{}>(path, {path: '/', exact: true});
+  if (match) return {kind: 'none'};
+  match = matchPath<{seed: string}>(path, {path: '/random/:seed'});
+  if (match) return {kind: 'random', seed: tryParseInt(0, decodeURIComponent(match.params.seed))};
+  match = matchPath<{species: string}>(path, {path: '/species/:species'});
+  if (match) return {kind: 'species', species: decodeURIComponent(match.params.species)};
+  match = matchPath<{recId: string}>(path, {path: '/rec/:recId*'});
+  if (match) return {kind: 'rec', recId: decodeURIComponent(match.params.recId)};
+  throw `searchPathParamsFromPath: Unexpected path: ${path}`;
+}
+
+//
+// Misc.
+//
 
 export const InlineMetadataColumns = {
   xc_id:            (rec: Rec) => rec.xc_id,

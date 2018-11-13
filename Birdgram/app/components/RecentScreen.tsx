@@ -1,10 +1,11 @@
 import { Location, MemoryHistory } from 'history';
 import React, { PureComponent } from 'react';
 import { Dimensions, FlatList, Image, Platform, SectionList, Text, View, WebView } from 'react-native';
-import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
+import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
+import { matchSearchPathParams, searchPathParamsFromPath, shortRecId } from '../datatypes';
 import { log } from '../log';
 import { Go, Histories } from '../router';
 import { Settings } from '../settings';
@@ -92,7 +93,7 @@ export class RecentScreen extends PureComponent<Props, State> {
           marginBottom: 10,
           ...material.titleObject,
         }}>
-          Recent searches
+          Recent Searches
         </Text>
       </View>
 
@@ -127,7 +128,12 @@ export class RecentScreen extends PureComponent<Props, State> {
                 borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
               }}>
                 <Text style={material.body1}>
-                  {recent.location.pathname}
+                  {matchSearchPathParams(searchPathParamsFromPath(recent.location.pathname), {
+                    none:    ()          => 'Home (/)',
+                    random:  ({seed})    => `Random (${seed})`,
+                    species: ({species}) => `Species: ${species}`,
+                    rec:     ({recId})   => `Rec: ${shortRecId(recId)}`,
+                  })}
                 </Text>
                 <Text style={material.caption}>
                   {recent.timestamp.toDateString()}, {recent.timestamp.toLocaleTimeString()}

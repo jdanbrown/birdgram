@@ -30,56 +30,47 @@ import stringHash from "string-hash";
 const fs = RNFB.fs;
 
 import { ActionSheetBasic } from './ActionSheets';
-import { TabBarStyle } from './TabRoutes';
-import { Settings, ShowMetadata } from '../settings';
 import { config } from '../config';
 import {
-  InlineMetadataColumn, InlineMetadataColumns, ModelsSearch, Quality, Rec, rec_f_preds, Rec_f_preds, RecId, SearchRecs,
-  ServerConfig, shortRecId,
+  InlineMetadataColumn, InlineMetadataColumns, ModelsSearch, matchSearchPathParams, Quality, Rec, rec_f_preds,
+  Rec_f_preds, RecId, SearchPathParams, searchPathParamsFromPath, SearchRecs, ServerConfig, shortRecId,
 } from '../datatypes';
 import { log, puts, tap } from '../log';
+import { Go } from '../router';
+import { Settings, ShowMetadata } from '../settings';
 import Sound from '../sound';
 import { querySql, SQL, sqlf } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import { debugStyle, LabelStyle, labelStyles } from '../styles';
+import { TabBarStyle } from './TabRoutes';
 import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait,
   objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, Styles, zipSame,
 } from '../utils';
 
-type PathParams = PathParamsNone | PathParamsSpecies | PathParamsRec;
-type PathParamsNone    = { kind: 'none' };
-type PathParamsSpecies = { kind: 'species', species: string };
-type PathParamsRec     = { kind: 'rec', recId: string };
-function matchPathParams<X>(pathParams: PathParams, cases: {
-  none:    (pathParams: PathParamsNone)    => X,
-  species: (pathParams: PathParamsSpecies) => X,
-  rec:     (pathParams: PathParamsRec)     => X,
-}): X {
-  switch (pathParams.kind) {
-    case 'none':    return cases.none(pathParams);
-    case 'species': return cases.species(pathParams);
-    case 'rec':     return cases.rec(pathParams);
-  }
-}
-
 const sidewaysTextWidth = 14;
 const recEditingButtonWidth = 30;
-const someExampleSpecies = 'GREG,LASP,HOFI,NOFL,GTGR,SWTH,GHOW' // XXX Dev
 
 interface ScrollViewState {
   contentOffset: Point;
   // (More fields available in NativeScrollEvent)
 }
 
-type Query = QuerySpecies | QueryRecId;
+// QUESTION Should Query + SearchPathParams be separate? 1-1 so far...
+type Query = QueryNone | QueryRandom | QuerySpecies | QueryRecId;
+type QueryNone    = {kind: 'none'}; // e.g. so we can show nothing on redirect from '/'
+type QueryRandom  = {kind: 'random',  seed: number};
 type QuerySpecies = {kind: 'species', species: string};
 type QueryRecId   = {kind: 'recId',   recId: string};
 function matchQuery<X>(query: Query, cases: {
+  none:    (query: QueryNone)    => X,
+  random:  (query: QueryRandom)  => X,
   species: (query: QuerySpecies) => X,
   recId:   (query: QueryRecId)   => X,
 }): X {
   switch (query.kind) {
+    case 'none':    return cases.none(query);
+    case 'random':  return cases.random(query);
     case 'species': return cases.species(query);
     case 'recId':   return cases.recId(query);
   }
@@ -91,6 +82,7 @@ interface Props {
   settings:          Settings;
   location:          Location;
   history:           MemoryHistory;
+  go:                Go;
   spectroBase:       Dim<number>;
   spectroScaleClamp: Clamp<number>;
 }
@@ -130,24 +122,16 @@ interface State {
 export class SearchScreen extends PureComponent<Props, State> {
 
   // Getters for prevProps
-  //  - TODO Simplify this boilerplate using <Route/> instead of doing the match/dispatch ourselves
-  _pathParams = (props?: Props): PathParams => {
+  _pathParams = (props?: Props): SearchPathParams => {
     const {pathname} = (props || this.props).location;
-    let match;
-    match = matchPath<Omit<PathParamsNone, 'kind'>>(pathname, {path: '/', exact: true});
-    if (match) return {kind: 'none'};
-    match = matchPath<Omit<PathParamsSpecies, 'kind'>>(pathname, {path: '/species/:species'});
-    if (match) return {kind: 'species', species: decodeURIComponent(match.params.species)};
-    match = matchPath<Omit<PathParamsRec, 'kind'>>(pathname, {path: '/rec/:recId*'});
-    if (match) return {kind: 'rec', recId: decodeURIComponent(match.params.recId)};
-    throw `SearchScreen._pathParams: Unexpected location.pathname: ${pathname}`;
+    return searchPathParamsFromPath(pathname);
   }
 
   // Getters for this.props
-  get pathParams (): PathParams    { return this._pathParams(); }
-  get settings   (): Settings      { return this.props.settings; }
-  get location   (): Location      { return this.props.location; }
-  get history    (): MemoryHistory { return this.props.history; }
+  get pathParams (): SearchPathParams { return this._pathParams(); }
+  get settings   (): Settings         { return this.props.settings; }
+  get location   (): Location         { return this.props.location; }
+  get history    (): MemoryHistory    { return this.props.history; }
 
   // Getters for this.state
   get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
@@ -181,9 +165,8 @@ export class SearchScreen extends PureComponent<Props, State> {
   db?: SQLiteDatabase;
   soundsCache: Map<RecId, Promise<Sound> | Sound> = new Map();
 
-  saveActionSheet: RefObject<ActionSheet> = React.createRef();
-  addActionSheet:  RefObject<ActionSheet> = React.createRef();
-  sortActionSheet: RefObject<ActionSheet> = React.createRef();
+  // (Unused, kept for reference)
+  // sortActionSheet: RefObject<ActionSheet> = React.createRef();
 
   scrollViewRef: RefObject<SectionListStatic<Rec>> = React.createRef();
 
@@ -335,6 +318,11 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   }
 
+  randomPath = (seed?: number): string => {
+    seed = seed !== undefined ? seed : chance.natural({max: 1e6});
+    return `/random/${seed}`;
+  }
+
   get spectroDim(): Dim<number> {
     return {
       height: this.props.spectroBase.height * this.state.spectroScale,
@@ -370,8 +358,9 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   get query(): Query { return this._query(); }
   _query = (props?: Props): Query => {
-    return matchPathParams<Query>(this._pathParams(props), {
-      none:    ()          => ({kind: 'species', species: someExampleSpecies}),
+    return matchSearchPathParams<Query>(this._pathParams(props), {
+      none:    ()          => ({kind: 'species', species: ''}),
+      random:  ({seed})    => ({kind: 'random', seed}),
       species: ({species}) => ({kind: 'species', species}),
       rec:     ({recId})   => ({kind: 'recId', recId}),
     });
@@ -379,11 +368,12 @@ export class SearchScreen extends PureComponent<Props, State> {
   };
 
   get queryDesc(): string {
-    // TODO Make match() typecheck for this use case
-    switch (this.query.kind) {
-      case 'species': return this.query.species;
-      case 'recId':   return shortRecId(this.query.recId);
-    }
+    return matchQuery(this.query, {
+      none:    ()          => 'none',
+      random:  ({seed})    => `random/${seed}`,
+      species: ({species}) => species,
+      recId:   ({recId})   => shortRecId(recId),
+    });
   }
 
   loadRecsFromQuery = async () => {
@@ -396,6 +386,8 @@ export class SearchScreen extends PureComponent<Props, State> {
       !deepEqual(this.query, this.state.status.queryInProgress) &&
       // Noop if this.query isn't valid
       matchQuery(this.query, {
+        none:    ()          => true,
+        random:  ({seed})    => true,
         species: ({species}) => species !== '',
         recId:   ({recId})   => recId   !== '',
       })
@@ -430,6 +422,35 @@ export class SearchScreen extends PureComponent<Props, State> {
 
       await matchQuery(this.query, {
 
+        none: async () => {
+          await _setRecs([]);
+        },
+
+        // TODO Weight species uniformly (e.g. select random species, then select random recs)
+        // TODO Get deterministic results from seed [how? sqlite doesn't support random(seed) or hash()]
+        random: async ({seed}) => {
+          await querySql<Rec>(this.db!, sqlf`
+            select *
+            from (
+              select
+                *,
+                cast(taxon_order as real) as taxon_order_num
+              from search_recs
+              where true
+                and quality in (${this.state.filterQuality})
+              order by
+                random()
+              limit ${this.state.filterLimit}
+            )
+            order by
+              taxon_order_num asc,
+              xc_id desc
+          `)(async results => {
+            const recs = results.rows.raw();
+            await _setRecs(recs);
+          });
+        },
+
         species: async ({species}) => {
           await querySql<Rec>(this.db!, sqlf`
             select *
@@ -438,9 +459,9 @@ export class SearchScreen extends PureComponent<Props, State> {
                 *,
                 cast(taxon_order as real) as taxon_order_num
               from search_recs
-              where
-                species in (${species.split(',').map(x => _.trim(x).toUpperCase())}) and
-                quality in (${this.state.filterQuality})
+              where true
+                and species in (${species.split(',').map(x => _.trim(x).toUpperCase())})
+                and quality in (${this.state.filterQuality})
               order by
                 xc_id desc
               limit ${this.state.filterLimit}
@@ -874,24 +895,6 @@ export class SearchScreen extends PureComponent<Props, State> {
         iconProps={{name: 'filter'}}
         onPress={() => this.setState({showFilters: true})}
       />
-      {/* Save as new list / add all to saved list / share list */}
-      <this.BottomControlsButton
-        help='Save'
-        // iconProps={{name: 'share'}}
-        // iconProps={{name: 'star'}}
-        iconProps={{name: 'bookmark'}}
-        onPress={() => this.saveActionSheet.current!.show()}
-      />
-      {/* Add species (select species manually) */}
-      <this.BottomControlsButton
-        help='Add'
-        // iconProps={{name: 'user-plus'}}
-        // iconProps={{name: 'file-plus'}}
-        // iconProps={{name: 'folder-plus'}}
-        // iconProps={{name: 'plus-circle'}}
-        iconProps={{name: 'plus'}}
-        onPress={() => this.addActionSheet.current!.show()}
-      />
       {/* Toggle sort: species probs / rec dist / manual list */}
       <this.BottomControlsButton
         help='Sort'
@@ -899,14 +902,41 @@ export class SearchScreen extends PureComponent<Props, State> {
         // iconProps={{name: 'chevron-down'}}
         // iconProps={{name: 'arrow-down'}}
         // iconProps={{name: 'arrow-down-circle'}}
-        onPress={() => this.sortActionSheet.current!.show()}
+        onPress={() => this.setState({
+          showGenericModal: () => (
+            <this.GenericModal title='Sort' actions={[
+              // this.state.queryRec ? [ // TODO queryRec
+              {
+                label: 'Sort by species, then by recs',
+                iconName: 'chevrons-down',
+                buttonColor: iOSColors.orange,
+                onPress: () => {},
+              }, {
+                label: 'Sort by recs only',
+                iconName: 'chevrons-down',
+                buttonColor: iOSColors.orange,
+                onPress: () => {},
+              }, {
+                label: 'Sort recs by similarity',
+                iconName: 'chevrons-down',
+                buttonColor: iOSColors.orange,
+                onPress: () => {},
+              }, {
+                label: 'Order manually',
+                iconName: 'chevrons-down',
+                buttonColor: iOSColors.orange,
+                onPress: () => {},
+              },
+            ]} />
+          )
+        })}
       />
-      {/* XXX Dev: a temporary way to reset to recs from >1 species */}
+      {/* Random recs */}
       <this.BottomControlsButton
-        help='Reset'
+        help='Random'
         // iconProps={{name: 'refresh-ccw'}}
-        iconProps={{name: 'home'}}
-        onPress={() => this.history.go(-(this.history.length - 1))}
+        iconProps={{name: 'shuffle'}}
+        onPress={() => this.history.push(this.randomPath())}
       />
       {/* Toggle editing controls for rec/species */}
       <this.BottomControlsButton
@@ -1067,12 +1097,12 @@ export class SearchScreen extends PureComponent<Props, State> {
             showGenericModal: () => (
               <this.GenericModal title='Search for' actions={[
                 {
-                  label: rec.species,
+                  label: `${rec.species}`,
                   iconName: 'search',
                   buttonColor: iOSColors.blue,
                   onPress: () => this.history.push(`/species/${encodeURIComponent(rec.species)}`),
                 }, {
-                  label: shortRecId(rec.id),
+                  label: `${shortRecId(rec.id)}`,
                   iconName: 'search',
                   buttonColor: iOSColors.blue,
                   onPress: () => this.history.push(`/rec/${encodeURIComponent(rec.id)}`),
@@ -1092,19 +1122,44 @@ export class SearchScreen extends PureComponent<Props, State> {
             showGenericModal: () => (
               <this.GenericModal title='Remove from results' actions={[
                 {
-                  label: rec.species,
+                  label: `${rec.species}`,
                   iconName: 'x',
                   buttonColor: iOSColors.red,
                   onPress: () => this.setState((state: State, props: Props) => ({
                     excludeSpecies: [...state.excludeSpecies, rec.species],
                   })),
                 }, {
-                  label: shortRecId(rec.id),
+                  label: `${shortRecId(rec.id)}`,
                   iconName: 'x',
                   buttonColor: iOSColors.red,
                   onPress: () => this.setState((state: State, props: Props) => ({
                     excludeRecIds: [...state.excludeRecIds, rec.id],
                   })),
+                }, {
+                  label: 'More species',
+                  iconName: 'plus-circle',
+                  buttonColor: iOSColors.blue,
+                  onPress: () => {},
+                }, {
+                  label: 'Fewer species',
+                  iconName: 'minus-circle',
+                  buttonColor: iOSColors.blue,
+                  onPress: () => {},
+                }, {
+                  label: 'More recs per species',
+                  iconName: 'plus-circle',
+                  buttonColor: iOSColors.blue,
+                  onPress: () => {},
+                }, {
+                  label: 'Fewer recs per species',
+                  iconName: 'minus-circle',
+                  buttonColor: iOSColors.blue,
+                  onPress: () => {},
+                }, {
+                  label: 'Add a species manually',
+                  iconName: 'plus-circle',
+                  buttonColor: iOSColors.blue,
+                  onPress: () => {},
                 },
               ]} />
             )
@@ -1119,15 +1174,30 @@ export class SearchScreen extends PureComponent<Props, State> {
           iconName='bookmark'
           onPress={() => this.setState({
             showGenericModal: () => (
-              <this.GenericModal title='Save to list' actions={[
+              <this.GenericModal title='Save / Share' actions={[
                 {
-                  label: rec.species,
+                  label: `${rec.species}`,
                   iconName: 'bookmark',
                   buttonColor: iOSColors.purple,
                   onPress: () => {},
                 }, {
-                  label: shortRecId(rec.id),
+                  label: `${shortRecId(rec.id)}`,
                   iconName: 'bookmark',
+                  buttonColor: iOSColors.purple,
+                  onPress: () => {},
+                }, {
+                  label: 'Save all to new list',
+                  iconName: 'bookmark',
+                  buttonColor: iOSColors.purple,
+                  onPress: () => {},
+                }, {
+                  label: 'Add all to existing list',
+                  iconName: 'bookmark',
+                  buttonColor: iOSColors.purple,
+                  onPress: () => {},
+                }, {
+                  label: 'Share list',
+                  iconName: 'share',
                   buttonColor: iOSColors.purple,
                   onPress: () => {},
                 },
@@ -1287,38 +1357,17 @@ export class SearchScreen extends PureComponent<Props, State> {
         transparent={true}
         children={this.Filters()}
       />
-      <ActionSheetBasic
-        innerRef={this.saveActionSheet}
-        options={[
-          ['Save as new list',      () => {}],
-          ['Add all to saved list', () => {}],
-          ['Share list',            () => {}],
-        ]}
-      />
-      <ActionSheetBasic
-        innerRef={this.addActionSheet}
-        options={[
-          ['+ num species',          () => {}],
-          ['– num species',          () => {}],
-          ['+ num recs per species', () => {}],
-          ['– num recs per species', () => {}],
-          ['Add a species manually', () => {}],
-        ]}
-      />
+      {/* (Unused, kept for reference)
       <ActionSheetBasic
         innerRef={this.sortActionSheet}
-        options={
-          // this.state.queryRec ? [ // TODO queryRec
-          true ? [
-            ['Sort by species, then by recs', () => {}],
-            ['Sort by recs only',             () => {}],
-            ['Order manually',                () => {}],
-          ] : [
-            ['Sort recs by similarity',       () => {}],
-            ['Order manually',                () => {}],
-          ]
-        }
+        options={[
+          ['Sort by species, then by recs', () => {}],
+          ['Sort by recs only',             () => {}],
+          ['Sort recs by similarity',       () => {}],
+          ['Order manually',                () => {}],
+        ]}
       />
+      */}
     </View>
   );
 
@@ -1328,6 +1377,11 @@ export class SearchScreen extends PureComponent<Props, State> {
     const styleForSpecies = this.stylesForSpecies(_.uniq(this.state.recs.map(rec => rec.species)));
     return (
       <View style={styles.container}>
+
+        {/* Redirect: '/' -> '/random/:seed' */}
+        <Route exact path='/' render={() => (
+          <Redirect to={this.randomPath()} />
+        )}/>
 
         {/* Loading spinner */}
         {this.state.status.loading && (

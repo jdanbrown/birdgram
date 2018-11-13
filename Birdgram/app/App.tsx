@@ -218,6 +218,7 @@ export default class App extends PureComponent<Props, State> {
                             serverConfig={this.state.serverConfig!}
                             modelsSearch={this.state.modelsSearch!}
                             settings={this.state.settings!}
+                            go={this.go}
                           />
                         ),
                       }, {
@@ -282,9 +283,14 @@ export default class App extends PureComponent<Props, State> {
   go = (tab: TabName, path: string) => {
     log.info('App.go', json({tab, path}));
     if (tab) {
+      // Show tab
       this.state.histories!.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)
       if (path) {
-        this.state.histories![tab].push(path);
+        // Push new location, unless it's the current location
+        const history = this.state.histories![tab];
+        if (path !== history.location.pathname) {
+          history.push(path);
+        }
       }
     }
   }
