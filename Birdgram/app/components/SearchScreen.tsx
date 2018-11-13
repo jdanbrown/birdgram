@@ -862,35 +862,6 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   BottomControls = (props: {}) => (
     <View style={styles.bottomControls}>
-      {/* Back */}
-      <this.BottomControlsButton
-        help='Back'
-        disabled={!this.history.canGo(-1)}
-        iconProps={{name: 'chevron-left'}}
-        onPress={() => this.history.goBack()} // TODO Add onLongPress for history.goForward()
-        onLongPress={() => this.setState({
-          showGenericModal: () => {
-            const {history} = this.props;
-            const n  = 7; // TODO Refactor the modal out of GenericModal so we can show all entries in a FlatList
-            const i  = history.index;
-            const lo = _.clamp(i  - n, 0, history.length - 1);
-            const hi = _.clamp(lo + n, 0, history.length);
-            return (
-              // TODO(back_forward): Finish testing this arithmetic
-              <this.GenericModal title='Go' actions={
-                history.entries
-                .slice(lo, hi)
-                .map((entry, index) => ({
-                  label: _.truncate(entry.pathname, {length: 10}) + ` (${index + lo - 1})`,
-                  iconName: 'chevron-left',
-                  buttonColor: iOSColors.blue,
-                  onPress: () => this.history.go(index + lo - i),
-                }))
-              }/>
-            );
-          }
-        })}
-      />
       {/* Filters */}
       <this.BottomControlsButton
         help='Filters'
