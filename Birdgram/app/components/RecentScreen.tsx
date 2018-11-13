@@ -62,7 +62,7 @@ export class RecentScreen extends PureComponent<Props, State> {
     this.props.histories.search.listen((location, action) => {
       this.addLocations([location]);
     });
-    this.addLocations(this.props.histories.search.entries);
+    this.addLocations(this.props.histories.search.entries.reverse());
 
   }
 

@@ -866,63 +866,87 @@ export class SearchScreen extends PureComponent<Props, State> {
       <this.BottomControlsButton
         help='Back'
         disabled={!this.history.canGo(-1)}
-        onPress={() => this.history.goBack()} // TODO Add onLongPress for history.goForward()
         iconProps={{name: 'chevron-left'}}
+        onPress={() => this.history.goBack()} // TODO Add onLongPress for history.goForward()
+        onLongPress={() => this.setState({
+          showGenericModal: () => {
+            const {history} = this.props;
+            const n  = 7; // TODO Refactor the modal out of GenericModal so we can show all entries in a FlatList
+            const i  = history.index;
+            const lo = _.clamp(i  - n, 0, history.length - 1);
+            const hi = _.clamp(lo + n, 0, history.length);
+            return (
+              // TODO(back_forward): Finish testing this arithmetic
+              <this.GenericModal title='Go' actions={
+                history.entries
+                .slice(lo, hi)
+                .map((entry, index) => ({
+                  label: _.truncate(entry.pathname, {length: 10}) + ` (${index + lo - 1})`,
+                  iconName: 'chevron-left',
+                  buttonColor: iOSColors.blue,
+                  onPress: () => this.history.go(index + lo - i),
+                }))
+              }/>
+            );
+          }
+        })}
       />
       {/* Filters */}
       <this.BottomControlsButton
         help='Filters'
-        onPress={() => this.setState({showFilters: true})}
         iconProps={{name: 'filter'}}
+        onPress={() => this.setState({showFilters: true})}
       />
       {/* Save as new list / add all to saved list / share list */}
       <this.BottomControlsButton
         help='Save'
-        onPress={() => this.saveActionSheet.current!.show()}
         // iconProps={{name: 'share'}}
         // iconProps={{name: 'star'}}
         iconProps={{name: 'bookmark'}}
+        onPress={() => this.saveActionSheet.current!.show()}
       />
       {/* Add species (select species manually) */}
       <this.BottomControlsButton
         help='Add'
-        onPress={() => this.addActionSheet.current!.show()}
         // iconProps={{name: 'user-plus'}}
         // iconProps={{name: 'file-plus'}}
         // iconProps={{name: 'folder-plus'}}
         // iconProps={{name: 'plus-circle'}}
         iconProps={{name: 'plus'}}
+        onPress={() => this.addActionSheet.current!.show()}
       />
       {/* Toggle sort: species probs / rec dist / manual list */}
       <this.BottomControlsButton
         help='Sort'
-        onPress={() => this.sortActionSheet.current!.show()}
         iconProps={{name: 'chevrons-down'}}
         // iconProps={{name: 'chevron-down'}}
         // iconProps={{name: 'arrow-down'}}
         // iconProps={{name: 'arrow-down-circle'}}
+        onPress={() => this.sortActionSheet.current!.show()}
       />
       {/* XXX Dev: a temporary way to reset to recs from >1 species */}
       <this.BottomControlsButton
         help='Reset'
-        onPress={() => this.history.go(-(this.history.length - 1))}
         // iconProps={{name: 'refresh-ccw'}}
         iconProps={{name: 'home'}}
+        onPress={() => this.history.go(-(this.history.length - 1))}
       />
       {/* Toggle editing controls for rec/species */}
       <this.BottomControlsButton
         help='Edit'
-        onPress={() => this.settings.toggle('editing')}
         active={this.settings.editing}
         iconProps={{name: 'sliders'}}
         // iconProps={{name: 'edit'}}
         // iconProps={{name: 'edit-2'}}
         // iconProps={{name: 'edit-3'}}
         // iconProps={{name: 'layout', style: Styles.flipBoth}}
+        onPress={() => this.settings.toggle('editing')}
       />
       {/* Cycle metadata: none / inline */}
       <this.BottomControlsButton
         help='Info'
+        active={this.settings.showMetadata === 'inline'}
+        iconProps={{name: 'file-minus'}}
         onPress={() => this.cycleMetadataInline()}
         onLongPress={() => this.setState({
           showGenericModal: () => (
@@ -940,40 +964,38 @@ export class SearchScreen extends PureComponent<Props, State> {
             } />
           )
         })}
-        active={this.settings.showMetadata === 'inline'}
-        iconProps={{name: 'file-minus'}}
       />
       {/* Cycle metadata: none / full */}
       <this.BottomControlsButton
         help='Info'
-        onPress={() => this.cycleMetadataFull()}
         active={this.settings.showMetadata === 'full'}
         iconProps={{name: 'file-text'}}
         // iconProps={{name: 'credit-card', style: Styles.flipVertical}}
         // iconProps={{name: 'sidebar', style: Styles.rotate270}}
+        onPress={() => this.cycleMetadataFull()}
       />
       {/* Toggle seekOnPlay crosshairs */}
       <this.BottomControlsButton
         help='Seek'
-        onPress={() => this.settings.toggle('seekOnPlay')}
         active={this.settings.seekOnPlay}
         iconProps={{name: 'crosshair'}}
+        onPress={() => this.settings.toggle('seekOnPlay')}
       />
       {/* Zoom more/fewer recs (spectro height) */}
       {/* - TODO Disable when spectroScale is min/max */}
       <this.BottomControlsButton
         help='Dense'
         disabled={this.state.spectroScale === this.props.spectroScaleClamp.min}
-        onPress={async () => await this.scaleSpectros(-1)}
         // iconProps={{name: 'align-justify'}} // 4 horizontal lines
         iconProps={{name: 'zoom-out'}}
+        onPress={async () => await this.scaleSpectros(-1)}
       />
       <this.BottomControlsButton
         help='Tall'
         disabled={this.state.spectroScale === this.props.spectroScaleClamp.max}
-        onPress={async () => await this.scaleSpectros(+1)}
         // iconProps={{name: 'menu'}}          // 3 horizontal lines
         iconProps={{name: 'zoom-in'}}
+        onPress={async () => await this.scaleSpectros(+1)}
       />
     </View>
   );

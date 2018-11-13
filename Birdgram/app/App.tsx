@@ -110,13 +110,19 @@ export default class App extends PureComponent<Props, State> {
     const histories = {
       tabs:     createMemoryHistory(),
       record:   createMemoryHistory(),
-      search:   createMemoryHistory({initialEntries: [
-        '/',
-        '/species/HOWR',
-        '/species/BEWR',
-        '/species/GTGR',
-        '/',
-      ]}),
+      search:   createMemoryHistory((() => {
+        const initialEntries = [
+          '/',
+          '/species/GTGR',
+          '/species/BEWR',
+          '/species/HOWR',
+          '/species/SOSP',
+        ];
+        return {
+          initialEntries,
+          initialIndex: initialEntries.length - 1,
+        };
+      })()),
       recent:   createMemoryHistory(),
       saved:    createMemoryHistory(),
       settings: createMemoryHistory(),
@@ -207,7 +213,7 @@ export default class App extends PureComponent<Props, State> {
                 {/* - NOTE Avoid history.location [https://reacttraining.com/react-router/native/api/history/history-is-mutable] */}
                 <HistoryConsumer children={({location: locationTabs, history: historyTabs}) => (
                   <TabRoutes
-                    defaultPath='/recent'
+                    defaultPath='/search'
                     histories={this.state.histories!}
                     routes={[
                       {
