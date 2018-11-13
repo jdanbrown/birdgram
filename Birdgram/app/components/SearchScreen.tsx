@@ -862,6 +862,12 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   BottomControls = (props: {}) => (
     <View style={styles.bottomControls}>
+      {/* Help */}
+      <this.BottomControlsButton
+        help='Help'
+        iconProps={{name: 'help-circle'}}
+        onPress={() => {}}
+      />
       {/* Filters */}
       <this.BottomControlsButton
         help='Filters'
