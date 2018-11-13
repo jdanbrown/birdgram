@@ -2,6 +2,8 @@
 // Utils
 //
 
+import _ from 'lodash';
+
 // Export global:any, which would have otherwise come from DOM but we disable DOM for react-native (tsconfig -> "lib")
 //  - Fallback to a mock `{}` for release builds, which run in jsc instead of chrome v8 and don't have window.global
 //  - https://facebook.github.io/react-native/docs/javascript-environment
@@ -64,6 +66,15 @@ export function objectKeysTyped<X extends {}>(x: X): Array<keyof X> {
   return Object.keys(x) as unknown as Array<keyof X>;
 }
 
+// Useful for debugging shouldComponentUpdate
+export function shallowDiff(x: object, y: object): {[key: string]: boolean} {
+  return _.assignWith<{[key: string]: boolean}>(
+    _.clone(x),
+    y,
+    (a: any, b: any) => a === b,
+  );
+}
+
 // Nonstandard shorthands (apologies for breaking norms, but these are too useful and too verbose by default)
 export const json   = JSON.stringify;
 export const pretty = (x: any) => JSON.stringify(x, null, 2);
@@ -103,7 +114,7 @@ export async function finallyAsync<X>(p: Promise<X>, f: () => Promise<void>): Pr
 // lodash
 //
 
-import _, { List } from 'lodash';
+import { List } from 'lodash';
 
 // Like _.zip, but refuse arrays of different lengths, and coerce _.zip return element types from (X | undefined) back to X
 export function zipSame<X, Y>(xs: List<X>, ys: List<Y>): Array<[X, Y]> {
@@ -148,6 +159,25 @@ export type Style = RegisteredStyle<ViewStyle | TextStyle | ImageStyle>
 // Typesafe wrapper around react-fast-compare
 export function deepEqual<X, Y extends X>(x: X, y: Y | null | undefined): boolean {
   return reactFastCompare(x, y);
+}
+
+export function shallowDiffPropsState<Props, State>(prevProps: Props, prevState: State, props: Props, state: State): object {
+  const diff = {};
+  [
+    {prefix: 'props', prevObj: prevProps, obj: props},
+    {prefix: 'state', prevObj: prevState, obj: state},
+  ].forEach(({prefix, prevObj, obj}) => {
+    const changed = _.assignWith(_.clone(prevObj), obj, (x: any, y: any) => x === y);
+    _.uniq([..._.keys(prevObj), ..._.keys(obj)]).forEach(k => {
+      const diffKey = `${prefix}.${k}`;
+      const prev = (prevObj as Record<string, any>)[k];
+      const curr = (obj     as Record<string, any>)[k];
+      if (prev !== curr) {
+        (diff as Record<string, any>)[diffKey] = {prev, curr};
+      }
+    })
+  });
+  return diff;
 }
 
 //

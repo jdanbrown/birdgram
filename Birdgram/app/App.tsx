@@ -1,12 +1,12 @@
-import { Location, MemoryHistory } from 'history';
-import React, { Component, ComponentType, RefObject } from 'React';
+import { createMemoryHistory, Location, MemoryHistory } from 'history';
+import React, { Component, ComponentType, PureComponent, ReactNode, RefObject } from 'React';
 import {
   ActivityIndicator, Animated, AsyncStorage, Dimensions, Linking, Platform, SafeAreaView, StatusBar, Text, View,
 } from 'react-native';
 import KeepAwake from 'react-native-keep-awake';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
-import { BackButton, Link, matchPath, NativeRouter, Redirect, Route, Switch } from 'react-router-native';
+import { BackButton, Link, matchPath, Redirect, Route, Switch } from 'react-router-native';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
@@ -22,9 +22,12 @@ import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { log } from './log';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
+import { HistoryConsumer, ObserveHistory, RouterWithHistory } from './router';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
-import { deepEqual, global, json, match, pretty, readJsonFile, Style } from './utils';
+import {
+  deepEqual, global, json, match, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style,
+} from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Animated = Animated;
@@ -37,9 +40,9 @@ global.iOSColors = iOSColors;
 global.matchPath = matchPath;
 global.material = material;
 global.materialColors = materialColors;
-// global.navigate = navigate; // XXX(nav_router)
-global.systemWeights = systemWeights;
+global.shallowDiff = shallowDiff;
 global.Settings = Settings;
+global.systemWeights = systemWeights;
 global.urlpack = urlpack;
 const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
 global.sj = {};
@@ -71,6 +74,8 @@ interface State {
   tabIndex: number;
   orientation: 'portrait' | 'landscape';
   loading: boolean;
+  // Loaded async (e.g. from storage)
+  histories?: {[key: string]: MemoryHistory};
   serverConfig?: ServerConfig,
   modelsSearch?: ModelsSearch,
   settings?: Settings,
@@ -78,13 +83,15 @@ interface State {
 }
 
 interface AppContext {
-  // TODO Use context for anything? Or just keep passing stuff as props?
+  // TODO Use context for anything?
 }
 
-const AppContext = React.createContext({
-});
+const AppContext = React.createContext(
+  // HACK No default: can't provide a real AppContext here, and we can ensure we always provide one [until tests]
+  undefined as unknown as AppContext,
+);
 
-export default class App extends Component<Props, State> {
+export default class App extends PureComponent<Props, State> {
 
   constructor(props: Props) {
     super(props);
@@ -98,6 +105,16 @@ export default class App extends Component<Props, State> {
 
   componentDidMount = async () => {
     log.info(`${this.constructor.name}.componentDidMount`);
+
+    // Create(/load) histories
+    const histories = {
+      tabs:     createMemoryHistory(),
+      record:   createMemoryHistory(),
+      search:   createMemoryHistory(),
+      recent:   createMemoryHistory(),
+      saved:    createMemoryHistory(),
+      settings: createMemoryHistory(),
+    };
 
     // Load serverConfig (async) on app startup
     const serverConfig = await readJsonFile<ServerConfig>(`${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`);
@@ -116,6 +133,7 @@ export default class App extends Component<Props, State> {
     // TODO Show loading screen until loads complete
     this.setState({
       loading: false,
+      histories,
       serverConfig,
       modelsSearch,
       settings,
@@ -124,16 +142,9 @@ export default class App extends Component<Props, State> {
 
   }
 
-  // Update on !deepEqual instead of default (any setState() / props change, even if data is the same) else any setState
-  // in componentDidUpdate would trigger an infinite update loop
-  shouldComponentUpdate(nextProps: Props, nextState: State): boolean {
-    const ret = !deepEqual(this.props, nextProps) || !deepEqual(this.state, nextState);
-    // log.debug('App.shouldComponentUpdate', {ret});
-    return ret;
-  }
-
   componentDidUpdate = (prevProps: Props, prevState: State) => {
-    log.info('App.componentDidUpdate', this.state.settings);
+    log.info('App.componentDidUpdate', shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    global.histories = this.state.histories; // XXX Debug
     global.settings = this.state.settings; // XXX Debug
   }
 
@@ -166,69 +177,68 @@ export default class App extends Component<Props, State> {
             <StatusBar hidden />
 
             {/* Top-level tab router (nested stacks will have their own router) */}
-            <NativeRouter
-              // Reference: props passed through to createMemoryHistory
-              //  - TODO How to bound history length?
-              // getUserConfirmation // () => boolean
-              // initialEntries      // string[]
-              // initialIndex        // number
-              // keyLength           // number
-            >
+            <RouterWithHistory history={this.state.histories!.tabs}>
               <View style={styles.fill}>
 
-                {/* HACK Globals for dev (rely on type checking to catch improper uses of these in real code) */}
-                <Route children={({location, history}: {location: Location, history: MemoryHistory}) => {
-                  global.routeProps = {location, history}; // (Exclude match since it's meaningless)
-                  log.info('App.Route: location', json(location));
-                  // log.debug('App.Route: history', history.entries.map((entry, i) => {
-                  //   const current = history.index === i;
-                  //   return `\n${current ? ' -> ' : '    '}${json(entry)}`;
-                  // }).join());
-                  return null;
-                }} />
-
                 {/* Route the back button (android) */}
+                {/* - FIXME Update for multiple histories (will require moving into TabRoutes since it owns tab index state) */}
                 <BackButton/>
 
                 {/* Route deep links */}
+                {/* - TODO(nav_router): Do Linking.openURL('birdgram-us://open/search/species/HOWR') twice -> /search/search/HOWR */}
                 <DeepLinking
                   prefix='birdgram-us://open'
-                  action='replace'
+                  onUrl={({path}) => {
+                    const match = matchPath(path, '/:tab/:tabPath*');
+                    if (match) {
+                      const {tab, tabPath} = match.params as {tab: string, tabPath: string};
+                      if (tab)     this.state.histories!.tabs.replace('/' + tab);  // (Leading '/' for absolute i/o relative)
+                      if (tabPath) this.state.histories![tab].push('/' + tabPath); // (Leading '/' for absolute i/o relative)
+                    }
+                  }}
                 />
 
                 {/* Tabs + screen pager */}
-                <Route children={({location, history}: {location: Location, history: MemoryHistory}) => (
+                {/* - NOTE Avoid history.location [https://reacttraining.com/react-router/native/api/history/history-is-mutable] */}
+                <HistoryConsumer children={({location: locationTabs, history: historyTabs}) => (
                   <TabRoutes
-                    defaultPath='/recent'
+                    defaultPath='/search'
+                    histories={this.state.histories!}
                     routes={[
                       {
-                        route: {path: '/record'}, label: 'Record', iconName: 'activity', render: props => (
+                        key: 'record', route: {path: '/record'},
+                        label: 'Record', iconName: 'activity',
+                        render: props => (
                           <RecordScreen {...props} />
                         ),
                       }, {
-                        route: {path: '/search'}, label: 'Search', iconName: 'search', render: props => (
+                        key: 'search', route: {path: '/search'},
+                        label: 'Search', iconName: 'search',
+                        render: props => (
                           <SearchScreen {...props}
                             serverConfig={this.state.serverConfig!}
                             modelsSearch={this.state.modelsSearch!}
                             settings={this.state.settings!}
-                            location={location}
-                            history={history}
                           />
                         ),
                       }, {
-                        route: {path: '/recent'}, label: 'Recent', iconName: 'list', render: props => (
+                        key: 'recent', route: {path: '/recent'},
+                        label: 'Recent', iconName: 'list',
+                        render: props => (
                           <RecentScreen {...props}
                             settings={this.state.settings!}
-                            location={location}
-                            history={history}
                           />
                         ),
                       }, {
-                        route: {path: '/saved'}, label: 'Saved', iconName: 'bookmark', render: props => (
+                        key: 'saved', route: {path: '/saved'},
+                        label: 'Saved', iconName: 'bookmark',
+                        render: props => (
                           <SavedScreen {...props} />
                         ),
                       }, {
-                        route: {path: '/settings'}, label: 'Settings', iconName: 'settings', render: props => (
+                        key: 'settings', route: {path: '/settings'},
+                        label: 'Settings', iconName: 'settings',
+                        render: props => (
                           <SettingsScreen {...props}
                             settings={this.state.settings!}
                           />
@@ -250,7 +260,7 @@ export default class App extends Component<Props, State> {
                 )}/>
 
               </View>
-            </NativeRouter>
+            </RouterWithHistory>
 
           </AppContext.Provider>
 

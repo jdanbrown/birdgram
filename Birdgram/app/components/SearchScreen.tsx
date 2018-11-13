@@ -44,7 +44,7 @@ import { StyleSheet } from '../stylesheet';
 import { debugStyle, LabelStyle, labelStyles } from '../styles';
 import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait,
-  objectKeysTyped, Omit, Point, pretty, round, Style, Styles, zipSame,
+  objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, Styles, zipSame,
 } from '../utils';
 
 type PathParams = PathParamsNone | PathParamsSpecies | PathParamsRec;
@@ -127,27 +127,27 @@ interface State {
   spectroScale: number;
 };
 
-export class SearchScreen extends Component<Props, State> {
+export class SearchScreen extends PureComponent<Props, State> {
 
   // Getters for prevProps
   //  - TODO Simplify this boilerplate using <Route/> instead of doing the match/dispatch ourselves
-  _pathParams = (props?: Props): PathParams | null => {
+  _pathParams = (props?: Props): PathParams => {
     const {pathname} = (props || this.props).location;
     let match;
-    match = matchPath<Omit<PathParamsNone, 'kind'>>(this.location.pathname, {path: '/search', exact: true});
+    match = matchPath<Omit<PathParamsNone, 'kind'>>(pathname, {path: '/', exact: true});
     if (match) return {kind: 'none'};
-    match = matchPath<Omit<PathParamsSpecies, 'kind'>>(this.location.pathname, {path: '/search/species/:species'});
-    if (match) return {kind: 'species', species: match.params.species};
-    match = matchPath<Omit<PathParamsRec, 'kind'>>(this.location.pathname, {path: '/search/rec/:recId'});
-    if (match) return {kind: 'rec', recId: match.params.recId};
-    else return null;
+    match = matchPath<Omit<PathParamsSpecies, 'kind'>>(pathname, {path: '/species/:species'});
+    if (match) return {kind: 'species', species: decodeURIComponent(match.params.species)};
+    match = matchPath<Omit<PathParamsRec, 'kind'>>(pathname, {path: '/rec/:recId*'});
+    if (match) return {kind: 'rec', recId: decodeURIComponent(match.params.recId)};
+    throw `SearchScreen._pathParams: Unexpected location.pathname: ${pathname}`;
   }
 
   // Getters for this.props
-  get pathParams (): PathParams | null { return this._pathParams(); }
-  get settings   (): Settings          { return this.props.settings; }
-  get location   (): Location          { return this.props.location; }
-  get history    (): MemoryHistory     { return this.props.history; }
+  get pathParams (): PathParams    { return this._pathParams(); }
+  get settings   (): Settings      { return this.props.settings; }
+  get location   (): Location      { return this.props.location; }
+  get history    (): MemoryHistory { return this.props.history; }
 
   // Getters for this.state
   get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
@@ -273,7 +273,7 @@ export class SearchScreen extends Component<Props, State> {
     });
 
     // Query recs (from navParams.species)
-    log.debug('componentDidMount -> loadRecsFromQuery');
+    // log.debug('componentDidMount -> loadRecsFromQuery');
     await this.loadRecsFromQuery();
 
   }
@@ -297,14 +297,6 @@ export class SearchScreen extends Component<Props, State> {
 
   }
 
-  // Update on !deepEqual instead of default (any setState() / props change, even if data is the same) else any setState
-  // in componentDidUpdate would trigger an infinite update loop
-  shouldComponentUpdate(nextProps: Props, nextState: State): boolean {
-    const ret = !deepEqual(this.props, nextProps) || !deepEqual(this.state, nextState);
-    // log.debug('shouldComponentUpdate', {ret});
-    return ret;
-  }
-
   // After props/state change; not called for the initial render()
   //  - Commit phase (impure, may read/write DOM, called once per commit)
   //  - Best practices
@@ -312,7 +304,7 @@ export class SearchScreen extends Component<Props, State> {
   //    - Do fetch data, conditioned on changed props/state (else update loops)
   //    - Do setState(), conditioned on changed props (else update loops)
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    log.info('SearchScreen.componentDidUpdate', this.props, this.state);
+    log.info('SearchScreen.componentDidUpdate', shallowDiffPropsState(prevProps, prevState, this.props, this.state));
 
     // Reset view state if query changed (i.e. props.navigation.state.params.{search,recId})
     //  - TODO Pass props.key to reset _all_ state? [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
@@ -338,7 +330,7 @@ export class SearchScreen extends Component<Props, State> {
 
     // Query recs (from updated navParams.species)
     //  - (Will noop if deepEqual(query, state.status.queryShown))
-    log.debug('componentDidUpdate -> loadRecsFromQuery');
+    // log.debug('componentDidUpdate -> loadRecsFromQuery');
     await this.loadRecsFromQuery();
 
   }
@@ -378,17 +370,11 @@ export class SearchScreen extends Component<Props, State> {
 
   get query(): Query { return this._query(); }
   _query = (props?: Props): Query => {
-    const pathParams = this._pathParams(props);
-    if (!pathParams) {
-      // TODO(nav_router): e.g. '/recent'
-      //  - TODO Add separate router
-    } else {
-      return matchPathParams<Query>(pathParams, {
-        none:    ()          => ({kind: 'species', species: someExampleSpecies}),
-        species: ({species}) => ({kind: 'species', species}),
-        rec:     ({recId})   => ({kind: 'recId', recId}),
-      });
-    }
+    return matchPathParams<Query>(this._pathParams(props), {
+      none:    ()          => ({kind: 'species', species: someExampleSpecies}),
+      species: ({species}) => ({kind: 'species', species}),
+      rec:     ({recId})   => ({kind: 'recId', recId}),
+    });
     // We ignore state.filterQueryText b/c TextInput.onSubmitEditing -> history.push -> navParams.species
   };
 
@@ -789,7 +775,7 @@ export class SearchScreen extends Component<Props, State> {
           value={this.state.filterQueryText}
           onChangeText={x => this.setState({filterQueryText: x})}
           onSubmitEditing={() => this.state.filterQueryText && (
-            this.history.push(`/search/species/${encodeURIComponent(this.state.filterQueryText)}`)
+            this.history.push(`/species/${encodeURIComponent(this.state.filterQueryText)}`)
           )}
           autoCorrect={false}
           autoCapitalize='characters'
@@ -919,7 +905,7 @@ export class SearchScreen extends Component<Props, State> {
       {/* XXX Dev: a temporary way to reset to recs from >1 species */}
       <this.BottomControlsButton
         help='Reset'
-        onPress={() => this.history.go(0)}
+        onPress={() => this.history.go(-(this.history.length - 1))}
         // iconProps={{name: 'refresh-ccw'}}
         iconProps={{name: 'home'}}
       />
@@ -1077,7 +1063,7 @@ export class SearchScreen extends Component<Props, State> {
         <this.RecEditingButton
           key={i}
           iconName='search'
-          // onPress={() => this.history.push(`/search/rec/${encodeURIComponent(rec.id)}`)}
+          // onPress={() => this.history.push(`/rec/${encodeURIComponent(rec.id)}`)}
           onPress={() => this.setState({
             showGenericModal: () => (
               <this.GenericModal title='Search for' actions={[
@@ -1085,12 +1071,12 @@ export class SearchScreen extends Component<Props, State> {
                   label: rec.species,
                   iconName: 'search',
                   buttonColor: iOSColors.blue,
-                  onPress: () => this.history.push(`/search/species/${encodeURIComponent(rec.species)}`),
+                  onPress: () => this.history.push(`/species/${encodeURIComponent(rec.species)}`),
                 }, {
                   label: shortRecId(rec.id),
                   iconName: 'search',
                   buttonColor: iOSColors.blue,
-                  onPress: () => this.history.push(`/search/rec/${encodeURIComponent(rec.id)}`),
+                  onPress: () => this.history.push(`/rec/${encodeURIComponent(rec.id)}`),
                 },
               ]} />
             )
@@ -1105,7 +1091,7 @@ export class SearchScreen extends Component<Props, State> {
           // iconName='slash'
           onPress={() => this.setState({
             showGenericModal: () => (
-              <this.GenericModal title='Remove results' actions={[
+              <this.GenericModal title='Remove from results' actions={[
                 {
                   label: rec.species,
                   iconName: 'x',
@@ -1134,7 +1120,7 @@ export class SearchScreen extends Component<Props, State> {
           iconName='bookmark'
           onPress={() => this.setState({
             showGenericModal: () => (
-              <this.GenericModal title='Save results' actions={[
+              <this.GenericModal title='Save to list' actions={[
                 {
                   label: rec.species,
                   iconName: 'bookmark',
@@ -1652,7 +1638,7 @@ function licenseTypeIcons(license_type: string, props?: object): Array<Element> 
 interface KeyboardDismissingViewState {
   isKeyboardShown: boolean;
 }
-export class KeyboardDismissingView extends Component<RN.ViewProps, KeyboardDismissingViewState> {
+export class KeyboardDismissingView extends PureComponent<RN.ViewProps, KeyboardDismissingViewState> {
   state = {
     isKeyboardShown: false,
   };
@@ -1665,6 +1651,9 @@ export class KeyboardDismissingView extends Component<RN.ViewProps, KeyboardDism
   componentWillUnmount = () => {
     this._keyboardDidShowListener!.remove();
     this._keyboardDidHideListener!.remove();
+  };
+  componentDidUpdate = (prevProps: RN.ViewProps, prevState: KeyboardDismissingViewState) => {
+    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
   };
   keyboardDidShow = () => this.setState({isKeyboardShown: true});
   keyboardDidHide = () => this.setState({isKeyboardShown: false});

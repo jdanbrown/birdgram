@@ -1,14 +1,14 @@
-import React from 'React';
-import { Component } from 'react';
+import React, { PureComponent } from 'react';
 import { Dimensions, Image, Platform, Text, View, WebView } from 'react-native';
 
 import { log } from '../log';
 import { StyleSheet } from '../stylesheet';
-import { global } from '../utils';
+import { global, shallowDiffPropsState } from '../utils';
 
-type Props = {};
+interface Props {}
+interface State {}
 
-export class SavedScreen extends Component<Props> {
+export class SavedScreen extends PureComponent<Props, State> {
 
   constructor(props: Props) {
     super(props);
@@ -21,6 +21,10 @@ export class SavedScreen extends Component<Props> {
 
   componentWillUnmount = async () => {
     log.info(`${this.constructor.name}.componentWillUnmount`);
+  }
+
+  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
   }
 
   render = () => {

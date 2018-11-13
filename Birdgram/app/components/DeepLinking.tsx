@@ -1,10 +1,11 @@
-import React, { Component } from 'react';
+import React, { PureComponent } from 'react';
 import { Linking } from 'react-native';
 import { Route } from 'react-router-native';
 import { History } from 'history';
 
 import { log } from '../log';
 import { urlpack } from '../urlpack';
+import { shallowDiffPropsState } from '../utils';
 
 // Open app urls (/ app links / deep links)
 //  - e.g. 'birdgram-us://open/...'
@@ -20,12 +21,14 @@ import { urlpack } from '../urlpack';
 
 export interface DeepLinkingProps {
   prefix: string;
-  action: 'push' | 'replace';
+  onUrl: (args: {url: string, path: string}) => void;
 }
 
-export class DeepLinking extends Component<DeepLinkingProps> {
+export interface DeepLinkingState {
+}
 
-  _history?: History;
+export class DeepLinking extends PureComponent<DeepLinkingProps, DeepLinkingState> {
+
   _listeners: {[key: string]: any} = {};
 
   componentDidMount = async () => {
@@ -51,13 +54,11 @@ export class DeepLinking extends Component<DeepLinkingProps> {
     Linking.removeEventListener('url', this._listeners.url);
   }
 
-  render = () => (
-    <Route children={({history}) => {
-      this._history = history;
-      // return null;
-      return this.props.children || null;
-    }}/>
-  );
+  componentDidUpdate = async (prevProps: DeepLinkingProps, prevState: DeepLinkingState) => {
+    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+  }
+
+  render = () => null;
 
   openUrl = async (url: string) => {
     log.info('DeepLinking.openUrl', {url});
@@ -65,9 +66,12 @@ export class DeepLinking extends Component<DeepLinkingProps> {
     // TODO Might need to match prefix differently on android vs. ios
     //  - e.g. 'scheme://' (ios) vs. 'scheme://authority' (android) [https://reactnavigation.org/docs/en/deep-linking.html]
     const path = url.replace(new RegExp(`^${this.props.prefix}`), '');
-    this._history![this.props.action](path);
+    this.props.onUrl({
+      url,
+      path,
+    });
 
-    // TODO(deep_link)
+    // TODO(nav_router)
     //  - 'birdgram-us://open/u/:tinyid' -> 'https://tinyurl.com/:tinyid' -> 'birdgram-us/open/:screen/:params'
     // log.info(await urlpack('lzma').stats(bigObject)); // XXX Dev [slow, ~2-5s for SearchScreen.state; why slower in Release vs Debug?]
 

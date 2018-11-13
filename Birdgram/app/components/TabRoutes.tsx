@@ -1,8 +1,8 @@
 // Based on https://github.com/react-navigation/react-navigation-tabs/blob/v0.5.1/src/views/BottomTabBar.js
 
 import _ from 'lodash';
-import { Location } from 'history';
-import React, { Component, ComponentClass, ReactNode } from 'React';
+import { createMemoryHistory, Location, MemoryHistory } from 'history';
+import React, { Component, ComponentClass, PureComponent, ReactNode } from 'React';
 import { Dimensions, Platform, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
 import Feather from 'react-native-vector-icons/Feather';
@@ -10,8 +10,9 @@ import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-rout
 
 import { log, puts } from '../log';
 import { getOrientation, matchOrientation, Orientation } from '../orientation';
+import { HistoryConsumer, ObserveHistory, RouterWithHistory } from '../router';
 import { StyleSheet } from '../stylesheet';
-import { json, pretty, Style } from '../utils';
+import { json, pretty, shallowDiffPropsState, Style } from '../utils';
 
 //
 // TabRoutes
@@ -19,6 +20,7 @@ import { json, pretty, Style } from '../utils';
 
 export interface TabRoutesProps {
   defaultPath?: string;
+  histories: {[key: string]: MemoryHistory};
   routes: Array<TabRoute>;
 }
 
@@ -27,6 +29,7 @@ export interface TabRoutesState {
 }
 
 export interface TabRoute {
+  key: string;
   route: TabRouteRoute;
   label: string;
   iconName: string;
@@ -41,14 +44,19 @@ export interface TabRouteRoute {
 }
 
 export interface TabRouteProps {
-  key: string;
+  key: TabRouteKey;
+  location: Location;
+  history: MemoryHistory;
+  histories: {[key: string]: MemoryHistory};
 }
 
-export class TabRoutes extends Component<TabRoutesProps, TabRoutesState> {
+export type TabRouteKey = string;
+
+export class TabRoutes extends PureComponent<TabRoutesProps, TabRoutesState> {
 
   // WARNING O(n_tabs^2) on each render, but should be harmless for small n_tabs (e.g. ~5)
-  routeByPath = (path: string): TabRoute | undefined => {
-    return _.find(this.props.routes, route => route.route.path === path);
+  routeByKey = (key: TabRouteKey): TabRoute | undefined => {
+    return _.find(this.props.routes, route => route.key === key);
   }
 
   state = {
@@ -63,8 +71,8 @@ export class TabRoutes extends Component<TabRoutesProps, TabRoutesState> {
     log.info(`${this.constructor.name}.componentWillUnmount`);
   }
 
-  componentDidUpdate = async () => {
-    // log.info(`${this.constructor.name}.componentDidUpdate`);
+  componentDidUpdate = async (prevProps: TabRoutesProps, prevState: TabRoutesState) => {
+    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
   }
 
   render = () => (
@@ -85,6 +93,8 @@ export class TabRoutes extends Component<TabRoutesProps, TabRoutesState> {
         )} */}
 
         {/* Tabs + pager */}
+        {/* FIXME Pager sometimes doesn't update to navigationState.index: */}
+        {/* - Repro: quickly: Toggle 'Show debug info' -> Saved -> Recent -> observe Recent tab is blue but pager shows Saved screen */}
         <TabView
           tabBarPosition='bottom'
           swipeEnabled={false}
@@ -93,7 +103,7 @@ export class TabRoutes extends Component<TabRoutesProps, TabRoutesState> {
           navigationState={{
             index: this.matchedRouteIndex(location),
             routes: this.props.routes.map(route => ({
-              key: route.route.path,
+              key: route.key,
               label: route.label,
               iconName: route.iconName,
             })),
@@ -110,9 +120,18 @@ export class TabRoutes extends Component<TabRoutesProps, TabRoutesState> {
             focused,
             index,
           }) => {
-            return this.routeByPath(route.key)!.render({
-              key: route.key,
-            });
+            return (
+              <RouterWithHistory history={this.props.histories[route.key]}>
+                <HistoryConsumer children={({location, history}) => (
+                  this.routeByKey(route.key)!.render({
+                    key: route.key,
+                    location: location,
+                    history: history,
+                    histories: this.props.histories,
+                  })
+                )}/>
+              </RouterWithHistory>
+            );
           }}
           renderTabBar={this.TabBarLikeIOS}
           // renderPager={...} // To customize the pager (e.g. override props)
@@ -137,7 +156,7 @@ export class TabRoutes extends Component<TabRoutesProps, TabRoutesState> {
     >
       {this.props.routes.map(route => (
         <View
-          key={route.route.path}
+          key={route.key}
           style={styles.tab}
         >
           <Route children={({location}) => (

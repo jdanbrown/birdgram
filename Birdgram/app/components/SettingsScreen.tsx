@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import React, { Component } from 'react';
+import React, { PureComponent } from 'react';
 import {
   Alert, AsyncStorage, Dimensions, Easing, Image, Modal, Platform, ScrollView, Text, TouchableHighlight, View, WebView,
 } from 'react-native';
@@ -11,7 +11,7 @@ import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { log } from '../log';
 import { Settings } from '../settings';
 import { StyleSheet } from '../stylesheet';
-import { global } from '../utils';
+import { global, shallowDiffPropsState } from '../utils';
 
 type Props = {
   settings: Settings;
@@ -21,7 +21,7 @@ type State = {
   showModal: boolean;
 };
 
-export class SettingsScreen extends Component<Props, State> {
+export class SettingsScreen extends PureComponent<Props, State> {
 
   constructor(props: Props) {
     super(props);
@@ -36,6 +36,10 @@ export class SettingsScreen extends Component<Props, State> {
 
   componentWillUnmount = async () => {
     log.info(`${this.constructor.name}.componentWillUnmount`);
+  }
+
+  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
   }
 
   // TODO https://github.com/evetstech/react-native-settings-list#a-more-realistic-example
