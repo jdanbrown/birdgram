@@ -64,7 +64,6 @@ export class SettingsScreen extends PureComponent<Props, State> {
       </View>
 
       <View style={{
-        // flexGrow: 1, // TODO Do we need flexGrow i/o flex? Used to have flexGrow
         flex: 1,
         backgroundColor: iOSColors.customGray,
       }}>

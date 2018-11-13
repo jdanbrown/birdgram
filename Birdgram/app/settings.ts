@@ -198,7 +198,7 @@ export class Settings implements Props {
   }
 
   //
-  // AsyncStorage
+  // AsyncStorage (Settings.*)
   //
 
   // Like AsyncStorage.setItem except:
@@ -217,8 +217,7 @@ export class Settings implements Props {
   //  - Prefixes stored keys
   //  - Does json serdes
   static async getItem(key: string): Promise<any | null> {
-    const str = await AsyncStorage.getItem(Settings.prefixKey(key));
-    return str && JSON.parse(str);
+    return Settings._getItemFromJson(Settings.prefixKey(key));
   }
 
   // Like AsyncStorage.multiGet except:
@@ -234,10 +233,33 @@ export class Settings implements Props {
     ])
   }
 
+  //
+  // AsyncStorage (raw)
+  //
+
+  // Like AsyncStorage.getItem except:
+  //  - No key prefixing
+  //  - Does json serdes
+  //  - Returns null if key not found (like AsyncStorage.getItem)
+  //  - Returns null if value can't be parsed as json
+  static async _getItemFromJson(key: string): Promise<any | null> {
+    const json = await AsyncStorage.getItem(key);
+    // Return null if no stored value
+    if (json === null) {
+      return null;
+    }
+    // Fail gracefully if the stored value is garbage
+    try {
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  }
+
   // Like AsyncStorage.multiGet, but keys defaults to AsyncStorage.getAllKeys()
-  //  - For debugging
   //  - No key prefixing
   //  - No json serdes
+  //  - For debugging
   static async _multiGetAll(keys?: Array<string>): Promise<object> {
     keys = keys || await AsyncStorage.getAllKeys();
     return _.fromPairs(await AsyncStorage.multiGet(keys));

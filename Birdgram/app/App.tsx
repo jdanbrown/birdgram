@@ -22,11 +22,14 @@ import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { log } from './log';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
-import { Go, HistoryConsumer, ObserveHistory, RouterWithHistory } from './router';
+import {
+  createDefaultHistories, Go, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
+  saveHistories, TabHistories, TabName,
+} from './router';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
 import {
-  deepEqual, global, json, match, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style,
+  deepEqual, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style,
 } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
@@ -75,11 +78,11 @@ interface State {
   orientation: 'portrait' | 'landscape';
   loading: boolean;
   // Loaded async (e.g. from storage)
-  histories?: {[key: string]: MemoryHistory};
-  serverConfig?: ServerConfig,
-  modelsSearch?: ModelsSearch,
-  settings?: Settings,
-  appContext?: AppContext,
+  histories?: Histories;
+  serverConfig?: ServerConfig;
+  modelsSearch?: ModelsSearch;
+  settings?: Settings;
+  appContext?: AppContext;
 }
 
 interface AppContext {
@@ -106,27 +109,12 @@ export default class App extends PureComponent<Props, State> {
   componentDidMount = async () => {
     log.info(`${this.constructor.name}.componentDidMount`);
 
-    // Create(/load) histories
-    const histories = {
-      tabs:     createMemoryHistory(),
-      record:   createMemoryHistory(),
-      search:   createMemoryHistory((() => {
-        const initialEntries = [
-          '/',
-          '/species/GTGR',
-          '/species/BEWR',
-          '/species/HOWR',
-          '/species/SOSP',
-        ];
-        return {
-          initialEntries,
-          initialIndex: initialEntries.length - 1,
-        };
-      })()),
-      recent:   createMemoryHistory(),
-      saved:    createMemoryHistory(),
-      settings: createMemoryHistory(),
-    };
+    // Load/create histories
+    //  - Save histories on change
+    const histories = await loadHistories() || createDefaultHistories();
+    Object.values(histories).forEach(history => {
+      history.listen(() => saveHistories(histories));
+    });
 
     // Load serverConfig (async) on app startup
     const serverConfig = await readJsonFile<ServerConfig>(`${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`);
@@ -203,7 +191,7 @@ export default class App extends PureComponent<Props, State> {
                   onUrl={({path}) => {
                     const match = matchPath(path, '/:tab/:tabPath*');
                     if (match) {
-                      const {tab, tabPath} = match.params as {tab: string, tabPath: string};
+                      const {tab, tabPath} = match.params as {tab: TabName, tabPath: string};
                       this.go(tab, '/' + (tabPath || '')); // (Leading '/' for absolute i/o relative)
                     }
                   }}
@@ -291,7 +279,7 @@ export default class App extends PureComponent<Props, State> {
     });
   }
 
-  go = (tab: string, path: string) => {
+  go = (tab: TabName, path: string) => {
     log.info('App.go', json({tab, path}));
     if (tab) {
       this.state.histories!.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)

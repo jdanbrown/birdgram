@@ -10,7 +10,7 @@ import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-rout
 
 import { log, puts } from '../log';
 import { getOrientation, matchOrientation, Orientation } from '../orientation';
-import { HistoryConsumer, ObserveHistory, RouterWithHistory } from '../router';
+import { Histories, HistoryConsumer, ObserveHistory, RouterWithHistory, TabName } from '../router';
 import { StyleSheet } from '../stylesheet';
 import { json, pretty, shallowDiffPropsState, Style } from '../utils';
 
@@ -20,7 +20,7 @@ import { json, pretty, shallowDiffPropsState, Style } from '../utils';
 
 export interface TabRoutesProps {
   defaultPath?: string;
-  histories: {[key: string]: MemoryHistory};
+  histories: Histories;
   routes: Array<TabRoute>;
 }
 
@@ -29,7 +29,7 @@ export interface TabRoutesState {
 }
 
 export interface TabRoute {
-  key: string;
+  key: TabRouteKey;
   route: TabRouteRoute;
   label: string;
   iconName: string;
@@ -47,10 +47,10 @@ export interface TabRouteProps {
   key: TabRouteKey;
   location: Location;
   history: MemoryHistory;
-  histories: {[key: string]: MemoryHistory};
+  histories: Histories;
 }
 
-export type TabRouteKey = string;
+export type TabRouteKey = TabName;
 
 export class TabRoutes extends PureComponent<TabRoutesProps, TabRoutesState> {
 

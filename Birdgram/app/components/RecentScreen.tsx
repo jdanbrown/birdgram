@@ -3,9 +3,10 @@ import React, { PureComponent } from 'react';
 import { Dimensions, FlatList, Image, Platform, SectionList, Text, View, WebView } from 'react-native';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
+import { getStatusBarHeight } from 'react-native-status-bar-height';
 
 import { log } from '../log';
-import { Go } from '../router';
+import { Go, Histories } from '../router';
 import { Settings } from '../settings';
 import { StyleSheet } from '../stylesheet';
 import { global, json, pretty, shallowDiffPropsState, Styles } from '../utils';
@@ -14,7 +15,7 @@ interface Props {
   settings:   Settings;
   location:   Location;
   history:    MemoryHistory;
-  histories:  {[key: string]: MemoryHistory};
+  histories:  Histories;
   go:         Go;
   maxRecents: number;
 }
@@ -62,7 +63,9 @@ export class RecentScreen extends PureComponent<Props, State> {
     this.props.histories.search.listen((location, action) => {
       this.addLocations([location]);
     });
-    this.addLocations(this.props.histories.search.entries.reverse());
+    this.addLocations(this.props.histories.search.entries
+      .slice().reverse() // Reverse without mutating
+    );
 
   }
 
@@ -74,23 +77,29 @@ export class RecentScreen extends PureComponent<Props, State> {
     log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
   }
 
-  render = () => {
-    return (
-      <View style={styles.container}>
+  render = () => (
+    <View style={{
+      flex: 1,
+    }}>
 
-        <View style={{
-          width: '100%',
-          backgroundColor: '#f7f7f7', // Default background color in iOS 10
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: 'rgba(0,0,0,.3)',
-          paddingVertical: 5, paddingHorizontal: 10,
+      <View style={{
+        borderBottomWidth: 1,
+        borderColor: iOSColors.midGray,
+      }}>
+        <Text style={{
+          alignSelf: 'center',
+          marginTop: 30 - getStatusBarHeight(), // No status bar
+          marginBottom: 10,
+          ...material.titleObject,
         }}>
-          <Text style={{
-            ...material.headlineObject,
-          }}>
-            Recent searches
-          </Text>
-        </View>
+          Recent searches
+        </Text>
+      </View>
+
+      <View style={{
+        flex: 1,
+        // backgroundColor: iOSColors.customGray,
+      }}>
 
         {/* TODO SectionList with dates as section headers */}
         <FlatList <Recent>
@@ -113,31 +122,27 @@ export class RecentScreen extends PureComponent<Props, State> {
               <View style={{
                 flex: 1,
                 flexDirection: 'column',
+                backgroundColor: iOSColors.white,
                 padding: 5,
                 borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
               }}>
-                <Text>{recent.timestamp.toLocaleString()}</Text>
-                <Text>{recent.location.pathname}</Text>
+                <Text style={material.body1}>
+                  {recent.location.pathname}
+                </Text>
+                <Text style={material.caption}>
+                  {recent.timestamp.toDateString()}, {recent.timestamp.toLocaleTimeString()}
+                </Text>
               </View>
             </RectButton>
           )}
         />
 
       </View>
-    );
-  }
+
+    </View>
+  );
 
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  banner: {
-    fontSize: 20,
-    textAlign: 'left',
-    margin: 10,
-  },
 });
