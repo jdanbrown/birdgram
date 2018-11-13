@@ -54,6 +54,8 @@ export class RouterWithHistory extends PureComponent<RouterWithHistoryProps, Rou
 // Utils
 //
 
+export type Go = (tab: string, path: string) => void;
+
 export function HistoryConsumer(props: {
   children: (props: {location: Location, history: MemoryHistory}) => ReactNode,
 }) {

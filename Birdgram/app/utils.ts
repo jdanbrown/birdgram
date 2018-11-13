@@ -188,6 +188,15 @@ export function shallowDiffPropsState<Props, State>(prevProps: Props, prevState:
 //  - TODO How to put in a StyleSheet.create without losing type info?
 //    - Forced into ViewStyle | TextStyle | ImageStyle, which is too lossy for e.g. TopControlsButtonProps / Feather (icon)
 export const Styles = {
+  fill: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  center: {
+    justifyContent: 'center', // Vertical
+    alignItems: 'center', // Horizontal
+  },
   rotate90:       {transform: [{rotate: '90deg'}]},
   rotate180:      {transform: [{rotate: '180deg'}]},
   rotate270:      {transform: [{rotate: '270deg'}]},

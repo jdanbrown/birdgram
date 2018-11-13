@@ -22,7 +22,7 @@ import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { log } from './log';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
-import { HistoryConsumer, ObserveHistory, RouterWithHistory } from './router';
+import { Go, HistoryConsumer, ObserveHistory, RouterWithHistory } from './router';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
 import {
@@ -110,7 +110,13 @@ export default class App extends PureComponent<Props, State> {
     const histories = {
       tabs:     createMemoryHistory(),
       record:   createMemoryHistory(),
-      search:   createMemoryHistory(),
+      search:   createMemoryHistory({initialEntries: [
+        '/',
+        '/species/HOWR',
+        '/species/BEWR',
+        '/species/GTGR',
+        '/',
+      ]}),
       recent:   createMemoryHistory(),
       saved:    createMemoryHistory(),
       settings: createMemoryHistory(),
@@ -192,8 +198,7 @@ export default class App extends PureComponent<Props, State> {
                     const match = matchPath(path, '/:tab/:tabPath*');
                     if (match) {
                       const {tab, tabPath} = match.params as {tab: string, tabPath: string};
-                      if (tab)     this.state.histories!.tabs.replace('/' + tab);  // (Leading '/' for absolute i/o relative)
-                      if (tabPath) this.state.histories![tab].push('/' + tabPath); // (Leading '/' for absolute i/o relative)
+                      this.go(tab, '/' + (tabPath || '')); // (Leading '/' for absolute i/o relative)
                     }
                   }}
                 />
@@ -202,7 +207,7 @@ export default class App extends PureComponent<Props, State> {
                 {/* - NOTE Avoid history.location [https://reacttraining.com/react-router/native/api/history/history-is-mutable] */}
                 <HistoryConsumer children={({location: locationTabs, history: historyTabs}) => (
                   <TabRoutes
-                    defaultPath='/search'
+                    defaultPath='/recent'
                     histories={this.state.histories!}
                     routes={[
                       {
@@ -227,6 +232,7 @@ export default class App extends PureComponent<Props, State> {
                         render: props => (
                           <RecentScreen {...props}
                             settings={this.state.settings!}
+                            go={this.go}
                           />
                         ),
                       }, {
@@ -277,6 +283,16 @@ export default class App extends PureComponent<Props, State> {
     this.setState({
       orientation: getOrientation(),
     });
+  }
+
+  go = (tab: string, path: string) => {
+    log.info('App.go', json({tab, path}));
+    if (tab) {
+      this.state.histories!.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)
+      if (path) {
+        this.state.histories![tab].push(path);
+      }
+    }
   }
 
 }
