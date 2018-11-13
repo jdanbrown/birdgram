@@ -314,7 +314,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     // Sync from/to Settings (3/3)
     //  - These aren't typical: we only use this for (global) settings keys that we also keep locally in state so we can
     //    batch-update them with other local state keys (e.g. global spectroScale + local scrollViewKey)
-    //  - TODO Is this a good pattern for "setState(x,y,z) locally + settings.set(x) globally"? [XXX No, probably not!]
+    //  - QUESTION What's a better pattern for "batch setState(x,y,z) locally + persist settings.set(x) globally"?
     if (this.state._spectroScale !== prevState._spectroScale) {
       noawait(this.props.settings.set('spectroScale', this.state._spectroScale));
     }
