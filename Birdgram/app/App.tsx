@@ -1,3 +1,4 @@
+import _ from 'lodash';
 import { createMemoryHistory, Location, MemoryHistory } from 'history';
 import React, { Component, ComponentType, PureComponent, ReactNode, RefObject } from 'React';
 import {
@@ -17,7 +18,6 @@ import { SavedScreen } from './components/SavedScreen';
 import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { TabRoutes, TabLink } from './components/TabRoutes';
-import { Settings } from './settings';
 import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { log } from './log';
@@ -26,6 +26,7 @@ import {
   createDefaultHistories, Go, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
   saveHistories, TabHistories, TabName,
 } from './router';
+import { Settings, SettingsProxy, SettingsWrites } from './settings';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
 import {
@@ -82,6 +83,7 @@ interface State {
   serverConfig?: ServerConfig;
   modelsSearch?: ModelsSearch;
   settings?: Settings;
+  settingsWrites?: SettingsWrites;
   appContext?: AppContext;
 }
 
@@ -127,6 +129,13 @@ export default class App extends PureComponent<Props, State> {
       settings => this.setState({settings}), // Callback for when Settings updates
     );
 
+    // A prop to pass to children components that won't change when Settings props change
+    //  - We pass Settings props separately, for more fine-grained control over when to trigger updates
+    //  - this.state.settings will change on each prop update, but this.state.settingsWrites won't
+    const settingsWrites: SettingsWrites = new SettingsProxy(() => {
+      return this.state.settings!
+    });
+
     const appContext = {
     };
 
@@ -137,6 +146,7 @@ export default class App extends PureComponent<Props, State> {
       serverConfig,
       modelsSearch,
       settings,
+      settingsWrites,
       appContext,
     });
 
@@ -215,10 +225,20 @@ export default class App extends PureComponent<Props, State> {
                         label: 'Search', iconName: 'search',
                         render: props => (
                           <SearchScreen {...props}
-                            serverConfig={this.state.serverConfig!}
-                            modelsSearch={this.state.modelsSearch!}
-                            settings={this.state.settings!}
-                            go={this.go}
+                            // App globals
+                            serverConfig            = {this.state.serverConfig!}
+                            modelsSearch            = {this.state.modelsSearch!}
+                            go                      = {this.go}
+                            // Settings
+                            settings                = {this.state.settingsWrites!}
+                            showDebug               = {this.state.settings!.showDebug}
+                            showMetadata            = {this.state.settings!.showMetadata}
+                            inlineMetadataColumns   = {this.state.settings!.inlineMetadataColumns}
+                            editing                 = {this.state.settings!.editing}
+                            seekOnPlay              = {this.state.settings!.seekOnPlay}
+                            playingProgressEnable   = {this.state.settings!.playingProgressEnable}
+                            playingProgressInterval = {this.state.settings!.playingProgressInterval}
+                            spectroScale            = {this.state.settings!.spectroScale}
                           />
                         ),
                       }, {
@@ -226,8 +246,10 @@ export default class App extends PureComponent<Props, State> {
                         label: 'Recent', iconName: 'list',
                         render: props => (
                           <RecentScreen {...props}
-                            settings={this.state.settings!}
-                            go={this.go}
+                            // App globals
+                            go        = {this.go}
+                            // Settings
+                            showDebug = {this.state.settings!.showDebug}
                           />
                         ),
                       }, {
@@ -241,7 +263,12 @@ export default class App extends PureComponent<Props, State> {
                         label: 'Settings', iconName: 'settings',
                         render: props => (
                           <SettingsScreen {...props}
-                            settings={this.state.settings!}
+                            // Settings
+                            settings                = {this.state.settingsWrites!}
+                            showDebug               = {this.state.settings!.showDebug}
+                            allowUploads            = {this.state.settings!.allowUploads}
+                            playingProgressEnable   = {this.state.settings!.playingProgressEnable}
+                            playingProgressInterval = {this.state.settings!.playingProgressInterval}
                           />
                         ),
                       },

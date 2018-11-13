@@ -9,15 +9,19 @@ import { matchSearchPathParams, searchPathParamsFromPath, shortRecId } from '../
 import { log } from '../log';
 import { Go, Histories } from '../router';
 import { Settings } from '../settings';
+import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
-import { global, json, pretty, shallowDiffPropsState, Styles } from '../utils';
+import { global, json, pretty, shallowDiffPropsState } from '../utils';
 
 interface Props {
-  settings:   Settings;
+  // App globals
   location:   Location;
   history:    MemoryHistory;
   histories:  Histories;
   go:         Go;
+  // Settings
+  showDebug: boolean;
+  // RecentScreen
   maxRecents: number;
 }
 
@@ -106,6 +110,10 @@ export class RecentScreen extends PureComponent<Props, State> {
         <FlatList <Recent>
           style={{
             ...Styles.fill,
+          }}
+          contentInset={{
+            top:    -1, // Hide top elem border under bottom border of title bar
+            bottom: -1, // Hide bottom elem border under top border of tab bar
           }}
           data={this.state.recents}
           keyExtractor={(recent, index) => `${index}`}

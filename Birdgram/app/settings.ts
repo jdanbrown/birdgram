@@ -5,7 +5,6 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 
 import { InlineMetadataColumn, InlineMetadataColumns } from './datatypes';
 import { log, puts } from './log';
-import { debugStyle } from './styles';
 import { json } from './utils';
 
 export type ShowMetadata = 'none' | 'inline' | 'full';
@@ -13,8 +12,8 @@ export type ShowMetadata = 'none' | 'inline' | 'full';
 // All 5 of these lists of attrs (4 here + constructor) must be kept in sync, else load/setItem/etc. aren't typesafe
 export interface Props {
   // NOTE Keep attrs in sync (1/5)
-  readonly allowUploads: boolean;
   readonly showDebug: boolean;
+  readonly allowUploads: boolean;
   // For SearchScreen
   readonly showMetadata: ShowMetadata;
   readonly inlineMetadataColumns: Array<InlineMetadataColumn>;
@@ -26,8 +25,8 @@ export interface Props {
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
-  allowUploads: true,
   showDebug: false,
+  allowUploads: true,
   // For SearchScreen
   showMetadata: 'inline',
   inlineMetadataColumns: ['state', 'month_day'] as Array<InlineMetadataColumn>,
@@ -40,8 +39,8 @@ export const DEFAULTS: Props = {
 };
 export const TYPES: {[key: string]: string} = {
   // NOTE Keep attrs in sync (3/5)
-  allowUploads: 'boolean',
   showDebug: 'boolean',
+  allowUploads: 'boolean',
   // For SearchScreen
   showMetadata: 'string',
   inlineMetadataColumns: 'object',
@@ -54,8 +53,8 @@ export const TYPES: {[key: string]: string} = {
 export const KEYS = [
   // NOTE Keep attrs in sync (4/5)
   //  - Keys in the order expected by the constructor
-  'allowUploads',
   'showDebug',
+  'allowUploads',
   // For SearchScreen
   'showMetadata',
   'inlineMetadataColumns',
@@ -66,15 +65,40 @@ export const KEYS = [
   'spectroScale',
 ];
 
-export class Settings implements Props {
+export interface SettingsWrites {
+  set<K extends keyof Props>(key: K, value: Props[K]): Promise<void>;
+  get<K extends keyof Props>(key: K): Promise<Props[K]>;
+  update<K extends keyof Props>(key: K, f: (v: Props[K]) => Props[K]): Promise<void>;
+  toggle<K extends keyof Props>(key: K): Promise<boolean>;
+}
+
+export class SettingsProxy implements SettingsWrites {
+  constructor(
+    public getProxy: () => SettingsWrites,
+  ) {}
+  async set<K extends keyof Props>(key: K, value: Props[K]): Promise<void> {
+    return await this.getProxy().set(key, value);
+  }
+  async get<K extends keyof Props>(key: K): Promise<Props[K]> {
+    return await this.getProxy().get(key);
+  }
+  async update<K extends keyof Props>(key: K, f: (v: Props[K]) => Props[K]): Promise<void> {
+    return await this.getProxy().update(key, f);
+  }
+  async toggle<K extends keyof Props>(key: K): Promise<boolean> {
+    return await this.getProxy().toggle(key);
+  }
+}
+
+export class Settings implements SettingsWrites, Props {
   // WARNING Declare all functions as methods i/o attrs, else they will sneak into serdes
 
   constructor(
     // Callback to trigger App.setState when settings change
     public readonly appSetState: (settings: Settings) => void,
     // NOTE Keep attrs in sync (4/5)
-    public readonly allowUploads: boolean,
     public readonly showDebug: boolean,
+    public readonly allowUploads: boolean,
   // For SearchScreen
     public readonly showMetadata: ShowMetadata,
     public readonly inlineMetadataColumns: Array<InlineMetadataColumn>,
@@ -168,6 +192,17 @@ export class Settings implements Props {
     await this.set(key, f(this[key]));
   }
 
+  async toggle<K extends keyof Props>(key: K): Promise<boolean> {
+    Settings.assertKeyHasType(key, 'boolean');
+    const value = this[key];
+    await this.set(key, !value);
+    return !value;
+  }
+
+  //
+  // AsyncStorage (Settings.*)
+  //
+
   // Prefix keys in AsyncStorage
   static _prefix = 'Settings.';
   static prefixKey(key: string): string {
@@ -180,13 +215,6 @@ export class Settings implements Props {
     return key.substr(Settings._prefix.length);
   };
 
-  async toggle<K extends keyof Props>(key: K): Promise<boolean> {
-    Settings.assertKeyHasType(key, 'boolean');
-    const value = this[key];
-    await this.set(key, !value);
-    return !value;
-  }
-
   static keyHasType(key: string, type: string) {
     return TYPES[key] === type;
   }
@@ -196,10 +224,6 @@ export class Settings implements Props {
       throw `Expected type[${TYPES[key]}] for key[${key}], got type[${type}]`;
     }
   }
-
-  //
-  // AsyncStorage (Settings.*)
-  //
 
   // Like AsyncStorage.setItem except:
   //  - Prefixes stored keys
@@ -263,25 +287,6 @@ export class Settings implements Props {
   static async _multiGetAll(keys?: Array<string>): Promise<object> {
     keys = keys || await AsyncStorage.getAllKeys();
     return _.fromPairs(await AsyncStorage.multiGet(keys));
-  }
-
-  //
-  // React
-  //
-
-  // Styles
-  get debugView(): object {
-    return {
-      display: this.showDebug ? undefined : 'none',
-      padding: 3,
-      backgroundColor: debugStyle.backgroundColor,
-    };
-  }
-  get debugText(): object {
-    return {
-      color: debugStyle.color,
-      backgroundColor: debugStyle.backgroundColor,
-    };
   }
 
 }

@@ -37,15 +37,15 @@ import {
 } from '../datatypes';
 import { log, puts, tap } from '../log';
 import { Go } from '../router';
-import { Settings, ShowMetadata } from '../settings';
+import { SettingsWrites, ShowMetadata } from '../settings';
 import Sound from '../sound';
 import { querySql, SQL, sqlf } from '../sql';
 import { StyleSheet } from '../stylesheet';
-import { debugStyle, LabelStyle, labelStyles } from '../styles';
+import { LabelStyle, labelStyles, Styles } from '../styles';
 import { TabBarStyle } from './TabRoutes';
 import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait,
-  objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, Styles, zipSame,
+  objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, zipSame,
 } from '../utils';
 
 const sidewaysTextWidth = 14;
@@ -77,14 +77,25 @@ function matchQuery<X>(query: Query, cases: {
 }
 
 interface Props {
-  serverConfig:      ServerConfig;
-  modelsSearch:      ModelsSearch;
-  settings:          Settings;
-  location:          Location;
-  history:           MemoryHistory;
-  go:                Go;
-  spectroBase:       Dim<number>;
-  spectroScaleClamp: Clamp<number>;
+  // App globals
+  serverConfig:            ServerConfig;
+  modelsSearch:            ModelsSearch;
+  location:                Location;
+  history:                 MemoryHistory;
+  go:                      Go;
+  // Settings
+  settings:                SettingsWrites;
+  showDebug:               boolean;
+  showMetadata:            ShowMetadata;
+  inlineMetadataColumns:   Array<InlineMetadataColumn>;
+  editing:                 boolean;
+  seekOnPlay:              boolean;
+  playingProgressEnable:   boolean;
+  playingProgressInterval: number;
+  spectroScale:            number;
+  // SearchScreen
+  spectroBase:             Dim<number>;
+  spectroScaleClamp:       Clamp<number>;
 }
 
 interface State {
@@ -116,7 +127,7 @@ interface State {
   };
   playingCurrentTime?: number;
   // Sync from/to Settings (1/3)
-  spectroScale: number;
+  _spectroScale: number;
 };
 
 export class SearchScreen extends PureComponent<Props, State> {
@@ -129,9 +140,6 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   // Getters for this.props
   get pathParams (): SearchPathParams { return this._pathParams(); }
-  get settings   (): Settings         { return this.props.settings; }
-  get location   (): Location         { return this.props.location; }
-  get history    (): MemoryHistory    { return this.props.history; }
 
   // Getters for this.state
   get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
@@ -159,7 +167,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     status: {loading: true},
     recs: [],
     // Sync from/to Settings (2/3)
-    spectroScale: this.settings.spectroScale,
+    _spectroScale: this.props.spectroScale,
   };
 
   db?: SQLiteDatabase;
@@ -306,9 +314,9 @@ export class SearchScreen extends PureComponent<Props, State> {
     // Sync from/to Settings (3/3)
     //  - These aren't typical: we only use this for (global) settings keys that we also keep locally in state so we can
     //    batch-update them with other local state keys (e.g. global spectroScale + local scrollViewKey)
-    //  - TODO Is this a good pattern for "setState(x,y,z) locally + settings.set(x) globally"?
-    if (this.state.spectroScale !== prevState.spectroScale) {
-      noawait(this.settings.set('spectroScale', this.state.spectroScale));
+    //  - TODO Is this a good pattern for "setState(x,y,z) locally + settings.set(x) globally"? [XXX No, probably not!]
+    if (this.state._spectroScale !== prevState._spectroScale) {
+      noawait(this.props.settings.set('spectroScale', this.state._spectroScale));
     }
 
     // Query recs (from updated navParams.species)
@@ -325,7 +333,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   get spectroDim(): Dim<number> {
     return {
-      height: this.props.spectroBase.height * this.state.spectroScale,
+      height: this.props.spectroBase.height * this.state._spectroScale,
       width:  this.scrollViewContentWidths.image,
     };
   }
@@ -340,17 +348,17 @@ export class SearchScreen extends PureComponent<Props, State> {
   get scrollViewContentWidths() {
     return {
       // NOTE Conditions duplicated elsewhere (render, spectroDim, ...)
-      recEditing:     !this.settings.editing ? 0 : (
+      recEditing:     !this.props.editing ? 0 : (
         recEditingButtonWidth * this._recEditingButtons.length
       ),
-      sidewaysText:   this.settings.showMetadata === 'full' ? 0 : (
+      sidewaysText:   this.props.showMetadata === 'full' ? 0 : (
         sidewaysTextWidth
       ),
-      debugInfo:      !this.settings.showDebug || this.settings.showMetadata !== 'inline' ? 0 : 70,
-      inlineMetadata: this.settings.showMetadata !== 'inline' ? 0 : 50,
+      debugInfo:      !this.props.showDebug || this.props.showMetadata !== 'inline' ? 0 : 70,
+      inlineMetadata: this.props.showMetadata !== 'inline' ? 0 : 50,
       image:          (
-        this.props.spectroBase.width * this.state.spectroScale - (
-          this.settings.showMetadata === 'full' ? 0 : sidewaysTextWidth
+        this.props.spectroBase.width * this.state._spectroScale - (
+          this.props.showMetadata === 'full' ? 0 : sidewaysTextWidth
         )
       ),
     };
@@ -686,7 +694,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Compute startTime to seek rec (if enabled)
           let startTime;
-          if (this.settings.seekOnPlay) {
+          if (this.props.seekOnPlay) {
             startTime = this.spectroTimeFromX(sound, x, absoluteX);
           } else {
             // startTime = 0; // TODO Show some kind of visual feedback when not seekOnPlay
@@ -711,7 +719,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             //    - Ugh, waaay slow and cpu inefficient: 16ms (60fps) kills rndebugger in Debug and pegs cpu in Release
             //    - TODO Explore alternatives: if setState->render is the bottleneck, then investigate Animated...
             //  - WARNING Don't separate timers per rec.id until we resolve "FIXME Race conditions" above ("tap many")
-            if (this.settings.playingProgressEnable && this.settings.playingProgressInterval !== 0) {
+            if (this.props.playingProgressEnable && this.props.playingProgressInterval !== 0) {
               timer.setInterval(this, 'playingCurrentTime',
                 async () => {
                   const {seconds, isPlaying} = await sound.getCurrentTimeAsync();
@@ -721,7 +729,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                     });
                   }
                 },
-                this.settings.playingProgressInterval,
+                this.props.playingProgressInterval,
               );
             }
 
@@ -742,23 +750,21 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   spectroTimeFromX = (sound: Sound, x: number, absoluteX: number): number => {
     const {contentOffset} = this._scrollViewState;
-    const {spectroScale} = this.state;
     const {width} = this.spectroDim;
     const {audio_s} = this.props.serverConfig.api.recs.search_recs.params;
     const duration = sound.getDuration();
     const time = x / width * audio_s;
-    // log.debug('spectroTimeFromX', pretty({time, x, absoluteX, contentOffset, width, spectroScale, audio_s, duration}));
+    // log.debug('spectroTimeFromX', pretty({time, x, absoluteX, contentOffset, width, audio_s, duration}));
     return time;
   }
 
   spectroXFromTime = (sound: Sound, time: number): number => {
     const {contentOffset} = this._scrollViewState;
-    const {spectroScale} = this.state;
     const {width} = this.spectroDim;
     const {audio_s} = this.props.serverConfig.api.recs.search_recs.params;
     const duration = sound.getDuration();
     const x = time / audio_s * width;
-    // log.debug('spectroXFromTime', pretty({x, time, contentOffset, width, spectroScale, audio_s, duration}));
+    // log.debug('spectroXFromTime', pretty({x, time, contentOffset, width, audio_s, duration}));
     return x;
   }
 
@@ -796,7 +802,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           value={this.state.filterQueryText}
           onChangeText={x => this.setState({filterQueryText: x})}
           onSubmitEditing={() => this.state.filterQueryText && (
-            this.history.push(`/species/${encodeURIComponent(this.state.filterQueryText)}`)
+            this.props.history.push(`/species/${encodeURIComponent(this.state.filterQueryText)}`)
           )}
           autoCorrect={false}
           autoCapitalize='characters'
@@ -824,7 +830,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       ['inline', 'full'],
       ['full',   'none'],
     );
-    await this.settings.set('showMetadata', next(this.settings.showMetadata));
+    await this.props.settings.set('showMetadata', next(this.props.showMetadata));
   }
 
   cycleMetadataInline = async () => {
@@ -833,7 +839,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       ['inline', 'none'],
       ['full',   'inline'],
     );
-    await this.settings.set('showMetadata', next(this.settings.showMetadata));
+    await this.props.settings.set('showMetadata', next(this.props.showMetadata));
   }
 
   cycleMetadata = async () => {
@@ -842,7 +848,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       ['inline', 'full'],
       ['full',   'none'],
     );
-    await this.settings.set('showMetadata', next(this.settings.showMetadata));
+    await this.props.settings.set('showMetadata', next(this.props.showMetadata));
 
     // Scroll SectionList so that same ~top recs are showing after drawing with new item/section heights
     //  - TODO More experimentation needed
@@ -860,15 +866,15 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   scaleSpectros = async (delta: number) => {
     this.setState((state, props) => {
-      // Round current spectroScale so that +1/-1 deltas snap back to non-fractional scales (e.g. after pinch zooms)
-      const spectroScale = this.clampSpectroScaleY(Math.round(state.spectroScale) + delta);
+      // Round current _spectroScale so that +1/-1 deltas snap back to non-fractional scales (e.g. after pinch zooms)
+      const _spectroScale = this.clampSpectroScaleY(Math.round(state._spectroScale) + delta);
       return {
-        spectroScale,
+        _spectroScale,
         scrollViewState: {
           // FIXME Zoom in -> scroll far down+right -> use '-' button to zoom out -> scroll view clipped b/c contentOffset nonzero
           contentOffset: {
-            x: this._scrollViewState.contentOffset.x * spectroScale / state.spectroScale,
-            y: this._scrollViewState.contentOffset.y * spectroScale / state.spectroScale,
+            x: this._scrollViewState.contentOffset.x * _spectroScale / state._spectroScale,
+            y: this._scrollViewState.contentOffset.y * _spectroScale / state._spectroScale,
           },
         },
       };
@@ -936,23 +942,23 @@ export class SearchScreen extends PureComponent<Props, State> {
         help='Random'
         // iconProps={{name: 'refresh-ccw'}}
         iconProps={{name: 'shuffle'}}
-        onPress={() => this.history.push(this.randomPath())}
+        onPress={() => this.props.history.push(this.randomPath())}
       />
       {/* Toggle editing controls for rec/species */}
       <this.BottomControlsButton
         help='Edit'
-        active={this.settings.editing}
+        active={this.props.editing}
         iconProps={{name: 'sliders'}}
         // iconProps={{name: 'edit'}}
         // iconProps={{name: 'edit-2'}}
         // iconProps={{name: 'edit-3'}}
         // iconProps={{name: 'layout', style: Styles.flipBoth}}
-        onPress={() => this.settings.toggle('editing')}
+        onPress={() => this.props.settings.toggle('editing')}
       />
       {/* Cycle metadata: none / inline */}
       <this.BottomControlsButton
         help='Info'
-        active={this.settings.showMetadata === 'inline'}
+        active={this.props.showMetadata === 'inline'}
         iconProps={{name: 'file-minus'}}
         onPress={() => this.cycleMetadataInline()}
         onLongPress={() => this.setState({
@@ -961,10 +967,10 @@ export class SearchScreen extends PureComponent<Props, State> {
               objectKeysTyped(InlineMetadataColumns).map(c => ({
                 label: c,
                 textColor: iOSColors.black,
-                buttonColor: this.settings.inlineMetadataColumns.includes(c) ? iOSColors.tealBlue : iOSColors.customGray,
+                buttonColor: this.props.inlineMetadataColumns.includes(c) ? iOSColors.tealBlue : iOSColors.customGray,
                 marginVertical: 2,
                 dismiss: false,
-                onPress: () => this.settings.update('inlineMetadataColumns', cs => (
+                onPress: () => this.props.settings.update('inlineMetadataColumns', cs => (
                   cs.includes(c) ? _.without(cs, c) : [...cs, c]
                 )),
               }))
@@ -975,7 +981,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       {/* Cycle metadata: none / full */}
       <this.BottomControlsButton
         help='Info'
-        active={this.settings.showMetadata === 'full'}
+        active={this.props.showMetadata === 'full'}
         iconProps={{name: 'file-text'}}
         // iconProps={{name: 'credit-card', style: Styles.flipVertical}}
         // iconProps={{name: 'sidebar', style: Styles.rotate270}}
@@ -984,22 +990,22 @@ export class SearchScreen extends PureComponent<Props, State> {
       {/* Toggle seekOnPlay crosshairs */}
       <this.BottomControlsButton
         help='Seek'
-        active={this.settings.seekOnPlay}
+        active={this.props.seekOnPlay}
         iconProps={{name: 'crosshair'}}
-        onPress={() => this.settings.toggle('seekOnPlay')}
+        onPress={() => this.props.settings.toggle('seekOnPlay')}
       />
       {/* Zoom more/fewer recs (spectro height) */}
       {/* - TODO Disable when spectroScale is min/max */}
       <this.BottomControlsButton
         help='Dense'
-        disabled={this.state.spectroScale === this.props.spectroScaleClamp.min}
+        disabled={this.state._spectroScale === this.props.spectroScaleClamp.min}
         // iconProps={{name: 'align-justify'}} // 4 horizontal lines
         iconProps={{name: 'zoom-out'}}
         onPress={async () => await this.scaleSpectros(-1)}
       />
       <this.BottomControlsButton
         help='Tall'
-        disabled={this.state.spectroScale === this.props.spectroScaleClamp.max}
+        disabled={this.state._spectroScale === this.props.spectroScaleClamp.max}
         // iconProps={{name: 'menu'}}          // 3 horizontal lines
         iconProps={{name: 'zoom-in'}}
         onPress={async () => await this.scaleSpectros(+1)}
@@ -1092,7 +1098,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         <this.RecEditingButton
           key={i}
           iconName='search'
-          // onPress={() => this.history.push(`/rec/${encodeURIComponent(rec.id)}`)}
+          // onPress={() => this.props.history.push(`/rec/${encodeURIComponent(rec.id)}`)}
           onPress={() => this.setState({
             showGenericModal: () => (
               <this.GenericModal title='Search for' actions={[
@@ -1100,12 +1106,12 @@ export class SearchScreen extends PureComponent<Props, State> {
                   label: `${rec.species}`,
                   iconName: 'search',
                   buttonColor: iOSColors.blue,
-                  onPress: () => this.history.push(`/species/${encodeURIComponent(rec.species)}`),
+                  onPress: () => this.props.history.push(`/species/${encodeURIComponent(rec.species)}`),
                 }, {
                   label: `${shortRecId(rec.id)}`,
                   iconName: 'search',
                   buttonColor: iOSColors.blue,
-                  onPress: () => this.history.push(`/rec/${encodeURIComponent(rec.id)}`),
+                  onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.id)}`),
                 },
               ]} />
             )
@@ -1223,9 +1229,9 @@ export class SearchScreen extends PureComponent<Props, State> {
       <Feather
         style={[styles.recEditingIcon, props.iconStyle,
           // Compact icon to fit within tiny rows
-          this.state.spectroScale >= 2 ? {} : {
-            fontSize: this.state.spectroScale / 2 * material.headlineObject.fontSize!,
-            lineHeight: this.state.spectroScale / 2 * material.headlineObject.lineHeight!,
+          this.state._spectroScale >= 2 ? {} : {
+            fontSize: this.state._spectroScale / 2 * material.headlineObject.fontSize!,
+            lineHeight: this.state._spectroScale / 2 * material.headlineObject.lineHeight!,
           },
         ]}
         name={props.iconName}
@@ -1414,8 +1420,8 @@ export class SearchScreen extends PureComponent<Props, State> {
             bounces={false}
             bouncesZoom={false}
             directionalLockEnabled={true} // Don't scroll vertical and horizontal at the same time (ios only)
-            minimumZoomScale={this.props.spectroScaleClamp.min / this.state.spectroScale}
-            maximumZoomScale={this.props.spectroScaleClamp.max / this.state.spectroScale}
+            minimumZoomScale={this.props.spectroScaleClamp.min / this.state._spectroScale}
+            maximumZoomScale={this.props.spectroScaleClamp.max / this.state._spectroScale}
             onScrollEndDrag={async ({nativeEvent}) => {
               // log.debug('onScrollEndDrag', json(nativeEvent)); // XXX Debug
               const {contentOffset, zoomScale, velocity} = nativeEvent;
@@ -1424,19 +1430,19 @@ export class SearchScreen extends PureComponent<Props, State> {
                 zoomScale !== 1              // Don't trigger zoom if no zooming happened (e.g. only scrolling)
                 // && velocity !== undefined // [XXX Unreliable] Don't trigger zoom on 1/2 fingers released, wait for 2/2
               ) {
-                const scale = zoomScale * this.state.spectroScale;
+                const scale = zoomScale * this.state._spectroScale;
                 // log.debug('ZOOM', json(nativeEvent)); // XXX Debug
                 // Trigger re-layout so non-image components (e.g. text) redraw at non-zoomed size
                 this.setState({
                   scrollViewState: this._scrollViewState,
-                  spectroScale: this.clampSpectroScaleY(scale),
+                  _spectroScale: this.clampSpectroScaleY(scale),
                   scrollViewKey: chance.hash(), // Else bad things (that I don't understand)
                 });
               }
             }}
 
             // TODO Sticky headers: manually calculate indices of species header rows
-            // stickyHeaderIndices={this.settings.showMetadata !== 'full' ? undefined : ...}
+            // stickyHeaderIndices={this.props.showMetadata !== 'full' ? undefined : ...}
 
             // TODO Add footer with "Load more" button
             //  - Mimic SectionList.ListFooterComponent [https://facebook.github.io/react-native/docs/sectionlist#listfootercomponent]
@@ -1455,7 +1461,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               }, sectionIndex) => [
 
                 // Species header
-                this.settings.showMetadata === 'full' && (
+                this.props.showMetadata === 'full' && (
                   <View
                     key={`section-${sectionIndex}-${title}`}
                     style={styles.sectionSpecies}
@@ -1465,7 +1471,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                       {species_com_name} (<Text style={{fontStyle: 'italic'}}>{species_sci_name}</Text>)
                     </Text>
                     {/* Debug info */}
-                    {this.settings.showDebug && (
+                    {this.props.showDebug && (
                       // FIXME Off screen unless zoom=1
                       <this.DebugText numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}]}>
                         ({recs_for_sp} recs)
@@ -1481,7 +1487,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                   <Animated.View
                     key={`row-${recIndex}-${rec.id}`}
                     style={[styles.recRow, {
-                      ...(this.settings.showMetadata === 'full' ? {} : {
+                      ...(this.props.showMetadata === 'full' ? {} : {
                         height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
                       }),
                     }]}
@@ -1489,7 +1495,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
                     {/* Rec editing buttons */}
                     {/* - NOTE Condition duplicated in scrollViewContentWidths */}
-                    {this.settings.editing && (
+                    {this.props.editing && (
                       <this.RecEditingButtons rec={rec} />
                     )}
 
@@ -1500,16 +1506,16 @@ export class SearchScreen extends PureComponent<Props, State> {
                       <View
                         style={{
                           flexDirection: 'row',
-                          ...(this.settings.showMetadata === 'full' ? {} : {
+                          ...(this.props.showMetadata === 'full' ? {} : {
                             height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
                           }),
                         }}
                       >
 
                         {/* Rec debug info */}
-                        {this.settings.showMetadata === 'inline' && (
+                        {this.props.showMetadata === 'inline' && (
                           <this.DebugView style={{
-                            padding: 0, // Reset padding:3 from settings.debugView
+                            padding: 0, // Reset padding:3 from debugView
                             width: this.scrollViewContentWidths.debugInfo,
                           }}>
                             {/* TODO(nav_rec_id) */}
@@ -1520,11 +1526,11 @@ export class SearchScreen extends PureComponent<Props, State> {
                         )}
 
                         {/* Rec inline metadata */}
-                        {this.settings.showMetadata === 'inline' && (
+                        {this.props.showMetadata === 'inline' && (
                           <View style={[styles.recMetadataInlineLeft, {
                             width: this.scrollViewContentWidths.inlineMetadata,
                           }]}>
-                            {this.settings.inlineMetadataColumns.map(c => (
+                            {this.props.inlineMetadataColumns.map(c => (
                               <this.RecText key={c} children={InlineMetadataColumns[c](rec)} />
                             ))}
                           </View>
@@ -1533,13 +1539,13 @@ export class SearchScreen extends PureComponent<Props, State> {
                         {/* Sideways species label */}
                         {/* - After controls/metadata so that label+spectro always abut (e.g. if scrolled all the way to the right) */}
                         {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
-                        {this.settings.showMetadata !== 'full' && (
+                        {this.props.showMetadata !== 'full' && (
                           <View style={[styles.recSpeciesSidewaysView, {
                             backgroundColor: styleForSpecies.get(rec.species)!.backgroundColor,
                           }]}>
                             <View style={styles.recSpeciesSidewaysViewInner}>
                               <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
-                                fontSize: this.state.spectroScale >= 2 ? 11 : 6, // Compact species label to fit within tiny rows
+                                fontSize: this.state._spectroScale >= 2 ? 11 : 6, // Compact species label to fit within tiny rows
                                 color: styleForSpecies.get(rec.species)!.color,
                               }]}>
                                 {rec.species}
@@ -1598,7 +1604,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                       </View>
 
                       {/* Rec metadata */}
-                      {/* {this.settings.showMetadata === 'inline' && (
+                      {/* {this.props.showMetadata === 'inline' && (
                         <View style={styles.recMetadataInlineBelow}>
                           <this.RecText flex={3} children={rec.xc_id} />
                           <this.RecText flex={1} children={rec.quality} />
@@ -1608,7 +1614,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                           <this.RecText flex={4} children={` ${rec.recordist}`} />
                         </View>
                       )} */}
-                      {this.settings.showMetadata === 'full' && (
+                      {this.props.showMetadata === 'full' && (
                         <View style={styles.recMetadataFull}>
                           <this.RecText flex={3} children={rec.xc_id} />
                           <this.RecText flex={1} children={rec.quality} />
@@ -1652,15 +1658,23 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   // Debug components
   //  - [Tried and gave up once to make well-typed generic version of these (DebugFoo = addStyle(Foo, ...) = withProps(Foo, ...))]
-  DebugView = (props: RN.ViewProps & {children: any}) => {
-    props = {...props, style: [this.settings.debugView, ...sanitizeStyle(props.style)]};
-    return (<View {...props} />);
-  };
-  DebugText = (props: RN.TextProps & {children: any}) => {
-    props = {...props, style: [this.settings.debugText, ...sanitizeStyle(props.style)]};
-    return (<Text {...props} />);
-  };
-  get recDebugText() { return [styles.recText, this.settings.debugText]; }
+  DebugView = (props: RN.ViewProps & {children: any}) => (
+    !this.props.showDebug ? null : (
+      <View {...{
+        ...props,
+        style: [Styles.debugView, ...sanitizeStyle(props.style)],
+      }}/>
+    )
+  );
+  DebugText = (props: RN.TextProps & {children: any}) => (
+    !this.props.showDebug ? null : (
+      <Text {...{
+        ...props,
+        style: [Styles.debugText, ...sanitizeStyle(props.style)],
+      }}/>
+    )
+  );
+  get recDebugText() { return [styles.recText, Styles.debugText]; }
 
 }
 

@@ -9,12 +9,18 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 
 import { log } from '../log';
-import { Settings } from '../settings';
+import { SettingsWrites } from '../settings';
+import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
 import { global, shallowDiffPropsState } from '../utils';
 
 type Props = {
-  settings: Settings;
+  // Settings
+  settings: SettingsWrites;
+  showDebug: boolean;
+  allowUploads: boolean;
+  playingProgressEnable: boolean;
+  playingProgressInterval: number;
 };
 
 type State = {
@@ -79,7 +85,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
             title='Allow uploads'
             hasNavArrow={false}
             hasSwitch={true}
-            switchState={this.props.settings.allowUploads}
+            switchState={this.props.allowUploads}
             switchOnValueChange={async x => await this.props.settings.set('allowUploads', x)}
           />
 
@@ -94,7 +100,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
             title='Playback progress (high cpu)'
             hasNavArrow={false}
             hasSwitch={true}
-            switchState={this.props.settings.playingProgressEnable}
+            switchState={this.props.playingProgressEnable}
             switchOnValueChange={async x => await this.props.settings.set('playingProgressEnable', x)}
           />
 
@@ -104,7 +110,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
             title='Playback progress interval (ms)'
             isEditable={true}
             hasNavArrow={false}
-            value={(this.props.settings.playingProgressInterval || '').toString()}
+            value={(this.props.playingProgressInterval || '').toString()}
             onTextChange={async str => {
               const x = parseInt(str);
               await this.props.settings.set('playingProgressInterval', _.isNaN(x) ? 0 : x);
@@ -118,7 +124,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
             title='Debug: Show debug info'
             hasNavArrow={false}
             hasSwitch={true}
-            switchState={this.props.settings.showDebug}
+            switchState={this.props.showDebug}
             switchOnValueChange={async x => await this.props.settings.set('showDebug', x)}
           />
 
@@ -150,9 +156,9 @@ export class SettingsScreen extends PureComponent<Props, State> {
         </View>
       </Modal>
 
-      {this.props.settings.showDebug && (
-        <View style={this.props.settings.debugView}>
-          <Text style={this.props.settings.debugText}>DEBUG INFO</Text>
+      {this.props.showDebug && (
+        <View style={Styles.debugView}>
+          <Text style={Styles.debugText}>DEBUG INFO</Text>
         </View>
       )}
 

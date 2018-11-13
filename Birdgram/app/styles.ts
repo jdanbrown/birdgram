@@ -1,12 +1,40 @@
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-//
-// Debug
-//
+// Generic styles
+//  - TODO How to put in a StyleSheet.create without losing type info?
+//    - Forced into ViewStyle | TextStyle | ImageStyle, which is too lossy for e.g. TopControlsButtonProps / Feather (icon)
+export const Styles = {
 
-export const debugStyle = {
-  color: iOSColors.green,
-  backgroundColor: iOSColors.black,
+  fill: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  center: {
+    justifyContent: 'center', // Vertical
+    alignItems: 'center', // Horizontal
+  },
+  rotate90:       {transform: [{rotate: '90deg'}]},
+  rotate180:      {transform: [{rotate: '180deg'}]},
+  rotate270:      {transform: [{rotate: '270deg'}]},
+  flipHorizontal: {transform: [{scaleX: -1}]},
+  flipVertical:   {transform: [{scaleY: -1}]},
+  flipBoth:       {transform: [{scaleX: -1}, {scaleY: -1}]},
+
+  // Debug styles
+  debug: {
+    color: iOSColors.green,
+    backgroundColor: iOSColors.black,
+  },
+  debugView: {
+    padding: 3,
+    backgroundColor: iOSColors.black,
+  },
+  debugText: {
+    color: iOSColors.green,
+    backgroundColor: iOSColors.black,
+  },
+
 };
 
 //
