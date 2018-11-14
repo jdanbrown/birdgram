@@ -75,6 +75,10 @@ export function shallowDiff(x: object, y: object): {[key: string]: boolean} {
   );
 }
 
+//
+// json
+//
+
 // Nonstandard shorthands (apologies for breaking norms, but these are too useful and too verbose by default)
 export const json   = JSON.stringify;
 export const pretty = (x: any) => JSON.stringify(x, null, 2);
@@ -84,6 +88,40 @@ export const unjson = JSON.parse;
 global.json   = json;
 global.pretty = pretty;
 global.unjson = unjson;
+
+//
+// yaml
+//
+
+import Yaml from 'js-yaml';
+
+export function yaml(x: any, opts?: Yaml.DumpOptions): string {
+  return Yaml.safeDump(x, {
+    flowLevel: 0,                     // Single line (pass -1 for multi-line pretty print)
+    schema: Yaml.DEFAULT_FULL_SCHEMA, // Don't barf on undefined [also allows all kinds of rich types through as !!foo]
+    lineWidth: 1e9,                   // Don't wrap long strings (default: 80)
+    ...(opts || {}),
+  });
+}
+
+export function yamlPretty(x: any, opts?: Yaml.DumpOptions): string {
+  return yaml(x, {
+    flowLevel: -1,
+    ...(opts || {}),
+  });
+}
+
+export function unyaml(x: string, opts?: Yaml.LoadOptions): any {
+  return Yaml.safeLoad(x, {
+    schema: Yaml.DEFAULT_SAFE_SCHEMA, // Do barf on undefined, to avoid loading unsafe code (e.g. !!js/function)
+    ...(opts || {}),
+  });
+}
+
+global.Yaml       = Yaml;
+global.yaml       = yaml;
+global.yamlPretty = yamlPretty;
+global.unyaml     = unyaml;
 
 //
 // Typescript

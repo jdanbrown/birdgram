@@ -1,17 +1,18 @@
 import { Places } from './places';
-import { Omit } from './utils';
+import { match, Omit } from './utils';
 
 //
 // Rec
 //
 
 export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
-export type RecId = string;
+export type SourceId = string;
 
 export interface Rec {
 
   // bubo
-  id: RecId;
+  source_id: SourceId; // More appropriate than id for mobile (see python util.rec_to_source_id for details)
+  // id: string;       // Hide so that we don't accidentally use it (we'll get type errors)
 
   // xc
   xc_id: number;
@@ -38,12 +39,13 @@ export interface Rec {
 
 }
 
-// If xc, abbrev long path rec.id -> short '<species>/<xc_id>'
-export function shortRecId(id: RecId): RecId {
-  return (
-    id.startsWith('cache/audio/xc/data/') ? id.split('/').slice(4, 6).join('/') :
-    id
-  );
+// e.g. 'xc:123456' -> 'XC123456'
+export function showSourceId(sourceId: SourceId): string {
+  const [dataset, rest] = sourceId.split(':');
+  return match(dataset,
+    ['xc', () => `XC${rest}`],
+    // ['user', ...], // TODO
+  )();
 }
 
 export interface Rec_f_preds {
@@ -87,7 +89,7 @@ export type SearchPathParams =
 export type SearchPathParamsNone    = { kind: 'none' };
 export type SearchPathParamsRandom  = { kind: 'random', seed: number };
 export type SearchPathParamsSpecies = { kind: 'species', species: string };
-export type SearchPathParamsRec     = { kind: 'rec', recId: string };
+export type SearchPathParamsRec     = { kind: 'rec', sourceId: SourceId };
 
 export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cases: {
   none:    (searchPathParams: SearchPathParamsNone)    => X,
@@ -112,8 +114,8 @@ export function searchPathParamsFromPath(path: string): SearchPathParams {
   if (match) return {kind: 'random', seed: tryParseInt(0, decodeURIComponent(match.params.seed))};
   match = matchPath<{species: string}>(path, {path: '/species/:species'});
   if (match) return {kind: 'species', species: decodeURIComponent(match.params.species)};
-  match = matchPath<{recId: string}>(path, {path: '/rec/:recId*'});
-  if (match) return {kind: 'rec', recId: decodeURIComponent(match.params.recId)};
+  match = matchPath<{sourceId: SourceId}>(path, {path: '/rec/:sourceId*'});
+  if (match) return {kind: 'rec', sourceId: decodeURIComponent(match.params.sourceId)};
   throw `searchPathParamsFromPath: Unexpected path: ${path}`;
 }
 

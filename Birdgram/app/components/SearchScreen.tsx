@@ -37,19 +37,19 @@ import { CCIcon, LicenseTypeIcons } from './Misc';
 import { TabBarStyle } from './TabRoutes';
 import { config } from '../config';
 import {
-  ModelsSearch, matchSearchPathParams, Quality, Rec, rec_f_preds, Rec_f_preds, RecId, SearchPathParams,
-  searchPathParamsFromPath, SearchRecs, ServerConfig, shortRecId,
+  ModelsSearch, matchSearchPathParams, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
+  searchPathParamsFromPath, SearchRecs, ServerConfig, showSourceId, SourceId,
 } from '../datatypes';
 import { log, puts, tap } from '../log';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
-import { querySql, SQL, sqlf } from '../sql';
+import { queryPlanFromRows, queryPlanPretty, querySql, SQL, sqlf } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import { LabelStyle, labelStyles, Styles } from '../styles';
 import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait,
-  objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, zipSame,
+  objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, Timer, yaml, yamlPretty, zipSame,
 } from '../utils';
 
 const sidewaysTextWidth = 14;
@@ -61,22 +61,22 @@ interface ScrollViewState {
 }
 
 // QUESTION Should Query + SearchPathParams be separate? 1-1 so far...
-type Query = QueryNone | QueryRandom | QuerySpecies | QueryRecId;
+type Query = QueryNone | QueryRandom | QuerySpecies | QueryRec;
 type QueryNone    = {kind: 'none'}; // e.g. so we can show nothing on redirect from '/'
 type QueryRandom  = {kind: 'random',  seed: number};
 type QuerySpecies = {kind: 'species', species: string};
-type QueryRecId   = {kind: 'recId',   recId: string};
+type QueryRec     = {kind: 'rec',     sourceId: SourceId};
 function matchQuery<X>(query: Query, cases: {
   none:    (query: QueryNone)    => X,
   random:  (query: QueryRandom)  => X,
   species: (query: QuerySpecies) => X,
-  recId:   (query: QueryRecId)   => X,
+  rec:     (query: QueryRec)     => X,
 }): X {
   switch (query.kind) {
     case 'none':    return cases.none(query);
     case 'random':  return cases.random(query);
     case 'species': return cases.species(query);
-    case 'recId':   return cases.recId(query);
+    case 'rec':     return cases.rec(query);
   }
 }
 
@@ -119,13 +119,11 @@ interface State {
   filterLimit: number;
   excludeSpecies: Array<string>;
   excludeRecIds: Array<string>;
-  status: {
-    loading: boolean,
-    queryInProgress?: Query,
-    queryShown?: Query;
-  },
-  recs: Array<Rec>;
-  recIdForActionModal?: RecId;
+  recs: 'loading' | Array<Rec>;
+  recsQueryInProgress?: Query,
+  recsQueryShown?: Query;
+  recsQueryTime?: number;
+  sourceIdForActionModal?: SourceId;
   playing?: {
     rec: Rec,
     sound: Sound,
@@ -150,6 +148,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   // Getters for this.state
   get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
+  get recsOrEmpty(): Array<Rec> { return this.state.recs === 'loading' ? [] : this.state.recs; }
 
   static defaultProps = {
     spectroBase:       {height: 20, width: Dimensions.get('window').width},
@@ -171,14 +170,13 @@ export class SearchScreen extends PureComponent<Props, State> {
     filterLimit: 30, // TODO How big vs. fast? (-> Settings with sane default)
     excludeSpecies: [],
     excludeRecIds: [],
-    status: {loading: true},
-    recs: [],
+    recs: 'loading',
     // Sync from/to Settings (2/3)
     _spectroScale: this.props.spectroScale,
   };
 
   db?: SQLiteDatabase;
-  soundsCache: Map<RecId, Promise<Sound> | Sound> = new Map();
+  soundsCache: Map<SourceId, Promise<Sound> | Sound> = new Map();
 
   // (Unused, kept for reference)
   // sortActionSheet: RefObject<ActionSheet> = React.createRef();
@@ -243,6 +241,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     }
 
     // Query db size (once)
+    log.info(`${this.constructor.name}.componentDidMount: Querying db size`);
     await querySql<{totalRecs: number}>(this.db!, `
       select count(*) as totalRecs
       from search_recs
@@ -255,6 +254,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     });
 
     // Query f_preds_* cols (once)
+    log.info(`${this.constructor.name}.componentDidMount: Querying f_preds_* cols`);
     await querySql<Rec>(this.db!, `
       select *
       from search_recs
@@ -304,7 +304,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
     log.info('SearchScreen.componentDidUpdate', shallowDiffPropsState(prevProps, prevState, this.props, this.state));
 
-    // Reset view state if query changed (i.e. props.navigation.state.params.{search,recId})
+    // Reset view state if query changed
     //  - TODO Pass props.key to reset _all_ state? [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
     if (!deepEqual(this.query, this._query(prevProps))) {
       log.info('SearchScreen.componentDidUpdate: Reset view state');
@@ -327,7 +327,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     }
 
     // Query recs (from updated navParams.species)
-    //  - (Will noop if deepEqual(query, state.status.queryShown))
+    //  - (Will noop if deepEqual(query, state.recsQueryShown))
     // log.debug('componentDidUpdate -> loadRecsFromQuery');
     await this.loadRecsFromQuery();
 
@@ -373,20 +373,20 @@ export class SearchScreen extends PureComponent<Props, State> {
   get query(): Query { return this._query(); }
   _query = (props?: Props): Query => {
     return matchSearchPathParams<Query>(this._pathParams(props), {
-      none:    ()          => ({kind: 'species', species: ''}),
-      random:  ({seed})    => ({kind: 'random', seed}),
-      species: ({species}) => ({kind: 'species', species}),
-      rec:     ({recId})   => ({kind: 'recId', recId}),
+      none:    ()           => ({kind: 'species', species: ''}),
+      random:  ({seed})     => ({kind: 'random', seed}),
+      species: ({species})  => ({kind: 'species', species}),
+      rec:     ({sourceId}) => ({kind: 'rec', sourceId}),
     });
     // We ignore state.filterQueryText b/c TextInput.onSubmitEditing -> history.push -> navParams.species
   };
 
   get queryDesc(): string {
     return matchQuery(this.query, {
-      none:    ()          => 'none',
-      random:  ({seed})    => `random/${seed}`,
-      species: ({species}) => species,
-      recId:   ({recId})   => shortRecId(recId),
+      none:    ()           => 'none',
+      random:  ({seed})     => `random/${seed}`,
+      species: ({species})  => species,
+      rec:     ({sourceId}) => showSourceId(sourceId),
     });
   }
 
@@ -395,54 +395,52 @@ export class SearchScreen extends PureComponent<Props, State> {
       // Noop if we don't know f_preds_cols yet (assume we'll be called again)
       this.state.f_preds_cols &&
       // Noop if this.query is already shown
-      !deepEqual(this.query, this.state.status.queryShown) &&
+      !deepEqual(this.query, this.state.recsQueryShown) &&
       // Noop if this.query is already in progress
-      !deepEqual(this.query, this.state.status.queryInProgress) &&
+      !deepEqual(this.query, this.state.recsQueryInProgress) &&
       // Noop if this.query isn't valid
       matchQuery(this.query, {
-        none:    ()          => true,
-        random:  ({seed})    => true,
-        species: ({species}) => species !== '',
-        recId:   ({recId})   => recId   !== '',
+        none:    ()           => true,
+        random:  ({seed})     => true,
+        species: ({species})  => species  !== '',
+        rec:     ({sourceId}) => sourceId !== '',
       })
     ) {
-      log.info('loadRecsFromQuery', pretty({query: this.query, status: this.state.status}));
+      log.info('loadRecsFromQuery', pretty({query: this.query}));
 
       // Set loading state
       //  - TODO Fade previous recs instead of showing a blank screen while loading
-      log.info('loadRecsFromQuery: state.status.loading = true');
+      log.info("loadRecsFromQuery: state.recs = 'loading'");
       this.setState({
-        status: {
-          loading: true,
-          queryInProgress: this.query,
-        },
-        recs: [],
+        recs: 'loading',
+        recsQueryInProgress: this.query,
       });
       await this.releaseSounds(); // (Safe to do after clearing state.recs, since it uses this.soundsCache)
 
       // Can't use window functions until sqlite ≥3.25.x
       //  - TODO Waiting on: https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
 
-      const _setRecs = async (recs: Array<Rec>): Promise<void> => {
-        log.info('loadRecsFromQuery: state.status.loading = false');
+      const timer = new Timer();
+      const _setRecs = ({recs}: {recs: 'loading' | Array<Rec>}): void => {
+        log.info(`loadRecsFromQuery: state.recs = ${recs === 'loading' ? recs : `(${recs.length} recs)`}`);
         this.setState({
-          status: {
-            loading: false,
-            queryShown: this.query,
-          },
           recs,
+          recsQueryShown: this.query,
+          recsQueryTime: timer.time(),
         });
       };
 
       await matchQuery(this.query, {
 
         none: async () => {
-          await _setRecs([]);
+          log.info(`loadRecsFromQuery: Got QueryNone, staying in 'loading'...`);
+          _setRecs({recs: 'loading'});
         },
 
         // TODO Weight species uniformly (e.g. select random species, then select random recs)
         // TODO Get deterministic results from seed [how? sqlite doesn't support random(seed) or hash()]
         random: async ({seed}) => {
+          log.info(`loadRecsFromQuery: Querying random recs`, json({seed}));
           await querySql<Rec>(this.db!, sqlf`
             select *
             from (
@@ -461,11 +459,12 @@ export class SearchScreen extends PureComponent<Props, State> {
               xc_id desc
           `)(async results => {
             const recs = results.rows.raw();
-            await _setRecs(recs);
+            _setRecs({recs});
           });
         },
 
         species: async ({species}) => {
+          log.info('loadRecsFromQuery: Querying recs for species', json({species}));
           await querySql<Rec>(this.db!, sqlf`
             select *
             from (
@@ -485,11 +484,12 @@ export class SearchScreen extends PureComponent<Props, State> {
               xc_id desc
           `)(async results => {
             const recs = results.rows.raw();
-            await _setRecs(recs);
+            _setRecs({recs});
           });
         },
 
-        recId: async ({recId}) => {
+        rec: async ({sourceId}) => {
+          log.info('loadRecsFromQuery: Loading recs for query_rec', json({sourceId}));
 
           // Compute top n_per_sp recs per species by d_pc (cosine_distance)
           //  - TODO Replace with window functions after sqlite upgrade
@@ -505,9 +505,18 @@ export class SearchScreen extends PureComponent<Props, State> {
           const n_per_sp     = 3; // TODO(nav_rec_id) -> param
           const n_recs       = this.state.filterLimit;
           const f_preds_cols = this.state.f_preds_cols || [];
+          const limit_top_sp = n_recs / n_per_sp + 1; // Close enough
 
           // Load query_rec from db
-          const query_rec = await this.loadRec(recId);
+          const query_rec = await this.loadRec(sourceId);
+          // log.debug('query_rec', query_rec); // XXX Debug
+
+          // Bail if sourceId not found (e.g. from persisted history)
+          if (!query_rec) {
+            log.warn('loadRecsFromQuery: sourceId not found:', sourceId);
+            _setRecs({recs: 'loading'});
+            return;
+          }
 
           // Read sp_p's (species probs) from query_rec.f_preds_*
           const sp_ps: Map<string, number> = new Map(zipSame(
@@ -519,47 +528,48 @@ export class SearchScreen extends PureComponent<Props, State> {
           const slp = (sp_p: number): number => Math.abs(-Math.log(sp_p)) // (abs for 1->0 i/o -0)
           const slps: Map<string, number> = mapMapValues(sp_ps, slp);
 
-          // Inject sql table: slps -> (species, slp)
-          const tableSlp = SQL.raw(
-            Array.from(slps)
-            // .slice(0, 2) // XXX Debug: smaller query
-            .map(([species, slp]) => sqlf`select ${species} as species, ${slp} as slp`)
-            .join(' union all ')
-          );
-
           // Compute in sql: cosine_distance(S.f_preds_*, Q.f_preds_*)
           //  - cosine_distance(x,y) = 1 - dot(x,y) / norm(x) / norm(y)
-          const sqlDot = SQL.raw(
-            f_preds_cols
+          const sqlDot = (f_preds_cols
             // .slice(0, 2) // XXX Debug: smaller query
             .map(c => sqlf`S.${SQL.raw(c)}*Q.${SQL.raw(c)}`).join(' + ') || '0'
           );
-          const sqlCosineDist = SQL.raw(sqlf`
-            1 - (${sqlDot}) / S.norm_f_preds / Q.norm_f_preds
-          `);
+          const sqlCosineDist = sqlf`
+            1 - (${SQL.raw(sqlDot)}) / S.norm_f_preds / Q.norm_f_preds
+          `;
 
           // Rank species by slp (slp asc b/c sgn(slp) ~ -sgn(sp_p))
-          const topSpecies = (
+          const topSlps: Array<{species: string, slp: number}> = (
             _(Array.from(slps.entries()))
-            .sortBy(([species, slp]) => slp)
+            .map(([species, slp]) => ({species, slp}))
+            .sortBy(({slp}) => slp)
+            .slice(0, limit_top_sp)
             .value()
-            .map(([species, slp]) => species)
           );
 
+          // Inject sql table: slps -> (species, slp)
+          const tableSlp = sqlf`
+            select column1 as species, column2 as slp from (values ${SQL.raw(topSlps
+              // .slice(0, 2) // XXX Debug: smaller query
+              .map(({species, slp}) => sqlf`(${species}, ${slp})`)
+              .join(', ')
+            )})
+          `;
+
           // Construct queries for each species
-          const sqlPerSpecies = (topSpecies
+          //  - TODO Shorter query: refactor sqlCosineDist expr (1 per topSlps) into a shared `with` table (1 total)
+          const sqlPerSpecies = (topSlps
             // .slice(0, 2) // XXX Debug: smaller query
-            .slice(0, n_recs / n_per_sp + 1) // Close enough
-            .map(species => sqlf`
+            .map(({species, slp}) => sqlf`
               select
                 S.*,
-                ${sqlCosineDist} as d_pc
+                ${SQL.raw(sqlCosineDist)} as d_pc
               from search_recs S
-                left join (select * from search_recs where id = ${recId}) Q on true -- Only 1 row in Q
+                left join (select * from search_recs where source_id = ${sourceId}) Q on true -- Only 1 row in Q
               where true
                 and S.species = ${species}
                 and S.quality in (${this.state.filterQuality})
-                and S.id != ${recId} -- Exclude query_rec from results
+                and S.source_id != ${sourceId} -- Exclude query_rec from results
               order by
                 d_pc asc
               limit ${n_per_sp}
@@ -573,7 +583,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               coalesce(slp.slp, 1e38) as slp
             -- Must select * from (...) else union complains about nested order by
             from (${SQL.raw(sqlPerSpecies.map(x => `select * from (${x})`).join(' union all '))}) S
-              left join (${tableSlp}) slp on S.species = slp.species
+              left join (${SQL.raw(tableSlp)}) slp on S.species = slp.species
             order by
               slp asc,
               d_pc asc
@@ -581,17 +591,15 @@ export class SearchScreen extends PureComponent<Props, State> {
           `;
 
           // Run query
+          log.info('loadRecsFromQuery: Querying recs for query_rec', json({sourceId}));
           await querySql<Rec>(this.db!, sql, {
-            // logTruncate: null, // XXX Debug: log full query
+            // logTruncate: null, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
 
             // HACK Inject query_rec as first result so it's visible at top
             //  - TODO Replace this with a proper display of query_rec at the top
-            await _setRecs([
-              query_rec,
-              ...recs,
-            ]);
+            _setRecs({recs: [query_rec, ...recs]});
 
           });
 
@@ -602,11 +610,12 @@ export class SearchScreen extends PureComponent<Props, State> {
     }
   }
 
-  loadRec = async (id: string): Promise<Rec> => {
+  loadRec = async (sourceId: SourceId): Promise<Rec> => {
+    log.info('[loadRec]', json({sourceId}));
     return await querySql<Rec>(this.db!, sqlf`
       select *
       from search_recs
-      where id = ${id}
+      where source_id = ${sourceId}
     `)(async results => {
       const [rec] = results.rows.raw();
       return rec;
@@ -616,9 +625,9 @@ export class SearchScreen extends PureComponent<Props, State> {
   releaseSounds = async () => {
     log.info(`Releasing ${this.soundsCache.size} cached sounds`);
     await Promise.all(
-      Array.from(this.soundsCache).map(async ([recId, soundAsync]) => {
+      Array.from(this.soundsCache).map(async ([sourceId, soundAsync]) => {
         log.debug('Releasing sound',
-          shortRecId(recId), // Noisy (unless rndebugger timestamps are shown, in which case these log lines don't de-dupe anyway)
+          showSourceId(sourceId), // Noisy (but these log lines don't de-dupe anyway when rndebugger timestamps are shown)
         );
         (await soundAsync).release();
       }),
@@ -628,19 +637,19 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   getOrAllocateSoundAsync = async (rec: Rec): Promise<Sound> => {
     // Is sound already allocated (in the cache)?
-    let soundAsync = this.soundsCache.get(rec.id);
+    let soundAsync = this.soundsCache.get(rec.source_id);
     if (!soundAsync) {
       log.debug('Allocating sound',
-        shortRecId(rec.id), // Noisy (unless rndebugger timestamps are shown, in which case these log lines don't de-dupe anyway)
+        showSourceId(rec.source_id), // Noisy (but these log lines don't de-dupe anyway when rndebugger timestamps are shown)
       );
       // Allocate + cache sound resource
-      //  - Cache the promise so that get+set is atomic, else we race and allocate multiple sounds per rec.id
+      //  - Cache the promise so that get+set is atomic, else we race and allocate multiple sounds per rec.source_id
       //  - (Observable via log counts in the console: if num alloc > num release, then we're racing)
-      this.soundsCache.set(rec.id, Sound.newAsync(
+      this.soundsCache.set(rec.source_id, Sound.newAsync(
         Rec.audioPath(rec),
         Sound.MAIN_BUNDLE,
       ));
-      soundAsync = this.soundsCache.get(rec.id);
+      soundAsync = this.soundsCache.get(rec.source_id);
     }
     return await soundAsync!;
   }
@@ -658,8 +667,8 @@ export class SearchScreen extends PureComponent<Props, State> {
         oldState === Gesture.State.ACTIVE &&
         state !== Gesture.State.CANCELLED
       ) {
-        log.debug('toggleRecPlaying', pretty({x, recId: rec.id,
-          playing: this.state.playing && {recId: this.state.playing.rec.id},
+        log.debug('toggleRecPlaying', pretty({x, sourceId: rec.source_id,
+          playing: this.state.playing && {sourceId: this.state.playing.rec.source_id},
         }));
 
         // FIXME Race conditions: tap many spectros really quickly and watch the "Playing rec" logs pile up
@@ -673,7 +682,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
         // Workaround: Manually clean up on done/stop b/c the .play done callback doesn't trigger on .stop
         const onDone = async () => {
-          log.info('Done: rec', rec.id);
+          log.info('Done: rec', rec.source_id);
           timer.clearInterval(this, 'playingCurrentTime');
           this.setState({
             playing: undefined,
@@ -686,7 +695,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           global.sound = sound; // XXX Debug
 
           // Stop sound playback
-          log.info('Stopping: rec', rec.id);
+          log.info('Stopping: rec', rec.source_id);
           await sound.stopAsync();
           await onDone();
 
@@ -694,7 +703,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
         // If touched rec was the currently playing rec, then we're done (it's stopped)
         // Else, play the (new) touched rec
-        if (!this.recIsPlaying(rec.id, playing)) {
+        if (!this.recIsPlaying(rec.source_id, playing)) {
           const sound = await soundAsync;
           global.sound = sound; // XXX Debug
 
@@ -708,7 +717,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Play rec (if startTime is valid)
           if (!startTime || startTime < sound.getDuration()) {
-            log.info('Playing: rec', rec.id);
+            log.info('Playing: rec', rec.source_id);
 
             // setState
             this.setState({
@@ -724,7 +733,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             //  - HACK react-native-sound doesn't have an onProgress callback, so we have to hack it ourselves :/
             //    - Ugh, waaay slow and cpu inefficient: 16ms (60fps) kills rndebugger in Debug and pegs cpu in Release
             //    - TODO Explore alternatives: if setState->render is the bottleneck, then investigate Animated...
-            //  - WARNING Don't separate timers per rec.id until we resolve "FIXME Race conditions" above ("tap many")
+            //  - WARNING Don't separate timers per rec.source_id until we resolve "FIXME Race conditions" above ("tap many")
             if (this.props.playingProgressEnable && this.props.playingProgressInterval !== 0) {
               timer.setInterval(this, 'playingCurrentTime',
                 async () => {
@@ -774,8 +783,8 @@ export class SearchScreen extends PureComponent<Props, State> {
     return x;
   }
 
-  recIsPlaying = (recId: RecId, playing: undefined | {rec: Rec}): boolean => {
-    return !playing ? false : playing.rec.id === recId;
+  recIsPlaying = (sourceId: SourceId, playing: undefined | {rec: Rec}): boolean => {
+    return !playing ? false : playing.rec.source_id === sourceId;
   }
 
   onLongPress = (rec: Rec) => async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
@@ -832,7 +841,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   showRecActionModal = (rec: Rec) => {
     this.setState({
-      recIdForActionModal: rec.id,
+      sourceIdForActionModal: rec.source_id,
       showGenericModal: () => (
         this.RecActionModal(rec)
       )
@@ -866,10 +875,10 @@ export class SearchScreen extends PureComponent<Props, State> {
             onPress: () => this.props.history.push(`/species/${encodeURIComponent(rec.species)}`),
           }, {
             ...defaults,
-            label: `Search (${shortRecId(rec.id)})`,
+            label: `Search (${showSourceId(rec.source_id)})`,
             iconName: 'search',
             buttonColor: iOSColors.blue,
-            onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.id)}`),
+            onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.source_id)}`),
           },
         ]})}
 
@@ -885,11 +894,11 @@ export class SearchScreen extends PureComponent<Props, State> {
             })),
           }, {
             ...defaults,
-            label: `Hide results (${shortRecId(rec.id)})`,
+            label: `Hide results (${showSourceId(rec.source_id)})`,
             iconName: 'x',
             buttonColor: iOSColors.red,
             onPress: () => this.setState((state: State, props: Props) => ({
-              excludeRecIds: [...state.excludeRecIds, rec.id],
+              excludeRecIds: [...state.excludeRecIds, rec.source_id],
             })),
           }
         ]})}
@@ -939,7 +948,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             onPress: () => {},
           }, {
             ...defaults,
-            label: `Save to list (${shortRecId(rec.id)})`,
+            label: `Save to list (${showSourceId(rec.source_id)})`,
             iconName: 'bookmark',
             buttonColor: iOSColors.orange,
             onPress: () => {},
@@ -1438,7 +1447,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   //  - Render phase (pure, no read/write DOM, may be called multiple times per commit or interrupted)
   render = () => {
     log.info(`${this.constructor.name}.render`);
-    const styleForSpecies = this.stylesForSpecies(_.uniq(this.state.recs.map(rec => rec.species)));
+    const styleForSpecies = this.stylesForSpecies(_.uniq(this.recsOrEmpty.map(rec => rec.species)));
     return (
       <View style={{
         flex: 1,
@@ -1450,7 +1459,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         )}/>
 
         {/* Loading spinner */}
-        {this.state.status.loading && (
+        {this.state.recs === 'loading' && (
           <View style={{
             flex: 1,
             justifyContent: 'center',
@@ -1462,7 +1471,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         {/* Recs list (with pan/pinch) */}
         {/* - We use ScrollView instead of SectionList to avoid _lots_ of opaque pinch-to-zoom bugs */}
         {/* - We use ScrollView instead of manual gestures (react-native-gesture-handler) to avoid _lots_ of opaque animation bugs */}
-        {this.state.status.loading || (
+        {this.state.recs !== 'loading' && (
           <ScrollView
             // @ts-ignore [Why doesn't this typecheck?]
             ref={this.scrollViewRef as RefObject<Component<SectionListStatic<Rec>, any, any>>}
@@ -1543,11 +1552,11 @@ export class SearchScreen extends PureComponent<Props, State> {
               //   ),
 
               // Rec rows
-              this.state.recs.map((rec, recIndex) => [
+              this.recsOrEmpty.map((rec, recIndex) => [
 
                 // Rec row
                 <Animated.View
-                  key={`row-${recIndex}-${rec.id}`}
+                  key={`row-${recIndex}-${rec.source_id}`}
                   style={{
                     flex: 1, flexDirection: 'row',
                     // Alternating row colors
@@ -1636,7 +1645,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                             />
 
                             {/* Start time cursor (if playing + startTime) */}
-                            {this.recIsPlaying(rec.id, this.state.playing) && (
+                            {this.recIsPlaying(rec.source_id, this.state.playing) && (
                               this.state.playing!.startTime && (
                                 <View style={{
                                   position: 'absolute', width: 1, height: '100%',
@@ -1647,7 +1656,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                             )}
 
                             {/* Progress time cursor (if playing + playingCurrentTime) */}
-                            {this.recIsPlaying(rec.id, this.state.playing) && (
+                            {this.recIsPlaying(rec.source_id, this.state.playing) && (
                               this.state.playing!.startTime && this.state.playingCurrentTime !== undefined && (
                                 <View style={{
                                   position: 'absolute', width: 1, height: '100%',
@@ -1658,7 +1667,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                             )}
 
                             {/* HACK Visual feedback for playing rec [XXX after adding progress bar by default] */}
-                            {this.recIsPlaying(rec.id, this.state.playing) && (
+                            {this.recIsPlaying(rec.source_id, this.state.playing) && (
                               <View style={{
                                 position: 'absolute', height: '100%', width: 5,
                                 left: 0,
@@ -1667,8 +1676,8 @@ export class SearchScreen extends PureComponent<Props, State> {
                             )}
 
                             {/* HACK Visual feedback for long-press ActionModal rec */}
-                            {/* - HACK Condition on showGenericModal b/c we can't currently onDismiss to unset recIdForActionModal */}
-                            {this.state.showGenericModal && this.state.recIdForActionModal === rec.id && (
+                            {/* - HACK Condition on showGenericModal b/c we can't (yet) onDismiss to unset sourceIdForActionModal */}
+                            {this.state.showGenericModal && this.state.sourceIdForActionModal === rec.source_id && (
                               <View style={{
                                 position: 'absolute', height: '100%', width: 5,
                                 left: 0,
@@ -1724,7 +1733,10 @@ export class SearchScreen extends PureComponent<Props, State> {
         <this.DebugView>
           <this.DebugText>queryDesc: {this.queryDesc}</this.DebugText>
           <this.DebugText>
-            Recs: {this.state.status.loading ? '...' : this.state.recs.length}/{this.state.totalRecs || '?'}
+            Recs: {this.state.recs === 'loading'
+              ? `.../${this.state.totalRecs || '?'}`
+              : `${this.state.recs.length}/${this.state.totalRecs || '?'} (${sprintf('%.3f', this.state.recsQueryTime)}s)`
+            }
           </this.DebugText>
           <this.DebugText>Filters: {json(this.filters)}</this.DebugText>
         </this.DebugView>

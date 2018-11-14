@@ -1117,7 +1117,7 @@ import yaml
 
 from config import config
 from constants import *
-from datatypes import Audio
+from datatypes import Audio, Recording
 
 
 def print_sys_info():
@@ -1135,6 +1135,38 @@ def print_sys_info():
         ])
         .rstrip()
     )
+
+
+# Currently only used for write_mobile_payload in payloads.df_cache_hybrid
+#   - TODO Push upstream to consolidate our overall data model
+def rec_to_source_id(rec: Recording) -> str:
+    """
+    A source_id is an abstraction of an audio_id (= rec.id) that identifies the source audio recording
+    - Significant features
+        - xc:   xc_id       [✗ slice(), ✗ spectro_denoise(), ✗ enc(), ✗ resample()]
+        - user: audio_bytes [✓ slice(), ✗ spectro_denoise(), ✗ enc(), ✗ resample()]
+    - Time/freq cropping is significant for user recs but not xc recs because they play different roles
+        - xc recs are output recs to recall vs. user recs are input recs to search for
+        - [Elaborate in terms of concrete use cases: search for different crops, sharing results, payload changes, ...]
+
+    Example source_id's:
+    - 'xc:390184'
+    - 'user:2018-10-06T08-14-46-f0856a21'
+    - 'user:2018-10-06T08-14-46-f0856a21?time=[55,60.5]'
+
+    Example of many audio_id -> 1 source_id:
+    - audio_id:  'xc/data/OATI/390184/audio.mp3'
+    - audio_id:  'cache/audio/xc/data/OATI/390184/audio.mp3.resample(...).enc(wav).slice(0,10000).spectro_denoise().enc(...,32k)'
+    - audio_id:  'cache/audio/xc/data/OATI/390184/audio.mp3.resample(...).enc(wav).slice(0,10000).spectro_denoise().enc(...,16k)'
+    - audio_id:  'cache/audio/xc/data/OATI/390184/audio.mp3.resample(...).enc(wav).slice(0,7000).spectro_denoise().enc(...,32k)'
+    - audio_id:  'cache/audio/xc/data/OATI/390184/audio.mp3.resample(...).enc(wav).slice(0,7000).spectro_denoise().enc(...,16k)'
+    - source_id: 'xc:390184'
+    """
+    if rec.dataset == 'xc':
+        return f'xc:{rec.xc_id}'
+    else:
+        # TODO Add dataset='user' (when e2e the mobile upload workflow)
+        raise f'rec_to_source_id: Unsupported dataset[{rec.dataset}]'
 
 
 def rec_str_line(rec, *_first, first=[], last=[], default=[

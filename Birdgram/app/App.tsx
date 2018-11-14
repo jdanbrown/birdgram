@@ -27,6 +27,7 @@ import {
   saveHistories, TabHistories, TabName,
 } from './router';
 import { Settings, SettingsProxy, SettingsWrites } from './settings';
+import { querySql } from './sql';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
 import {
@@ -44,6 +45,7 @@ global.iOSColors = iOSColors;
 global.matchPath = matchPath;
 global.material = material;
 global.materialColors = materialColors;
+global.querySql = querySql;
 global.shallowDiff = shallowDiff;
 global.Settings = Settings;
 global.systemWeights = systemWeights;

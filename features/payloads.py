@@ -235,6 +235,13 @@ def df_cache_hybrid(
             # We'll need to mutate (re-assign) as we go
             mobile_df = df
 
+            # HACK Add columns for mobile
+            #   - TODO Push upstream to consolidate our overall data model
+            with log_time_context(f'Mobile: Add columns for mobile'):
+                mobile_df = mobile_df.assign(
+                    source_id=lambda df: df_map_rows(df, rec_to_source_id),
+                )
+
             # Write bytes_cols to files (one file per cell)
             for bytes_col in bytes_cols:
                 bytes_name = strip_endswith(bytes_col, '_bytes', check=True)
@@ -325,14 +332,32 @@ def df_cache_hybrid(
             with log_time_context(f'Mobile: Write {rel(mobile_db_path)}', lambda: naturalsize_path(mobile_db_path)):
                 # Create and connect to sqlite file
                 with sqla_oneshot_eng_conn_tx(f'sqlite:///{ensure_parent_dir(mobile_db_path)}') as conn:
-                    mobile_df.to_sql(table, conn,
-                        index=False,  # Silently drop df index (we shouldn't have any)
-                        if_exists='replace',
-                        **{**to_sql_kwargs,
-                            'chunksize': 1000,  # Safe default for big writes (pd default writes all rows at once -- mem unsafe)
-                        },
+                    # Write table
+                    (mobile_df
+                        .to_sql(table, conn,
+                            if_exists='replace',
+                            index=False,  # Silently drop df index (we shouldn't have any)
+                            **{**to_sql_kwargs,
+                                'chunksize': 1000,  # Safe default for big writes (pd default writes all rows at once -- mem unsafe)
+                            },
+                        )
                     )
                     mobile_file_sizes[rel(mobile_db_path)] = size_path(mobile_db_path)
+                    # Create indexes
+                    #   - https://www.sqlite.org/lang_createindex.html
+                    #   - https://www.sqlite.org/queryplanner.html
+                    #   - Separate from df.to_sql because it doesn't provide easy support for creating indexes
+                    #       - Can create single-col indexes but not composite ones [https://stackoverflow.com/q/39089382/397334]
+                    #       - Can't create a primary key [https://stackoverflow.com/q/39407254/397334]
+                    for index in [
+                        dict(cols=['source_id'], unique=True),
+                        dict(cols=['species', 'source_id'], unique=True),
+                    ]:
+                        conn.execute('create %sindex ix_search_recs_%s on search_recs (%s)' % (
+                            'unique ' if index.get('unique') else ' ',
+                            '_'.join(index['cols']),
+                            ', '.join(index['cols']),
+                        ))
 
             # Write file: server-config.json
             #   - TODO Trim down (see ServerConfig in app/datatypes.ts for first cut at contract with mobile)

@@ -67,14 +67,20 @@ export interface Histories extends TabHistories {
 export type TabName = keyof TabHistories;
 export type HistoryName = keyof Histories;
 
+// Prefix keys in AsyncStorage
+const _prefix = 'router_v2.'; // Bump version to wipe out storage on incompat code changes
+function prefixKey(key: string): string {
+  return `${_prefix}${key}`;
+};
+
 export async function saveHistories(histories: Histories): Promise<void> {
   log.debug('router.saveHistories', histories);
-  await AsyncStorage.setItem('router.histories', JSON.stringify(histories));
+  await AsyncStorage.setItem(prefixKey('histories'), JSON.stringify(histories));
 }
 
 export async function loadHistories(): Promise<null | Histories> {
   // FIXME Types: distinguish hydrated Histories vs. unhydrated Record<HistoryName, HistoryNonFunctionProps>
-  const x = await Settings._getItemFromJson('router.histories') as null | Histories;
+  const x = await Settings._getItemFromJson(prefixKey('histories')) as null | Histories;
   const histories = !x ? null : (
     // Rehydrate via createMemoryHistory()
     _.mapValues(x, ({

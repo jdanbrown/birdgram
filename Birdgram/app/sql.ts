@@ -3,7 +3,7 @@ import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import _SQL from 'sqlstring-sqlite';
 
 import { log } from './log';
-import { Timer } from './utils';
+import { noawait, Timer, yamlPretty } from './utils';
 
 // Re-export sqlstring as SQL + add extra methods
 export const SQL = {..._SQL,
@@ -36,37 +36,50 @@ export function sqlf(strs: TemplateStringsArray, ...args: any[]): string {
 
 export function querySql<Row>(
   db: SQLiteDatabase,
-  _sql: string | BindSql,
-  opts: {logTruncate?: number | null} = {},
+  sql: string, // Assumes caller handles formatting (e.g. via sqlf`...`)
+  opts: {
+    logTruncate?: number | null, // null to not truncate
+    logQueryPlan?: boolean,
+  } = {},
 ): <X>(onResults: (results: ResultSet<Row>) => Promise<X>) => Promise<X> {
 
   // Default opts
-  opts = {
-    logTruncate: opts.logTruncate === undefined ? 200 : opts.logTruncate,
+  opts = {...opts,
+    logTruncate: opts.logTruncate !== undefined ? opts.logTruncate : 500, // Preserve null
+    logQueryPlan: _.defaultTo(opts.logQueryPlan, true),
+  };
+
+  // Log query plan (if requested)
+  if (opts.logQueryPlan) {
+    const timer = new Timer();
+    noawait(new Promise((resolve, reject) => {
+      db.transaction(tx => {
+        tx.executeSql(
+          sqlf`explain query plan ${SQL.raw(sql)}`,
+          [],
+          (tx, {rows}) => {
+            const planRows = rows.raw() as QueryPlanRow[];
+            const plan = queryPlanFromRows(planRows);
+            log.debug('[querySql] EXPLAIN QUERY PLAN', `time[${timer.time()}s]`,
+              '\n' + queryPlanPretty(plan),
+            );
+            resolve();
+          },
+          e => reject(e),
+        );
+      });
+    }));
   }
 
-  // Unpack args
-  let sql: string;
-  let params: any[] | undefined;
-  if (typeof _sql !== 'string') {
-    ({sql, params} = _sql);
-  } else {
-    sql = _sql;
-    params = undefined;
-  }
-
-  // sql + params
-  //  - Format using sqlstring-sqlite (e.g. array support) instead of react-native-sqlite-storage (e.g. no array support)
-  sql = SQL.format(sql, params);
-  params = undefined;
-
+  // Run query
   const timer = new Timer();
   const sqlTrunc = !opts.logTruncate ? sql : _.truncate(sql, {length: opts.logTruncate});
   log.debug('[querySql] Running...', sqlTrunc);
   return onResults => new Promise((resolve, reject) => {
     // TODO How to also `await db.transaction`? (Do we even want to?)
     db.transaction(tx => {
-      tx.executeSql( // [How do you use the Promise version of tx.executeSql without jumping out of the tx?]
+      // [How do you use the Promise version of tx.executeSql without jumping out of the tx?]
+      tx.executeSql(
         sql,
         [],
         (tx, {rows, rowsAffected, insertId}) => {
@@ -88,15 +101,6 @@ export function querySql<Row>(
 
 }
 
-// XXX Is this worthwhile given that we immediately SQL.format in the impl anyway? Unlikely that impl will change soon.
-export interface BindSql {
-  sql: string;
-  params?: any[];
-}
-export function bindSql(sql: string, params?: any[]): BindSql {
-  return {sql, params}
-}
-
 // Mimic @types/react-native-sqlite-storage, but add <Row>
 export interface ResultSet<Row> {
   rows: ResultSetRowList<Row>;
@@ -107,4 +111,38 @@ export interface ResultSetRowList<Row> {
   length: number;
   item(index: number): Row;
   raw(): Row[];
+}
+
+//
+// `EXPLAIN QUERY PLAN`
+//
+
+// Convert flat rows from `explain query plan` to a tree-shaped object that's readable via e.g. pretty()
+export interface QueryPlanRow { id: number; parent: number; detail: string; }
+export interface QueryPlan    { detail: string; children?: Array<QueryPlan>; }
+export function queryPlanFromRows(planRows: Array<QueryPlanRow>): QueryPlan {
+  // Make the root node (id=0) ourselves b/c planRows doesn't include it
+  const nodeById: {[key: number]: QueryPlan} = {
+    0: {detail: 'QUERY PLAN'}, // 'QUERY PLAN' like cli output of `explain query plan`
+  };
+  // Mutate each planRow into the plan tree
+  planRows.forEach(({id, parent, detail}) => {
+    const node = {detail};
+    nodeById[id] = node;
+    const parentNode = nodeById[parent];
+    if (parentNode.children === undefined) parentNode.children = [];
+    parentNode.children.push(node);
+  });
+  return nodeById[0];
+}
+
+// More compact pretty representation ({detail, children} -> {[detail]: children})
+export function queryPlanPretty(plan: QueryPlan): string {
+  return yamlPretty(_queryPlanPretty(plan));
+}
+export interface _QueryPlanPretty { [key: string]: null | Array<_QueryPlanPretty>; }
+export function _queryPlanPretty(plan: QueryPlan): _QueryPlanPretty {
+  return {
+    [plan.detail]: plan.children === undefined ? [] : plan.children.map(_queryPlanPretty),
+  };
 }
