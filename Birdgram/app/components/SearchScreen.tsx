@@ -3,7 +3,7 @@ import { Location, MemoryHistory } from 'history';
 import _ from 'lodash';
 import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import RN, {
-  ActivityIndicator, Animated, Dimensions, FlatList, GestureResponderEvent, Image, ImageStyle, Keyboard,
+  ActivityIndicator, Animated, Dimensions, FlatList, FlexStyle, GestureResponderEvent, Image, ImageStyle, Keyboard,
   KeyboardAvoidingView, LayoutChangeEvent, Modal, Platform, RegisteredStyle, ScrollView, SectionList, SectionListData,
   SectionListStatic, StyleProp, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
 } from 'react-native';
@@ -119,6 +119,7 @@ interface State {
     queryShown?: Query;
   },
   recs: Array<Rec>;
+  recIdForActionModal?: RecId;
   playing?: {
     rec: Rec,
     sound: Sound,
@@ -775,7 +776,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   onLongPress = (rec: Rec) => async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
     const {nativeEvent: {state}} = event; // Unpack SyntheticEvent (before async)
     if (state === Gesture.State.ACTIVE) {
-      log.debug('onLongPress');
+      this.showRecActionModal(rec);
     }
   }
 
@@ -823,6 +824,153 @@ export class SearchScreen extends PureComponent<Props, State> {
       </View>
     </KeyboardDismissingView>
   );
+
+  showRecActionModal = (rec: Rec) => {
+    this.setState({
+      recIdForActionModal: rec.id,
+      showGenericModal: () => (
+        this.RecActionModal(rec)
+      )
+    });
+  }
+
+  RecActionModal = (rec: Rec) => {
+    const Separator = () => (
+      <View style={{height: 5}}/>
+    );
+    const defaults = {
+      buttonStyle: {
+        marginVertical: 1,
+        marginHorizontal: 5,
+        paddingVertical: 2,
+        paddingHorizontal: 5,
+      } as ViewStyle,
+    };
+    return (
+      <this.GenericModal
+        onDismiss={() => this.setState({
+          recIdForActionModal: undefined,
+        })}
+      >
+
+        <this.GenericModalTitle title='Rec actions' />
+
+        <Separator/>
+        {this.ActionModalButtons({actions: [
+          {
+            ...defaults,
+            label: `Search (${rec.species})`,
+            iconName: 'search',
+            buttonColor: iOSColors.blue,
+            onPress: () => this.props.history.push(`/species/${encodeURIComponent(rec.species)}`),
+          }, {
+            ...defaults,
+            label: `Search (${shortRecId(rec.id)})`,
+            iconName: 'search',
+            buttonColor: iOSColors.blue,
+            onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.id)}`),
+          },
+        ]})}
+
+        <Separator/>
+        {this.ActionModalButtons({actions: [
+          {
+            ...defaults,
+            label: `Hide results (${rec.species})`,
+            iconName: 'x',
+            buttonColor: iOSColors.red,
+            onPress: () => this.setState((state: State, props: Props) => ({
+              excludeSpecies: [...state.excludeSpecies, rec.species],
+            })),
+          }, {
+            ...defaults,
+            label: `Hide results (${shortRecId(rec.id)})`,
+            iconName: 'x',
+            buttonColor: iOSColors.red,
+            onPress: () => this.setState((state: State, props: Props) => ({
+              excludeRecIds: [...state.excludeRecIds, rec.id],
+            })),
+          }
+        ]})}
+
+        <Separator/>
+        {this.ActionModalButtons({actions: [
+          {
+            ...defaults,
+            label: 'More species',
+            iconName: 'plus-circle',
+            buttonColor: iOSColors.purple,
+            onPress: () => {},
+          }, {
+            ...defaults,
+            label: 'Fewer species',
+            iconName: 'minus-circle',
+            buttonColor: iOSColors.purple,
+            onPress: () => {},
+          }, {
+            ...defaults,
+            label: 'More recs per species',
+            iconName: 'plus-circle',
+            buttonColor: iOSColors.purple,
+            onPress: () => {},
+          }, {
+            ...defaults,
+            label: 'Fewer recs per species',
+            iconName: 'minus-circle',
+            buttonColor: iOSColors.purple,
+            onPress: () => {},
+          }, {
+            ...defaults,
+            label: 'Add a species manually',
+            iconName: 'plus-circle',
+            buttonColor: iOSColors.purple,
+            onPress: () => {},
+          },
+        ]})}
+
+        <Separator/>
+        {this.ActionModalButtons({actions: [
+          {
+            ...defaults,
+            label: `Save to list (${rec.species})`,
+            iconName: 'bookmark',
+            buttonColor: iOSColors.orange,
+            onPress: () => {},
+          }, {
+            ...defaults,
+            label: `Save to list (${shortRecId(rec.id)})`,
+            iconName: 'bookmark',
+            buttonColor: iOSColors.orange,
+            onPress: () => {},
+          }, {
+            ...defaults,
+            label: 'Save all to new list',
+            iconName: 'bookmark',
+            buttonColor: iOSColors.orange,
+            onPress: () => {},
+          }, {
+            ...defaults,
+            label: 'Add all to existing list',
+            iconName: 'bookmark',
+            buttonColor: iOSColors.orange,
+            onPress: () => {},
+          },
+        ]})}
+
+        <Separator/>
+        {this.ActionModalButtons({actions: [
+          {
+            ...defaults,
+            label: 'Share list',
+            iconName: 'share',
+            buttonColor: iOSColors.green,
+            onPress: () => {},
+          },
+        ]})}
+
+      </this.GenericModal>
+    );
+  }
 
   cycleMetadataFull = async () => {
     const next = (showMetadata: ShowMetadata) => match<ShowMetadata, ShowMetadata, ShowMetadata>(showMetadata,
@@ -910,7 +1058,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         // iconProps={{name: 'arrow-down-circle'}}
         onPress={() => this.setState({
           showGenericModal: () => (
-            <this.GenericModal title='Sort' actions={[
+            <this.ActionModal title='Sort' actions={[
               // this.state.queryRec ? [ // TODO queryRec
               {
                 label: 'Sort by species, then by recs',
@@ -944,11 +1092,15 @@ export class SearchScreen extends PureComponent<Props, State> {
         iconProps={{name: 'shuffle'}}
         onPress={() => this.props.history.push(this.randomPath())}
       />
-      {/* Toggle editing controls for rec/species */}
+      {/* Toggle editing [moving] controls for rec/species */}
       <this.BottomControlsButton
-        help='Edit'
+        // HACK Reduced from "editing" to just "moving"
+        // - XXX this button after we figure out how the moving UI should work
+        // help='Edit'
+        help='Move'
         active={this.props.editing}
-        iconProps={{name: 'sliders'}}
+        // iconProps={{name: 'sliders'}}
+        iconProps={{name: 'move'}}
         // iconProps={{name: 'edit'}}
         // iconProps={{name: 'edit-2'}}
         // iconProps={{name: 'edit-3'}}
@@ -963,12 +1115,14 @@ export class SearchScreen extends PureComponent<Props, State> {
         onPress={() => this.cycleMetadataInline()}
         onLongPress={() => this.setState({
           showGenericModal: () => (
-            <this.GenericModal title='Show columns' actions={
+            <this.ActionModal title='Show columns' actions={
               objectKeysTyped(InlineMetadataColumns).map(c => ({
                 label: c,
                 textColor: iOSColors.black,
                 buttonColor: this.props.inlineMetadataColumns.includes(c) ? iOSColors.tealBlue : iOSColors.customGray,
-                marginVertical: 2,
+                buttonStyle: {
+                  marginVertical: 2,
+                },
                 dismiss: false,
                 onPress: () => this.props.settings.update('inlineMetadataColumns', cs => (
                   cs.includes(c) ? _.without(cs, c) : [...cs, c]
@@ -1086,130 +1240,11 @@ export class SearchScreen extends PureComponent<Props, State> {
   get _recEditingButtons() {
     return [
 
-      // (i: number, rec: Rec) => (
-      //   <this.RecEditingButton
-      //     key={i}
-      //     iconName='move'
-      //     onPress={() => {}}
-      //   />
-      // ),
-
       (i: number, rec: Rec) => (
         <this.RecEditingButton
           key={i}
-          iconName='search'
-          // onPress={() => this.props.history.push(`/rec/${encodeURIComponent(rec.id)}`)}
-          onPress={() => this.setState({
-            showGenericModal: () => (
-              <this.GenericModal title='Search for' actions={[
-                {
-                  label: `${rec.species}`,
-                  iconName: 'search',
-                  buttonColor: iOSColors.blue,
-                  onPress: () => this.props.history.push(`/species/${encodeURIComponent(rec.species)}`),
-                }, {
-                  label: `${shortRecId(rec.id)}`,
-                  iconName: 'search',
-                  buttonColor: iOSColors.blue,
-                  onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.id)}`),
-                },
-              ]} />
-            )
-          })}
-        />
-      ),
-
-      (i: number, rec: Rec) => (
-        <this.RecEditingButton
-          key={i}
-          iconName='x'
-          // iconName='slash'
-          onPress={() => this.setState({
-            showGenericModal: () => (
-              <this.GenericModal title='Remove from results' actions={[
-                {
-                  label: `${rec.species}`,
-                  iconName: 'x',
-                  buttonColor: iOSColors.red,
-                  onPress: () => this.setState((state: State, props: Props) => ({
-                    excludeSpecies: [...state.excludeSpecies, rec.species],
-                  })),
-                }, {
-                  label: `${shortRecId(rec.id)}`,
-                  iconName: 'x',
-                  buttonColor: iOSColors.red,
-                  onPress: () => this.setState((state: State, props: Props) => ({
-                    excludeRecIds: [...state.excludeRecIds, rec.id],
-                  })),
-                }, {
-                  label: 'More species',
-                  iconName: 'plus-circle',
-                  buttonColor: iOSColors.blue,
-                  onPress: () => {},
-                }, {
-                  label: 'Fewer species',
-                  iconName: 'minus-circle',
-                  buttonColor: iOSColors.blue,
-                  onPress: () => {},
-                }, {
-                  label: 'More recs per species',
-                  iconName: 'plus-circle',
-                  buttonColor: iOSColors.blue,
-                  onPress: () => {},
-                }, {
-                  label: 'Fewer recs per species',
-                  iconName: 'minus-circle',
-                  buttonColor: iOSColors.blue,
-                  onPress: () => {},
-                }, {
-                  label: 'Add a species manually',
-                  iconName: 'plus-circle',
-                  buttonColor: iOSColors.blue,
-                  onPress: () => {},
-                },
-              ]} />
-            )
-          })}
-        />
-      ),
-
-      (i: number, rec: Rec) => (
-        <this.RecEditingButton
-          key={i}
-          // iconName='star'
-          iconName='bookmark'
-          onPress={() => this.setState({
-            showGenericModal: () => (
-              <this.GenericModal title='Save / Share' actions={[
-                {
-                  label: `${rec.species}`,
-                  iconName: 'bookmark',
-                  buttonColor: iOSColors.purple,
-                  onPress: () => {},
-                }, {
-                  label: `${shortRecId(rec.id)}`,
-                  iconName: 'bookmark',
-                  buttonColor: iOSColors.purple,
-                  onPress: () => {},
-                }, {
-                  label: 'Save all to new list',
-                  iconName: 'bookmark',
-                  buttonColor: iOSColors.purple,
-                  onPress: () => {},
-                }, {
-                  label: 'Add all to existing list',
-                  iconName: 'bookmark',
-                  buttonColor: iOSColors.purple,
-                  onPress: () => {},
-                }, {
-                  label: 'Share list',
-                  iconName: 'share',
-                  buttonColor: iOSColors.purple,
-                  onPress: () => {},
-                },
-              ]} />
-            )
-          })}
+          iconName='move'
+          onPress={() => {}}
         />
       ),
 
@@ -1240,22 +1275,18 @@ export class SearchScreen extends PureComponent<Props, State> {
   );
 
   GenericModal = (props: {
-    title: string,
-    actions: Array<{
-      label: string,
-      iconName?: string,
-      buttonColor?: string,
-      textColor?: string,
-      marginVertical?: number,
-      dismiss?: boolean,
-      onPress: () => void,
-    }>,
+    children: ReactNode,
+    onDismiss?: () => void,
   }) => (
     // Background overlay: semi-transparent background + tap outside modal to dismiss
     <BaseButton
-      onPress={() => this.setState({
-        showGenericModal: null, // Dismiss modal
-      })}
+      onPress={() => {
+        // Dismiss modal
+        this.setState({
+          showGenericModal: null,
+        });
+        _.defaultTo(props.onDismiss, _.noop)();
+      }}
       style={{
         width: '100%', height: '100%', // Full screen
         backgroundColor: `${iOSColors.black}88`, // Semi-transparent overlay
@@ -1267,61 +1298,103 @@ export class SearchScreen extends PureComponent<Props, State> {
         backgroundColor: iOSColors.white,
         padding: 15,
       }}>
-        <Text style={{
-          alignSelf: 'center', // (horizontal)
-          marginBottom: 5,
-          ...material.titleObject,
-        }}>
-          {props.title}
-        </Text>
-        {props.actions.map(({
-          label,
-          iconName,
-          buttonColor,
-          textColor,
-          marginVertical,
-          dismiss,
-          onPress,
-        }, i) => (
-          <RectButton
-            key={i}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              padding: 10, marginHorizontal: 10,
-              marginVertical: marginVertical !== undefined ? marginVertical : 10,
-              backgroundColor: buttonColor || iOSColors.customGray,
-            }}
-            onPress={() => {
-              if (dismiss === undefined || dismiss) {
-                this.setState({
-                  showGenericModal: null, // Dismiss modal
-                });
-              }
-              onPress();
-            }}
-          >
-            {iconName && (
-              <Feather
-                style={{
-                  ...material.headlineObject,
-                  marginRight: 5,
-                  color: textColor || iOSColors.white,
-                }}
-                name={iconName}
-              />
-            )}
-            <Text
-              style={{
-                ...material.buttonObject,
-                color: textColor || iOSColors.white,
-              }}
-              children={label}
-            />
-          </RectButton>
-        ))}
+        {props.children}
       </View>
     </BaseButton>
+  );
+
+  GenericModalTitle = (props: {
+    title: string,
+    style?: TextStyle,
+  }) => (
+    <Text style={{
+      alignSelf: 'center', // (horizontal)
+      marginBottom: 5,
+      ...material.titleObject,
+      ...props.style,
+    }}>
+      {props.title}
+    </Text>
+  );
+
+  ActionModal = (props: {
+    title: string,
+    titleStyle?: TextStyle,
+    actions: Array<{
+      label: string,
+      iconName?: string,
+      buttonColor?: string,
+      textColor?: string,
+      buttonStyle?: ViewStyle,
+      dismiss?: boolean,
+      onPress: () => void,
+    }>,
+  }) => (
+    <this.GenericModal>
+      <this.GenericModalTitle style={props.titleStyle} title={props.title} />
+      {this.ActionModalButtons({actions: props.actions})}
+    </this.GenericModal>
+  );
+
+  ActionModalButtons = (props: {
+    actions: Array<{
+      label: string,
+      iconName?: string,
+      buttonColor?: string,
+      textColor?: string,
+      buttonStyle?: ViewStyle,
+      dismiss?: boolean,
+      onPress: () => void,
+    }>,
+  }) => (
+    props.actions.map(({
+      label,
+      iconName,
+      buttonColor,
+      textColor,
+      buttonStyle,
+      dismiss,
+      onPress,
+    }, i) => (
+      <RectButton
+        key={i}
+        style={{
+          flexDirection:    'row',
+          alignItems:       'center',
+          padding:          10,
+          marginHorizontal: 10,
+          marginVertical:   2,
+          backgroundColor:  _.defaultTo(buttonColor, iOSColors.customGray),
+          ..._.defaultTo(buttonStyle, {}),
+        }}
+        onPress={() => {
+          if (_.defaultTo(dismiss, true)) {
+            this.setState({
+              showGenericModal: null, // Dismiss modal
+            });
+          }
+          onPress();
+        }}
+      >
+        {iconName && (
+          <Feather
+            style={{
+              ...material.headlineObject,
+              marginRight: 5,
+              color: _.defaultTo(textColor, iOSColors.white),
+            }}
+            name={iconName}
+          />
+        )}
+        <Text
+          style={{
+            ...material.buttonObject,
+            color: _.defaultTo(textColor, iOSColors.white),
+          }}
+          children={label}
+        />
+      </RectButton>
+    ))
   );
 
   RecText = <X extends {children: any, flex?: number}>(props: X) => {
@@ -1589,12 +1662,21 @@ export class SearchScreen extends PureComponent<Props, State> {
                                 )
                               )}
 
-                              {/* Visual feedback for playing rec [XXX after adding progress bar by default] */}
+                              {/* HACK Visual feedback for playing rec [XXX after adding progress bar by default] */}
                               {this.recIsPlaying(rec.id, this.state.playing) && (
                                 <View style={{
-                                  position: 'absolute', width: 2, height: '100%',
+                                  position: 'absolute', height: '100%', width: 5,
                                   left: 0,
                                   backgroundColor: iOSColors.red,
+                                }}/>
+                              )}
+
+                              {/* HACK Visual feedback for long-press ActionModal rec */}
+                              {this.state.recIdForActionModal === rec.id && (
+                                <View style={{
+                                  position: 'absolute', height: '100%', width: 5,
+                                  left: 0,
+                                  backgroundColor: iOSColors.black,
                                 }}/>
                               )}
 
