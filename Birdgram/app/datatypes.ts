@@ -30,6 +30,7 @@ export interface Rec {
   state_only: string;
   recordist: string;
   license_type: string;
+  remarks: string;
 
   // search_recs / search output
   slp?: number;
@@ -119,19 +120,6 @@ export function searchPathParamsFromPath(path: string): SearchPathParams {
 //
 // Misc.
 //
-
-export const InlineMetadataColumns = {
-  xc_id:            (rec: Rec) => rec.xc_id,
-  species_com_name: (rec: Rec) => rec.species_com_name,
-  species_sci_name: (rec: Rec) => rec.species_sci_name,
-  recs_for_sp:      (rec: Rec) => rec.recs_for_sp,
-  quality:          (rec: Rec) => rec.quality,
-  month_day:        (rec: Rec) => rec.month_day,
-  place:            (rec: Rec) => Rec.placeNorm(rec.place),
-  state:            (rec: Rec) => Rec.placeNorm(rec.state),
-};
-
-export type InlineMetadataColumn = keyof typeof InlineMetadataColumns;
 
 export const Models = {
   search: {

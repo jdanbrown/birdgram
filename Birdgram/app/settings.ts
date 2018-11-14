@@ -3,11 +3,9 @@ import React from 'react';
 import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import { InlineMetadataColumn, InlineMetadataColumns } from './datatypes';
+import { MetadataColumnBelow, MetadataColumnLeft } from './components/MetadataColumns';
 import { log, puts } from './log';
 import { json } from './utils';
-
-export type ShowMetadata = 'none' | 'inline' | 'full';
 
 // All 5 of these lists of attrs (4 here + constructor) must be kept in sync, else load/setItem/etc. aren't typesafe
 export interface Props {
@@ -15,8 +13,10 @@ export interface Props {
   readonly showDebug: boolean;
   readonly allowUploads: boolean;
   // For SearchScreen
-  readonly showMetadata: ShowMetadata;
-  readonly inlineMetadataColumns: Array<InlineMetadataColumn>;
+  readonly showMetadataLeft: boolean;
+  readonly showMetadataBelow: boolean;
+  readonly metadataColumnsLeft: Array<MetadataColumnLeft>;
+  readonly metadataColumnsBelow: Array<MetadataColumnBelow>;
   readonly editing: boolean;
   readonly seekOnPlay: boolean;
   readonly playingProgressEnable: boolean;
@@ -28,8 +28,10 @@ export const DEFAULTS: Props = {
   showDebug: false,
   allowUploads: true,
   // For SearchScreen
-  showMetadata: 'inline',
-  inlineMetadataColumns: ['state', 'month_day'] as Array<InlineMetadataColumn>,
+  showMetadataLeft: false,
+  showMetadataBelow: false,
+  metadataColumnsLeft: ['state', 'month_day'] as Array<MetadataColumnLeft>,
+  metadataColumnsBelow: ['species', 'recordist', 'place', 'remarks'] as Array<MetadataColumnBelow>,
   editing: false,
   seekOnPlay: false,
   playingProgressEnable: true,
@@ -42,8 +44,10 @@ export const TYPES: {[key: string]: string} = {
   showDebug: 'boolean',
   allowUploads: 'boolean',
   // For SearchScreen
-  showMetadata: 'string',
-  inlineMetadataColumns: 'object',
+  showMetadataLeft: 'boolean',
+  showMetadataBelow: 'boolean',
+  metadataColumnsLeft: 'object',
+  metadataColumnsBelow: 'object',
   editing: 'boolean',
   seekOnPlay: 'boolean',
   playingProgressEnable: 'boolean',
@@ -56,8 +60,10 @@ export const KEYS = [
   'showDebug',
   'allowUploads',
   // For SearchScreen
-  'showMetadata',
-  'inlineMetadataColumns',
+  'showMetadataLeft',
+  'showMetadataBelow',
+  'metadataColumnsLeft',
+  'metadataColumnsBelow',
   'editing',
   'seekOnPlay',
   'playingProgressEnable',
@@ -100,8 +106,10 @@ export class Settings implements SettingsWrites, Props {
     public readonly showDebug: boolean,
     public readonly allowUploads: boolean,
   // For SearchScreen
-    public readonly showMetadata: ShowMetadata,
-    public readonly inlineMetadataColumns: Array<InlineMetadataColumn>,
+    public readonly showMetadataLeft: boolean,
+    public readonly showMetadataBelow: boolean,
+    public readonly metadataColumnsLeft: Array<MetadataColumnLeft>,
+    public readonly metadataColumnsBelow: Array<MetadataColumnBelow>,
     public readonly editing: boolean,
     public readonly seekOnPlay: boolean,
     public readonly playingProgressEnable: boolean,

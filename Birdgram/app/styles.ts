@@ -32,7 +32,6 @@ export const Styles = {
   },
   debugText: {
     color: iOSColors.green,
-    backgroundColor: iOSColors.black,
   },
 
 };

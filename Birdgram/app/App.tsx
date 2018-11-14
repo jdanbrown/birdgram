@@ -234,8 +234,10 @@ export default class App extends PureComponent<Props, State> {
                               // Settings
                               settings                = {this.state.settingsWrites!}
                               showDebug               = {this.state.settings!.showDebug}
-                              showMetadata            = {this.state.settings!.showMetadata}
-                              inlineMetadataColumns   = {this.state.settings!.inlineMetadataColumns}
+                              showMetadataLeft        = {this.state.settings!.showMetadataLeft}
+                              showMetadataBelow       = {this.state.settings!.showMetadataBelow}
+                              metadataColumnsLeft     = {this.state.settings!.metadataColumnsLeft}
+                              metadataColumnsBelow    = {this.state.settings!.metadataColumnsBelow}
                               editing                 = {this.state.settings!.editing}
                               seekOnPlay              = {this.state.settings!.seekOnPlay}
                               playingProgressEnable   = {this.state.settings!.playingProgressEnable}
