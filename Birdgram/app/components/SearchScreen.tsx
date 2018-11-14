@@ -623,7 +623,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   }
 
   releaseSounds = async () => {
-    log.info(`Releasing ${this.soundsCache.size} cached sounds`);
+    log.info(`[releaseSounds] Releasing ${this.soundsCache.size} cached sounds`);
     await Promise.all(
       Array.from(this.soundsCache).map(async ([sourceId, soundAsync]) => {
         log.debug('Releasing sound',
@@ -633,6 +633,9 @@ export class SearchScreen extends PureComponent<Props, State> {
       }),
     );
     this.soundsCache = new Map();
+    this.setState({
+      playing: undefined, // In case we were playing a sound, mark that we aren't anymore
+    });
   }
 
   getOrAllocateSoundAsync = async (rec: Rec): Promise<Sound> => {
@@ -696,7 +699,9 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Stop sound playback
           log.info('Stopping: rec', rec.source_id);
-          await sound.stopAsync();
+          if (sound.isLoaded()) { // Else we'll hang if sound was released while playing (e.g. play -> load new search)
+            await sound.stopAsync();
+          }
           await onDone();
 
         }
