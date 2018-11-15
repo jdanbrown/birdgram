@@ -14,6 +14,7 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import RNFB from 'rn-fetch-blob';
+import WaveFile from 'wavefile/dist/wavefile';
 const {fs, base64} = RNFB;
 
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
@@ -22,9 +23,10 @@ import { SourceId } from '../datatypes';
 import { log } from '../log';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
+import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
-import { chance, global, match, shallowDiffPropsState } from '../utils';
+import { chance, global, json, match, pretty, shallowDiffPropsState } from '../utils';
 
 // Util: wrap `new Jimp` in a promise
 const JimpAsync = (...args: Array<any>): Promise<Jimp> => new Promise((resolve, reject) => {
@@ -34,6 +36,7 @@ const JimpAsync = (...args: Array<any>): Promise<Jimp> => new Promise((resolve, 
 enum RecordingState {
   Stopped = 'Stopped',
   Recording = 'Recording',
+  Saving = 'Saving',
 }
 
 export interface Props {
@@ -44,6 +47,7 @@ export interface Props {
   showDebug: boolean;
   // RecordScreen
   sampleRate: number;
+  channels: number;
   refreshRate: number;
   spectroHeight: number;
 }
@@ -59,6 +63,7 @@ export class RecordScreen extends React.Component<Props, State> {
 
   static defaultProps = {
     sampleRate: 22050,
+    channels: 1,
     refreshRate: 2, // TODO Make updates faster so we can refresh at lower latency
     spectroHeight: 400,
   };
@@ -83,7 +88,7 @@ export class RecordScreen extends React.Component<Props, State> {
     Permissions.request('microphone').then(status => {
       // NOTE Buggy on ios simulator [https://github.com/yonahforst/react-native-permissions/issues/58]
       //  - Recording works, but permissions always return 'undetermined'
-      log.info('Permissions.request: microphone', status);
+      log.info('[componentDidMount] Permissions.request: microphone', status);
     });
 
     // Register callbacks
@@ -144,11 +149,13 @@ export class RecordScreen extends React.Component<Props, State> {
               backgroundColor: match(this.state.recordingState,
                 [RecordingState.Stopped,   '#b2df8a'],
                 [RecordingState.Recording, '#fb9a99'],
+                [RecordingState.Saving,    '#ffff99'],
               ),
             }}
             onPress={match(this.state.recordingState,
               [RecordingState.Stopped,   this.startRecording],
               [RecordingState.Recording, this.stopRecording],
+              [RecordingState.Saving,    () => {}],
             )}
           >
             <FontAwesome5
@@ -160,6 +167,7 @@ export class RecordScreen extends React.Component<Props, State> {
               name={match(this.state.recordingState,
                 [RecordingState.Stopped,   'play'],
                 [RecordingState.Recording, 'stop'],
+                [RecordingState.Saving,    'spinner'],
               )}
             />
           </RectButton>
@@ -189,7 +197,7 @@ export class RecordScreen extends React.Component<Props, State> {
 
   startRecording = async () => {
     if (this.state.recordingState === RecordingState.Stopped) {
-      log.info('startRecording');
+      log.info('[startRecording]');
 
       // Update recordingState + reset audio chunks
       this.setState({
@@ -207,7 +215,8 @@ export class RecordScreen extends React.Component<Props, State> {
         //  - https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
         //  - TODO PR to change hardcoded kAudioFormatULaw -> any mFormatID (e.g. mp4)
         sampleRate, // (QA'd via tone generator -> MicStream -> magSpectrogram)
-        bitsPerChannel: 16,
+        bitsPerChannel: 16, // TODO(write_audio)
+        // bitsPerChannel: 8, // XXX(write_audio)
         channelsPerFrame: 1,
         // Compute a bufferSize that will fire ~refreshRate buffers per sec
         //  - Hardcode `/2` here to counteract the `*2` in MicStream...
@@ -224,7 +233,7 @@ export class RecordScreen extends React.Component<Props, State> {
   onRecordedChunk = async (samples: Array<number>) => {
     // MicStream.stop is unobservably async, so ignore any audio capture after we think we've stopped
     if (this.state.recordingState === RecordingState.Recording) {
-      // log.debug('onRecordedChunk: samples', samples.length,
+      // log.debug('[onRecordedChunk] samples', samples.length,
       //   // samples, // Noisy
       // );
 
@@ -244,15 +253,66 @@ export class RecordScreen extends React.Component<Props, State> {
 
   stopRecording = async () => {
     if (this.state.recordingState === RecordingState.Recording) {
-      log.info('stopRecording');
+      log.info('[stopRecording]');
 
-      // Update recordingState
       this.setState({
-        recordingState: RecordingState.Stopped,
+        recordingState: RecordingState.Saving,
       });
 
       // Stop recording
+      log.debug('[stopRecording] Stopping mic');
       MicStream.stop(); // (Async with no signal of success/failure)
+
+      // TODO(write_audio)
+
+      // Encode audioSamples as wav data
+      //  - https://github.com/rochars/wavefile#create-wave-files-from-scratch
+      //  - https://github.com/rochars/wavefile#the-wavefile-methods
+      let audioSamples = _.flatten(this.state.audioSampleChunks);
+      // audioSamples = audioSamples.map(x => x - 128) // XXX Error: "Overflow at input index 14: -1"
+      const wav = new WaveFile()
+      wav.fromScratch(
+        this.props.channels,
+        this.props.sampleRate,
+        // MicStream records using kAudioFormatULaw
+        //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L31
+        // '8',
+        // '8a',
+        '8m', // 8-bit int, mu-Law
+        audioSamples,
+      );
+      wav.fromMuLaw(); // TODO "Decode 8-bit mu-Law as 16-bit"
+
+      // Write wav data to file
+      const filename = `${new Date().toISOString()}-${chance.hash({length: 8})}.wav`;
+      const wavPath = `${fs.dirs.CacheDir}/${filename}`;
+      // await fs.createFile(wavPath, audioSamples as unknown as string, 'ascii'); // HACK Ignore bad type
+      await fs.createFile(wavPath, Array.from(wav.toBuffer()) as unknown as string, 'ascii'); // HACK Ignore bad type
+      const {size} = await fs.stat(wavPath);
+      log.debug('[stopRecording] Wrote file', json({wavPath, size}));
+
+      // XXX Debug
+      Sound.setActive(true);
+      Sound.setCategory(
+        'PlayAndRecord',
+        true, // mixWithOthers
+      );
+      Sound.setMode(
+        'Default',
+        // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
+      );
+      const sound = await Sound.newAsync(wavPath);
+      sound.play();
+
+      // XXX Debug
+      global.audioSamples = audioSamples;
+      global.wavPath = wavPath;
+      global.wav = wav;
+      global.sound = sound;
+
+      this.setState({
+        recordingState: RecordingState.Stopped,
+      });
 
     }
   }

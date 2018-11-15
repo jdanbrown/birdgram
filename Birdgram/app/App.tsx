@@ -58,7 +58,7 @@ timed('d3-color',           () => global.d3c             = require('d3-color'));
 timed('d3-scale-chromatic', () => global.d3sc            = require('d3-scale-chromatic'));      // 6ms
 timed('jimp',               () => global.Jimp            = require('jimp'));                    // 170ms
 timed('lodash',             () => global._               = require('lodash'));                  // 0ms
-// timed('path-to-regexp',     () => global.pathToRegexp    = require('path-to-regexp'));          // ?ms
+timed('path-to-regexp',     () => global.pathToRegexp    = require('path-to-regexp'));          // ?
 timed('ndarray',            () => global.ndarray         = require('ndarray'));                 // 1ms
 timed('nj',                 () => global.nj              = require('../third-party/numjs/dist/numjs.min')); // 130ms
 timed('sj.ops',             () => global.sj.ops          = require('ndarray-ops'));             // 50ms
@@ -66,9 +66,10 @@ timed('React',              () => global.R               = require('React'));   
 timed('ReactNative',        () => global.RN              = require('ReactNative'));             // 13ms
 timed('rn-fetch-blob',      () => global.RNFB            = require('rn-fetch-blob').default);   // 0ms
 timed('Gesture',            () => global.Gesture         = require('react-native-gesture-handler')); // ?
-timed('react-native-sound', () => global.Sound           = require('react-native-sound'));      // 1ms
+timed('./sound',            () => global.Sound           = require('./sound').default);         // 1ms
 timed('SQLite',             () => global.SQLite          = require('react-native-sqlite-storage')); // 0ms
 timed('typography',         () => global.typography      = require('react-native-typography')); // 27ms
+timed('wavefile',           () => global.WaveFile        = require('wavefile/dist/wavefile'));  // ?
 timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));                   // 0ms
 // timed('sj.getPixels',    () => global.sj.getPixels    = require('get-pixels'));              // 10ms // XXX Doesn't work in RN
 // timed('sj.savePixels',   () => global.sj.savePixels   = require('save-pixels'));             // 30ms // XXX Doesn't work in RN

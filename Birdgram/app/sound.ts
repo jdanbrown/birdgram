@@ -3,11 +3,11 @@ import _Sound from 'react-native-sound';
 export default class Sound extends _Sound {
 
   // async variant of `new Sound`
-  static newAsync = (filename: string, basePath: string): Promise<Sound> => {
+  static newAsync = (filename: string, basePath?: string): Promise<Sound> => {
     return new Promise((resolve, reject) => {
       const sound: Sound = new Sound(
         filename,
-        basePath,
+        basePath || '',
         error => error ? reject(error) : resolve(sound),
       );
     });
