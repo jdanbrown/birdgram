@@ -1,12 +1,10 @@
+import _ from 'lodash';
 import { Places } from './places';
 import { match, Omit } from './utils';
 
 //
 // Rec
 //
-
-export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
-export type SourceId = string;
 
 export interface Rec {
 
@@ -22,8 +20,8 @@ export interface Rec {
   species_sci_name: string;    // (From xc)
   recs_for_sp: number;
   quality: Quality;
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
   month_day: string;
   place: string;
   place_only: string;
@@ -39,13 +37,26 @@ export interface Rec {
 
 }
 
-// e.g. 'xc:123456' -> 'XC123456'
-export function showSourceId(sourceId: SourceId): string {
+export type SourceId = string;
+export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
+
+export function matchSourceId<X>(sourceId: SourceId, cases: {
+  xc:   (x: {xc_id: number}) => X,
+  user: (x: any)             => X, // TODO(user_source_id)
+}): X {
   const [dataset, rest] = sourceId.split(':');
   return match(dataset,
-    ['xc', () => `XC${rest}`],
-    // ['user', ...], // TODO
+    ['xc',   () => cases.xc({xc_id: parseInt(rest)})],
+    ['user', () => cases.user({})], // TODO(user_source_id)
   )();
+}
+
+// e.g. 'xc:123456' -> 'XC123456'
+export function showSourceId(sourceId: SourceId): string {
+  return matchSourceId(sourceId, {
+    xc:   ({xc_id}) => `XC${xc_id}`,
+    user: ({})      => sourceId, // TODO(user_source_id)
+  });
 }
 
 export interface Rec_f_preds {
@@ -61,6 +72,10 @@ export const Rec = {
   spectroPath: (rec: Rec): string => SearchRecs.assetPath('spectro', rec.species, rec.xc_id, 'png'),
   audioPath:   (rec: Rec): string => SearchRecs.assetPath('audio',   rec.species, rec.xc_id, 'mp4'),
 
+  hasCoords: (rec: Rec): boolean => {
+    return !_.isNil(rec.lat) && !_.isNil(rec.lng);
+  },
+
   placeNorm: (placeLike: string): string => {
     return placeLike.split(', ').reverse().map(x => Rec.placePartAbbrev(x)).join(', ');
   },
@@ -71,6 +86,29 @@ export const Rec = {
       part
     );
     return ret;
+  },
+
+  xcUrl: (rec: Rec): string => {
+    return `https://www.xeno-canto.org/${rec.xc_id}`;
+  },
+
+  speciesUrl: (rec: Rec): string => {
+    return `https://www.allaboutbirds.org/guide/${rec.species_com_name.replace(/ /g, '_')}`;
+  },
+
+  // TODO Open in user's preferred map app i/o google maps
+  //  - Docs for zoom levels: https://developers.google.com/maps/documentation/maps-static/dev-guide#Zoomlevels
+  mapUrl: (rec: Rec, opts: {zoom: number}): string | null => {
+    if (!Rec.hasCoords(rec)) {
+      // TODO How to zoom when we don't know (lat,lng)?
+      const {place} = rec;
+      return `https://maps.google.com/maps?oi=map&q=${place}`;
+    } else {
+      // TODO How to show '$place' as label instead of '$lat,$lng'?
+      const {lat, lng, place} = rec;
+      const {zoom} = opts;
+      return `https://www.google.com/maps/place/${lat},${lng}/@${lat},${lng},${zoom}z`;
+    }
   },
 
 };

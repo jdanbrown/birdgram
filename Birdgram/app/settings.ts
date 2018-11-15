@@ -3,9 +3,9 @@ import React from 'react';
 import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import { MetadataColumnBelow, MetadataColumnLeft } from './components/MetadataColumns';
+import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from './components/MetadataColumns';
 import { log, puts } from './log';
-import { json } from './utils';
+import { json, objectKeysTyped } from './utils';
 
 // All 5 of these lists of attrs (4 here + constructor) must be kept in sync, else load/setItem/etc. aren't typesafe
 export interface Props {
@@ -30,8 +30,8 @@ export const DEFAULTS: Props = {
   // For SearchScreen
   showMetadataLeft: false,
   showMetadataBelow: false,
-  metadataColumnsLeft: ['state', 'month_day'] as Array<MetadataColumnLeft>,
-  metadataColumnsBelow: ['species', 'recordist', 'place', 'remarks'] as Array<MetadataColumnBelow>,
+  metadataColumnsLeft: ['com_name'] as Array<MetadataColumnLeft>,
+  metadataColumnsBelow: objectKeysTyped(MetadataColumnsBelow) as Array<MetadataColumnBelow>,
   editing: false,
   seekOnPlay: false,
   playingProgressEnable: true,

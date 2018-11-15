@@ -354,8 +354,8 @@ export class SearchScreen extends PureComponent<Props, State> {
   get scrollViewContentWidth() { return _.sum(_.values(this.scrollViewContentWidths)); }
   get scrollViewContentWidths() {
     const sidewaysText = sidewaysTextWidth;
-    const debugInfo    = !(this.props.showDebug && this.props.showMetadataLeft) ? 0 : 70;
-    const metadataLeft = !(this.props.showMetadataLeft && !this.props.showMetadataBelow) ? 0 : 50;
+    const debugInfo    = !(this.props.showDebug && this.props.showMetadataLeft) ? 0 : 80; // Wide enough for 'n_recs: 123'
+    const metadataLeft = !(this.props.showMetadataLeft && !this.props.showMetadataBelow) ? 0 : 65; // Wide enough for 'XC123456'
     return {
       // NOTE Conditions duplicated elsewhere (render, ...)
       recEditing:     !this.props.editing ? 0 : recEditingButtonWidth * this._recEditingButtons.length,
@@ -456,7 +456,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             )
             order by
               taxon_order_num asc,
-              xc_id desc
+              source_id desc
           `)(async results => {
             const recs = results.rows.raw();
             _setRecs({recs});
@@ -476,12 +476,12 @@ export class SearchScreen extends PureComponent<Props, State> {
                 and species in (${species.split(',').map(x => _.trim(x).toUpperCase())})
                 and quality in (${this.state.filterQuality})
               order by
-                xc_id desc
+                source_id desc
               limit ${this.state.filterLimit}
             )
             order by
               taxon_order_num asc,
-              xc_id desc
+              source_id desc
           `)(async results => {
             const recs = results.rows.raw();
             _setRecs({recs});
@@ -792,7 +792,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     return !playing ? false : playing.rec.source_id === sourceId;
   }
 
-  onLongPress = (rec: Rec) => async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
+  onSpectroLongPress = (rec: Rec) => async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
     const {nativeEvent: {state}} = event; // Unpack SyntheticEvent (before async)
     if (state === Gesture.State.ACTIVE) {
       this.showRecActionModal(rec);
@@ -1559,7 +1559,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               // Rec rows
               this.recsOrEmpty.map((rec, recIndex) => [
 
-                // Rec row
+                // Rec row (with editing buttons)
                 <Animated.View
                   key={`row-${recIndex}-${rec.source_id}`}
                   style={{
@@ -1580,65 +1580,64 @@ export class SearchScreen extends PureComponent<Props, State> {
                   )}
 
                   {/* Rec region without the editing buttons  */}
-                  <Animated.View style={{
-                    flex: 1, flexDirection: 'column',
-                  }}>
+                  <LongPressGestureHandler onHandlerStateChange={this.onSpectroLongPress(rec)}>
+                    <Animated.View style={{
+                      flex: 1, flexDirection: 'column',
+                    }}>
 
-                    {/* Rec row */}
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        ...(this.props.showMetadataBelow ? {} : {
-                          height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
-                        }),
-                      }}
-                    >
+                      {/* Rec row */}
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          ...(this.props.showMetadataBelow ? {} : {
+                            height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
+                          }),
+                        }}
+                      >
 
-                      {/* Rec debug info */}
-                      {this.props.showMetadataLeft && (
-                        <this.DebugView style={{
-                          padding: 0, // Reset padding:3 from debugView
-                          width: this.scrollViewContentWidths.debugInfo,
-                        }}>
-                          {/* TODO(nav_rec_id) */}
-                          {/* <MetadataText style={Styles.debugText} children={rec.xc_id} /> */}
-                          <MetadataText style={Styles.debugText}>slp: {rec.slp && round(rec.slp, 2)}</MetadataText>
-                          <MetadataText style={Styles.debugText}>d_pc: {rec.d_pc && round(rec.d_pc, 2)}</MetadataText>
-                        </this.DebugView>
-                      )}
+                        {/* Rec debug info */}
+                        {this.props.showMetadataLeft && (
+                          <this.DebugView style={{
+                            padding: 0, // Reset padding:3 from debugView
+                            width: this.scrollViewContentWidths.debugInfo,
+                          }}>
+                            <MetadataText style={Styles.debugText}>slp: {rec.slp && round(rec.slp, 2)}</MetadataText>
+                            <MetadataText style={Styles.debugText}>d_pc: {rec.d_pc && round(rec.d_pc, 2)}</MetadataText>
+                            <MetadataText style={Styles.debugText}>n_recs: {rec.recs_for_sp}</MetadataText>
+                          </this.DebugView>
+                        )}
 
-                      {/* Rec metadata left */}
-                      {this.props.showMetadataLeft && !this.props.showMetadataBelow && (
-                        <View style={{
-                          flexDirection: 'column',
-                          width: this.scrollViewContentWidths.metadataLeft,
-                        }}>
-                          {this.props.metadataColumnsLeft.map(c => (
-                            c in MetadataColumnsLeft && ( // Ignore invalid keys
+                        {/* Rec metadata left */}
+                        {this.props.showMetadataLeft && !this.props.showMetadataBelow && (
+                          <View style={{
+                            flexDirection: 'column',
+                            width: this.scrollViewContentWidths.metadataLeft,
+                            borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: iOSColors.midGray,
+                          }}>
+                            {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
+                            {objectKeysTyped(MetadataColumnsLeft).map(c => this.props.metadataColumnsLeft.includes(c) && (
                               <MetadataText key={c} children={MetadataColumnsLeft[c](rec)} />
-                            )
-                          ))}
-                        </View>
-                      )}
+                            ))}
+                          </View>
+                        )}
 
-                      {/* Sideways species label */}
-                      {/* - After controls/metadata so that label+spectro always abut (e.g. if scrolled all the way to the right) */}
-                      {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
-                      <View style={[styles.recSpeciesSidewaysView, {
-                        backgroundColor: styleForSpecies.get(rec.species)!.backgroundColor,
-                      }]}>
-                        <View style={styles.recSpeciesSidewaysViewInner}>
-                          <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
-                            fontSize: this.state._spectroScale >= 2 ? 11 : 6, // Compact species label to fit within tiny rows
-                            color: styleForSpecies.get(rec.species)!.color,
-                          }]}>
-                            {rec.species}
-                          </Text>
+                        {/* Sideways species label */}
+                        {/* - After controls/metadata so that label+spectro always abut (e.g. if scrolled all the way to the right) */}
+                        {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
+                        <View style={[styles.recSpeciesSidewaysView, {
+                          backgroundColor: styleForSpecies.get(rec.species)!.backgroundColor,
+                        }]}>
+                          <View style={styles.recSpeciesSidewaysViewInner}>
+                            <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
+                              fontSize: this.state._spectroScale >= 2 ? 11 : 6, // Compact species label to fit within tiny rows
+                              color: styleForSpecies.get(rec.species)!.color,
+                            }]}>
+                              {rec.species}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
 
-                      {/* Spectro (tap) */}
-                      <LongPressGestureHandler onHandlerStateChange={this.onLongPress(rec)}>
+                        {/* Spectro (tap) */}
                         <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(rec)}>
                           <Animated.View>
 
@@ -1692,21 +1691,20 @@ export class SearchScreen extends PureComponent<Props, State> {
 
                           </Animated.View>
                         </TapGestureHandler>
-                      </LongPressGestureHandler>
 
-                    </View>
+                      </View>
 
-                    {/* Rec metadata below */}
-                    {this.props.showMetadataBelow && (
-                      <View style={{
-                        width: Dimensions.get('window').width, // Fit within the left-most screen width of ScrollView content
-                        flexDirection: 'column',
-                        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iOSColors.black,
-                        marginTop: 3,
-                        // marginBottom: 3,
-                      }}>
-                        {this.props.metadataColumnsBelow.map(c => (
-                          c in MetadataColumnsBelow && ( // Ignore invalid keys
+                      {/* Rec metadata below */}
+                      {this.props.showMetadataBelow && (
+                        <View style={{
+                          width: Dimensions.get('window').width, // Fit within the left-most screen width of ScrollView content
+                          flexDirection: 'column',
+                          // borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iOSColors.black, // TODO Make full width
+                          marginTop: 3,
+                          // marginBottom: 3,
+                        }}>
+                          {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
+                          {objectKeysTyped(MetadataColumnsBelow).map(c => this.props.metadataColumnsBelow.includes(c) && (
                             <MetadataText
                               key={c}
                               style={{
@@ -1718,12 +1716,12 @@ export class SearchScreen extends PureComponent<Props, State> {
                                 fontWeight: 'bold',
                               }}>{c}:</Text> {MetadataColumnsBelow[c](rec)}
                             </MetadataText>
-                          )
-                        ))}
-                      </View>
-                    )}
+                          ))}
+                        </View>
+                      )}
 
-                  </Animated.View>
+                    </Animated.View>
+                  </LongPressGestureHandler>
 
                 </Animated.View>
 
