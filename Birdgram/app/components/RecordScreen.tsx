@@ -6,6 +6,7 @@ import Jimp from 'jimp';
 import _ from 'lodash';
 import React, { PureComponent } from 'react';
 import { Button, Dimensions, EmitterSubscription, Image, Platform, Text, TextProps, View, ViewProps } from 'react-native';
+import AudioRecord from 'react-native-audio-record';
 import FastImage from 'react-native-fast-image';
 import { BaseButton, BorderlessButton, LongPressGestureHandler, RectButton, TapGestureHandler } from 'react-native-gesture-handler';
 import MicStream from 'react-native-microphone-stream';
@@ -46,39 +47,50 @@ export interface Props {
   settings: SettingsWrites;
   showDebug: boolean;
   // RecordScreen
+  library: 'MicStream' | 'AudioRecord';
   sampleRate: number;
   channels: number;
   refreshRate: number;
   spectroHeight: number;
+  renderBufferSize: number;
 }
 
 interface State {
-  recordingState: RecordingState,
-  audioSampleChunks: Array<Array<number>>,
-  spectroChunksImageProps: Array<{source: {uri: string}, style?: object}>,
+  recordingState: RecordingState;
+  spectroChunksImageProps: Array<SpectroChunksImageProps>;
+}
+
+interface SpectroChunksImageProps {
+  source: {uri: string};
+  style?: object;
 }
 
 // https://github.com/chadsmith/react-native-microphone-stream
 export class RecordScreen extends React.Component<Props, State> {
 
   static defaultProps = {
+    library: 'AudioRecord', // TODO(write_audio)
     sampleRate: 22050,
     channels: 1,
-    refreshRate: 2, // TODO Make updates faster so we can refresh at lower latency
+    // refreshRate: 2, // TODO Make updates faster so we can refresh at lower latency
+    refreshRate: 22050 / 2048, // HACK 2048 hardcoded in react-native-audio-record/ios/RNAudioRecord.m
     spectroHeight: 400,
+    renderBufferSize: 1024 * 8,
   };
 
   state: State = {
     recordingState: RecordingState.Stopped,
-    audioSampleChunks: [],
     spectroChunksImageProps: [],
   };
 
   // Getters for props
-  get spectroChunksPerScreenWidth(): number { return Dimensions.get('window').width / (44 / this.props.refreshRate) + 1; }
+  get spectroChunksPerScreenWidth(): number {
+    return Math.ceil(Dimensions.get('window').width / (44 / this.props.refreshRate) + 1);
+  }
 
   // Private attrs
   _listener?: EmitterSubscription;
+  _audioSampleChunks: Array<Array<number>> = [];
 
   componentDidMount = () => {
     log.info(`${this.constructor.name}.componentDidMount`);
@@ -181,10 +193,10 @@ export class RecordScreen extends React.Component<Props, State> {
             state.recordingState: {this.state.recordingState}
           </this.DebugText>
           <this.DebugText>
-            state.audioSampleChunks: {this.state.audioSampleChunks.length}
+            _audioSampleChunks: {this._audioSampleChunks.length}
           </this.DebugText>
           <this.DebugText>
-            state.audioSampleChunks.sum: {_.sum(this.state.audioSampleChunks.map((x: Array<number>) => x.length))}
+            _audioSampleChunks.sum: {_.sum(this._audioSampleChunks.map(x => x.length))}
           </this.DebugText>
           <this.DebugText>
             state.spectroChunksImageProps: {this.state.spectroChunksImageProps.length}
@@ -200,53 +212,53 @@ export class RecordScreen extends React.Component<Props, State> {
       log.info('[startRecording]');
 
       // Update recordingState + reset audio chunks
+      this._audioSampleChunks = [];
       this.setState({
         recordingState: RecordingState.Recording,
-        audioSampleChunks: [],
         spectroChunksImageProps: [],
       });
 
-      // Init mic
-      //  - init() here instead of componentDidMount because we have to call it after each stop()
-      const {sampleRate, refreshRate} = this.props;
-      MicStream.init({
-        // Options
-        //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L23-L32
-        //  - https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
-        //  - TODO PR to change hardcoded kAudioFormatULaw -> any mFormatID (e.g. mp4)
-        sampleRate, // (QA'd via tone generator -> MicStream -> magSpectrogram)
-        bitsPerChannel: 16, // TODO(write_audio)
-        // bitsPerChannel: 8, // XXX(write_audio)
-        channelsPerFrame: 1,
-        // Compute a bufferSize that will fire ~refreshRate buffers per sec
-        //  - Hardcode `/2` here to counteract the `*2` in MicStream...
-        //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L35
-        bufferSize: Math.floor(sampleRate / refreshRate / 2),
-      });
+      if (this.props.library === 'MicStream') {
 
-      // Start recording
-      MicStream.start(); // (Async with no signal of success/failure)
+        // Init mic
+        //  - init() here instead of componentDidMount because we have to call it after each stop()
+        const {sampleRate, refreshRate} = this.props;
+        MicStream.init({
+          // Options
+          //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L23-L32
+          //  - https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
+          //  - TODO PR to change hardcoded kAudioFormatULaw -> any mFormatID (e.g. mp4)
+          sampleRate, // (QA'd via tone generator -> MicStream -> magSpectrogram)
+          bitsPerChannel: 16, // TODO(write_audio)
+          // bitsPerChannel: 8, // XXX(write_audio)
+          channelsPerFrame: 1,
+          // Compute a bufferSize that will fire ~refreshRate buffers per sec
+          //  - Hardcode `/2` here to counteract the `*2` in MicStream...
+          //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L35
+          bufferSize: Math.floor(sampleRate / refreshRate / 2),
+        });
 
-    }
-  }
+        // Start recording
+        MicStream.start(); // (Async with no signal of success/failure)
 
-  onRecordedChunk = async (samples: Array<number>) => {
-    // MicStream.stop is unobservably async, so ignore any audio capture after we think we've stopped
-    if (this.state.recordingState === RecordingState.Recording) {
-      // log.debug('[onRecordedChunk] samples', samples.length,
-      //   // samples, // Noisy
-      // );
+      } else if (this.props.library === 'AudioRecord') {
 
-      // Buffer samples
-      this.setState((state, props) => ({
-        audioSampleChunks: ([...state.audioSampleChunks, samples]
-          // HACK Trim audio for O(1) mem usage -- think harder how to buffer long durations of audio (e.g. files i/o ram)
-          .slice(-this.spectroChunksPerScreenWidth)
-        ),
-      }));
+        // TODO(write_audio)
+        AudioRecord.init({
+          sampleRate: this.props.sampleRate,
+          channels: this.props.channels,
+          bitsPerSample: 16,  // TODO(write_audio)
+          wavFile: 'AudioRecord-test-0.wav',
+        });
+        AudioRecord.start();
 
-      // Display recorded audio (incremental)
-      await this.renderChunk(samples);
+        // TODO(write_audio)
+        AudioRecord.on('data', (data: string) => {
+          const samples = Buffer.from(data, 'base64'); // Decode base64 string -> uint8 audio samples
+          this.onRecordedChunk(Array.from(samples));
+        });
+
+      }
 
     }
   }
@@ -259,37 +271,57 @@ export class RecordScreen extends React.Component<Props, State> {
         recordingState: RecordingState.Saving,
       });
 
-      // Stop recording
-      log.debug('[stopRecording] Stopping mic');
-      MicStream.stop(); // (Async with no signal of success/failure)
+      let wavPath;
+      if (this.props.library === 'MicStream') {
 
-      // TODO(write_audio)
+        // Stop recording
+        log.debug('[stopRecording] Stopping mic');
+        MicStream.stop(); // (Async with no signal of success/failure)
 
-      // Encode audioSamples as wav data
-      //  - https://github.com/rochars/wavefile#create-wave-files-from-scratch
-      //  - https://github.com/rochars/wavefile#the-wavefile-methods
-      let audioSamples = _.flatten(this.state.audioSampleChunks);
-      // audioSamples = audioSamples.map(x => x - 128) // XXX Error: "Overflow at input index 14: -1"
-      const wav = new WaveFile()
-      wav.fromScratch(
-        this.props.channels,
-        this.props.sampleRate,
-        // MicStream records using kAudioFormatULaw
-        //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L31
-        // '8',
-        // '8a',
-        '8m', // 8-bit int, mu-Law
-        audioSamples,
-      );
-      wav.fromMuLaw(); // TODO "Decode 8-bit mu-Law as 16-bit"
+        // TODO(write_audio)
 
-      // Write wav data to file
-      const filename = `${new Date().toISOString()}-${chance.hash({length: 8})}.wav`;
-      const wavPath = `${fs.dirs.CacheDir}/${filename}`;
-      // await fs.createFile(wavPath, audioSamples as unknown as string, 'ascii'); // HACK Ignore bad type
-      await fs.createFile(wavPath, Array.from(wav.toBuffer()) as unknown as string, 'ascii'); // HACK Ignore bad type
-      const {size} = await fs.stat(wavPath);
-      log.debug('[stopRecording] Wrote file', json({wavPath, size}));
+        // Encode audioSamples as wav data
+        //  - https://github.com/rochars/wavefile#create-wave-files-from-scratch
+        //  - https://github.com/rochars/wavefile#the-wavefile-methods
+        let audioSamples = _.flatten(this._audioSampleChunks);
+        // audioSamples = audioSamples.map(x => x - 128) // XXX Error: "Overflow at input index 14: -1"
+        const wav = new WaveFile()
+        wav.fromScratch(
+          this.props.channels,
+          this.props.sampleRate,
+          // MicStream records using kAudioFormatULaw
+          //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L31
+          // '8',
+          // '8a',
+          '8m', // 8-bit int, mu-Law
+          audioSamples,
+        );
+        wav.fromMuLaw(); // TODO "Decode 8-bit mu-Law as 16-bit"
+
+        // Write wav data to file
+        const filename = `${new Date().toISOString()}-${chance.hash({length: 8})}.wav`;
+        wavPath = `${fs.dirs.CacheDir}/${filename}`;
+        // await fs.createFile(wavPath, audioSamples as unknown as string, 'ascii'); // HACK Ignore bad type
+        await fs.createFile(wavPath, Array.from(wav.toBuffer()) as unknown as string, 'ascii'); // HACK Ignore bad type
+        const {size} = await fs.stat(wavPath);
+        log.debug('[stopRecording] Wrote file', json({wavPath, size}));
+
+        // XXX Debug
+        global.audioSamples = audioSamples;
+        global.wav = wav;
+
+      } else if (this.props.library === 'AudioRecord') {
+
+        // TODO(write_audio)
+        wavPath = await AudioRecord.stop();
+
+      }
+
+      const sound = await Sound.newAsync(wavPath);
+
+      // XXX Debug
+      global.wavPath = wavPath;
+      global.sound = sound;
 
       // XXX Debug
       Sound.setActive(true);
@@ -301,14 +333,7 @@ export class RecordScreen extends React.Component<Props, State> {
         'Default',
         // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
       );
-      const sound = await Sound.newAsync(wavPath);
       sound.play();
-
-      // XXX Debug
-      global.audioSamples = audioSamples;
-      global.wavPath = wavPath;
-      global.wav = wav;
-      global.sound = sound;
 
       this.setState({
         recordingState: RecordingState.Stopped,
@@ -317,7 +342,41 @@ export class RecordScreen extends React.Component<Props, State> {
     }
   }
 
-  renderChunk = async (chunk: Array<number>): Promise<void> => {
+  onRecordedChunk = async (samples: Array<number>) => {
+    log.info('[onRecordedChunk]', json({samplesLength: samples.length}));
+    // MicStream.stop is unobservably async, so ignore any audio capture after we think we've stopped
+    if (this.state.recordingState === RecordingState.Recording) {
+
+      // Buffer chunks (don't setState until flush, to throttle render)
+      this._audioSampleChunks.push(samples);
+
+      // Flush if ≥renderBufferSize (throttle render)
+      if (_.sum(this._audioSampleChunks.map(x => x.length)) >= this.props.renderBufferSize) {
+
+        // Pop + close over buffered audio samples
+        const {_audioSampleChunks} = this;
+        this._audioSampleChunks = [];
+
+        // Compute spectros on this thread, not setState thread
+        //  - TODO Batch size?
+        const spectroChunksImageProps = await Promise.all(_audioSampleChunks.map(this.spectroChunksImage));
+        // const spectroChunksImageProps = [await this.spectroChunksImage(_.flatten(_audioSampleChunks))];
+
+        // setState + render
+        this.setState((state, props) => ({
+          spectroChunksImageProps: (
+            [...state.spectroChunksImageProps, ...spectroChunksImageProps]
+            .slice(-this.spectroChunksPerScreenWidth) // Trim spectro chunks for O(1) mem usage
+          ),
+        }));
+
+      }
+
+    }
+  }
+
+  spectroChunksImage = async (chunk: Array<number>): Promise<SpectroChunksImageProps> => {
+    log.info('[spectroChunksImage]', json({chunkLength: chunk.length}));
 
     // TODO Include previous chunk(s) in stft
     //  - Defer until melSpectrogram, so we can couple to the right mel params
@@ -388,15 +447,11 @@ export class RecordScreen extends React.Component<Props, State> {
     const pngPath = `${fs.dirs.CacheDir}/${filename}`;
     const pngBase64 = dataUrl.replace('data:image/png;base64,', '');
     await fs.createFile(pngPath, pngBase64, 'base64');
-    this.setState((state, props) => ({
-      spectroChunksImageProps: (
-        [...state.spectroChunksImageProps, {
-          source: {uri: `file://${pngPath}`},
-          style: {width: w_img, height: h_img}, // For file:// uris, else image doesn't show
-        }]
-        .slice(-this.spectroChunksPerScreenWidth) // Trim spectro chunks for O(1) mem usage
-      ),
-    }));
+
+    return {
+      source: {uri: `file://${pngPath}`},
+      style: {width: w_img, height: h_img}, // For file:// uris, else image doesn't show
+    };
 
     // // XXX Globals for dev
     // Object.assign(global, {
