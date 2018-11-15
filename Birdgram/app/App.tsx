@@ -222,7 +222,13 @@ export default class App extends PureComponent<Props, State> {
                           key: 'record', route: {path: '/record'},
                           label: 'Record', iconName: 'activity',
                           render: props => (
-                            <RecordScreen {...props} />
+                            <RecordScreen {...props}
+                              // App globals
+                              go                      = {this.go}
+                              // Settings
+                              settings                = {this.state.settingsWrites!}
+                              showDebug               = {this.state.settings!.showDebug}
+                            />
                           ),
                         }, {
                           key: 'search', route: {path: '/search'},

@@ -46,7 +46,7 @@ import { SettingsWrites } from '../settings';
 import Sound from '../sound';
 import { queryPlanFromRows, queryPlanPretty, querySql, SQL, sqlf } from '../sql';
 import { StyleSheet } from '../stylesheet';
-import { LabelStyle, labelStyles, Styles } from '../styles';
+import { normalizeStyle, LabelStyle, labelStyles, Styles } from '../styles';
 import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait,
   objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, Timer, yaml, yamlPretty, zipSame,
@@ -137,19 +137,6 @@ interface State {
 
 export class SearchScreen extends PureComponent<Props, State> {
 
-  // Getters for prevProps
-  _pathParams = (props?: Props): SearchPathParams => {
-    const {pathname} = (props || this.props).location;
-    return searchPathParamsFromPath(pathname);
-  }
-
-  // Getters for this.props
-  get pathParams (): SearchPathParams { return this._pathParams(); }
-
-  // Getters for this.state
-  get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
-  get recsOrEmpty(): Array<Rec> { return this.state.recs === 'loading' ? [] : this.state.recs; }
-
   static defaultProps = {
     spectroBase:       {height: 20, width: Dimensions.get('window').width},
     spectroScaleClamp: {min: 1, max: 8},
@@ -175,6 +162,20 @@ export class SearchScreen extends PureComponent<Props, State> {
     _spectroScale: this.props.spectroScale,
   };
 
+  // Getters for prevProps
+  _pathParams = (props?: Props): SearchPathParams => {
+    const {pathname} = (props || this.props).location;
+    return searchPathParamsFromPath(pathname);
+  }
+
+  // Getters for props
+  get pathParams (): SearchPathParams { return this._pathParams(); }
+
+  // Getters for state
+  get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
+  get recsOrEmpty(): Array<Rec> { return this.state.recs === 'loading' ? [] : this.state.recs; }
+
+  // Private attrs
   db?: SQLiteDatabase;
   soundsCache: Map<SourceId, Promise<Sound> | Sound> = new Map();
 
@@ -874,44 +875,6 @@ export class SearchScreen extends PureComponent<Props, State> {
         {this.ActionModalButtons({actions: [
           {
             ...defaults,
-            label: `Search (${rec.species})`,
-            iconName: 'search',
-            buttonColor: iOSColors.blue,
-            onPress: () => this.props.history.push(`/species/${encodeURIComponent(rec.species)}`),
-          }, {
-            ...defaults,
-            label: `Search (${showSourceId(rec.source_id)})`,
-            iconName: 'search',
-            buttonColor: iOSColors.blue,
-            onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.source_id)}`),
-          },
-        ]})}
-
-        <Separator/>
-        {this.ActionModalButtons({actions: [
-          {
-            ...defaults,
-            label: `Hide results (${rec.species})`,
-            iconName: 'x',
-            buttonColor: iOSColors.red,
-            onPress: () => this.setState((state: State, props: Props) => ({
-              excludeSpecies: [...state.excludeSpecies, rec.species],
-            })),
-          }, {
-            ...defaults,
-            label: `Hide results (${showSourceId(rec.source_id)})`,
-            iconName: 'x',
-            buttonColor: iOSColors.red,
-            onPress: () => this.setState((state: State, props: Props) => ({
-              excludeRecIds: [...state.excludeRecIds, rec.source_id],
-            })),
-          }
-        ]})}
-
-        <Separator/>
-        {this.ActionModalButtons({actions: [
-          {
-            ...defaults,
             label: 'More species',
             iconName: 'plus-circle',
             buttonColor: iOSColors.purple,
@@ -940,6 +903,44 @@ export class SearchScreen extends PureComponent<Props, State> {
             iconName: 'plus-circle',
             buttonColor: iOSColors.purple,
             onPress: () => {},
+          },
+        ]})}
+
+        <Separator/>
+        {this.ActionModalButtons({actions: [
+          {
+            ...defaults,
+            label: `Hide results (${rec.species})`,
+            iconName: 'x',
+            buttonColor: iOSColors.red,
+            onPress: () => this.setState((state: State, props: Props) => ({
+              excludeSpecies: [...state.excludeSpecies, rec.species],
+            })),
+          }, {
+            ...defaults,
+            label: `Hide results (${showSourceId(rec.source_id)})`,
+            iconName: 'x',
+            buttonColor: iOSColors.red,
+            onPress: () => this.setState((state: State, props: Props) => ({
+              excludeRecIds: [...state.excludeRecIds, rec.source_id],
+            })),
+          }
+        ]})}
+
+        <Separator/>
+        {this.ActionModalButtons({actions: [
+          {
+            ...defaults,
+            label: `Search (${rec.species})`,
+            iconName: 'search',
+            buttonColor: iOSColors.blue,
+            onPress: () => this.props.history.push(`/species/${encodeURIComponent(rec.species)}`),
+          }, {
+            ...defaults,
+            label: `Search (${showSourceId(rec.source_id)})`,
+            iconName: 'search',
+            buttonColor: iOSColors.blue,
+            onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.source_id)}`),
           },
         ]})}
 
@@ -1760,7 +1761,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     !this.props.showDebug ? null : (
       <View {...{
         ...props,
-        style: [Styles.debugView, ...sanitizeStyle(props.style)],
+        style: [Styles.debugView, ...normalizeStyle(props.style)],
       }}/>
     )
   );
@@ -1768,20 +1769,11 @@ export class SearchScreen extends PureComponent<Props, State> {
     !this.props.showDebug ? null : (
       <Text {...{
         ...props,
-        style: [Styles.debugText, ...sanitizeStyle(props.style)],
+        style: [Styles.debugText, ...normalizeStyle(props.style)],
       }}/>
     )
   );
 
-}
-
-// (Not sure about this type)
-function sanitizeStyle<X extends {}>(style: undefined | null | X | Array<X>): Array<X> {
-  return (
-    !style ? [] :
-    style instanceof Array ? style :
-    [style]
-  );
 }
 
 // TODO Why is this slow to respond after keyboard shows? -- adding logging to find the bottleneck

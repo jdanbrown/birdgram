@@ -1,3 +1,4 @@
+import { TextProps, ViewProps } from 'react-native'
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 // Generic styles
@@ -9,11 +10,11 @@ export const Styles = {
     flex: 1,
     width: '100%',
     height: '100%',
-  },
+  } as ViewProps,
   center: {
     justifyContent: 'center', // Vertical
     alignItems: 'center', // Horizontal
-  },
+  } as ViewProps,
   rotate90:       {transform: [{rotate: '90deg'}]},
   rotate180:      {transform: [{rotate: '180deg'}]},
   rotate270:      {transform: [{rotate: '270deg'}]},
@@ -35,6 +36,15 @@ export const Styles = {
   },
 
 };
+
+// (Not sure about this type)
+export function normalizeStyle<X extends {}>(style: undefined | null | X | Array<X>): Array<X> {
+  return (
+    !style ? [] :
+    style instanceof Array ? style :
+    [style]
+  );
+}
 
 //
 // Labels
