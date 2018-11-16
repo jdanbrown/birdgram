@@ -441,7 +441,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         // TODO Weight species uniformly (e.g. select random species, then select random recs)
         // TODO Get deterministic results from seed [how? sqlite doesn't support random(seed) or hash()]
         random: async ({seed}) => {
-          log.info(`loadRecsFromQuery: Querying random recs`, json({seed}));
+          log.info(`loadRecsFromQuery: Querying random recs`, yaml({seed}));
           await querySql<Rec>(this.db!, sqlf`
             select *
             from (
@@ -465,7 +465,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         },
 
         species: async ({species}) => {
-          log.info('loadRecsFromQuery: Querying recs for species', json({species}));
+          log.info('loadRecsFromQuery: Querying recs for species', yaml({species}));
           await querySql<Rec>(this.db!, sqlf`
             select *
             from (
@@ -490,7 +490,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         },
 
         rec: async ({sourceId}) => {
-          log.info('loadRecsFromQuery: Loading recs for query_rec', json({sourceId}));
+          log.info('loadRecsFromQuery: Loading recs for query_rec', yaml({sourceId}));
 
           // Compute top n_per_sp recs per species by d_pc (cosine_distance)
           //  - TODO Replace with window functions after sqlite upgrade
@@ -592,7 +592,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           `;
 
           // Run query
-          log.info('loadRecsFromQuery: Querying recs for query_rec', json({sourceId}));
+          log.info('loadRecsFromQuery: Querying recs for query_rec', yaml({sourceId}));
           await querySql<Rec>(this.db!, sql, {
             // logTruncate: null, // XXX Debug
           })(async results => {
@@ -612,7 +612,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   }
 
   loadRec = async (sourceId: SourceId): Promise<Rec> => {
-    log.info('[loadRec]', json({sourceId}));
+    log.info('[loadRec]', yaml({sourceId}));
     return await querySql<Rec>(this.db!, sqlf`
       select *
       from search_recs
@@ -1492,7 +1492,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             }}
             // This is (currently) the only place we use state.scrollViewState i/o this._scrollViewState
             contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
-              // log.debug('render.contentOffset', json(x)); // XXX Debug
+              // log.debug('render.contentOffset', yaml(x)); // XXX Debug
             })}
             bounces={false}
             bouncesZoom={false}
@@ -1500,7 +1500,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             minimumZoomScale={this.props.spectroScaleClamp.min / this.state._spectroScale}
             maximumZoomScale={this.props.spectroScaleClamp.max / this.state._spectroScale}
             onScrollEndDrag={async ({nativeEvent}) => {
-              // log.debug('onScrollEndDrag', json(nativeEvent)); // XXX Debug
+              // log.debug('onScrollEndDrag', yaml(nativeEvent)); // XXX Debug
               const {contentOffset, zoomScale, velocity} = nativeEvent;
               this._scrollViewState = {contentOffset};
               if (
@@ -1508,7 +1508,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 // && velocity !== undefined // [XXX Unreliable] Don't trigger zoom on 1/2 fingers released, wait for 2/2
               ) {
                 const scale = zoomScale * this.state._spectroScale;
-                // log.debug('ZOOM', json(nativeEvent)); // XXX Debug
+                // log.debug('ZOOM', yaml(nativeEvent)); // XXX Debug
                 // Trigger re-layout so non-image components (e.g. text) redraw at non-zoomed size
                 this.setState({
                   scrollViewState: this._scrollViewState,
@@ -1742,7 +1742,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               : `${this.state.recs.length}/${this.state.totalRecs || '?'} (${sprintf('%.3f', this.state.recsQueryTime)}s)`
             }
           </this.DebugText>
-          <this.DebugText>Filters: {json(this.filters)}</this.DebugText>
+          <this.DebugText>Filters: {yaml(this.filters)}</this.DebugText>
         </this.DebugView>
 
         {/* Bottom controls */}

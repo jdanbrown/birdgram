@@ -31,7 +31,7 @@ import { querySql } from './sql';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
 import {
-  deepEqual, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style,
+  deepEqual, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style, yaml
 } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
@@ -323,7 +323,7 @@ export default class App extends PureComponent<Props, State> {
   }
 
   go = (tab: TabName, path: string) => {
-    log.info('App.go', json({tab, path}));
+    log.info('App.go', yaml({tab, path}));
     if (tab) {
       // Show tab
       this.state.histories!.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)

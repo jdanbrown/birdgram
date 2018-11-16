@@ -5,7 +5,7 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 
 import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from './components/MetadataColumns';
 import { log, puts } from './log';
-import { json, objectKeysTyped } from './utils';
+import { json, objectKeysTyped, yaml } from './utils';
 
 // All 5 of these lists of attrs (4 here + constructor) must be kept in sync, else load/setItem/etc. aren't typesafe
 export interface Props {
@@ -177,7 +177,7 @@ export class Settings implements SettingsWrites, Props {
   }
 
   async set<K extends keyof Props>(key: K, value: Props[K]): Promise<void> {
-    log.info('Settings.set', json({key, value}));
+    log.info('Settings.set', yaml({key, value}));
     // Set locally
     //  - Before persist: faster App.state response, async persist (which has high variance runtime)
     this.appSetState(this.withProps({

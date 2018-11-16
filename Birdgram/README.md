@@ -106,6 +106,12 @@ android
   - TODO
 
 # Troubleshooting
+- js code doesn't update in Xcode Release build
+  - Silent js build error [e.g. next bullet]
+  - To find it, try checking previous build msgs, or try clean build folder and rebuild to resurface it
+- Xcode Release build fails with "main.jsbundle does not exist. This must be a bug with"
+  - Not the real error -- find the preceeding error msg in Xcode
+  - Last time it was a js build-time error that tripped in Release but not Debug (b/c it relied on `__DEV__` true vs. undefined)
 - App starts loading _very_ slowly in Debug mode (with high cpu on laptop)
   - Try restarting rndebugger (this worked for me once)
 - App does weird stuff, e.g. fails on startup with strange errors, or loads to a blank screen

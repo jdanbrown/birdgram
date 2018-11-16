@@ -3,9 +3,12 @@ import { interpolateMagma } from 'd3-scale-chromatic';
 // console.warn('XXX: RecordScreen: import jimp ...'); // XXX Debug
 import Jimp from 'jimp';
 // console.warn('XXX: RecordScreen: import jimp: done'); // XXX Debug
+import Humanize from 'humanize-plus';
 import _ from 'lodash';
 import React, { PureComponent } from 'react';
-import { Button, Dimensions, EmitterSubscription, Image, Platform, Text, TextProps, View, ViewProps } from 'react-native';
+import {
+  Button, Dimensions, EmitterSubscription, Image, ImageStyle, Platform, Text, TextProps, View, ViewProps,
+} from 'react-native';
 import AudioRecord from 'react-native-audio-record';
 import FastImage from 'react-native-fast-image';
 import { BaseButton, BorderlessButton, LongPressGestureHandler, RectButton, TapGestureHandler } from 'react-native-gesture-handler';
@@ -15,19 +18,23 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import RNFB from 'rn-fetch-blob';
+import { sprintf } from 'sprintf-js';
 import WaveFile from 'wavefile/dist/wavefile';
 const {fs, base64} = RNFB;
 
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
 import { SourceId } from '../datatypes';
-import { log } from '../log';
+import { log, puts } from '../log';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
-import { chance, global, json, match, pretty, shallowDiffPropsState } from '../utils';
+import {
+  chance, ExpWeightedMean, global, json, match, matchNil, matchNull, matchUndefined, pretty, round,
+  shallowDiffPropsState, Timer, yaml, yamlPretty,
+} from '../utils';
 
 // Util: wrap `new Jimp` in a promise
 const JimpAsync = (...args: Array<any>): Promise<Jimp> => new Promise((resolve, reject) => {
@@ -50,19 +57,21 @@ export interface Props {
   library: 'MicStream' | 'AudioRecord';
   sampleRate: number;
   channels: number;
-  refreshRate: number;
+  bitsPerSample: number;
   spectroHeight: number;
-  renderBufferSize: number;
+  spectroLoad: number;
 }
 
 interface State {
   recordingState: RecordingState;
   spectroChunksImageProps: Array<SpectroChunksImageProps>;
+  nAudioSamples: number;
+  nImageWidth: number;
 }
 
 interface SpectroChunksImageProps {
   source: {uri: string};
-  style?: object;
+  style: {width: number, height: number},
 }
 
 // https://github.com/chadsmith/react-native-microphone-stream
@@ -72,25 +81,59 @@ export class RecordScreen extends React.Component<Props, State> {
     library: 'AudioRecord', // TODO(write_audio)
     sampleRate: 22050,
     channels: 1,
-    // refreshRate: 2, // TODO Make updates faster so we can refresh at lower latency
-    refreshRate: 22050 / 2048, // HACK 2048 hardcoded in react-native-audio-record/ios/RNAudioRecord.m
+    bitsPerSample: 16,
     spectroHeight: 400,
-    renderBufferSize: 1024 * 8,
+    spectroLoad: .25, // ~Max cpu load, to dynamically throttle audio->spectro batch size, which determines spectro refresh rate
   };
 
   state: State = {
     recordingState: RecordingState.Stopped,
     spectroChunksImageProps: [],
+    nAudioSamples: 0,
+    nImageWidth: 0,
   };
-
-  // Getters for props
-  get spectroChunksPerScreenWidth(): number {
-    return Math.ceil(Dimensions.get('window').width / (44 / this.props.refreshRate) + 1);
-  }
 
   // Private attrs
   _listener?: EmitterSubscription;
   _audioSampleChunks: Array<Array<number>> = [];
+
+  // Throttle audio->spectro
+  _spectroTimeMean = new ExpWeightedMean(.5);
+  _idleTimeMean    = new ExpWeightedMean(.5);
+  _actualLoadMean  = new ExpWeightedMean(.5);
+  _timerSinceLastSpectro: null | Timer = null;
+  get spectroTimeMean (): number { return this._spectroTimeMean.value; }
+  get idleTimeMean    (): number { return this._idleTimeMean.value; }
+  get refreshRateMean (): number { return 1 / (this.spectroTimeMean + this.idleTimeMean); }
+  get actualLoadMean  (): number { return this._actualLoadMean.value; }
+  recordTimeForLastSpectro = (time: number): void => {
+    this._spectroTimeMean.add(time);
+    this._timerSinceLastSpectro = new Timer();
+  }
+  readyToRenderNextSpectro = (): boolean => {
+    const idleTime = matchNull(this._timerSinceLastSpectro, {null: () => 0, x: t => t.time()});
+    const totalTime = this.spectroTimeMean + idleTime
+    const actualLoad = this.spectroTimeMean / totalTime;
+    const ready = totalTime === 0 || actualLoad <= this.props.spectroLoad;
+    if (ready) {
+      this._idleTimeMean.add(idleTime);
+      if (!_.isNaN(actualLoad)) this._actualLoadMean.add(actualLoad);
+      this._timerSinceLastSpectro = null;
+      log.info('RecordScreen.readyToRenderNextSpectro', yaml({
+        spectroLoad: this.props.spectroLoad,
+        actualLoad: round(actualLoad, 3),
+        idleTime,
+        spectroTime: round(this.spectroTimeMean, 3),
+        refreshRateMean: round(this.refreshRateMean, 2),
+      }));
+    }
+    return ready;
+  }
+
+  // Precompute spectro color table for fast lookup in the tight loop in spectroChunksImage
+  _magmaTable: Array<{r: number, g: number, b: number}> = (
+    _.range(256).map(x => color(interpolateMagma(x / 256)) as RGBColor)
+  );
 
   componentDidMount = () => {
     log.info(`${this.constructor.name}.componentDidMount`);
@@ -100,7 +143,7 @@ export class RecordScreen extends React.Component<Props, State> {
     Permissions.request('microphone').then(status => {
       // NOTE Buggy on ios simulator [https://github.com/yonahforst/react-native-permissions/issues/58]
       //  - Recording works, but permissions always return 'undetermined'
-      log.info('[componentDidMount] Permissions.request: microphone', status);
+      log.info(`${this.constructor.name}.componentDidMount Permissions.request: microphone`, status);
     });
 
     // Register callbacks
@@ -127,6 +170,7 @@ export class RecordScreen extends React.Component<Props, State> {
         Styles.center,
       ]}>
 
+        {/* Spectro image */}
         <View style={{
           ...Styles.center,
           marginVertical: 5,
@@ -140,15 +184,13 @@ export class RecordScreen extends React.Component<Props, State> {
             // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
             //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
             //  - https://github.com/DylanVann/react-native-fast-image
-            (this.state.spectroChunksImageProps
-              .slice(-this.spectroChunksPerScreenWidth)
-              .map(props => (
-                <FastImage key={props.source.uri} {...props} />
-              ))
-            )
+            (this.state.spectroChunksImageProps.map(props => (
+              <FastImage key={props.source.uri} {...props} />
+            )))
           }
         </View>
 
+        {/* Play/stop button */}
         <View style={{
           flexShrink: 1,
           marginTop: 5,
@@ -185,21 +227,33 @@ export class RecordScreen extends React.Component<Props, State> {
           </RectButton>
         </View>
 
+        {/* Debug info */}
         <this.DebugView style={{
           marginVertical: 5,
           width: '100%',
         }}>
           <this.DebugText>
-            state.recordingState: {this.state.recordingState}
+            recordingState: {this.state.recordingState}
           </this.DebugText>
           <this.DebugText>
-            _audioSampleChunks: {this._audioSampleChunks.length}
+            audio: {}
+            {sprintf('%.1fs', this.state.nAudioSamples / this.props.sampleRate)} {}
+            ({Humanize.compactInteger(this.state.nAudioSamples, 2)} samples)
           </this.DebugText>
           <this.DebugText>
-            _audioSampleChunks.sum: {_.sum(this._audioSampleChunks.map(x => x.length))}
+            spectro: {}
+            {this.state.nImageWidth} w × {this.props.spectroHeight} h (
+            {Humanize.compactInteger(this.state.nImageWidth * this.props.spectroHeight, 2)} px, {}
+            {this.state.spectroChunksImageProps.length} chunks
+            )
           </this.DebugText>
           <this.DebugText>
-            state.spectroChunksImageProps: {this.state.spectroChunksImageProps.length}
+            load: {round(this.actualLoadMean, 3)} {}
+            ({round(this.spectroTimeMean, 3)}s spectro : {round(this.idleTimeMean, 3)}s idle) {}
+            ≤ {round(this.props.spectroLoad, 3)}
+          </this.DebugText>
+          <this.DebugText>
+            refreshRate: {round(this.refreshRateMean, 2)}/s {}
           </this.DebugText>
         </this.DebugView>
 
@@ -209,27 +263,34 @@ export class RecordScreen extends React.Component<Props, State> {
 
   startRecording = async () => {
     if (this.state.recordingState === RecordingState.Stopped) {
-      log.info('[startRecording]');
+      log.info('RecordScreen.startRecording', yaml({
+        sampleRate: this.props.sampleRate,
+        channels: this.props.channels,
+        bitsPerSample: this.props.bitsPerSample,
+      }));
 
       // Update recordingState + reset audio chunks
       this._audioSampleChunks = [];
       this.setState({
         recordingState: RecordingState.Recording,
         spectroChunksImageProps: [],
+        nAudioSamples: 0,
+        nImageWidth: 0,
       });
 
       if (this.props.library === 'MicStream') {
 
         // Init mic
         //  - init() here instead of componentDidMount because we have to call it after each stop()
-        const {sampleRate, refreshRate} = this.props;
+        const refreshRate = 2; // TODO Make updates faster so we can refresh at lower latency
+        const {sampleRate} = this.props;
         MicStream.init({
           // Options
           //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L23-L32
           //  - https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
           //  - TODO PR to change hardcoded kAudioFormatULaw -> any mFormatID (e.g. mp4)
           sampleRate, // (QA'd via tone generator -> MicStream -> magSpectrogram)
-          bitsPerChannel: 16, // TODO(write_audio)
+          bitsPerChannel: this.props.bitsPerSample,
           // bitsPerChannel: 8, // XXX(write_audio)
           channelsPerFrame: 1,
           // Compute a bufferSize that will fire ~refreshRate buffers per sec
@@ -247,7 +308,7 @@ export class RecordScreen extends React.Component<Props, State> {
         AudioRecord.init({
           sampleRate: this.props.sampleRate,
           channels: this.props.channels,
-          bitsPerSample: 16,  // TODO(write_audio)
+          bitsPerSample: this.props.bitsPerSample,
           wavFile: 'AudioRecord-test-0.wav',
         });
         AudioRecord.start();
@@ -265,7 +326,7 @@ export class RecordScreen extends React.Component<Props, State> {
 
   stopRecording = async () => {
     if (this.state.recordingState === RecordingState.Recording) {
-      log.info('[stopRecording]');
+      log.info('RecordScreen.stopRecording');
 
       this.setState({
         recordingState: RecordingState.Saving,
@@ -275,7 +336,7 @@ export class RecordScreen extends React.Component<Props, State> {
       if (this.props.library === 'MicStream') {
 
         // Stop recording
-        log.debug('[stopRecording] Stopping mic');
+        log.debug('RecordScreen.stopRecording: Stopping mic');
         MicStream.stop(); // (Async with no signal of success/failure)
 
         // TODO(write_audio)
@@ -304,7 +365,7 @@ export class RecordScreen extends React.Component<Props, State> {
         // await fs.createFile(wavPath, audioSamples as unknown as string, 'ascii'); // HACK Ignore bad type
         await fs.createFile(wavPath, Array.from(wav.toBuffer()) as unknown as string, 'ascii'); // HACK Ignore bad type
         const {size} = await fs.stat(wavPath);
-        log.debug('[stopRecording] Wrote file', json({wavPath, size}));
+        log.debug('RecordScreen.stopRecording: Wrote file', yaml({wavPath, size}));
 
         // XXX Debug
         global.audioSamples = audioSamples;
@@ -343,31 +404,47 @@ export class RecordScreen extends React.Component<Props, State> {
   }
 
   onRecordedChunk = async (samples: Array<number>) => {
-    log.info('[onRecordedChunk]', json({samplesLength: samples.length}));
+    log.info('RecordScreen.onRecordedChunk', yaml({samplesLength: samples.length}));
     // MicStream.stop is unobservably async, so ignore any audio capture after we think we've stopped
     if (this.state.recordingState === RecordingState.Recording) {
 
       // Buffer chunks (don't setState until flush, to throttle render)
       this._audioSampleChunks.push(samples);
 
-      // Flush if ≥renderBufferSize (throttle render)
-      if (_.sum(this._audioSampleChunks.map(x => x.length)) >= this.props.renderBufferSize) {
+      // Flush if ready (throttle render)
+      if (this.readyToRenderNextSpectro()) {
 
         // Pop + close over buffered audio samples
         const {_audioSampleChunks} = this;
         this._audioSampleChunks = [];
 
         // Compute spectros on this thread, not setState thread
-        //  - TODO Batch size?
-        const spectroChunksImageProps = await Promise.all(_audioSampleChunks.map(this.spectroChunksImage));
-        // const spectroChunksImageProps = [await this.spectroChunksImage(_.flatten(_audioSampleChunks))];
+        const spectroChunksImageProps = [await this.spectroChunksImage(_.flatten(_audioSampleChunks))];
+
+        // Slice trailing spectro chunks for O(1) mem usage
+        //  - More complicated than .slice(-n) because spectro chunk widths are variable
+        const filterSpectroChunks = (chunks: Array<SpectroChunksImageProps>): Array<SpectroChunksImageProps> => {
+          const widthToFill = Dimensions.get('window').width;
+          let width = 0;
+          return (chunks
+            .slice().reverse() // Don't mutate
+            .filter(chunk => {
+              if (width >= widthToFill) {
+                return false;
+              } else {
+                width += chunk.style.width;
+                return true;
+              }
+            })
+            .reverse()
+          );
+        }
 
         // setState + render
         this.setState((state, props) => ({
-          spectroChunksImageProps: (
-            [...state.spectroChunksImageProps, ...spectroChunksImageProps]
-            .slice(-this.spectroChunksPerScreenWidth) // Trim spectro chunks for O(1) mem usage
-          ),
+          spectroChunksImageProps: filterSpectroChunks([...state.spectroChunksImageProps, ...spectroChunksImageProps]),
+          nAudioSamples: state.nAudioSamples + _.sum(_audioSampleChunks.map(x => x.length)),
+          nImageWidth: state.nImageWidth + _.sum(spectroChunksImageProps.map(({style: {width}}) => width)),
         }));
 
       }
@@ -376,7 +453,7 @@ export class RecordScreen extends React.Component<Props, State> {
   }
 
   spectroChunksImage = async (chunk: Array<number>): Promise<SpectroChunksImageProps> => {
-    log.info('[spectroChunksImage]', json({chunkLength: chunk.length}));
+    const timer = new Timer();
 
     // TODO Include previous chunk(s) in stft
     //  - Defer until melSpectrogram, so we can couple to the right mel params
@@ -406,7 +483,7 @@ export class RecordScreen extends React.Component<Props, State> {
     // log.debug('S.min, S.max', S.min(), S.max());
 
     // log.debug('nfft', nfft);
-    // log.debug('spectro.shape', S.shape);
+    // log.debug('S.shape', S.shape);
 
     // Compute imageRGBA from S
     const [w_S, h_S] = S.shape;
@@ -414,13 +491,11 @@ export class RecordScreen extends React.Component<Props, State> {
     for (let w = 0; w < w_S; w++) {
       for (let h = 0; h < h_S; h++) {
         const x = S.get(w, -h) as unknown as number; // (Fix bad type: S.get(w,h): Float32Array)
-        const c = color(interpolateMagma(1 - x)) as RGBColor;
-        if (c) {
-          imageRGBA[0 + 4*(w + w_S*h)] = c.r;
-          imageRGBA[1 + 4*(w + w_S*h)] = c.g;
-          imageRGBA[2 + 4*(w + w_S*h)] = c.b;
-          imageRGBA[3 + 4*(w + w_S*h)] = c.opacity * 255;
-        }
+        const c = this._magmaTable[Math.round((1 - x) * 255)]; // Lookup table to avoid slow color() in inner loop
+        imageRGBA[0 + 4*(w + w_S*h)] = c.r;
+        imageRGBA[1 + 4*(w + w_S*h)] = c.g;
+        imageRGBA[2 + 4*(w + w_S*h)] = c.b;
+        imageRGBA[3 + 4*(w + w_S*h)] = 255;
       }
     }
 
@@ -448,16 +523,29 @@ export class RecordScreen extends React.Component<Props, State> {
     const pngBase64 = dataUrl.replace('data:image/png;base64,', '');
     await fs.createFile(pngPath, pngBase64, 'base64');
 
-    return {
+    const ret: SpectroChunksImageProps = {
       source: {uri: `file://${pngPath}`},
       style: {width: w_img, height: h_img}, // For file:// uris, else image doesn't show
     };
 
     // // XXX Globals for dev
     // Object.assign(global, {
-    //   audio, spectro, S, w_S, h_S, w_img, h_img, imageRGBA,
+    //   audio, spectro, S, w_S, h_S, w_img, h_img, imageRGBA, ret,
     // });
 
+    const time = timer.time();
+    this.recordTimeForLastSpectro(time);
+    log.info('RecordScreen.spectroChunksImage', yaml({
+      ['chunk.length']: chunk.length,
+      time,
+      timePerAudioSec: round(time / (chunk.length / (this.props.sampleRate * this.props.channels)), 3),
+      nfft,
+      ['S.shape']: S.shape,
+      ['S.min_max']: [S.min(), S.max()],
+      ['wh_img']: [w_img, h_img],
+    }));
+
+    return ret;
   }
 
   // Debug components

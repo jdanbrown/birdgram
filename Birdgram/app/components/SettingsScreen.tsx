@@ -12,7 +12,7 @@ import { log } from '../log';
 import { SettingsWrites } from '../settings';
 import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
-import { global, shallowDiffPropsState } from '../utils';
+import { global, json, pretty, shallowDiffPropsState, yaml, yamlPretty } from '../utils';
 
 type Props = {
   // Settings
@@ -160,7 +160,14 @@ export class SettingsScreen extends PureComponent<Props, State> {
 
         {this.props.showDebug && (
           <View style={Styles.debugView}>
-            <Text style={Styles.debugText}>DEBUG INFO</Text>
+            <Text style={Styles.debugText} children={yamlPretty({
+              showDebug: this.props.showDebug,
+              // WARNING __DEV__ must be a computed key else it gets replaced with its boolean value [how?] in the
+              // Release build (but not the Debug build!), which causes the build to fail, which Xcode only _sometimes_
+              // surfaces as a build error, and if it doesn't then you have a Release app that's silently stuck on stale
+              // js code even though your Debug app has the latest js code. UGH.
+              ['__DEV__']: __DEV__,
+            })}/>
           </View>
         )}
 

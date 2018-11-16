@@ -13,6 +13,7 @@ export const global: any = window.global || {};
 export function all(...xs: Array<any>): boolean { return xs.every(Boolean); }
 export function any(...xs: Array<any>): boolean { return xs.some(Boolean); }
 
+// TODO Change cases to functions, like the other ADT matchFoo functions
 // `X0 extends X` so that x0 can't (quietly) generalize the type of the case patterns (e.g. to include null)
 //  - e.g. fail on `match(X | null, ...)` if the case patterns don't include null
 export function match<X, X0 extends X, Y>(x0: X0, ...cases: Array<[X | Match, Y]>): Y {
@@ -27,6 +28,27 @@ export function match<X, X0 extends X, Y>(x0: X0, ...cases: Array<[X | Match, Y]
 // Singleton match.default
 enum Match { Default }
 match.default = Match.Default;
+
+export function matchNull<X, Y>(x: null | X, cases: {x: (x: X) => Y, null: () => Y}): Y {
+  switch (x) {
+    case null: return cases.null();
+    default:   return cases.x(x);
+  }
+}
+
+export function matchUndefined<X, Y>(x: undefined | X, cases: {x: (x: X) => Y, undefined: () => Y}): Y {
+  return (x === undefined
+    ? cases.undefined()
+    : cases.x(x)
+  )
+}
+
+export function matchNil<X, Y>(x: undefined | null | X, cases: {x: (x: X) => Y, nil: (x: {nil: undefined | null}) => Y}): Y {
+  return (_.isNil(x)
+    ? cases.nil({nil: x})
+    : cases.x(x)
+  )
+}
 
 export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
   if (!map.has(k)) {
@@ -53,11 +75,14 @@ export function mapMapEntries<K, V, L, U>(map: Map<K, V>, f: (k: K, v: V) => [L,
 
 export class Timer {
   constructor(
-    public readonly startTime: Date = new Date(),
+    public startTime: Date = new Date(),
   ) {}
   time = (): number => {
     return (new Date().getTime() - this.startTime.getTime()) / 1000; // Seconds
   };
+  reset = () => {
+    this.startTime = new Date();
+  }
 }
 
 // When you want Object.keys(x): Array<keyof typeof x> i/o Array<string>
@@ -73,6 +98,20 @@ export function shallowDiff(x: object, y: object): {[key: string]: boolean} {
     y,
     (a: any, b: any) => a === b,
   );
+}
+
+export class ExpWeightedMean {
+  constructor(
+    public readonly alpha: number,
+    public value: number = 0,
+  ) {
+    if (!(0 <= alpha && alpha <= 1)) {
+      throw `ExpWeightedMean: alpha[${alpha}] must be in [0,1]`;
+    }
+  }
+  add = (x: number) => {
+    this.value = this.alpha*x + (1 - this.alpha)*this.value;
+  }
 }
 
 //
@@ -101,7 +140,7 @@ export function yaml(x: any, opts?: Yaml.DumpOptions): string {
     schema: Yaml.DEFAULT_FULL_SCHEMA, // Don't barf on undefined [also allows all kinds of rich types through as !!foo]
     lineWidth: 1e9,                   // Don't wrap long strings (default: 80)
     ...(opts || {}),
-  });
+  }).trim(); // Remove trailing newline (only when flowLevel > 0)
 }
 
 export function yamlPretty(x: any, opts?: Yaml.DumpOptions): string {

@@ -7,7 +7,7 @@ import { Route, Router } from 'react-router-native';
 
 import { log } from './log';
 import { Settings } from './settings';
-import { global, shallowDiffPropsState } from './utils';
+import { global, json, shallowDiffPropsState, yaml } from './utils';
 
 //
 // Utils
@@ -37,10 +37,10 @@ export function ObserveHistory(props: {globalKey: string}) {
       // global.histories[props.globalKey] = {location, history}; // (Exclude match since it's meaningless)
 
       // Noisy, but maybe useful later
-      // log.info(`histories.${props.globalKey}: location`, json(location));
+      // log.info(`histories.${props.globalKey}: location`, yaml(location));
       // log.debug('histories.Route: history', history.entries.map((entry, i) => {
       //   const current = history.index === i;
-      //   return `\n${current ? ' -> ' : '    '}${json(entry)}`;
+      //   return `\n${current ? ' -> ' : '    '}${yaml(entry)}`;
       // }).join());
 
       return null;
