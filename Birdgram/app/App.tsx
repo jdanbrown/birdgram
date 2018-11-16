@@ -18,6 +18,7 @@ import { SavedScreen } from './components/SavedScreen';
 import { SearchScreen } from './components/SearchScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { TabRoutes, TabLink } from './components/TabRoutes';
+import * as Colors from './colors';
 import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { log } from './log';
@@ -37,6 +38,7 @@ import {
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Animated = Animated;
 global.AsyncStorage = AsyncStorage;
+global.Colors = Colors;
 global.deepEqual = deepEqual;
 global.Dimensions = Dimensions;
 global.Linking = Linking;
