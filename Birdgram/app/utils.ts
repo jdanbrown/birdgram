@@ -114,6 +114,23 @@ export class ExpWeightedMean {
   }
 }
 
+export function timed<X>(f: () => X): {x: X, time: number} {
+  const timer = new Timer();
+  const x = f();
+  return {x, time: timer.time()};
+}
+
+export function times<X>(n: number, f: () => X) {
+  while (n > 0) {
+    f();
+    n -= 1;
+  }
+}
+
+// HACK Globals for dev
+global.timed = timed;
+global.times = times;
+
 //
 // json
 //

@@ -395,14 +395,14 @@ class Melspectro(HasPlotAudioTF, SpectroLike):
 
     # FIXME Oops, we removed load_audio_as_rec() when we removed spectro.audio. Figure out how to handle this now.
     def reparam(self, rec_or_audio_or_signal=None, **kwargs):
-        return type(self)(rec_or_audio_or_signal or self.load_audio_as_rec(), **{
+        return type(self)(rec_or_audio_or_signal if rec_or_audio_or_signal is not None else self.load_audio_as_rec(), **{
             **self.melspectro_kwargs,
             **kwargs,
         })
 
     # FIXME Oops, we removed load_audio_as_rec() when we removed spectro.audio. Figure out how to handle this now.
     def to_normal_spectro(self, rec_or_audio_or_signal=None, **kwargs):
-        return Spectro(rec_or_audio_or_signal or self.load_audio_as_rec(), **{
+        return Spectro(rec_or_audio_or_signal if rec_or_audio_or_signal is not None else self.load_audio_as_rec(), **{
             **self.spectro_kwargs,
             **kwargs,
         })

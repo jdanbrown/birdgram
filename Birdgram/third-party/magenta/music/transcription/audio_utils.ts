@@ -1,10 +1,27 @@
 // Copied from:
 //  - https://github.com/tensorflow/magenta-js/blob/53a6cdd/music/src/transcription/audio_utils.ts
 //
-// Edits:
+// HACK Edits:
 //  - Deleted functions that don't typecheck without DOM or Web Audio
 //  - Fix applyWindow to not return null
 //  - Add exports
+
+// TODO(db): Investigate potential perf gains by rewriting Float32Array + math by hand -> nj.array + nj math
+//  - e.g. just nj matmul seems like it's likely to be a win
+
+// HACK
+import nj from '../../../../third-party/numjs/dist/numjs.min';
+import { timed, times } from '../../../../app/utils';
+import { log } from '../../../../app/log';
+export function measurePerf(n: number = 10000, r: number = 5) {
+  const y = new Float32Array(nj.random(n).tolist());
+  times(r, () => {
+    const {time} = timed(() => {
+      melSpectrogram(y, {sampleRate: 22050});
+    });
+    log.info({time});
+  });
+}
 
 /**
  * Utiltities for loading audio and computing mel spectrograms, based on
@@ -164,11 +181,23 @@ export function applyFilterbank(
   // Apply each filter to the whole FFT signal to get one value.
   const out = new Float32Array(filterbank.length);
   for (let i = 0; i < filterbank.length; i++) {
-    // To calculate filterbank energies we multiply each filterbank with the
-    // power spectrum.
-    const win = applyWindow(mags, filterbank[i]);
-    // Then add up the coefficents.
-    out[i] = win.reduce((a, b) => a + b);
+
+    // HACK measurePerf: ~.20 -> ~.065 (~3.1x)
+    //  - [before]
+    // // To calculate filterbank energies we multiply each filterbank with the
+    // // power spectrum.
+    // const win = applyWindow(mags, filterbank[i]);
+    // // Then add up the coefficents.
+    // // HACK measurePerf: ~.18 -> ~.055 (~3.2x)
+    // out[i] = win.reduce((a, b) => a + b); // [before]
+    // // @ts-ignore: TypedArray iterator
+    // // for (let a of win) out[i] += a; // [after]
+    //  - [after]
+    const a = mags, b = filterbank[i];
+    for (let j = 0; j < a.length; j++) {
+      out[i] += a[j] * b[j];
+    }
+
   }
   return out;
 }

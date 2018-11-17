@@ -119,6 +119,8 @@ export const Rec = {
 
 import { matchPath } from 'react-router-native';
 
+import { log } from './log';
+
 export type SearchPathParams =
   | SearchPathParamsNone
   | SearchPathParamsRandom
@@ -154,7 +156,8 @@ export function searchPathParamsFromPath(path: string): SearchPathParams {
   if (match) return {kind: 'species', species: decodeURIComponent(match.params.species)};
   match = matchPath<{sourceId: SourceId}>(path, {path: '/rec/:sourceId*'});
   if (match) return {kind: 'rec', sourceId: decodeURIComponent(match.params.sourceId)};
-  throw `searchPathParamsFromPath: Unexpected path: ${path}`;
+  log.warn(`searchPathParamsFromPath: Unexpected path[${path}], returning {kind: none}`);
+  return {kind: 'none'};
 }
 
 //

@@ -1074,6 +1074,12 @@ export class SearchScreen extends PureComponent<Props, State> {
           )
         })}
       />
+      {/* Query that returns no results [XXX For dev] */}
+      <this.BottomControlsButton
+        help='Blank'
+        iconProps={{name: 'power'}}
+        onPress={() => this.props.history.push(`/species/_BLANK`)} // HACK No results via non-existent species
+      />
       {/* Random recs */}
       <this.BottomControlsButton
         help='Random'

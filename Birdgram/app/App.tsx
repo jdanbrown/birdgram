@@ -32,7 +32,7 @@ import { querySql } from './sql';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
 import {
-  deepEqual, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style, yaml
+  deepEqual, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
 } from './utils';
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
@@ -51,11 +51,13 @@ global.querySql = querySql;
 global.shallowDiff = shallowDiff;
 global.Settings = Settings;
 global.systemWeights = systemWeights;
+global.Timer = Timer;
 global.urlpack = urlpack;
 const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
 global.sj = {};
 timed('AudioUtils',         () => global.AudioUtils      = require('../third-party/magenta/music/transcription/audio_utils'));
 timed('AudioRecord',        () => global.AudioRecord     = require('react-native-audio-record').default); // ?
+timed('base64-js',          () => global.base64js        = require('base64-js'));               // ?
 // timed('d3',              () => global.d3              = require('d3'));                      // 50ms [heavy, don't need full d3]
 timed('d3-color',           () => global.d3c             = require('d3-color'));                // 2ms
 timed('d3-scale-chromatic', () => global.d3sc            = require('d3-scale-chromatic'));      // 6ms

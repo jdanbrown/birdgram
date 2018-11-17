@@ -1,3 +1,5 @@
+import base64js from 'base64-js';
+import concatTypedArray from 'concat-typed-array';
 import { color, RGBColor } from 'd3-color';
 import { interpolateMagma } from 'd3-scale-chromatic';
 // console.warn('XXX: RecordScreen: import jimp ...'); // XXX Debug
@@ -44,7 +46,11 @@ const JimpAsync = (...args: Array<any>): Promise<Jimp> => new Promise((resolve, 
 });
 
 // "Samples" means "audio samples" throughout
-type Samples = Buffer; // Buffer extends Uint8Array
+export type Samples = Int16Array; // HACK Assumes bitsPerSample=16
+export const Samples = Int16Array;
+export function concatSamples(args: Samples[]): Samples { return concatTypedArray(Samples, ...args); }
+global.concatTypedArray = concatTypedArray; // XXX Debug
+global.concatSamples = concatSamples; // XXX Debug
 
 export interface Props {
   // App globals
@@ -58,6 +64,7 @@ export interface Props {
   channels: number;
   bitsPerSample: number;
   spectroHeight: number;
+  nMels: number;
 }
 
 interface State {
@@ -79,6 +86,7 @@ interface SpectroImage {
   source: {uri: string};
   width: number;
   height: number;
+  debugTime?: number;
 }
 
 export class RecordScreen extends React.Component<Props, State> {
@@ -89,7 +97,8 @@ export class RecordScreen extends React.Component<Props, State> {
     sampleRate: 22050,
     channels: 1,
     bitsPerSample: 16,
-    spectroHeight: 100,
+    spectroHeight: 128, // TODO(mel_spectro) Settings?
+    nMels: 128, // Should match spectroHeight for best results (refresh rate + no image smoothing)
   };
 
   state: State = {
@@ -106,8 +115,8 @@ export class RecordScreen extends React.Component<Props, State> {
 
   // Recorded samples -> reshaped samples -> spectro images
   //  - Private attrs instead of state to avoid excessive render calls
-  _samplesChunks:  Array<Buffer> = [];
-  _partialRechunk: Array<Buffer> = [];
+  _samplesChunks:  Array<Samples> = [];
+  _partialRechunk: Array<Samples> = [];
 
   // Precompute spectro color table for fast lookup in the tight loop in spectroImageFromSamples
   _magmaTable: Array<{r: number, g: number, b: number}> = (
@@ -131,10 +140,11 @@ export class RecordScreen extends React.Component<Props, State> {
       log.info(`${this.constructor.name}.componentDidMount Permissions.request: microphone`, status);
     });
 
-    // Register callbacks
-    this._listener = MicStream.addListener(samples => {
-      this.onSamplesChunk(Buffer.from(samples));
-    });
+    // TODO(mel_spectro): Needs update for Buffer -> Int16Array
+    // // Register callbacks
+    // this._listener = MicStream.addListener(samples => {
+    //   this.onSamplesChunk(Buffer.from(samples));
+    // });
 
   }
 
@@ -184,18 +194,26 @@ export class RecordScreen extends React.Component<Props, State> {
             // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
             //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
             //  - https://github.com/DylanVann/react-native-fast-image
-            (this.state.spectroImages.map(({source, width, height}, index) => (
-              <FastImage
+            (this.state.spectroImages.map(({source, width, height, debugTime}, index) => (
+              <View
                 key={index} // (Use source.uri if index causes trouble)
-                style={{
-                  width,
-                  height,
-                  marginBottom: 1,
-                  marginRight: this.props.showDebug ? 1 : 0,
-                }}
-                source={source}
-                // resizeMode='stretch' // Handled upstream by a jimp.resize
-              />
+              >
+                <FastImage
+                  style={{
+                    width,
+                    height,
+                    marginBottom: 1,
+                    marginRight: this.props.showDebug ? 1 : 0,
+                  }}
+                  source={source}
+                  resizeMode='stretch'
+                />
+                {this.props.showDebug && debugTime && (
+                  <this.DebugView style={{padding: 0}}>
+                    <this.DebugText style={{fontSize: 8}}>{debugTime * 1000}</this.DebugText>
+                  </this.DebugView>
+                )}
+              </View>
             )))
           }
         </ScrollView>
@@ -293,6 +311,7 @@ export class RecordScreen extends React.Component<Props, State> {
         sampleRate: this.props.sampleRate,
         channels: this.props.channels,
         bitsPerSample: this.props.bitsPerSample,
+        library: this.props.library,
       }));
 
       // Update recordingState + reset audio chunks
@@ -318,7 +337,6 @@ export class RecordScreen extends React.Component<Props, State> {
           //  - TODO PR to change hardcoded kAudioFormatULaw -> any mFormatID (e.g. mp4)
           sampleRate, // (QA'd via tone generator -> MicStream -> magSpectrogram)
           bitsPerChannel: this.props.bitsPerSample,
-          // bitsPerChannel: 8, // XXX(write_audio)
           channelsPerFrame: 1,
           // Compute a bufferSize that will fire ~refreshRate buffers per sec
           //  - Hardcode `/2` here to counteract the `*2` in MicStream...
@@ -330,20 +348,20 @@ export class RecordScreen extends React.Component<Props, State> {
         MicStream.start(); // (Async with no signal of success/failure)
 
       } else if (this.props.library === 'AudioRecord') {
-
         // TODO(write_audio)
+
         AudioRecord.init({
           sampleRate: this.props.sampleRate,
           channels: this.props.channels,
           bitsPerSample: this.props.bitsPerSample,
-          wavFile: this.freshFilename('recording', 'wav'), // FIXME Hardcoded to fs.dirs.DocumentDir
+          wavFile: this.freshFilename('wav'), // FIXME dir is hardcoded to fs.dirs.DocumentDir (in RNAudioRecord.m)
         });
         AudioRecord.start();
 
-        // TODO(write_audio)
         AudioRecord.on('data', (data: string) => {
-          const samples = Buffer.from(data, 'base64'); // Decode base64 string -> audio samples (uint8)
-          this.onSamplesChunk(samples);
+          // Convert base64:str -> bytes:Uint8Array -> samples:Int16Array (int16 to match bitsPerSample=16)
+          if (this.props.bitsPerSample !== 16) throw 'Samples=Int16Array assumes bitsPerSample=16'; // HACK
+          this.onSamplesChunk(new Samples(base64js.toByteArray(data).buffer));
         });
 
       }
@@ -353,7 +371,7 @@ export class RecordScreen extends React.Component<Props, State> {
 
   stopRecording = async () => {
     if (this.state.recordingState === RecordingState.Recording) {
-      log.info('RecordScreen.stopRecording');
+      log.info('RecordScreen.stopRecording', yaml({library: this.props.library}));
 
       this.setState({
         recordingState: RecordingState.Saving,
@@ -371,7 +389,7 @@ export class RecordScreen extends React.Component<Props, State> {
         // Encode audio samples as wav data
         //  - https://github.com/rochars/wavefile#create-wave-files-from-scratch
         //  - https://github.com/rochars/wavefile#the-wavefile-methods
-        let samples = Array.from(Buffer.concat(this._samplesChunks));
+        let samples = Array.from(concatSamples(this._samplesChunks));
         // samples = samples.map(x => x - 128) // XXX Error: "Overflow at input index 14: -1"
         const wav = new WaveFile()
         wav.fromScratch(
@@ -387,14 +405,14 @@ export class RecordScreen extends React.Component<Props, State> {
         wav.fromMuLaw(); // TODO "Decode 8-bit mu-Law as 16-bit"
 
         // Write wav data to file
-        wavPath = `${fs.dirs.CacheDir}/${this.freshFilename('recording', 'wav')}`;
+        wavPath = `${fs.dirs.CacheDir}/${this.freshFilename('wav')}`;
         // await fs.createFile(wavPath, samples as unknown as string, 'ascii'); // HACK Ignore bad type
         await fs.createFile(wavPath, Array.from(wav.toBuffer()) as unknown as string, 'ascii'); // HACK Ignore bad type
         const {size} = await fs.stat(wavPath);
         log.debug('RecordScreen.stopRecording: Wrote file', yaml({wavPath, size}));
 
         // XXX Debug
-        global.samples = samples;
+        // global.samples = samples;
         global.wav = wav;
 
       } else if (this.props.library === 'AudioRecord') {
@@ -406,23 +424,28 @@ export class RecordScreen extends React.Component<Props, State> {
         throw `Invalid library[${this.props.library}]`; // (Eliminate wavPath: undefined)
       }
 
+      // TODO(mel_spectro): Debug
+      log.info('Writing this._samplesChunks to file');
+      const samplesForJson = Array.from(concatSamples(this._samplesChunks));
+      await fs.writeFile(`${wavPath}.samples.json`, json(samplesForJson));
+
       const sound = await Sound.newAsync(wavPath);
 
       // XXX Debug
       global.wavPath = wavPath;
       global.sound = sound;
 
-      // XXX Debug
-      Sound.setActive(true);
-      Sound.setCategory(
-        'PlayAndRecord',
-        true, // mixWithOthers
-      );
-      Sound.setMode(
-        'Default',
-        // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
-      );
-      sound.play();
+      // // XXX Debug
+      // Sound.setActive(true);
+      // Sound.setCategory(
+      //   'PlayAndRecord',
+      //   true, // mixWithOthers
+      // );
+      // Sound.setMode(
+      //   'Default',
+      //   // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
+      // );
+      // sound.play();
 
       this.setState({
         recordingState: RecordingState.Stopped,
@@ -444,7 +467,7 @@ export class RecordScreen extends React.Component<Props, State> {
           // Consume the rest of chunk (and stop)
           this._partialRechunk.push(chunk);
           need -= chunk.length;
-          chunk = Buffer.alloc(0); // Empty
+          chunk = new Samples(0); // Empty
         } else {
           // Consume a prefix of chunk and loop on the rest
           this._partialRechunk.push(chunk.slice(0, need));
@@ -453,12 +476,13 @@ export class RecordScreen extends React.Component<Props, State> {
         }
         if (need === 0) {
           // Produce the next rechunk
-          rechunks.push(Buffer.concat(this._partialRechunk));
+          rechunks.push(concatSamples(this._partialRechunk));
           this._partialRechunk = [];
         }
       }
 
-      // TODO Helpful? Currently unused and consuming ram [though empirically not a significant amount]
+      // TODO Required for MicStream file write (in stopRecording)
+      // // TODO Helpful? Currently unused and consuming ram [though empirically not a significant amount]
       // // Persist rechunks [before render, which we might need to change to throttle or shed load]
       // for (let rechunk of rechunks) {
       //   this._samplesChunks.push(rechunk);
@@ -486,32 +510,71 @@ export class RecordScreen extends React.Component<Props, State> {
     // TODO Include samples from previous chunks in stft
     //  - Defer until melSpectrogram, so we can couple to the right mel params
 
-    // Compute (mag) spectro from samples
-    const {sampleRate} = this.props;
-    const [pow, db] = [
-      // pow=1 without powerToDb kinda works, but pow=2 with powerToDb works way better
-      // 1, false, // Barely
-      // 2, false, // Junk
-      // 2, true,  // Decent
-      3, true,  // Good enough (until we melSpectrogram)
-    ];
-    let [spectro, nfft] = magSpectrogram(
-      // TODO TODO `new Float32Array` is dubious -- is it converting numbers or casting bytes?
-      stft(new Float32Array(samples), {sampleRate}), // (QA'd via tone generator -> MicStream -> magSpectrogram)
-      pow,
-    );
-    if (db) spectro = powerToDb(spectro);
+    const {sampleRate, nMels} = this.props;
+
+    // Convert int16->float32 for fft lib (no byte reinterp, just element-wise conversion)
+    const y = Float32Array.from(samples);
+
+    const doMel = true;
+    const melParams = {
+      // TODO(mel_spectro)
+      sampleRate,
+      // nFft: 2048 / 2,
+      // nFft: 2048, // Default: 2048 [I think]
+      // winLength, // Default: nFft
+      // hopLength, // Default: winLength // 4
+      nMels, // Default: 128
+      power: 2, // Default: 2
+      fMin: 0, // Default: 0
+      fMax: sampleRate / 2, // Default: sampleRate / 2
+    };
+
+    let pow: number, db: boolean, nFft: number, spectro: Array<Float32Array>;
+    if (!doMel) {
+      // log.debug('magSpectrogram');
+
+      // Compute (mag) spectro from samples
+      [pow, db] = [
+        // pow=1 without powerToDb kinda works, but pow=2 with powerToDb works way better
+        // 1, false, // Barely
+        // 2, false, // Junk
+        2, true,  // Decent [~ melSpectrogram]
+        // 3, true,  // Good enough (until we melSpectrogram)
+      ];
+      // (QA'd via tone generator -> MicStream -> magSpectrogram)
+      // const _stft = stft(y, {sampleRate});
+      const _stft = stft(y, _.clone(melParams)); // (Clone to avoid caller mutation)
+      [spectro, nFft] = magSpectrogram(_stft, pow);
+
+      // Linear power -> log power
+      if (db) spectro = powerToDb(spectro);
+
+    } else {
+      // log.debug('melSpectrogram');
+
+      nFft = _.get(melParams, 'nFft', null);
+      const db = true;
+      // const db = false;
+      // log.debug('melParams', '\n'+yamlPretty(melParams)); // Debug
+
+      spectro = melSpectrogram(y, _.clone(melParams)); // (Clone to avoid caller mutation)
+
+      // Linear power -> log power
+      if (db) spectro = powerToDb(spectro);
+
+    }
+
+    // Float32Array[] -> nj.array
     let S = nj.array(spectro);
 
-    // Normalize values to [0,1]
-    //  - QUESTION max or max-min?
-    // log.debug('S.min, S.max', S.min(), S.max());
+    // Normalize values to [0,1] for imageRGBA [QUESTION max? max - min?]
+    // log.debug('S.min, S.max', S.min(), S.max()); // Debug
     S = S.subtract(S.min());
     S = S.divide(S.max());
-    // log.debug('S.min, S.max', S.min(), S.max());
+    // log.debug('S.min, S.max', S.min(), S.max()); // Debug
 
-    // log.debug('nfft', nfft);
-    // log.debug('S.shape', S.shape);
+    // log.debug('nFft', nFft); // Debug
+    // log.debug('S.shape', S.shape); // Debug
 
     // Compute imageRGBA from S
     const [w_S, h_S] = S.shape;
@@ -541,7 +604,7 @@ export class RecordScreen extends React.Component<Props, State> {
     img = (img
       // .crop(0, 0, w_img, h_img)
       // Noticeably faster (at spectroHeight=100) to downsize before data url i/o skip jimp.resize and <Image resizeMode='stretch'>
-      .resize(w_img, h_img)
+      // .resize(w_img, h_img) // XXX(mel_spectro)
     );
 
     // Render image (via file)
@@ -552,23 +615,24 @@ export class RecordScreen extends React.Component<Props, State> {
     const pngBase64 = dataUrl.replace('data:image/png;base64,', '');
     await fs.createFile(pngPath, pngBase64, 'base64');
 
+    const time = timer.time();
     const spectroImage: SpectroImage = {
       source: {uri: `file://${pngPath}`}, // Image {style:{width,height}} required for file:// uris, else image doesn't show
       width: w_img,
       height: h_img,
+      debugTime: time,
     };
 
     // XXX Globals for dev
     Object.assign(global, {
-      samples, spectro, S, w_S, h_S, w_img, h_img, imageRGBA, spectroImage,
+      samples, y, melParams, spectro, S, w_S, h_S, w_img, h_img, imageRGBA, spectroImage,
     });
 
-    const time = timer.time();
     log.info('RecordScreen.spectroImageFromSamples', yaml({
       ['samples.length']: samples.length,
       time,
       timePerAudioSec: round(time / (samples.length / (this.props.sampleRate * this.props.channels)), 3),
-      nfft,
+      nFft,
       ['S.shape']: S.shape,
       ['S.min_max']: [S.min(), S.max()],
       ['wh_img']: [w_img, h_img],
@@ -577,8 +641,10 @@ export class RecordScreen extends React.Component<Props, State> {
     return spectroImage;
   }
 
-  freshFilename = (prefix: string, ext: string): string => {
-    return puts(`${prefix}-${new Date().toISOString()}-${chance.hash({length: 8})}.${ext}`);
+  freshFilename = (ext: string): string => {
+    const prefix = 'rec-v2';
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); // (Avoid at least ':' chars, for osx)
+    return puts(`${prefix}-${timestamp}-${chance.hash({length: 8})}.${ext}`);
   }
 
   // Debug components

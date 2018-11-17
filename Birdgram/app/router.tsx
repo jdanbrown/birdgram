@@ -68,7 +68,7 @@ export type TabName = keyof TabHistories;
 export type HistoryName = keyof Histories;
 
 // Prefix keys in AsyncStorage
-const _prefix = 'router_v2.'; // Bump version to wipe out storage on incompat code changes
+const _prefix = 'router_v3.'; // Bump version to wipe out storage on incompat code changes
 function prefixKey(key: string): string {
   return `${_prefix}${key}`;
 };
