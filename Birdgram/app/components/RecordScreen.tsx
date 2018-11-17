@@ -37,7 +37,7 @@ import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
   chance, ExpWeightedMean, global, json, match, matchNil, matchNull, matchUndefined, pretty, round,
-  shallowDiffPropsState, Timer, yaml, yamlPretty,
+  shallowDiffPropsState, timed, Timer, yaml, yamlPretty,
 } from '../utils';
 
 // Util: wrap `new Jimp` in a promise
@@ -86,7 +86,7 @@ interface SpectroImage {
   source: {uri: string};
   width: number;
   height: number;
-  debugTime?: number;
+  debugTimes?: {[key: string]: number};
 }
 
 export class RecordScreen extends React.Component<Props, State> {
@@ -194,7 +194,7 @@ export class RecordScreen extends React.Component<Props, State> {
             // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
             //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
             //  - https://github.com/DylanVann/react-native-fast-image
-            (this.state.spectroImages.map(({source, width, height, debugTime}, index) => (
+            (this.state.spectroImages.map(({source, width, height, debugTimes}, index) => (
               <View
                 key={index} // (Use source.uri if index causes trouble)
               >
@@ -208,9 +208,11 @@ export class RecordScreen extends React.Component<Props, State> {
                   source={source}
                   resizeMode='stretch'
                 />
-                {this.props.showDebug && debugTime && (
-                  <this.DebugView style={{padding: 0}}>
-                    <this.DebugText style={{fontSize: 8}}>{debugTime * 1000}</this.DebugText>
+                {this.props.showDebug && (
+                  <this.DebugView style={{flexDirection: 'column', padding: 0}}>
+                    {_.values(debugTimes || {}).map((debugTime, i) => (
+                      <this.DebugText key={i} style={{fontSize: 8}}>{debugTime * 1000}</this.DebugText>
+                    ))}
                   </this.DebugView>
                 )}
               </View>
@@ -506,6 +508,7 @@ export class RecordScreen extends React.Component<Props, State> {
 
   spectroImageFromSamples = async (samples: Samples): Promise<SpectroImage> => {
     const timer = new Timer();
+    const debugTimes: {[key: string]: number} = {};
 
     // TODO Include samples from previous chunks in stft
     //  - Defer until melSpectrogram, so we can couple to the right mel params
@@ -515,7 +518,11 @@ export class RecordScreen extends React.Component<Props, State> {
     // Convert int16->float32 for fft lib (no byte reinterp, just element-wise conversion)
     const y = Float32Array.from(samples);
 
-    const doMel = true;
+    const spectroType: string = (
+      // 'mag'
+      'mel'
+      // 'mock'
+    );
     const melParams = {
       // TODO(mel_spectro)
       sampleRate,
@@ -529,12 +536,12 @@ export class RecordScreen extends React.Component<Props, State> {
       fMax: sampleRate / 2, // Default: sampleRate / 2
     };
 
-    let pow: number, db: boolean, nFft: number, spectro: Array<Float32Array>;
-    if (!doMel) {
+    let nFft: number, spectro: Array<Float32Array>;
+    if (spectroType === 'mag') {
       // log.debug('magSpectrogram');
 
       // Compute (mag) spectro from samples
-      [pow, db] = [
+      const [pow, db] = [
         // pow=1 without powerToDb kinda works, but pow=2 with powerToDb works way better
         // 1, false, // Barely
         // 2, false, // Junk
@@ -549,7 +556,7 @@ export class RecordScreen extends React.Component<Props, State> {
       // Linear power -> log power
       if (db) spectro = powerToDb(spectro);
 
-    } else {
+    } else if (spectroType === 'mel') {
       // log.debug('melSpectrogram');
 
       nFft = _.get(melParams, 'nFft', null);
@@ -558,10 +565,20 @@ export class RecordScreen extends React.Component<Props, State> {
       // log.debug('melParams', '\n'+yamlPretty(melParams)); // Debug
 
       spectro = melSpectrogram(y, _.clone(melParams)); // (Clone to avoid caller mutation)
+      debugTimes.melSplit = timer.lap();
 
       // Linear power -> log power
       if (db) spectro = powerToDb(spectro);
 
+    } else if (spectroType === 'mock') {
+
+      nFft = _.get(melParams, 'nFft', null);
+
+      const [w, h] = [20, melParams.nMels];
+      spectro = (nj.random([w, h]).tolist() as number[][]).map(x => Float32Array.from(x));
+
+    } else {
+      throw `Invalid spectroType[${spectroType}]`;
     }
 
     // Float32Array[] -> nj.array
@@ -575,6 +592,8 @@ export class RecordScreen extends React.Component<Props, State> {
 
     // log.debug('nFft', nFft); // Debug
     // log.debug('S.shape', S.shape); // Debug
+
+    debugTimes.spectro = timer.lap();
 
     // Compute imageRGBA from S
     const [w_S, h_S] = S.shape;
@@ -590,37 +609,61 @@ export class RecordScreen extends React.Component<Props, State> {
       }
     }
 
+    debugTimes.rgba = timer.lap();
+
     // Build image from imageRGBA
     //  - XXX Very slow, kills app after ~5s
     const [w_img, h_img] = [
       w_S,
       this.props.spectroHeight,
     ];
-    let img = await JimpAsync({
-      data: imageRGBA,
-      width: w_S,
-      height: h_S,
-    })
-    img = (img
-      // .crop(0, 0, w_img, h_img)
-      // Noticeably faster (at spectroHeight=100) to downsize before data url i/o skip jimp.resize and <Image resizeMode='stretch'>
-      // .resize(w_img, h_img) // XXX(mel_spectro)
-    );
 
-    // Render image (via file)
-    //  - Scratch: fs.createFile(pngPath, imageRGBA.toString('base64'), 'base64');
-    const dataUrl = await img.getBase64Async('image/png');
-    const filename = `${new Date().toISOString()}-${chance.hash({length: 8})}.png`;
-    const pngPath = `${fs.dirs.CacheDir}/${filename}`;
-    const pngBase64 = dataUrl.replace('data:image/png;base64,', '');
-    await fs.createFile(pngPath, pngBase64, 'base64');
+    let source: {uri: string};
+    const imageType: string = (
+      'jimp'
+      // 'mock'
+    );
+    if (imageType === 'jimp') {
+
+      let img = await JimpAsync({
+        data: imageRGBA,
+        width: w_S,
+        height: h_S,
+      })
+      img = (img
+        // .crop(0, 0, w_img, h_img)
+        // Noticeably faster (at spectroHeight=100) to downsize before data url i/o skip jimp.resize and <Image resizeMode='stretch'>
+        // .resize(w_img, h_img) // XXX(mel_spectro)
+      );
+
+      debugTimes.jimp = timer.lap();
+
+      // Render image (via file)
+      //  - Scratch: fs.createFile(pngPath, imageRGBA.toString('base64'), 'base64');
+      const dataUrl = await img.getBase64Async('image/png');
+      debugTimes.dataUrl = timer.lap();
+      const filename = `${new Date().toISOString()}-${chance.hash({length: 8})}.png`;
+      const pngPath = `${fs.dirs.CacheDir}/${filename}`;
+      const pngBase64 = dataUrl.replace('data:image/png;base64,', '');
+      await fs.createFile(pngPath, pngBase64, 'base64');
+      debugTimes.file = timer.lap();
+
+      source = {uri: `file://${pngPath}`}; // Image {style:{width,height}} required for file:// uris, else image doesn't show
+
+    } else if (imageType === 'mock') {
+
+      source = {uri: ''};
+
+    } else {
+      throw `Invalid imageType[${imageType}]`;
+    }
 
     const time = timer.time();
     const spectroImage: SpectroImage = {
-      source: {uri: `file://${pngPath}`}, // Image {style:{width,height}} required for file:// uris, else image doesn't show
+      source,
       width: w_img,
       height: h_img,
-      debugTime: time,
+      debugTimes,
     };
 
     // XXX Globals for dev

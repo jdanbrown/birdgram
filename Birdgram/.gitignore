@@ -1,3 +1,7 @@
+# Birdgram
+ios/AudioKitPlaygrounds/
+ios/Pods/
+
 # xcode
 build/
 *.pbxuser

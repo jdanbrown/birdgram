@@ -83,6 +83,11 @@ export class Timer {
   reset = () => {
     this.startTime = new Date();
   }
+  lap = (): number => {
+    const time = this.time();
+    this.reset();
+    return time;
+  }
 }
 
 // When you want Object.keys(x): Array<keyof typeof x> i/o Array<string>
@@ -114,7 +119,11 @@ export class ExpWeightedMean {
   }
 }
 
-export function timed<X>(f: () => X): {x: X, time: number} {
+export function timed<X>(f: () => X): number {
+  return _timed(f).time;
+}
+
+export function _timed<X>(f: () => X): {x: X, time: number} {
   const timer = new Timer();
   const x = f();
   return {x, time: timer.time()};
@@ -130,6 +139,7 @@ export function times<X>(n: number, f: () => X) {
 // HACK Globals for dev
 global.timed = timed;
 global.times = times;
+global.str   = (x: any) => x.toString(); // e.g. for nj.array, which have a not useful console.log but a useful .toString()
 
 //
 // json
