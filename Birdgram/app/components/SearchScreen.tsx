@@ -182,6 +182,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   // (Unused, kept for reference)
   // sortActionSheet: RefObject<ActionSheet> = React.createRef();
 
+  // Refs
   scrollViewRef: RefObject<SectionListStatic<Rec>> = React.createRef();
 
   // Avoid constructor
