@@ -5,6 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// TODO Testing imports from pods
+#import <AudioKit/AudioKit.h>
+
 #import <UIKit/UIKit.h>
 
 #import "AppDelegate.h"

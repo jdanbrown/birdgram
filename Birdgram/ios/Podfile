@@ -1,0 +1,38 @@
+# Docs:
+# - https://facebook.github.io/react-native/docs/integration-with-existing-apps#configuring-cocoapods-dependencies
+# - https://shift.infinite.red/beginner-s-guide-to-using-cocoapods-with-react-native-46cb4d372995
+
+# Troubleshooting
+# - `pod install` -> error "Unable to find a specification for `FooBar`"
+#   - Try inspecting stuff
+#     $ pod repo list
+#     $ pod search FooBar
+#     $ pod spec cat FooBar
+#   - Try updating the pod master repo [https://github.com/CocoaPods/CocoaPods/issues/3877]
+#     $ pod repo update
+#   - Try resetting the pod master repo [https://stackoverflow.com/a/32850706/397334]
+#     $ pod repo remove master
+#     $ pod setup
+
+platform :ios, '9.0'
+use_frameworks!
+
+workspace 'Birdgram.xcworkspace'
+
+def all_pods
+  pod 'AudioKit', '~> 4.5'
+end
+
+target 'Bubo' do
+  project 'Bubo/Bubo.xcodeproj'
+  all_pods
+end
+
+target 'Birdgram' do
+  project 'Birdgram.xcodeproj'
+  all_pods
+  # # This causes warnings. Commented out for now.
+  # target 'BirdgramTests' do
+  #   inherit! :search_paths
+  # end
+end
