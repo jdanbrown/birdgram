@@ -7,11 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		8423EF679280958EEB9D7598 /* Pods_Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */; };
 		B70DB74E21A1F7AC00968F4D /* Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B70DB74421A1F7AC00968F4D /* Bubo.framework */; };
 		B70DB75321A1F7AC00968F4D /* BuboTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70DB75221A1F7AC00968F4D /* BuboTests.swift */; };
 		B70DB75521A1F7AC00968F4D /* Bubo.h in Headers */ = {isa = PBXBuildFile; fileRef = B70DB74721A1F7AC00968F4D /* Bubo.h */; settings = {ATTRIBUTES = (Public, ); }; };
-		B70DB75F21A1F82100968F4D /* Spectro3.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70DB75E21A1F82100968F4D /* Spectro3.swift */; };
+		B72CC81521A36331009D8690 /* Pods_Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */; };
+		B754382221A3734300705EE3 /* Spectro.swift in Sources */ = {isa = PBXBuildFile; fileRef = B754382121A3734300705EE3 /* Spectro.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,7 +33,7 @@
 		B70DB74D21A1F7AC00968F4D /* BuboTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BuboTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B70DB75221A1F7AC00968F4D /* BuboTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuboTests.swift; sourceTree = "<group>"; };
 		B70DB75421A1F7AC00968F4D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		B70DB75E21A1F82100968F4D /* Spectro3.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spectro3.swift; sourceTree = "<group>"; };
+		B754382121A3734300705EE3 /* Spectro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spectro.swift; sourceTree = "<group>"; };
 		E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -42,7 +42,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8423EF679280958EEB9D7598 /* Pods_Bubo.framework in Frameworks */,
+				B72CC81521A36331009D8690 /* Pods_Bubo.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -82,7 +82,7 @@
 			children = (
 				B70DB74721A1F7AC00968F4D /* Bubo.h */,
 				B70DB74821A1F7AC00968F4D /* Info.plist */,
-				B70DB75E21A1F82100968F4D /* Spectro3.swift */,
+				B754382121A3734300705EE3 /* Spectro.swift */,
 			);
 			path = Bubo;
 			sourceTree = "<group>";
@@ -244,7 +244,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B70DB75F21A1F82100968F4D /* Spectro3.swift in Sources */,
+				B754382221A3734300705EE3 /* Spectro.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -411,6 +411,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = org.jdanbrown.Bubo;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -439,6 +440,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = org.jdanbrown.Bubo;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				SKIP_INSTALL = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

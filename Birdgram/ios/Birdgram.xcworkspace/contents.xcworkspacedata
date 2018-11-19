@@ -5,7 +5,7 @@
       location = "group:AudioKitPlaygrounds/AudioKitPlaygrounds.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:Playgrounds.playground">
+      location = "group:Playgrounds/Playgrounds.xcodeproj">
    </FileRef>
    <FileRef
       location = "group:Bubo/Bubo.xcodeproj">

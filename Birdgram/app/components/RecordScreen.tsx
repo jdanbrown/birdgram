@@ -30,15 +30,18 @@ import nj from '../../third-party/numjs/dist/numjs.min';
 import * as Colors from '../colors';
 import { SourceId } from '../datatypes';
 import { log, puts } from '../log';
+import Spectro from '../native/Spectro';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
-  chance, ExpWeightedMean, global, json, match, matchNil, matchNull, matchUndefined, pretty, round,
+  chance, deepEqual, ExpWeightedMean, global, json, match, matchNil, matchNull, matchUndefined, pretty, round,
   shallowDiffPropsState, timed, Timer, yaml, yamlPretty,
 } from '../utils';
+
+global.Spectro = Spectro; // XXX Debug
 
 // Util: wrap `new Jimp` in a promise
 const JimpAsync = (...args: Array<any>): Promise<Jimp> => new Promise((resolve, reject) => {
@@ -74,6 +77,7 @@ interface State {
   spectroImages: Array<SpectroImage>;
   nSamples: number;
   nSpectroWidth: number;
+  nativeSpectro: object | null; // TODO(swift_audio)
 }
 
 enum RecordingState {
@@ -108,6 +112,7 @@ export class RecordScreen extends React.Component<Props, State> {
     spectroImages: [],
     nSamples: 0,
     nSpectroWidth: 0,
+    nativeSpectro: null,
   };
 
   // Getters for state
@@ -159,6 +164,14 @@ export class RecordScreen extends React.Component<Props, State> {
 
     if (this.state.follow) {
       this._scrollViewRef.current!.scrollToEnd();
+    }
+
+    // TODO(swift_audio)
+    const nativeSpectro: object = {
+      foo: await Spectro.foo('one', 'two', 4),
+    };
+    if (!deepEqual(nativeSpectro, this.state.nativeSpectro)) {
+      this.setState({nativeSpectro});
     }
 
   }
@@ -220,6 +233,36 @@ export class RecordScreen extends React.Component<Props, State> {
           }
         </ScrollView>
 
+        {/* Debug info */}
+        <this.DebugView style={{
+          width: '100%',
+        }}>
+          <this.DebugText>
+            navite/Spectro: {json(this.state.nativeSpectro)}
+          </this.DebugText>
+          <this.DebugText>
+            recordingState: {this.state.recordingState}
+          </this.DebugText>
+          <this.DebugText>
+            refreshRate: {this.state.refreshRate} ({this.nSamplesPerImage} samples per image / {this.props.sampleRate} Hz)
+          </this.DebugText>
+          <this.DebugText>
+            audio: {}
+            {sprintf('%.1fs', this.state.nSamples / this.props.sampleRate)} {}
+            ({Humanize.compactInteger(this.state.nSamples, 2)} samples)
+          </this.DebugText>
+          <this.DebugText>
+            spectro: {}
+            {this.state.nSpectroWidth} w × {this.props.spectroHeight} h (
+            {Humanize.compactInteger(this.state.nSpectroWidth * this.props.spectroHeight, 2)} px, {}
+            {this.state.spectroImages.length} images)
+          </this.DebugText>
+          <this.DebugText>
+            handoff: {}
+            {this.state.spectroImages.length} images / {this._samplesChunks.length} chunks
+          </this.DebugText>
+        </this.DebugView>
+
         {/* Controls bar */}
         <View style={{
           flexDirection: 'row',
@@ -275,33 +318,6 @@ export class RecordScreen extends React.Component<Props, State> {
           )}
 
         </View>
-
-        {/* Debug info */}
-        <this.DebugView style={{
-          width: '100%',
-        }}>
-          <this.DebugText>
-            recordingState: {this.state.recordingState}
-          </this.DebugText>
-          <this.DebugText>
-            refreshRate: {this.state.refreshRate} ({this.nSamplesPerImage} samples per image / {this.props.sampleRate} Hz)
-          </this.DebugText>
-          <this.DebugText>
-            audio: {}
-            {sprintf('%.1fs', this.state.nSamples / this.props.sampleRate)} {}
-            ({Humanize.compactInteger(this.state.nSamples, 2)} samples)
-          </this.DebugText>
-          <this.DebugText>
-            spectro: {}
-            {this.state.nSpectroWidth} w × {this.props.spectroHeight} h (
-            {Humanize.compactInteger(this.state.nSpectroWidth * this.props.spectroHeight, 2)} px, {}
-            {this.state.spectroImages.length} images)
-          </this.DebugText>
-          <this.DebugText>
-            handoff: {}
-            {this.state.spectroImages.length} images / {this._samplesChunks.length} chunks
-          </this.DebugText>
-        </this.DebugView>
 
       </View>
     );

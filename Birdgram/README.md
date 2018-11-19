@@ -106,6 +106,13 @@ android
   - TODO
 
 # Troubleshooting
+- Playground fails to import frameworks (e.g. Bubo)
+  - Build the framework (e.g. Bubo) _once_ against a non-device device (e.g. "Generic iOS Device" / "iPhone 8")
+  - Then it doesn't matter which device you run against
+  - https://stackoverflow.com/a/37737190/397334
+- App fails on startup with cryptic stacktrace `__dyld_start` -> `__abort_with_payload`
+  - This happened when app Birdgram depended on framework Bubo
+  - Solution: in Birdgram project, "Embedded Binaries" -> + -> "Bubo.framework" (in addition to "Linked Libraries and Frameworks")
 - js code doesn't update in Xcode Release build
   - Silent js build error [e.g. next bullet]
   - To find it, try checking previous build msgs, or try clean build folder and rebuild to resurface it

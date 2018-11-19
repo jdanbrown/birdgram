@@ -2,7 +2,8 @@ import _ from 'lodash';
 import { createMemoryHistory, Location, MemoryHistory } from 'history';
 import React, { Component, ComponentType, PureComponent, ReactNode, RefObject } from 'React';
 import {
-  ActivityIndicator, Animated, AsyncStorage, Dimensions, Linking, Platform, SafeAreaView, StatusBar, Text, View,
+  ActivityIndicator, Animated, AsyncStorage, Dimensions, Linking, NativeModules, Platform, SafeAreaView, StatusBar,
+  Text, View,
 } from 'react-native';
 import KeepAwake from 'react-native-keep-awake';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
@@ -47,6 +48,7 @@ global.iOSColors = iOSColors;
 global.matchPath = matchPath;
 global.material = material;
 global.materialColors = materialColors;
+global.NativeModules = NativeModules;
 global.querySql = querySql;
 global.shallowDiff = shallowDiff;
 global.Settings = Settings;
