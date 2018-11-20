@@ -33,6 +33,7 @@
 		65BAEAB44DA24E9F9CE028FE /* Octicons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F456A7EB74E0402F98D0B31C /* Octicons.ttf */; };
 		6EC8A70CCE1B434A8D0B38BC /* MaterialIcons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E4BA4FD5A5644B62A9306C04 /* MaterialIcons.ttf */; };
 		76C840EB92AF487FBA6F0BD0 /* libRNAudioRecord.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DCA049B7438047599F841446 /* libRNAudioRecord.a */; };
+		7A245EFCCB59431FB0ADAD55 /* Pods_Birdgram.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 84DD8563EA53EA75065B87DD /* Pods_Birdgram.framework */; };
 		7C19D04F340144F295944389 /* libMicrophoneStream.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9C5D782FE18342929BD97492 /* libMicrophoneStream.a */; };
 		8007C45C489E4E25A5749D3F /* Feather.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DE94A016F63348E785A58055 /* Feather.ttf */; };
 		832341BD1AAA6AB300B99B32 /* libRCTText.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 832341B51AAA6A8300B99B32 /* libRCTText.a */; };
@@ -46,8 +47,10 @@
 		B2CE4D585E83481DB2A6B031 /* Entypo.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2CEE8CD9DE4841FCBC38447E /* Entypo.ttf */; };
 		B72CC80B21A34706009D8690 /* Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7019D5821A1FA6300F6E12B /* Bubo.framework */; };
 		B72CC80C21A34706009D8690 /* Bubo.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B7019D5821A1FA6300F6E12B /* Bubo.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		B72CC80F21A349FA009D8690 /* RNSpectro.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72CC80E21A349FA009D8690 /* RNSpectro.swift */; };
-		B72CC81321A34DBC009D8690 /* RNSpectro.m in Sources */ = {isa = PBXBuildFile; fileRef = B72CC81221A34DBC009D8690 /* RNSpectro.m */; };
+		B72CC80F21A349FA009D8690 /* Spectro.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72CC80E21A349FA009D8690 /* Spectro.swift */; };
+		B72CC81321A34DBC009D8690 /* Spectro.m in Sources */ = {isa = PBXBuildFile; fileRef = B72CC81221A34DBC009D8690 /* Spectro.m */; };
+		B76003CC21A3A7E200E1347A /* RCTSwiftLog.m in Sources */ = {isa = PBXBuildFile; fileRef = B76003C921A3A7E200E1347A /* RCTSwiftLog.m */; };
+		B76003CD21A3A7E200E1347A /* RCTLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003CB21A3A7E200E1347A /* RCTLog.swift */; };
 		B7B6AA5521A08A64008DDDBC /* search_recs in Resources */ = {isa = PBXBuildFile; fileRef = B7B6AA5421A08A64008DDDBC /* search_recs */; };
 		BF7C9911FA9C4338B0BF698C /* AntDesign.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E0D3CAC7BEF84537A4FD221A /* AntDesign.ttf */; };
 		C62C1AB9427E46D2BA340C1F /* libFastImage.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 15ACA59D541D436B8793C522 /* libFastImage.a */; };
@@ -447,6 +450,7 @@
 		2DCFFA301FB0499987321DAF /* MaterialCommunityIcons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = MaterialCommunityIcons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf"; sourceTree = "<group>"; };
 		3A2E8A05D78F4C998DC5DD92 /* FastImage.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = FastImage.xcodeproj; path = "../node_modules/react-native-fast-image/ios/FastImage.xcodeproj"; sourceTree = "<group>"; };
 		3DB7677A7FCE4E6886B3F6B8 /* RNSound.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = RNSound.xcodeproj; path = "../node_modules/react-native-sound/RNSound.xcodeproj"; sourceTree = "<group>"; };
+		45495516AF5157803E035649 /* Pods-Birdgram.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Birdgram.debug.xcconfig"; path = "Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram.debug.xcconfig"; sourceTree = "<group>"; };
 		4C301D1697624C7A851CBCED /* Foundation.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = Foundation.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Foundation.ttf"; sourceTree = "<group>"; };
 		58C910D952494CFAB98C0692 /* libRNSound.a */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = archive.ar; path = libRNSound.a; sourceTree = "<group>"; };
 		5D88AD5476D646B49025ACF6 /* FontAwesome5_Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome5_Regular.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome5_Regular.ttf"; sourceTree = "<group>"; };
@@ -459,6 +463,7 @@
 		7EE2EADEA0C24559BD626FAB /* test-auto-assets */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "test-auto-assets"; path = "../app/assets/auto/test-auto-assets"; sourceTree = "<group>"; };
 		8245462B264A4B53849196AC /* Ionicons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = Ionicons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Ionicons.ttf"; sourceTree = "<group>"; };
 		832341B01AAA6A8300B99B32 /* RCTText.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RCTText.xcodeproj; path = "../node_modules/react-native/Libraries/Text/RCTText.xcodeproj"; sourceTree = "<group>"; };
+		84DD8563EA53EA75065B87DD /* Pods_Birdgram.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Birdgram.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		945DEC247A05462C804E0C32 /* FontAwesome5_Solid.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome5_Solid.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome5_Solid.ttf"; sourceTree = "<group>"; };
 		95D338A68A224B59BF0B0214 /* RNVectorIcons.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = RNVectorIcons.xcodeproj; path = "../node_modules/react-native-vector-icons/RNVectorIcons.xcodeproj"; sourceTree = "<group>"; };
 		95FD82E165E44F2FB09395D9 /* RNGestureHandler.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = RNGestureHandler.xcodeproj; path = "../node_modules/react-native-gesture-handler/ios/RNGestureHandler.xcodeproj"; sourceTree = "<group>"; };
@@ -468,10 +473,14 @@
 		A4A78B34711F4B67BD424763 /* EvilIcons.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = EvilIcons.ttf; path = "../node_modules/react-native-vector-icons/Fonts/EvilIcons.ttf"; sourceTree = "<group>"; };
 		AA1F90226BC44ACE94E2E1CD /* RNFetchBlob.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = RNFetchBlob.xcodeproj; path = "../node_modules/rn-fetch-blob/ios/RNFetchBlob.xcodeproj"; sourceTree = "<group>"; };
 		ADBDB91F1DFEBF0600ED6528 /* RCTBlob.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RCTBlob.xcodeproj; path = "../node_modules/react-native/Libraries/Blob/RCTBlob.xcodeproj"; sourceTree = "<group>"; };
+		B1811E90C52768853A485721 /* Pods-Birdgram.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Birdgram.release.xcconfig"; path = "Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram.release.xcconfig"; sourceTree = "<group>"; };
 		B7019D5821A1FA6300F6E12B /* Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B70DB6D921A1F45100968F4D /* Birdgram-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Birdgram-Bridging-Header.h"; sourceTree = "<group>"; };
-		B72CC80E21A349FA009D8690 /* RNSpectro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNSpectro.swift; path = Birdgram/RNSpectro.swift; sourceTree = "<group>"; };
-		B72CC81221A34DBC009D8690 /* RNSpectro.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = RNSpectro.m; path = Birdgram/RNSpectro.m; sourceTree = "<group>"; };
+		B72CC80E21A349FA009D8690 /* Spectro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Spectro.swift; path = Birdgram/Spectro.swift; sourceTree = "<group>"; };
+		B72CC81221A34DBC009D8690 /* Spectro.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Spectro.m; path = Birdgram/Spectro.m; sourceTree = "<group>"; };
+		B76003C921A3A7E200E1347A /* RCTSwiftLog.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = RCTSwiftLog.m; path = Birdgram/RCTSwiftLog.m; sourceTree = "<group>"; };
+		B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RCTSwiftLog.h; path = Birdgram/RCTSwiftLog.h; sourceTree = "<group>"; };
+		B76003CB21A3A7E200E1347A /* RCTLog.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RCTLog.swift; path = Birdgram/RCTLog.swift; sourceTree = "<group>"; };
 		B7B6AA5421A08A64008DDDBC /* search_recs */ = {isa = PBXFileReference; lastKnownFileType = folder; name = search_recs; path = "../../data/cache/payloads/search_recs-version[8],limit[100],audio_s[10],countries_k[na],com_names_k[ca],num_recs[None]-fb42447/mobile-version[1]/search_recs"; sourceTree = "<group>"; };
 		B8ED9E6567504A149A09641B /* SQLite.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = SQLite.xcodeproj; path = "../node_modules/react-native-sqlite-storage/src/ios/SQLite.xcodeproj"; sourceTree = "<group>"; };
 		C6B6829AB2D043BB990531DD /* FontAwesome.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome.ttf"; sourceTree = "<group>"; };
@@ -500,6 +509,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B72CC80B21A34706009D8690 /* Bubo.framework in Frameworks */,
+				7A245EFCCB59431FB0ADAD55 /* Pods_Birdgram.framework in Frameworks */,
 				ADBDB9381DFEBF1600ED6528 /* libRCTBlob.a in Frameworks */,
 				11D1A2F320CAFA9E000508D9 /* libRCTAnimation.a in Frameworks */,
 				146834051AC3E58100842450 /* libReact.a in Frameworks */,
@@ -617,9 +627,12 @@
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				13B07FB11A68108700A75B9A /* LaunchScreen.xib */,
 				13B07FB71A68108700A75B9A /* main.m */,
-				B72CC80E21A349FA009D8690 /* RNSpectro.swift */,
-				B72CC81221A34DBC009D8690 /* RNSpectro.m */,
+				B72CC80E21A349FA009D8690 /* Spectro.swift */,
+				B72CC81221A34DBC009D8690 /* Spectro.m */,
 				B70DB6D921A1F45100968F4D /* Birdgram-Bridging-Header.h */,
+				B76003CB21A3A7E200E1347A /* RCTLog.swift */,
+				B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */,
+				B76003C921A3A7E200E1347A /* RCTSwiftLog.m */,
 			);
 			name = Birdgram;
 			sourceTree = "<group>";
@@ -647,11 +660,21 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		1AD88479424A1B254CCF8D4E /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				45495516AF5157803E035649 /* Pods-Birdgram.debug.xcconfig */,
+				B1811E90C52768853A485721 /* Pods-Birdgram.release.xcconfig */,
+			);
+			name = Pods;
+			sourceTree = "<group>";
+		};
 		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
 				B7019D5821A1FA6300F6E12B /* Bubo.framework */,
 				2D16E6891FA4F8E400B85C8A /* libReact.a */,
+				84DD8563EA53EA75065B87DD /* Pods_Birdgram.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -746,6 +769,7 @@
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				B7125450216D58B400B2BDB2 /* Recovered References */,
 				7F216E01966A45A9926C3220 /* Resources */,
+				1AD88479424A1B254CCF8D4E /* Pods */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -893,11 +917,13 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Birdgram" */;
 			buildPhases = (
+				2AFC3E054FFDE9C2372E7D8B /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				B72CC80D21A34706009D8690 /* Embed Frameworks */,
+				566F0755AA0DF6EED2C65ACD /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -1427,6 +1453,42 @@
 			shellPath = /bin/sh;
 			shellScript = "# From https://facebook.github.io/react-native/docs/running-on-device\nif [ \"${CONFIGURATION}\" == \"Debug\" ]; then export SKIP_BUNDLING=true; fi\n\nexport NODE_BINARY=node\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
 		};
+		2AFC3E054FFDE9C2372E7D8B /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Birdgram-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		566F0755AA0DF6EED2C65ACD /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${SRCROOT}/Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram-frameworks.sh",
+				"${BUILT_PRODUCTS_DIR}/Surge/Surge.framework",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Surge.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -1442,10 +1504,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B72CC81321A34DBC009D8690 /* RNSpectro.m in Sources */,
+				B76003CC21A3A7E200E1347A /* RCTSwiftLog.m in Sources */,
+				B72CC81321A34DBC009D8690 /* Spectro.m in Sources */,
 				13B07FBC1A68108700A75B9A /* AppDelegate.m in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
-				B72CC80F21A349FA009D8690 /* RNSpectro.swift in Sources */,
+				B76003CD21A3A7E200E1347A /* RCTLog.swift in Sources */,
+				B72CC80F21A349FA009D8690 /* Spectro.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1555,6 +1619,7 @@
 		};
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 45495516AF5157803E035649 /* Pods-Birdgram.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -1593,6 +1658,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B1811E90C52768853A485721 /* Pods-Birdgram.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -1673,7 +1739,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -1719,7 +1785,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				VALIDATE_PRODUCT = YES;

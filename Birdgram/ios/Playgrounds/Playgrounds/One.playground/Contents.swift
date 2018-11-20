@@ -4,11 +4,50 @@
 //  - Key: ctrl-\ to stop running playground
 //  - Key: ctrl-enter to show/hide current result inline [doesn't always work...]
 
+import Bubo // Before pods imports
+import AudioKit
+import AudioKitUI
+import Surge
+
+let d = ["a": 1, "b": 2]
+d["a"] as? Int
+
+print(Thread.callStackSymbols.joined(separator: "\n"))
+
+func f(_ g: () -> Int) -> Int { return g() * 2 }
+f { 4 }
+f { return 3 }
+
+let s = "foo"
+s.self
+type(of: s)
+
+//AppError("foo")
+//Array<AudioQueueBufferRef>(repeating: nil, count: 3)
+
+"x: \(Spectro.self)"
+
+let p = UnsafeMutablePointer<String>.allocate(capacity: 1)
+var v = "foo"
+//p.pointee // Error
+p.initialize(from: &v, count: 1)
+p.pointee
+p.deallocate()
+
+import Foundation
+NSError(domain: "foo", code: -5000)
+
+let d = ["a": 1, "b": 2]
+d["c"] ?? 3
+
 import UIKit
 
-import Bubo
-import AudioKit // After Bubo
-import AudioKitUI // After Bubo
+import Bubo // Before pods imports
+import AudioKit
+import AudioKitUI
+import Surge
+
+Surge.sum([1,2,3,4] as [Double])
 
 buboValue
 Spectro.foo(x: "xx", y: "yy", z: 42)

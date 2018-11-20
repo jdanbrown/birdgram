@@ -48,7 +48,7 @@ export function matchSourceId<X>(sourceId: SourceId, cases: {
   return match(dataset,
     ['xc',   () => cases.xc({xc_id: parseInt(rest)})],
     ['user', () => cases.user({})], // TODO(user_source_id)
-  )();
+  );
 }
 
 // e.g. 'xc:123456' -> 'XC123456'

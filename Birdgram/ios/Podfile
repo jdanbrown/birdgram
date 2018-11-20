@@ -14,13 +14,14 @@
 #     $ pod repo remove master
 #     $ pod setup
 
-platform :ios, '9.0'
+platform :ios, '10.0'
 use_frameworks!
 
 workspace 'Birdgram.xcworkspace'
 
 def all_pods
   pod 'AudioKit', '~> 4.5'
+  pod 'Surge', '~> 2.0.0'
 end
 
 # TODO How to fix warning "contains framework ... for which the Podfile does not contain host targets"?
@@ -30,11 +31,11 @@ target 'Bubo' do
 end
 
 # XXX Consolidated in Bubo (upstream framework, so we can use playgrounds)
-# target 'Birdgram' do
-#   project 'Birdgram.xcodeproj'
-#   all_pods
-#   # # This causes warnings. Commented out for now.
-#   # target 'BirdgramTests' do
-#   #   inherit! :search_paths
-#   # end
-# end
+target 'Birdgram' do
+  project 'Birdgram.xcodeproj'
+  all_pods
+  # # This causes warnings. Commented out for now.
+  # target 'BirdgramTests' do
+  #   inherit! :search_paths
+  # end
+end

@@ -806,7 +806,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     await match(state,
       [Gesture.State.ACTIVE, () => this.setState({showHelp: true})],
       [Gesture.State.END,    () => this.setState({showHelp: false})],
-    )();
+    );
   }
 
   onMockPress = (rec: Rec) => async () => {

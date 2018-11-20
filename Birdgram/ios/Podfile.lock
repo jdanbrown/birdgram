@@ -5,17 +5,21 @@ PODS:
   - AudioKit/Core (4.5.4)
   - AudioKit/UI (4.5.4):
     - AudioKit/Core
+  - Surge (2.0.0)
 
 DEPENDENCIES:
   - AudioKit (~> 4.5)
+  - Surge (~> 2.0.0)
 
 SPEC REPOS:
   https://github.com/cocoapods/specs.git:
     - AudioKit
+    - Surge
 
 SPEC CHECKSUMS:
   AudioKit: af3f5b73e22f85f3cd03076fea8afbb9658f0938
+  Surge: 1f0286bc5f0fe4283f3455479895bf85c7ef7760
 
-PODFILE CHECKSUM: c491d6b0a3b383d763b4606803fb7508c3d6bd70
+PODFILE CHECKSUM: a20de41a062953c4d4ef6c898f9baa08a045d1e3
 
 COCOAPODS: 1.5.3

@@ -30,7 +30,7 @@ import nj from '../../third-party/numjs/dist/numjs.min';
 import * as Colors from '../colors';
 import { SourceId } from '../datatypes';
 import { log, puts } from '../log';
-import Spectro from '../native/Spectro';
+import { Spectro } from '../native/Spectro';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
@@ -38,7 +38,7 @@ import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
   chance, deepEqual, ExpWeightedMean, global, json, match, matchNil, matchNull, matchUndefined, pretty, round,
-  shallowDiffPropsState, timed, Timer, yaml, yamlPretty,
+  shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty,
 } from '../utils';
 
 global.Spectro = Spectro; // XXX Debug
@@ -62,7 +62,7 @@ export interface Props {
   settings: SettingsWrites;
   showDebug: boolean;
   // RecordScreen
-  library: 'MicStream' | 'AudioRecord';
+  library: Library;
   sampleRate: number;
   channels: number;
   bitsPerSample: number;
@@ -77,8 +77,10 @@ interface State {
   spectroImages: Array<SpectroImage>;
   nSamples: number;
   nSpectroWidth: number;
-  nativeSpectro: object | null; // TODO(swift_audio)
+  nativeSpectro: object | null; // TODO(swift_spectro)
 }
+
+type Library = 'MicStream' | 'AudioRecord' | 'Spectro';
 
 enum RecordingState {
   Stopped = 'Stopped',
@@ -95,9 +97,10 @@ interface SpectroImage {
 
 export class RecordScreen extends React.Component<Props, State> {
 
-  static defaultProps = {
+  static defaultProps: Partial<Props> = {
     // library: 'MicStream', // XXX(write_audio)
-    library: 'AudioRecord', // TODO(write_audio)
+    // library: 'AudioRecord', // TODO(write_audio)
+    library: 'Spectro', // TODO(swift_spectro)
     sampleRate: 22050,
     channels: 1,
     bitsPerSample: 16,
@@ -145,11 +148,24 @@ export class RecordScreen extends React.Component<Props, State> {
       log.info(`${this.constructor.name}.componentDidMount Permissions.request: microphone`, status);
     });
 
-    // TODO(mel_spectro): Needs update for Buffer -> Int16Array
-    // // Register callbacks
-    // this._listener = MicStream.addListener(samples => {
-    //   this.onSamplesChunk(Buffer.from(samples));
-    // });
+
+    match(this.props.library,
+      ['MicStream', () => {
+        // TODO(mel_spectro): Needs update for Buffer -> Int16Array
+        // // Register callbacks
+        // this._listener = MicStream.addListener(samples => {
+        //   this.onSamplesChunk(Buffer.from(samples));
+        // });
+      }],
+      ['Spectro', () => {
+        // TODO(swift_spectro)
+        this._listener = Spectro.addListener((data: string) => {
+          // Convert base64:str -> bytes:Uint8Array -> samples:Int16Array (int16 to match bitsPerSample=16)
+          if (this.props.bitsPerSample !== 16) throw 'Samples=Int16Array assumes bitsPerSample=16'; // HACK
+          this.onSamplesChunk(new Samples(base64js.toByteArray(data).buffer));
+        });
+      }],
+    );
 
   }
 
@@ -166,9 +182,11 @@ export class RecordScreen extends React.Component<Props, State> {
       this._scrollViewRef.current!.scrollToEnd();
     }
 
-    // TODO(swift_audio)
+    // TODO(swift_spectro)
     const nativeSpectro: object = {
-      foo: await Spectro.foo('one', 'two', 4),
+      hello: await tryElseAsync(Promise.resolve(null), async () => {
+        return await Spectro.hello('one', 'two', 4);
+      }),
     };
     if (!deepEqual(nativeSpectro, this.state.nativeSpectro)) {
       this.setState({nativeSpectro});
@@ -238,7 +256,7 @@ export class RecordScreen extends React.Component<Props, State> {
           width: '100%',
         }}>
           <this.DebugText>
-            navite/Spectro: {json(this.state.nativeSpectro)}
+            Spectro.hello: {json(this.state.nativeSpectro)}
           </this.DebugText>
           <this.DebugText>
             recordingState: {this.state.recordingState}
@@ -296,21 +314,21 @@ export class RecordScreen extends React.Component<Props, State> {
 
           {/* Record/stop */}
           {match(this.state.recordingState,
-            [RecordingState.Stopped, (
+            [RecordingState.Stopped, () => (
               <RectButton style={styles.button} onPress={this.startRecording}>
                 <FontAwesome5 style={[styles.buttonIcon, {color: Colors.Paired.darkGreen}]}
                   name='circle' solid
                 />
               </RectButton>
             )],
-            [RecordingState.Recording, (
+            [RecordingState.Recording, () => (
               <RectButton style={styles.button} onPress={this.stopRecording}>
                 <FontAwesome5 style={[styles.buttonIcon, {color: Colors.Paired.darkRed}]}
                   name='stop' solid
                 />
               </RectButton>
             )],
-            [RecordingState.Saving, (
+            [RecordingState.Saving, () => (
               <RectButton style={styles.button} onPress={() => {}}>
                 <ActivityIndicator size='large' />
               </RectButton>
@@ -341,48 +359,63 @@ export class RecordScreen extends React.Component<Props, State> {
         nSpectroWidth: 0,
       });
 
-      if (this.props.library === 'MicStream') {
-        // https://github.com/chadsmith/react-native-microphone-stream
+      await match(this.props.library,
+        ['MicStream', async () => {
+          // https://github.com/chadsmith/react-native-microphone-stream
 
-        // Init mic
-        //  - init() here instead of componentDidMount because we have to call it after each stop()
-        const refreshRate = 2; // TODO Make updates faster so we can refresh at lower latency
-        const {sampleRate} = this.props;
-        MicStream.init({
-          // Options
-          //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L23-L32
-          //  - https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
-          //  - TODO PR to change hardcoded kAudioFormatULaw -> any mFormatID (e.g. mp4)
-          sampleRate, // (QA'd via tone generator -> MicStream -> magSpectrogram)
-          bitsPerChannel: this.props.bitsPerSample,
-          channelsPerFrame: 1,
-          // Compute a bufferSize that will fire ~refreshRate buffers per sec
-          //  - Hardcode `/2` here to counteract the `*2` in MicStream...
-          //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L35
-          bufferSize: Math.floor(sampleRate / refreshRate / 2),
-        });
+          // Init mic
+          //  - init() here instead of componentDidMount because we have to call it after each stop()
+          const refreshRate = 2; // TODO Make updates faster so we can refresh at lower latency
+          const {sampleRate} = this.props;
+          MicStream.init({
+            // Options
+            //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L23-L32
+            //  - https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
+            //  - TODO PR to change hardcoded kAudioFormatULaw -> any mFormatID (e.g. mp4)
+            sampleRate, // (QA'd via tone generator -> MicStream -> magSpectrogram)
+            bitsPerChannel: this.props.bitsPerSample,
+            channelsPerFrame: 1,
+            // Compute a bufferSize that will fire ~refreshRate buffers per sec
+            //  - Hardcode `/2` here to counteract the `*2` in MicStream...
+            //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L35
+            bufferSize: Math.floor(sampleRate / refreshRate / 2),
+          });
 
-        // Start recording
-        MicStream.start(); // (Async with no signal of success/failure)
+          // Start recording
+          MicStream.start(); // (Async with no signal of success/failure)
 
-      } else if (this.props.library === 'AudioRecord') {
-        // TODO(write_audio)
+        }],
+        ['AudioRecord', async () => {
+          // TODO(write_audio)
 
-        AudioRecord.init({
-          sampleRate: this.props.sampleRate,
-          channels: this.props.channels,
-          bitsPerSample: this.props.bitsPerSample,
-          wavFile: this.freshFilename('wav'), // FIXME dir is hardcoded to fs.dirs.DocumentDir (in RNAudioRecord.m)
-        });
-        AudioRecord.start();
+          AudioRecord.init({
+            sampleRate: this.props.sampleRate,
+            channels: this.props.channels,
+            bitsPerSample: this.props.bitsPerSample,
+            wavFile: this.freshFilename('wav'), // FIXME dir is hardcoded to fs.dirs.DocumentDir (in RNAudioRecord.m)
+          });
+          AudioRecord.start();
 
-        AudioRecord.on('data', (data: string) => {
-          // Convert base64:str -> bytes:Uint8Array -> samples:Int16Array (int16 to match bitsPerSample=16)
-          if (this.props.bitsPerSample !== 16) throw 'Samples=Int16Array assumes bitsPerSample=16'; // HACK
-          this.onSamplesChunk(new Samples(base64js.toByteArray(data).buffer));
-        });
+          AudioRecord.on('data', (data: string) => {
+            // Convert base64:str -> bytes:Uint8Array -> samples:Int16Array (int16 to match bitsPerSample=16)
+            if (this.props.bitsPerSample !== 16) throw 'Samples=Int16Array assumes bitsPerSample=16'; // HACK
+            this.onSamplesChunk(new Samples(base64js.toByteArray(data).buffer));
+          });
 
-      }
+        }],
+        ['Spectro', async () => {
+          // TODO(swift_spectro)
+
+          await Spectro.setup({
+            outputPath: `${fs.dirs.CacheDir}/${this.freshFilename('wav')}`,
+            sampleRate: this.props.sampleRate,
+            bitsPerChannel: this.props.bitsPerSample,
+            channelsPerFrame: this.props.channels,
+          });
+          await Spectro.start();
+
+        }],
+      );
 
     }
   }
@@ -395,52 +428,60 @@ export class RecordScreen extends React.Component<Props, State> {
         recordingState: RecordingState.Saving,
       });
 
-      let wavPath;
-      if (this.props.library === 'MicStream') {
+      const wavPath = await match(this.props.library,
+        ['MicStream', async () => {
 
-        // Stop recording
-        log.debug('RecordScreen.stopRecording: Stopping mic');
-        MicStream.stop(); // (Async with no signal of success/failure)
+          // Stop recording
+          log.debug('RecordScreen.stopRecording: Stopping mic');
+          MicStream.stop(); // (Async with no signal of success/failure)
 
-        // TODO(write_audio)
+          // TODO(write_audio)
 
-        // Encode audio samples as wav data
-        //  - https://github.com/rochars/wavefile#create-wave-files-from-scratch
-        //  - https://github.com/rochars/wavefile#the-wavefile-methods
-        let samples = Array.from(concatSamples(this._samplesChunks));
-        // samples = samples.map(x => x - 128) // XXX Error: "Overflow at input index 14: -1"
-        const wav = new WaveFile()
-        wav.fromScratch(
-          this.props.channels,
-          this.props.sampleRate,
-          // MicStream records using kAudioFormatULaw
-          //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L31
-          // '8',
-          // '8a',
-          '8m', // 8-bit int, mu-Law
-          samples,
-        );
-        wav.fromMuLaw(); // TODO "Decode 8-bit mu-Law as 16-bit"
+          // Encode audio samples as wav data
+          //  - https://github.com/rochars/wavefile#create-wave-files-from-scratch
+          //  - https://github.com/rochars/wavefile#the-wavefile-methods
+          let samples = Array.from(concatSamples(this._samplesChunks));
+          // samples = samples.map(x => x - 128) // XXX Error: "Overflow at input index 14: -1"
+          const wav = new WaveFile()
+          wav.fromScratch(
+            this.props.channels,
+            this.props.sampleRate,
+            // MicStream records using kAudioFormatULaw
+            //  - https://github.com/chadsmith/react-native-microphone-stream/blob/4cca1e7/ios/MicrophoneStream.m#L31
+            // '8',
+            // '8a',
+            '8m', // 8-bit int, mu-Law
+            samples,
+          );
+          wav.fromMuLaw(); // TODO "Decode 8-bit mu-Law as 16-bit"
 
-        // Write wav data to file
-        wavPath = `${fs.dirs.CacheDir}/${this.freshFilename('wav')}`;
-        // await fs.createFile(wavPath, samples as unknown as string, 'ascii'); // HACK Ignore bad type
-        await fs.createFile(wavPath, Array.from(wav.toBuffer()) as unknown as string, 'ascii'); // HACK Ignore bad type
-        const {size} = await fs.stat(wavPath);
-        log.debug('RecordScreen.stopRecording: Wrote file', yaml({wavPath, size}));
+          // Write wav data to file
+          const wavPath = `${fs.dirs.CacheDir}/${this.freshFilename('wav')}`;
+          // await fs.createFile(wavPath, samples as unknown as string, 'ascii'); // HACK Ignore bad type
+          await fs.createFile(wavPath, Array.from(wav.toBuffer()) as unknown as string, 'ascii'); // HACK Ignore bad type
+          const {size} = await fs.stat(wavPath);
+          log.debug('RecordScreen.stopRecording: Wrote file', yaml({wavPath, size}));
 
-        // XXX Debug
-        // global.samples = samples;
-        global.wav = wav;
+          // XXX Debug
+          // global.samples = samples;
+          global.wav = wav;
 
-      } else if (this.props.library === 'AudioRecord') {
+          return wavPath;
 
-        // TODO(write_audio)
-        wavPath = await AudioRecord.stop();
+        }],
+        ['AudioRecord', async () => {
+          // TODO(write_audio)
 
-      } else {
-        throw `Invalid library[${this.props.library}]`; // (Eliminate wavPath: undefined)
-      }
+          return await AudioRecord.stop();
+
+        }],
+        ['Spectro', async () => {
+          // TODO(swift_spectro)
+
+          return await Spectro.stop();
+
+        }],
+      );
 
       // TODO(mel_spectro): Debug
       log.info('Writing this._samplesChunks to file');

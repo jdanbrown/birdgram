@@ -13,13 +13,29 @@ export const global: any = window.global || {};
 export function all(...xs: Array<any>): boolean { return xs.every(Boolean); }
 export function any(...xs: Array<any>): boolean { return xs.some(Boolean); }
 
+export function tryElse<Z, X extends Z = Z, Y extends Z = Z>(x: X, f: () => Y): Z {
+  try {
+    return f();
+  } catch {
+    return x;
+  }
+}
+
+export async function tryElseAsync<Z, X extends Z = Z, Y extends Z = Z>(x: X, f: () => Promise<Y>): Promise<Z> {
+  try {
+    return await f();
+  } catch {
+    return x;
+  }
+}
+
 // TODO Change cases to functions, like the other ADT matchFoo functions
 // `X0 extends X` so that x0 can't (quietly) generalize the type of the case patterns (e.g. to include null)
 //  - e.g. fail on `match(X | null, ...)` if the case patterns don't include null
-export function match<X, X0 extends X, Y>(x0: X0, ...cases: Array<[X | Match, Y]>): Y {
-  for (let [x, y] of cases) {
+export function match<X, X0 extends X, Y>(x0: X0, ...cases: Array<[X | Match, () => Y]>): Y {
+  for (let [x, f] of cases) {
     if (x === x0 || x === Match.Default) {
-      return y;
+      return f();
     }
   }
   throw new Error(`No cases matched: ${x0} not in ${cases}`);

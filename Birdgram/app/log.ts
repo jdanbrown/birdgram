@@ -61,10 +61,10 @@ export class Log {
   logIfLevel = (level: Level): Do<any[]> => {
     const console_f = levelOrder(level) < levelOrder(this.level) ? noop : (
       match(level, // (Instead of console[level] because types)
-        ['debug', console.debug],
-        ['info',  console.info],
-        ['warn',  console.warn],
-        ['error', console.error],
+        ['debug', () => console.debug],
+        ['info',  () => console.info],
+        ['warn',  () => console.warn],
+        ['error', () => console.error],
       ).bind(console)
     );
     return (...args: any[]) => console_f(
