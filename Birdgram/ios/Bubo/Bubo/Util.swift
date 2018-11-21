@@ -39,3 +39,23 @@ public func checkStatus(_ status: OSStatus) throws -> Void {
     throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
   }
 }
+
+public func pathDirname(_ path: String) -> String {
+  return (path as NSString).deletingLastPathComponent
+}
+
+public func pathBasename(_ path: String) -> String {
+  return (path as NSString).lastPathComponent
+}
+
+public func pathSplitExt(_ path: String) -> (String, String) {
+  return (
+    (path as NSString).deletingPathExtension,
+    (path as NSString).pathExtension
+  )
+}
+
+public func documentsDirectory() -> String {
+  // https://stackoverflow.com/questions/24055146/how-to-find-nsdocumentdirectory-in-swift
+  return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
+}

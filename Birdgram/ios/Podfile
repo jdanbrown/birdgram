@@ -22,6 +22,7 @@ workspace 'Birdgram.xcworkspace'
 def all_pods
   pod 'AudioKit', '~> 4.5'
   pod 'Surge', '~> 2.0.0'
+  pod 'PromisesSwift', '~> 1.2.4'
 end
 
 # TODO How to fix warning "contains framework ... for which the Podfile does not contain host targets"?

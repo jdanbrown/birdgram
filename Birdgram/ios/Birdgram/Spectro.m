@@ -19,13 +19,18 @@ RCT_EXTERN_METHOD(
   reject:(RCTPromiseRejectBlock)reject
 );
 
-// XXX Dev
 RCT_EXTERN_METHOD(
-  hello:(NSString *)x
-  y:(NSString *)y
-  z:(nonnull NSNumber *)z
-  resolve:(RCTPromiseResolveBlock)resolve
+  stats:(RCTPromiseResolveBlock)resolve
   reject:(RCTPromiseRejectBlock)reject
 );
+
+// XXX Dev
+// RCT_EXTERN_METHOD(
+//   hello:(NSString *)x
+//   y:(NSString *)y
+//   z:(nonnull NSNumber *)z
+//   resolve:(RCTPromiseResolveBlock)resolve
+//   reject:(RCTPromiseRejectBlock)reject
+// );
 
 @end

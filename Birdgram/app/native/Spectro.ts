@@ -7,7 +7,7 @@ import { EmitterSubscription, NativeEventEmitter, NativeModules } from 'react-na
 const {RNSpectro} = NativeModules;
 
 export interface SpectroOpts {
-  outputPath: string;
+  outputFile: string;
   sampleRate?: number;
   bitsPerChannel?: number;
   channelsPerFrame?: number;
@@ -22,11 +22,12 @@ export const Spectro = {
 
   setup: async (opts: SpectroOpts): Promise<void> => RNSpectro.setup(opts),
   start: async (): Promise<void>                  => RNSpectro.start(),
-  stop:  async (): Promise<string>                => RNSpectro.stop(),
+  stop:  async (): Promise<string | null>         => RNSpectro.stop(),
+  stats: async (): Promise<object>                => RNSpectro.stats(),
 
   addListener: (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('audioData', f),
 
   // XXX Dev
-  hello: async (x: string, y: string, z: number): Promise<string> => RNSpectro.hello(x, y, z),
+  // hello: async (x: string, y: string, z: number): Promise<string> => RNSpectro.hello(x, y, z),
 
 };

@@ -111,8 +111,10 @@ android
   - Then it doesn't matter which device you run against
   - https://stackoverflow.com/a/37737190/397334
 - App fails on startup with cryptic stacktrace `__dyld_start` -> `__abort_with_payload`
-  - This happened when app Birdgram depended on framework Bubo
-  - Solution: in Birdgram project, "Embedded Binaries" -> + -> "Bubo.framework" (in addition to "Linked Libraries and Frameworks")
+  - This happened once when app Birdgram depended on framework Bubo
+    - Solution: in Birdgram project, "Embedded Binaries" -> + -> "Bubo.framework" (in addition to "Linked Libraries and Frameworks")
+  - This happens occasionally for no reason
+    - Solution: try again (build -> run)
 - js code doesn't update in Xcode Release build
   - Silent js build error [e.g. next bullet]
   - To find it, try checking previous build msgs, or try clean build folder and rebuild to resurface it

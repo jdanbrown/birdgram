@@ -101,7 +101,7 @@ export class RecordScreen extends React.Component<Props, State> {
     // library: 'MicStream', // XXX(write_audio)
     // library: 'AudioRecord', // TODO(write_audio)
     library: 'Spectro', // TODO(swift_spectro)
-    sampleRate: 22050,
+    sampleRate: 44100, // TODO(swift_spectro) Stuck having to work with 44K i/o 22K (see comments in Spectro.swift)
     channels: 1,
     bitsPerSample: 16,
     spectroHeight: 128, // TODO(mel_spectro) Settings?
@@ -184,9 +184,7 @@ export class RecordScreen extends React.Component<Props, State> {
 
     // TODO(swift_spectro)
     const nativeSpectro: object = {
-      hello: await tryElseAsync(Promise.resolve(null), async () => {
-        return await Spectro.hello('one', 'two', 4);
-      }),
+      stats: await tryElseAsync<object | null>(null, () => Spectro.stats()),
     };
     if (!deepEqual(nativeSpectro, this.state.nativeSpectro)) {
       this.setState({nativeSpectro});
@@ -256,7 +254,7 @@ export class RecordScreen extends React.Component<Props, State> {
           width: '100%',
         }}>
           <this.DebugText>
-            Spectro.hello: {json(this.state.nativeSpectro)}
+            Spectro: {json(this.state.nativeSpectro)}
           </this.DebugText>
           <this.DebugText>
             recordingState: {this.state.recordingState}
@@ -407,7 +405,7 @@ export class RecordScreen extends React.Component<Props, State> {
           // TODO(swift_spectro)
 
           await Spectro.setup({
-            outputPath: `${fs.dirs.CacheDir}/${this.freshFilename('wav')}`,
+            outputFile: this.freshFilename('mp4'), // FIXME dir is hardcoded to BaseDirectory.temp (in Spectro.swift)
             sampleRate: this.props.sampleRate,
             bitsPerChannel: this.props.bitsPerSample,
             channelsPerFrame: this.props.channels,
@@ -428,7 +426,7 @@ export class RecordScreen extends React.Component<Props, State> {
         recordingState: RecordingState.Saving,
       });
 
-      const wavPath = await match(this.props.library,
+      const audioPath: string | null = await match(this.props.library,
         ['MicStream', async () => {
 
           // Stop recording
@@ -456,17 +454,17 @@ export class RecordScreen extends React.Component<Props, State> {
           wav.fromMuLaw(); // TODO "Decode 8-bit mu-Law as 16-bit"
 
           // Write wav data to file
-          const wavPath = `${fs.dirs.CacheDir}/${this.freshFilename('wav')}`;
-          // await fs.createFile(wavPath, samples as unknown as string, 'ascii'); // HACK Ignore bad type
-          await fs.createFile(wavPath, Array.from(wav.toBuffer()) as unknown as string, 'ascii'); // HACK Ignore bad type
-          const {size} = await fs.stat(wavPath);
-          log.debug('RecordScreen.stopRecording: Wrote file', yaml({wavPath, size}));
+          const audioPath = `${fs.dirs.CacheDir}/${this.freshFilename('wav')}`;
+          // await fs.createFile(audioPath, samples as unknown as string, 'ascii'); // HACK Ignore bad type
+          await fs.createFile(audioPath, Array.from(wav.toBuffer()) as unknown as string, 'ascii'); // HACK Ignore bad type
+          const {size} = await fs.stat(audioPath);
+          log.debug('RecordScreen.stopRecording: Wrote file', yaml({audioPath, size}));
 
           // XXX Debug
           // global.samples = samples;
           global.wav = wav;
 
-          return wavPath;
+          return audioPath;
 
         }],
         ['AudioRecord', async () => {
@@ -484,27 +482,34 @@ export class RecordScreen extends React.Component<Props, State> {
       );
 
       // TODO(mel_spectro): Debug
-      log.info('Writing this._samplesChunks to file');
-      const samplesForJson = Array.from(concatSamples(this._samplesChunks));
-      await fs.writeFile(`${wavPath}.samples.json`, json(samplesForJson));
+      log.info(`RecordScreen.stopRecording: Got audioPath[${audioPath}]`);
+      if (audioPath !== null) {
 
-      const sound = await Sound.newAsync(wavPath);
+        // log.info('Writing this._samplesChunks to file');
+        // const samplesForJson = Array.from(concatSamples(this._samplesChunks));
+        // await fs.writeFile(`${audioPath}.samples.json`, json(samplesForJson));
 
-      // XXX Debug
-      global.wavPath = wavPath;
-      global.sound = sound;
+        const sound = await Sound.newAsync(audioPath);
 
-      // // XXX Debug
-      // Sound.setActive(true);
-      // Sound.setCategory(
-      //   'PlayAndRecord',
-      //   true, // mixWithOthers
-      // );
-      // Sound.setMode(
-      //   'Default',
-      //   // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
-      // );
-      // sound.play();
+        // XXX Debug
+        global.audioPath = audioPath;
+        global.sound = sound;
+
+        // XXX Debug
+        log.info('XXX Playing rec');
+        Sound.setActive(true);
+        Sound.setCategory(
+          'PlayAndRecord',
+          true, // mixWithOthers
+        );
+        Sound.setMode(
+          'Default',
+          // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
+        );
+        sound.play();
+        Sound.setActive(false);
+
+      }
 
       this.setState({
         recordingState: RecordingState.Stopped,
