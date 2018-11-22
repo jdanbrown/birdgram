@@ -101,7 +101,7 @@ export class RecordScreen extends React.Component<Props, State> {
     // library: 'MicStream', // XXX(write_audio)
     // library: 'AudioRecord', // TODO(write_audio)
     library: 'Spectro', // TODO(swift_spectro)
-    sampleRate: 44100, // TODO(swift_spectro) Stuck having to work with 44K i/o 22K (see comments in Spectro.swift)
+    sampleRate: 22050, // TODO(swift_spectro) Stuck having to work with 44K i/o 22K (see comments in Spectro.swift)
     channels: 1,
     bitsPerSample: 16,
     spectroHeight: 128, // TODO(mel_spectro) Settings?
@@ -405,7 +405,7 @@ export class RecordScreen extends React.Component<Props, State> {
           // TODO(swift_spectro)
 
           await Spectro.setup({
-            outputFile: this.freshFilename('mp4'), // FIXME dir is hardcoded to BaseDirectory.temp (in Spectro.swift)
+            outputFile: this.freshFilename('wav'), // FIXME dir is hardcoded to BaseDirectory.temp (in Spectro.swift)
             sampleRate: this.props.sampleRate,
             bitsPerChannel: this.props.bitsPerSample,
             channelsPerFrame: this.props.channels,
@@ -490,6 +490,7 @@ export class RecordScreen extends React.Component<Props, State> {
         // await fs.writeFile(`${audioPath}.samples.json`, json(samplesForJson));
 
         const sound = await Sound.newAsync(audioPath);
+        log.debug('RecordScreen.stopRecording: sound', json({duration: sound.getDuration(), filename: sound.getFilename()}))
 
         // XXX Debug
         global.audioPath = audioPath;

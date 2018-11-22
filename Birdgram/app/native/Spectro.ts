@@ -25,7 +25,7 @@ export const Spectro = {
   stop:  async (): Promise<string | null>         => RNSpectro.stop(),
   stats: async (): Promise<object>                => RNSpectro.stats(),
 
-  addListener: (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('audioData', f),
+  addListener: (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('audioChunk', f),
 
   // XXX Dev
   // hello: async (x: string, y: string, z: number): Promise<string> => RNSpectro.hello(x, y, z),

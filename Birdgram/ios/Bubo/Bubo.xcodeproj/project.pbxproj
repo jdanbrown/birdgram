@@ -13,6 +13,7 @@
 		B72CC81521A36331009D8690 /* Pods_Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */; };
 		B754382221A3734300705EE3 /* SpectroImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = B754382121A3734300705EE3 /* SpectroImpl.swift */; };
 		B76003BE21A3A3C200E1347A /* Util.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003BD21A3A3C100E1347A /* Util.swift */; };
+		B78BFDED21A61C9F0046AB77 /* Json.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78BFDEC21A61C9F0046AB77 /* Json.swift */; };
 		B79B59B821A3B0F000AE28B2 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B79B59B721A3B0F000AE28B2 /* Surge.framework */; };
 /* End PBXBuildFile section */
 
@@ -37,6 +38,8 @@
 		B70DB75421A1F7AC00968F4D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B754382121A3734300705EE3 /* SpectroImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectroImpl.swift; sourceTree = "<group>"; };
 		B76003BD21A3A3C100E1347A /* Util.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Util.swift; sourceTree = "<group>"; };
+		B78BFDEC21A61C9F0046AB77 /* Json.swift */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.swift; path = Json.swift; sourceTree = "<group>"; tabWidth = 2; };
+		B78BFDEE21A61E440046AB77 /* SwiftyJSON.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = SwiftyJSON.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B79B59B721A3B0F000AE28B2 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -87,6 +90,7 @@
 			children = (
 				B70DB74721A1F7AC00968F4D /* Bubo.h */,
 				B70DB74821A1F7AC00968F4D /* Info.plist */,
+				B78BFDEC21A61C9F0046AB77 /* Json.swift */,
 				B754382121A3734300705EE3 /* SpectroImpl.swift */,
 				B76003BD21A3A3C100E1347A /* Util.swift */,
 			);
@@ -114,6 +118,7 @@
 		D52B7F095958C74123E4660D /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				B78BFDEE21A61E440046AB77 /* SwiftyJSON.framework */,
 				B79B59B721A3B0F000AE28B2 /* Surge.framework */,
 				E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */,
 			);
@@ -251,6 +256,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B78BFDED21A61C9F0046AB77 /* Json.swift in Sources */,
 				B754382221A3734300705EE3 /* SpectroImpl.swift in Sources */,
 				B76003BE21A3A3C200E1347A /* Util.swift in Sources */,
 			);

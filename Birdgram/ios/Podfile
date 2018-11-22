@@ -23,6 +23,8 @@ def all_pods
   pod 'AudioKit', '~> 4.5'
   pod 'Surge', '~> 2.0.0'
   pod 'PromisesSwift', '~> 1.2.4'
+  pod 'SwiftyJSON', '~> 4.0'
+  pod 'Yams', '~> 1.0.1'
 end
 
 # TODO How to fix warning "contains framework ... for which the Podfile does not contain host targets"?
@@ -31,7 +33,11 @@ target 'Bubo' do
   all_pods
 end
 
-# XXX Consolidated in Bubo (upstream framework, so we can use playgrounds)
+target 'Playgrounds' do
+  project 'Playgrounds/Playgrounds.xcodeproj'
+  all_pods
+end
+
 target 'Birdgram' do
   project 'Birdgram.xcodeproj'
   all_pods

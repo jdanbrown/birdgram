@@ -100,6 +100,7 @@ class RNSpectro: RCTEventEmitter {
         // TODO Clean up unused params
         bufferSize:       self.getProp(opts, "bufferSize"),
         sampleRate:       self.getProp(opts, "sampleRate"),
+        channels:         self.getProp(opts, "channels"),
         bytesPerPacket:   self.getProp(opts, "bytesPerPacket"),
         framesPerPacket:  self.getProp(opts, "framesPerPacket"),
         bytesPerFrame:    self.getProp(opts, "bytesPerFrame"),
@@ -145,11 +146,16 @@ class RNSpectro: RCTEventEmitter {
 
 }
 
-class Spectro {
+class Spectro
+  // : _SpectroAudioKit
+  : _SpectroBasic
+{}
+
+class _SpectroAudioKit {
 
   static func supportedEvents() -> [String] {
     return [
-      "audioData"
+      "audioChunk"
     ]
   }
 
@@ -163,6 +169,7 @@ class Spectro {
     // TODO Clean up unused params
     bufferSize:       UInt32?,
     sampleRate:       Double?,
+    channels:         UInt32?,
     bytesPerPacket:   UInt32?,
     framesPerPacket:  UInt32?,
     bytesPerFrame:    UInt32?,
@@ -174,7 +181,7 @@ class Spectro {
       emitter:    emitter,
       outputFile: outputFile,
       bufferSize: bufferSize ?? 8192,
-      desc:       AudioStreamBasicDescription(
+      format:     AudioStreamBasicDescription(
         // TODO Clean up unused params
         // https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
         // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/1572096-audio_data_format_identifiers
@@ -185,7 +192,7 @@ class Spectro {
         mBytesPerPacket:   bytesPerPacket   ?? 2, // TODO Function of bitsPerChannel (and ...)?
         mFramesPerPacket:  framesPerPacket  ?? 1, // 1 for uncompressed
         mBytesPerFrame:    bytesPerFrame    ?? 2, // TODO Function of bitsPerChannel (and ...)?
-        mChannelsPerFrame: channelsPerFrame ?? 1,
+        mChannelsPerFrame: channelsPerFrame ?? channels ?? 1,
         mBitsPerChannel:   bitsPerChannel   ?? 16,
         mReserved:         0
       )
@@ -195,7 +202,7 @@ class Spectro {
   // Params
   let emitter:    RCTEventEmitter
   let outputFile: String
-  let desc:       AudioStreamBasicDescription
+  let format:     AudioStreamBasicDescription
 
   // State
   var recorder: AKNodeRecorder?
@@ -205,12 +212,12 @@ class Spectro {
     emitter:    RCTEventEmitter,
     outputFile: String,
     bufferSize: UInt32,
-    desc:       AudioStreamBasicDescription
+    format:     AudioStreamBasicDescription
   ) {
     RCTLogInfo("Spectro.init")
     self.emitter    = emitter
     self.outputFile = outputFile
-    self.desc       = desc
+    self.format     = format
   }
 
   deinit {
@@ -234,14 +241,14 @@ class Spectro {
 
     // WARNING Set AKSettings, not AudioKit.format
     //  - IDK WTF AudioKit.format is for, but AKAudioFile() uses params from AKSettings.format and ignores AudioKit.format
-    AKSettings.sampleRate = desc.mSampleRate
-    AKSettings.channelCount = desc.mChannelsPerFrame
+    AKSettings.sampleRate = format.mSampleRate
+    AKSettings.channelCount = format.mChannelsPerFrame
     //  - XXX DONT USE AudioKit.format, use AKSettings (above)
     // AudioKit.format = AVAudioFormat(
     //   // WARNING .pcmFormatInt16 crashes AudioKit.start(); convert manually [https://stackoverflow.com/a/9153854/397334]
-    //   commonFormat: .pcmFormatFloat32, // TODO Convert float32 -> uint16 downstream (+ assert desc.mBitsPerChannel == 16)
-    //   sampleRate: desc.mSampleRate,
-    //   channels: desc.mChannelsPerFrame,
+    //   commonFormat: .pcmFormatFloat32, // TODO Convert float32 -> uint16 downstream (+ assert format.mBitsPerChannel == 16)
+    //   sampleRate: format.mSampleRate,
+    //   channels: format.mChannelsPerFrame,
     //   interleaved: false
     // )!
 
@@ -363,9 +370,9 @@ class Spectro {
 
   func stats() -> Dictionary<String, Any> {
     return [
-      "sampleRate": desc.mSampleRate,
-      "channels": desc.mChannelsPerFrame,
-      // "bitsPerSample": desc.mBitsPerChannel, // TODO
+      "sampleRate": format.mSampleRate,
+      "channels": format.mChannelsPerFrame,
+      // "bitsPerSample": format.mBitsPerChannel, // TODO
       "duration": recorder?.recordedDuration as Any,
       "path": recPath as Any,
     ]
@@ -378,157 +385,300 @@ class Spectro {
 
 }
 
-// XXX after de-risking and committing to AudioKit
-// class _Spectro {
-//
-//   static func supportedEvents() -> [String] {
-//     return [
-//       "audioData"
-//     ]
-//   }
-//
-//   static func constantsToExport() -> Dictionary<AnyHashable, Any> {
-//     return [:]
-//     // return [
-//     //   "one": 1,
-//     //   "two": "dos",
-//     // ]
-//   }
-//
-//   static func create(
-//     emitter:          RCTEventEmitter,
-//     outputFile:       String,
-//     bufferSize:       UInt32?,
-//     sampleRate:       Double?,
-//     bytesPerPacket:   UInt32?,
-//     framesPerPacket:  UInt32?,
-//     bytesPerFrame:    UInt32?,
-//     channelsPerFrame: UInt32?,
-//     bitsPerChannel:   UInt32?
-//   ) throws -> Spectro {
-//     RCTLogInfo("Spectro.create")
-//     return Spectro(
-//       emitter:    emitter,
-//       outputFile: outputFile,
-//       bufferSize: bufferSize ?? 8192,
-//       desc:       AudioStreamBasicDescription(
-//         // https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
-//         // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/1572096-audio_data_format_identifiers
-//         // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/mpeg-4_audio_object_type_constants
-//         mSampleRate:       sampleRate       ?? 44100,
-//         mFormatID:         kAudioFormatLinearPCM, // TODO kAudioFormatMPEG4AAC [how to specify bitrate? else just try aac_he_v2]
-//         mFormatFlags:      0,
-//         mBytesPerPacket:   bytesPerPacket   ?? 2, // TODO Function of bitsPerChannel (and ...)?
-//         mFramesPerPacket:  framesPerPacket  ?? 1, // 1 for uncompressed
-//         mBytesPerFrame:    bytesPerFrame    ?? 2, // TODO Function of bitsPerChannel (and ...)?
-//         mChannelsPerFrame: channelsPerFrame ?? 1,
-//         mBitsPerChannel:   bitsPerChannel   ?? 16,
-//         mReserved:         0
-//       )
-//     )
-//   }
-//
-//   // Params
-//   let emitter:    RCTEventEmitter
-//   let outputFile: String
-//   let bufferSize: UInt32
-//   var desc:       AudioStreamBasicDescription
-//   // let queue:      UnsafeMutablePointer<AudioQueueRef>
-//   // let buffer:     UnsafeMutablePointer<AudioQueueBufferRef>
-//   var queue:      AudioQueueRef?
-//   var buffer:     AudioQueueBufferRef?
-//
-//   init(
-//     emitter:    RCTEventEmitter,
-//     outputFile: String,
-//     bufferSize: UInt32,
-//     desc:       AudioStreamBasicDescription
-//   ) {
-//     RCTLogInfo("Spectro.init")
-//
-//     self.emitter    = emitter
-//     self.outputFile = outputFile
-//     self.bufferSize = bufferSize
-//     self.desc       = desc
-//
-//     // self.queue   = UnsafeMutablePointer<AudioQueueRef>.allocate(capacity: 1)
-//     // self.buffer  = UnsafeMutablePointer<AudioQueueBufferRef>.allocate(capacity: 1)
-//
-//     // let numBuffers = 3 // TODO Param
-//     // self.queue   = UnsafeMutablePointer<AudioQueueRef>.allocate(capacity: 1)
-//     // self.buffers = Array<AudioQueueBufferRef>(repeatedValue: nil, count: numBuffers)
-//
-//   }
-//
-//   deinit {
-//     RCTLogInfo("Spectro.deinit")
-//
-//     if let _queue = self.queue { AudioQueueStop(_queue, true) } // Ignore OSStatus
-//
-//     // queue.deallocate()
-//     // buffer.deallocate()
-//
-//   }
-//
-//   func start() throws -> Void {
-//     RCTLogInfo("Spectro.start")
-//
-//     let session = AVAudioSession.sharedInstance()
-//     try session.setCategory(.playAndRecord, mode: .default, options: [])
-//     try session.overrideOutputAudioPort(AVAudioSession.PortOverride.speaker)
-//
-//     try checkStatus(AudioQueueNewInput(
-//       &desc,
-//       { (selfOpaque, inAQ, inBuffer, inStartTime, inNumberPacketDescriptions, inPacketDescs) -> Void in
-//         let selfTyped = Unmanaged<Spectro>.fromOpaque(selfOpaque!).takeUnretainedValue()
-//         return selfTyped.onAudioData(inAQ, inBuffer, inStartTime, inNumberPacketDescriptions, inPacketDescs)
-//       },
-//       UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()),
-//       nil,
-//       nil,
-//       0, // Must be 0 (reserved)
-//       &queue
-//     ))
-//     try checkStatus(AudioQueueAllocateBuffer(
-//       queue!,
-//       bufferSize * 2, // TODO Why *2?
-//       &buffer
-//     ))
-//     try checkStatus(AudioQueueEnqueueBuffer(
-//       queue!,
-//       buffer!,
-//       0,
-//       nil
-//     ))
-//     try checkStatus(AudioQueueStart(queue!, nil))
-//
-//   }
-//
-//   func stop() throws -> String {
-//     RCTLogInfo("Spectro.stop")
-//
-//     let session = AVAudioSession.sharedInstance()
-//     try session.setCategory(.playback, mode: .default, options: [])
-//
-//     try checkStatus(AudioQueueStop(queue!, true))
-//
-//     return outputFile
-//   }
-//
-//   func onAudioData(
-//     _ inAQ:                       AudioQueueRef,
-//     _ inBuffer:                   AudioQueueBufferRef,
-//     _ inStartTime:                UnsafePointer<AudioTimeStamp>,
-//     _ inNumberPacketDescriptions: UInt32,
-//     _ inPacketDescs:              UnsafePointer<AudioStreamPacketDescription>?
-//   ) -> Void {
-//     RCTLogInfo("Spectro.onAudioData")
-//     // TODO(swift_spectro)
-//   }
-//
-//   // XXX Dev
-//   func hello(_ x: String, _ y: String, _ z: NSNumber) -> String {
-//     return SpectroImpl.hello(x, y, z)
-//   }
-//
-// }
+// Leaned heavily on these very simple and clear examples to make this thing work
+//  - https://github.com/carsonmcdonald/AVSExample-Swift/blob/master/AVSExample/SimplePCMRecorder.swift
+//  - https://github.com/goodatlas/react-native-audio-record/blob/master/ios/RNAudioRecord.m
+//  - https://github.com/chadsmith/react-native-microphone-stream/blob/master/ios/MicrophoneStream.m
+class _SpectroBasic {
+
+  static func supportedEvents() -> [String] {
+    return [
+      "audioChunk"
+    ]
+  }
+
+  static func constantsToExport() -> Dictionary<AnyHashable, Any> {
+    return [:]
+  }
+
+  static func create(
+    emitter:          RCTEventEmitter,
+    outputFile:       String,
+    // TODO Clean up unused params
+    bufferSize:       UInt32?,
+    sampleRate:       Double?,
+    channels:         UInt32?,
+    bytesPerPacket:   UInt32?,
+    framesPerPacket:  UInt32?,
+    bytesPerFrame:    UInt32?,
+    channelsPerFrame: UInt32?,
+    bitsPerChannel:   UInt32?
+  ) throws -> Spectro {
+    RCTLogInfo("Spectro.create")
+    let mSampleRate       = sampleRate       ?? 44100
+    let mBitsPerChannel   = bitsPerChannel   ?? 16
+    let mChannelsPerFrame = channelsPerFrame ?? channels ?? 2
+    let mBytesPerPacket   = bytesPerPacket   ?? (mBitsPerChannel / 8 * mChannelsPerFrame)
+    let mBytesPerFrame    = bytesPerFrame    ?? mBytesPerPacket // Default assumes PCM
+    let mFramesPerPacket  = framesPerPacket  ?? 1 // 1 for uncompressed
+    let _bufferSize       = bufferSize       ?? 2048 // HACK Manually tuned for (22050hz,1ch,16bit)
+    let mFormatFlags      = (
+      // TODO Understand this. Was crashing without it. Blindly copied from RNAudioRecord.m (react-native-audio-record)
+      mBitsPerChannel == 8
+        ? kLinearPCMFormatFlagIsPacked
+        : (kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked)
+    )
+    return Spectro(
+      emitter:    emitter,
+      outputFile: outputFile,
+      bufferSize: _bufferSize,
+      format:     AudioStreamBasicDescription(
+        // TODO Clean up unused params
+        // https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
+        // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/1572096-audio_data_format_identifiers
+        // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/mpeg-4_audio_object_type_constants
+        mSampleRate:       mSampleRate,
+        mFormatID:         kAudioFormatLinearPCM, // TODO kAudioFormatMPEG4AAC [how to specify bitrate? else just try aac_he_v2]
+        mFormatFlags:      mFormatFlags,
+        mBytesPerPacket:   mBytesPerPacket,
+        mFramesPerPacket:  mFramesPerPacket,
+        mBytesPerFrame:    mBytesPerFrame,
+        mChannelsPerFrame: mChannelsPerFrame,
+        mBitsPerChannel:   mBitsPerChannel,
+        mReserved:         0
+      )
+    )
+  }
+
+  // Params
+  let emitter:    RCTEventEmitter
+  let outputFile: String
+  let bufferSize: UInt32
+  let numBuffers: Int
+  var format:     AudioStreamBasicDescription
+
+  // State
+  var queue:             AudioQueueRef?        = nil
+  var buffers:           [AudioQueueBufferRef] = []
+  var audioFile:         AudioFileID?          = nil
+  var numPacketsWritten: UInt32                = 0
+
+  // TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
+  var outputPath: String { get { return "\(documentsDirectory())/\(outputFile)" } }
+
+  init(
+    emitter:    RCTEventEmitter,
+    outputFile: String,
+    bufferSize: UInt32,
+    numBuffers: Int = 3, // ≥3 on iphone? [https://books.google.com/books?id=jiwEcrb_H0EC&pg=PA160]
+    format:     AudioStreamBasicDescription
+  ) {
+    RCTLogInfo("Spectro.init")
+    self.emitter    = emitter
+    self.outputFile = outputFile
+    self.bufferSize = bufferSize
+    self.numBuffers = numBuffers
+    self.format     = format
+  }
+
+  deinit {
+    RCTLogInfo("Spectro.deinit")
+
+    // Stop recording + dealloc queue [which also deallocs its buffers, I hope?]
+    if let _queue = queue {
+      AudioQueueStop(_queue, true) // (No checkStatus)
+      AudioQueueDispose(_queue, true) // (No checkStatus)
+    }
+
+    // Close audio file
+    if let _audioFile = audioFile {
+      AudioFileClose(_audioFile) // (No checkStatus)
+    }
+
+  }
+
+  func start() throws -> Void {
+    RCTLogInfo(String(format: "Spectro.start: %@", pretty([
+      "outputFile": outputFile,
+      "numBuffers": numBuffers,
+      "queue": queue as Any,
+      "buffers": buffers,
+    ])))
+
+    // Noop if already recording
+    guard queue == nil else { return }
+
+    // Set audio session mode for recording
+    RCTLogTrace("Spectro.start: AVAudioSession.setCategory(.playAndRecord)")
+    let session = AVAudioSession.sharedInstance()
+    try session.setCategory(.playAndRecord, mode: .default, options: [])
+
+    // Reset audio file state
+    audioFile         = nil
+    numPacketsWritten = 0
+
+    // Create audio file to record to
+    //  - TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
+    let outputUrl  = NSURL(fileURLWithPath: outputPath)
+    let fileType   = kAudioFileWAVEType // TODO .mp4 [Timesink! Need muck with format + general trial and error]
+    RCTLogTrace(String(format: "Spectro.start: AudioFileCreateWithURL: %@", pretty([
+      "outputUrl": outputUrl,
+      "fileType": fileType,
+      "format": format,
+    ])))
+    AudioFileCreateWithURL(
+      outputUrl,
+      fileType,
+      &format,
+      .eraseFile, // NOTE Silently overwrite existing files, else weird hangs _after_ recording starts when file already exists
+      &audioFile
+    )
+
+    // Allocate audio queue
+    RCTLogTrace(String(format: "Spectro.start: AudioQueueNewInput: %@", pretty([
+      "format": format,
+    ])))
+    try checkStatus(AudioQueueNewInput(
+      &format,
+      { (selfOpaque, inAQ, inBuffer, inStartTime, inNumberPacketDescriptions, inPacketDescs) -> Void in
+        let selfTyped = Unmanaged<Spectro>.fromOpaque(selfOpaque!).takeUnretainedValue()
+        return selfTyped.onAudioData(inAQ, inBuffer, inStartTime, inNumberPacketDescriptions, inPacketDescs)
+      },
+      UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()),
+      nil,
+      nil,
+      0, // Must be 0 (reserved)
+      &queue
+    ))
+    let _queue = queue!
+
+    // Allocate buffers for audio queue
+    buffers = []
+    for _ in 0..<numBuffers {
+      var buffer: AudioQueueBufferRef?
+      RCTLogTrace(String(format: "Spectro.start: AudioQueueAllocateBuffer: %@", show([
+        "numBuffers": numBuffers,
+        "queue": _queue,
+        "bufferSize": bufferSize,
+      ])))
+      try checkStatus(AudioQueueAllocateBuffer(_queue, bufferSize * 2, &buffer)) // TODO Why *2?
+      let _buffer = buffer!
+      RCTLogTrace(String(format: "Spectro.start: AudioQueueEnqueueBuffer: %@", show([
+        "numBuffers": numBuffers,
+        "queue": _queue,
+        "buffer": _buffer,
+      ])))
+      try checkStatus(AudioQueueEnqueueBuffer(_queue, _buffer, 0, nil))
+      buffers.append(_buffer)
+    }
+
+    // Start recording
+    RCTLogTrace(String(format: "Spectro.start: AudioQueueStart: %@", show([
+      "queue": queue,
+    ])))
+    try checkStatus(AudioQueueStart(_queue, nil))
+
+  }
+
+  func stop() -> Promise<String?> {
+    return Promise { () -> String? in
+      RCTLogInfo("Spectro.stop")
+
+      // Noop unless recording
+      guard let _queue     = self.queue     else { return nil }
+      guard let _audioFile = self.audioFile else { return nil } // Should be defined if queue is, but let's not risk races
+
+      // Stop recording
+      RCTLogTrace("Spectro.start: AudioQueueStop + AudioQueueDispose")
+      try checkStatus(AudioQueueStop(_queue, true))
+      try checkStatus(AudioQueueDispose(_queue, true))
+
+      // Reset audio session mode for playback
+      RCTLogTrace("Spectro.stop: AVAudioSession.setCategory(.playback)")
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playback, mode: .default, options: [])
+
+      // Reset audio queue state
+      self.queue = nil
+
+      // Close audio file (but don't reset its state until the next .start(), so we can continue reading it)
+      try checkStatus(AudioFileClose(_audioFile))
+
+      return self.outputPath
+    }
+  }
+
+  func onAudioData(
+    _ inQueue:      AudioQueueRef,
+    _ inBuffer:     AudioQueueBufferRef,
+    _ pStartTime:   UnsafePointer<AudioTimeStamp>,
+    _ numPackets:   UInt32,
+    _ pPacketDescs: UnsafePointer<AudioStreamPacketDescription>? // nil for uncompressed formats
+  ) -> Void {
+    do {
+      RCTLogInfo(String(format: "Spectro.onAudioData: %@", show([
+        // "self.queue": self.queue,         // For debug
+        // "self.audioFile": self.audioFile, // For debug
+        "inQueue": inQueue,
+        "inBuffer": inBuffer,
+        // "startTime": pStartTime.pointee, // Lots of info I don't care about
+        "numPackets": numPackets,
+        "pPacketDescs": pPacketDescs,
+      ])))
+
+      // Noop unless recording
+      guard self.queue != nil               else { return }
+      guard self.queue == inQueue           else { return } // This would be a stop/start race, in which case audioFile is wrong
+      guard let _audioFile = self.audioFile else { return } // Should be defined if queue is, but let's not risk races
+
+      // Append to audioFile
+      if numPackets > 0 {
+        var ioNumPackets = numPackets
+        try checkStatus(AudioFileWritePackets(
+          _audioFile,
+          false, // Don't cache the writen data [what does this mean?]
+          inBuffer.pointee.mAudioDataByteSize,
+          pPacketDescs,
+          Int64(numPacketsWritten),
+          &ioNumPackets, // in: num packets to write; out: num packets actually written
+          inBuffer.pointee.mAudioData
+        ))
+        numPacketsWritten += ioNumPackets
+      }
+
+      // Compute spectro chunks from audio samples
+      //  - TODO Switch js -> Surge [after e2e with existing js spectro code]
+      let bytes: UnsafeMutableRawPointer = inBuffer.pointee.mAudioData
+      let base64: String = NSData(
+        bytes: bytes,
+        length: Int(inBuffer.pointee.mAudioDataByteSize)
+      ).base64EncodedString()
+      emitter.sendEvent(withName: "audioChunk", body: base64)
+
+      // Re-enqueue consumed buffer to receive more audio data
+      switch AudioQueueEnqueueBuffer(inQueue, inBuffer, 0, nil) {
+      case kAudioQueueErr_EnqueueDuringReset: break // Ignore these (harmless?) errors on .stop()
+      case let status: try checkStatus(status)
+      }
+
+    } catch {
+      RCTLogError("Spectro.onAudioData: Error: \(error)")
+    }
+  }
+
+  func stats() -> Dictionary<String, Any> {
+    return [
+      "sampleRate": format.mSampleRate,
+      "channels": format.mChannelsPerFrame,
+      "bitsPerSample": format.mBitsPerChannel,
+      "numPacketsWritten": numPacketsWritten,
+      "outputFile": outputFile,
+    ]
+  }
+
+  // XXX Dev
+  // func hello(_ x: String, _ y: String, _ z: NSNumber) -> String {
+  //   return SpectroImpl.hello(x, y, z)
+  // }
+
+}

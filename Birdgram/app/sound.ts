@@ -2,6 +2,12 @@ import _Sound from 'react-native-sound';
 
 export default class Sound extends _Sound {
 
+  // Expose some useful private props as public
+  getFilename = (): string => {
+    // @ts-ignore (Not exposed)
+    return this._filename;
+  }
+
   // async variant of `new Sound`
   static newAsync = (filename: string, basePath?: string): Promise<Sound> => {
     return new Promise((resolve, reject) => {

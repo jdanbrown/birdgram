@@ -7,8 +7,18 @@
 import Bubo // Before pods imports
 import AudioKit
 import AudioKitUI
+//import SwiftyJSON
 import Surge
 //import Promises
+
+CFURL(
+
+URL(fileURLWithPath: "/foo/bar")
+
+print(String(describing: ["a":1, "b":2]))
+print(String(format: "%@", ["a":1, "b":2]))
+
+//JSON(3)
 
 print(AKAudioFile().fileFormat)
 print(AudioKit.format)
