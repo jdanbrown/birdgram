@@ -118,21 +118,29 @@
                                withHeight:(int) height {
 
 
-  size_t bufferLength = width * height * 4;
-  CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, buffer, bufferLength, NULL);
+  // Grayscale [works]
   size_t bitsPerComponent = 8;
-  size_t bitsPerPixel = 32;
-  size_t bytesPerRow = 4 * width;
+  size_t componentsPerPixel = 1;
+  CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault | kCGImageAlphaNone;
+  CGColorSpaceRef colorSpaceRef = CGColorSpaceCreateDeviceGray();
 
-  CGColorSpaceRef colorSpaceRef = CGColorSpaceCreateDeviceRGB();
+  // // RGBA [works]
+  // size_t bitsPerComponent = 8;
+  // size_t componentsPerPixel = 4;
+  // CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault | kCGImageAlphaPremultipliedLast;
+  // CGColorSpaceRef colorSpaceRef = CGColorSpaceCreateDeviceRGB();
+
+  size_t bitsPerPixel = bitsPerComponent * componentsPerPixel;
+  size_t bytesPerRow = componentsPerPixel * width;
+  size_t bufferLength = componentsPerPixel * width * height;
+  CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, buffer, bufferLength, NULL);
+  CGColorRenderingIntent renderingIntent = kCGRenderingIntentDefault;
+
   if(colorSpaceRef == NULL) {
     NSLog(@"Error allocating color space");
     CGDataProviderRelease(provider);
     return nil;
   }
-
-  CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault | kCGImageAlphaPremultipliedLast;
-  CGColorRenderingIntent renderingIntent = kCGRenderingIntentDefault;
 
   CGImageRef iref = CGImageCreate(width,
                                   height,

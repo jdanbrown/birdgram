@@ -7,4 +7,5 @@
 #import <React/RCTEventEmitter.h>
 #import <React/RCTLog.h>
 
+#import "ImageHelper.h"
 #import "RCTSwiftLog.h"

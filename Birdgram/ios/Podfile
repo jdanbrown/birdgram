@@ -21,7 +21,7 @@ workspace 'Birdgram.xcworkspace'
 
 def all_pods
   pod 'AudioKit', '~> 4.5'
-  pod 'Surge', '~> 2.0.0'
+  # pod 'Surge', '~> 2.2.0' # XXX Vendored
   pod 'PromisesSwift', '~> 1.2.4'
   pod 'SwiftyJSON', '~> 4.0'
   pod 'Yams', '~> 1.0.1'
@@ -46,3 +46,16 @@ target 'Birdgram' do
   #   inherit! :search_paths
   # end
 end
+
+# # XXX Trying https://github.com/CocoaPods/CocoaPods/issues/3773#issuecomment-125305143
+# post_install do |installer|
+#   installer.pods_project.targets.each do |target|
+#     target.build_configurations.each do |config|
+#       # config.build_settings["OTHER_LDFLAGS"] = '$(inherited) "-ObjC"'
+#       puts target.name, config.build_settings["OTHER_LDFLAGS"]
+#       # if target.name == "Appboy-iOS-SDK"
+#       #   config.build_settings["OTHER_LDFLAGS"] = '$(inherited) "-ObjC"'
+#       # end
+#     end
+#   end
+# end

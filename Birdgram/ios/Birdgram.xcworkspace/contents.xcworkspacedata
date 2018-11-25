@@ -2,6 +2,12 @@
 <Workspace
    version = "1.0">
    <FileRef
+      location = "group:Pods/Pods.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:Surge/Surge.xcodeproj">
+   </FileRef>
+   <FileRef
       location = "group:AudioKitPlaygrounds/AudioKitPlaygrounds.xcodeproj">
    </FileRef>
    <FileRef
@@ -12,8 +18,5 @@
    </FileRef>
    <FileRef
       location = "group:Birdgram.xcodeproj">
-   </FileRef>
-   <FileRef
-      location = "group:Pods/Pods.xcodeproj">
    </FileRef>
 </Workspace>

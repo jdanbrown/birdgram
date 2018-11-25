@@ -11,6 +11,7 @@
 		B710840021A36D71006C3A5E /* Playgrounds.h in Headers */ = {isa = PBXBuildFile; fileRef = B71083FE21A36D71006C3A5E /* Playgrounds.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		B710840721A36D95006C3A5E /* Empty.swift in Sources */ = {isa = PBXBuildFile; fileRef = B710840621A36D95006C3A5E /* Empty.swift */; };
 		B710840B21A36DE4006C3A5E /* Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B710840A21A36DE4006C3A5E /* Bubo.framework */; };
+		B7B1EACA21AAEBEC003EE032 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EAC921AAEBEC003EE032 /* Surge.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +24,7 @@
 		B710840821A36DC9006C3A5E /* One.playground */ = {isa = PBXFileReference; lastKnownFileType = file.playground; path = One.playground; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.swift; };
 		B710840A21A36DE4006C3A5E /* Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B78BFDF021A61E950046AB77 /* SwiftyJSON.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = SwiftyJSON.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7B1EAC921AAEBEC003EE032 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F0D25E641E9ED94F9C61A41C /* Pods-Playgrounds.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Playgrounds.release.xcconfig"; path = "../Pods/Target Support Files/Pods-Playgrounds/Pods-Playgrounds.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -31,6 +33,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B7B1EACA21AAEBEC003EE032 /* Surge.framework in Frameworks */,
 				B710840B21A36DE4006C3A5E /* Bubo.framework in Frameworks */,
 				6A0DD8497F553F1041E20E7F /* Pods_Playgrounds.framework in Frameworks */,
 			);
@@ -80,6 +83,7 @@
 		B710840921A36DE4006C3A5E /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				B7B1EAC921AAEBEC003EE032 /* Surge.framework */,
 				B78BFDF021A61E950046AB77 /* SwiftyJSON.framework */,
 				B710840A21A36DE4006C3A5E /* Bubo.framework */,
 				4DFA295D35FE328E108B5CE1 /* Pods_Playgrounds.framework */,

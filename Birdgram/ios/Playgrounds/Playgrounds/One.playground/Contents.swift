@@ -11,7 +11,44 @@ import AudioKitUI
 import Surge
 //import Promises
 
-CFURL(
+print(Matrix([1,2,3,4].chunked(2)))
+print(Matrix(rows: 0, columns: 0, repeatedValue: 0 as Float))
+// Matrix([] as [[Double]])
+
+// Surge
+Surge.sum([1,2,3,4] as [Double])
+[1.0,2,3] • [4.0,5,6]
+
+// Surge: Arithmetic
+let n = [-1.0, 2.0, 3.0, 4.0, 5.0]
+let sum = Surge.sum(n)
+let a = [1.0, 3.0, 5.0, 7.0]
+let b = [2.0, 4.0, 6.0, 8.0]
+let product = mul(a, b)
+
+// Surge: Matrix
+let A = Matrix([[1, 1], [1, -1]])
+let C = Matrix([[3], [1]])
+let B = inv(A) * C
+print(A, B, C)
+print(A * transpose(A))
+
+// Surge: FFT
+let count = 64
+let frequency = 4.0
+let amplitude = 3.0
+let x = (0..<count).map { 2.0 * Double.pi / Double(count) * Double($0) * frequency }
+print("x", show(x))
+print("fft(x)", show(fft(x)))
+print("sin(x)", show(sin(x)))
+print("fft(sin(x))", show(fft(sin(x))))
+
+////
+
+print(FileManager.default.temporaryDirectory.path)
+
+let xss = [[1,2],[3,4]]
+//xss.joined()
 
 URL(fileURLWithPath: "/foo/bar")
 

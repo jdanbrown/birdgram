@@ -89,13 +89,13 @@ enum RecordingState {
 }
 
 interface SpectroImage {
-  source: {uri: string};
+  source: {uri?: string};
   width: number;
   height: number;
-  debugTimes?: {[key: string]: number};
+  debugTimes?: Array<number>;
 }
 
-export class RecordScreen extends React.Component<Props, State> {
+export class RecordScreen extends PureComponent<Props, State> {
 
   static defaultProps: Partial<Props> = {
     // library: 'MicStream', // XXX(write_audio)
@@ -110,7 +110,8 @@ export class RecordScreen extends React.Component<Props, State> {
 
   state: State = {
     recordingState: RecordingState.Stopped,
-    refreshRate: 2,
+    refreshRate: 4, // XXX Good for debug (avoids overloading react refresh)
+    // refreshRate: 16, // TODO Good for prod
     follow: true,
     spectroImages: [],
     nSamples: 0,
@@ -132,7 +133,7 @@ export class RecordScreen extends React.Component<Props, State> {
   );
 
   // Listeners
-  _listener?: EmitterSubscription;
+  _listeners: Array<EmitterSubscription> = [];
 
   // Refs
   _scrollViewRef: RefObject<ScrollView> = React.createRef();
@@ -153,17 +154,21 @@ export class RecordScreen extends React.Component<Props, State> {
       ['MicStream', () => {
         // TODO(mel_spectro): Needs update for Buffer -> Int16Array
         // // Register callbacks
-        // this._listener = MicStream.addListener(samples => {
+        // this._listeners.push(MicStream.addListener(samples => {
         //   this.onSamplesChunk(Buffer.from(samples));
-        // });
+        // }));
       }],
       ['Spectro', () => {
         // TODO(swift_spectro)
-        this._listener = Spectro.addListener((data: string) => {
-          // Convert base64:str -> bytes:Uint8Array -> samples:Int16Array (int16 to match bitsPerSample=16)
-          if (this.props.bitsPerSample !== 16) throw 'Samples=Int16Array assumes bitsPerSample=16'; // HACK
-          this.onSamplesChunk(new Samples(base64js.toByteArray(data).buffer));
-        });
+
+        // this._listeners.push(Spectro.onAudioChunk((data: string) => {
+        //   // Convert base64:str -> bytes:Uint8Array -> samples:Int16Array (int16 to match bitsPerSample=16)
+        //   if (this.props.bitsPerSample !== 16) throw 'Samples=Int16Array assumes bitsPerSample=16'; // HACK
+        //   this.onSamplesChunk(new Samples(base64js.toByteArray(data).buffer));
+        // }));
+
+        this._listeners.push(Spectro.onSpectroFilePath(this.onSpectroFilePath));
+
       }],
     );
 
@@ -172,17 +177,21 @@ export class RecordScreen extends React.Component<Props, State> {
   componentWillUnmount = () => {
     log.info(`${this.constructor.name}.componentWillUnmount`);
     // Unregisterd callbacks
-    if (this._listener) this._listener.remove();
+    this._listeners.forEach(listener => listener.remove());
   }
 
+  // Component updates in tight loop (spectro refresh)
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    // Avoid logging in tight loop (bottleneck at refreshRate=16)
+    // log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
 
     if (this.state.follow) {
+      // (Not a bottleneck at refreshRate=16)
       this._scrollViewRef.current!.scrollToEnd();
     }
 
     // TODO(swift_spectro)
+    //  - TODO Maybe a bottleneck at refreshRate=16 [profile again and decide]
     const nativeSpectro: object = {
       stats: await tryElseAsync<object | null>(null, () => Spectro.stats()),
     };
@@ -224,27 +233,15 @@ export class RecordScreen extends React.Component<Props, State> {
             //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
             //  - https://github.com/DylanVann/react-native-fast-image
             (this.state.spectroImages.map(({source, width, height, debugTimes}, index) => (
-              <View
+              <SpectroImageComp
                 key={index} // (Use source.uri if index causes trouble)
-              >
-                <FastImage
-                  style={{
-                    width,
-                    height,
-                    marginBottom: 1,
-                    marginRight: this.props.showDebug ? 1 : 0,
-                  }}
-                  source={source}
-                  resizeMode='stretch'
-                />
-                {this.props.showDebug && (
-                  <this.DebugView style={{flexDirection: 'column', padding: 0}}>
-                    {_.values(debugTimes || {}).map((debugTime, i) => (
-                      <this.DebugText key={i} style={{fontSize: 8}}>{debugTime * 1000}</this.DebugText>
-                    ))}
-                  </this.DebugView>
-                )}
-              </View>
+                // key={this.props.source.uri}
+                source={source}
+                width={width}
+                height={height}
+                debugTimes={debugTimes}
+                showDebug={this.props.showDebug}
+              />
             )))
           }
         </ScrollView>
@@ -280,60 +277,14 @@ export class RecordScreen extends React.Component<Props, State> {
         </this.DebugView>
 
         {/* Controls bar */}
-        <View style={{
-          flexDirection: 'row',
-        }}>
-
-          {/* Refresh rate +/– */}
-          <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {
-            this.setState((state, props) => ({refreshRate: _.clamp(state.refreshRate - 1, 1, 10)}))
-          }}>
-            <Feather name='minus' style={styles.buttonIcon} />
-          </RectButton>
-          <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {}}>
-            <Text style={[styles.buttonIcon, material.headline]}>
-              {this.state.refreshRate}/s
-            </Text>
-          </RectButton>
-          <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {
-            this.setState((state, props) => ({refreshRate: _.clamp(state.refreshRate + 1, 1, 10)}))
-          }}>
-            <Feather name='plus' style={styles.buttonIcon} />
-          </RectButton>
-
-          {/* Toggle follow */}
-          <RectButton style={styles.button} onPress={() => {
-            this.setState((state, props) => ({follow: !state.follow}))
-          }}>
-            <Feather name='chevrons-down' style={[styles.buttonIcon, {
-              color: this.state.follow ? iOSColors.blue : iOSColors.black,
-            }]}/>
-          </RectButton>
-
-          {/* Record/stop */}
-          {match(this.state.recordingState,
-            [RecordingState.Stopped, () => (
-              <RectButton style={styles.button} onPress={this.startRecording}>
-                <FontAwesome5 style={[styles.buttonIcon, {color: Colors.Paired.darkGreen}]}
-                  name='circle' solid
-                />
-              </RectButton>
-            )],
-            [RecordingState.Recording, () => (
-              <RectButton style={styles.button} onPress={this.stopRecording}>
-                <FontAwesome5 style={[styles.buttonIcon, {color: Colors.Paired.darkRed}]}
-                  name='stop' solid
-                />
-              </RectButton>
-            )],
-            [RecordingState.Saving, () => (
-              <RectButton style={styles.button} onPress={() => {}}>
-                <ActivityIndicator size='large' />
-              </RectButton>
-            )],
-          )}
-
-        </View>
+        <ControlsBar
+          recordingState={this.state.recordingState}
+          refreshRate={this.state.refreshRate}
+          follow={this.state.follow}
+          parentSetState={f => this.setState(f)}
+          startRecording={this.startRecording}
+          stopRecording={this.stopRecording}
+        />
 
       </View>
     );
@@ -409,6 +360,8 @@ export class RecordScreen extends React.Component<Props, State> {
             sampleRate: this.props.sampleRate,
             bitsPerChannel: this.props.bitsPerSample,
             channelsPerFrame: this.props.channels,
+            refreshRate: this.state.refreshRate, // HACK Only updates on stop/record
+            // bufferSize: 2048, // HACK Manually tuned for (22050hz,1ch,16bit)
           });
           await Spectro.start();
 
@@ -517,6 +470,40 @@ export class RecordScreen extends React.Component<Props, State> {
       });
 
     }
+  }
+
+  // TODO(swift_spectro)
+  onSpectroFilePath = async ({spectroFilePath, width, height, nSamples, debugTimes}: {
+    spectroFilePath?: string,
+    width: number,
+    height: number,
+    nSamples: number,
+    debugTimes: Array<number>,
+  }) => {
+    log.info('RecordScreen.onSpectroFilePath', json({
+      spectroFilePath: _.defaultTo(spectroFilePath, null),
+      size: !spectroFilePath ? undefined : (await fs.stat(spectroFilePath)).size,
+      width,
+      height,
+      nSamples,
+      debugTimes,
+    }));
+
+    // TODO(debug_slow): refreshRate=32 seems to work just fine in Release build
+
+    const spectroImage: SpectroImage = {
+      source: !spectroFilePath ? {} : {uri: `file://${spectroFilePath}`},
+      width,
+      height: this.props.spectroHeight, // (Resize height->spectroHeight via Image render)
+      debugTimes,
+    };
+
+    this.setState((state, props) => ({
+      spectroImages: [...state.spectroImages, spectroImage],
+      nSamples:      state.nSamples      + nSamples,
+      nSpectroWidth: state.nSpectroWidth + width,
+    }));
+
   }
 
   onSamplesChunk = async (chunk: Samples) => {
@@ -726,7 +713,7 @@ export class RecordScreen extends React.Component<Props, State> {
       source,
       width: w_img,
       height: h_img,
-      debugTimes,
+      debugTimes: Array.from(_.values(debugTimes)),
     };
 
     // XXX Globals for dev
@@ -771,6 +758,170 @@ export class RecordScreen extends React.Component<Props, State> {
       }}/>
     )
   );
+
+}
+
+// Split out spectro image as component else excessive updates cause render bottleneck
+//  - TODO Rename SpectroImage -> ? so we can rename SpectroImageComp -> SpectroImage
+export interface SpectroImageCompProps {
+  source: {uri?: string};
+  width: number;
+  height: number;
+  debugTimes?: Array<number>;
+  showDebug: boolean;
+}
+export interface SpectroImageCompState {}
+export class SpectroImageComp extends PureComponent<SpectroImageCompProps, SpectroImageCompState> {
+
+  static defaultProps = {};
+  state = {};
+
+  componentDidMount = async () => {
+    // log.info(`${this.constructor.name}.componentDidMount`);
+  }
+
+  componentWillUnmount = async () => {
+    // log.info(`${this.constructor.name}.componentWillUnmount`);
+  }
+
+  componentDidUpdate = async (prevProps: SpectroImageCompProps, prevState: SpectroImageCompState) => {
+    // log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+  }
+
+  render = () => {
+    // log.info(`${this.constructor.name}.render`);
+    return (
+      <View>
+        <FastImage
+          style={{
+            width: this.props.width,
+            height: this.props.height,
+            marginBottom: 1,
+            marginRight: this.props.showDebug ? 1 : 0,
+            paddingVertical: 1, backgroundColor: 'red', // XXX(swift_spectro): Debug
+          }}
+          source={this.props.source}
+          // resizeMode='stretch' // TODO(swift_spectro): Re-enable
+          resizeMode='center' // XXX(swift_spectro): Debug
+        />
+        {this.props.showDebug && (
+          <this.DebugView style={{flexDirection: 'column', padding: 0, marginRight: 1}}>
+            {(this.props.debugTimes || []).map((debugTime, i) => (
+              <this.DebugText key={i} style={{fontSize: 8}}>{Math.round(debugTime * 1000)}</this.DebugText>
+            ))}
+          </this.DebugView>
+        )}
+      </View>
+    );
+  }
+
+  // Debug components
+  //  - [Tried and gave up once to make well-typed generic version of these (DebugFoo = addStyle(Foo, ...) = withProps(Foo, ...))]
+  DebugView = (props: ViewProps & {children: any}) => (
+    !this.props.showDebug ? null : (
+      <View {...{
+        ...props,
+        style: [Styles.debugView, ...normalizeStyle(props.style)],
+      }}/>
+    )
+  );
+  DebugText = (props: TextProps & {children: any}) => (
+    !this.props.showDebug ? null : (
+      <Text {...{
+        ...props,
+        style: [Styles.debugText, ...normalizeStyle(props.style)],
+      }}/>
+    )
+  );
+
+}
+
+// Split out control buttons as component else excessive updates cause render bottleneck
+export interface ControlsBarProps {
+  recordingState: State["recordingState"];
+  refreshRate:    State["refreshRate"];
+  follow:         State["follow"];
+  parentSetState: typeof RecordScreen.prototype.setState;
+  startRecording: typeof RecordScreen.prototype.startRecording;
+  stopRecording:  typeof RecordScreen.prototype.stopRecording;
+}
+export interface ControlsBarState {}
+export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarState> {
+
+  static defaultProps = {};
+  state = {};
+
+  componentDidMount = async () => {
+    log.info(`${this.constructor.name}.componentDidMount`);
+  }
+
+  componentWillUnmount = async () => {
+    log.info(`${this.constructor.name}.componentWillUnmount`);
+  }
+
+  componentDidUpdate = async (prevProps: ControlsBarProps, prevState: ControlsBarState) => {
+    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+  }
+
+  render = () => {
+    log.info(`${this.constructor.name}.render`);
+    return (
+      <View style={{
+        flexDirection: 'row',
+      }}>
+
+        {/* Refresh rate +/– */}
+        <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {
+          this.props.parentSetState((state, props) => ({refreshRate: _.clamp(state.refreshRate / 2, 1, 16)}))
+        }}>
+          <Feather name='minus' style={styles.buttonIcon} />
+        </RectButton>
+        <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {}}>
+          <Text style={[styles.buttonIcon, material.headline]}>
+            {this.props.refreshRate}/s
+          </Text>
+        </RectButton>
+        <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {
+          this.props.parentSetState((state, props) => ({refreshRate: _.clamp(state.refreshRate * 2, 1, 16)}))
+        }}>
+          <Feather name='plus' style={styles.buttonIcon} />
+        </RectButton>
+
+        {/* Toggle follow */}
+        <RectButton style={styles.button} onPress={() => {
+          this.props.parentSetState((state, props) => ({follow: !state.follow}))
+        }}>
+          <Feather name='chevrons-down' style={[styles.buttonIcon, {
+            color: this.props.follow ? iOSColors.blue : iOSColors.black,
+          }]}/>
+        </RectButton>
+
+        {/* Record/stop */}
+        {match(this.props.recordingState,
+          [RecordingState.Stopped, () => (
+            <RectButton style={styles.button} onPress={this.props.startRecording}>
+              <FontAwesome5 style={[styles.buttonIcon, {color: Colors.Paired.darkGreen}]}
+                name='circle' solid
+              />
+            </RectButton>
+          )],
+          [RecordingState.Recording, () => (
+            <RectButton style={styles.button} onPress={this.props.stopRecording}>
+              <FontAwesome5 style={[styles.buttonIcon, {color: Colors.Paired.darkRed}]}
+                name='stop' solid
+              />
+            </RectButton>
+          )],
+          [RecordingState.Saving, () => (
+            <RectButton style={styles.button} onPress={() => {}}>
+              <ActivityIndicator size='large' />
+            </RectButton>
+          )],
+        )}
+
+      </View>
+    );
+  }
 
 }
 
