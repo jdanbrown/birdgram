@@ -105,7 +105,15 @@ android
 - Android Studio
   - TODO
 
-# Troubleshooting
+# Troubleshooting (newest to oldest)
+- `swift` repl fails with "error: Couldn't lookup symbols" for e.g. Bubo symbols
+  - In the repl code, before `import Bubo`, manually `import` every module from xcode's "Linked Frameworks and Libraries", e.g.
+    - Works: `import Bubo`
+    - Fails: `import Bubo; bubo_foo()`
+    - Fails: `import Bubo; import Surge; ...; import Yams; bubo_foo()`
+    - Works: `import Surge; ...; import Yams; import Bubo; bubo_foo()`
+  - This is horse shit
+  - cf. ~/bin/ipykernel-install-swift.md for more gory details about `swift` repl
 - Playground fails to import frameworks (e.g. Bubo)
   - Build the framework (e.g. Bubo) _once_ against a non-device device (e.g. "Generic iOS Device" / "iPhone 8")
   - Then it doesn't matter which device you run against

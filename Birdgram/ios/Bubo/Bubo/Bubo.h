@@ -6,7 +6,8 @@
 //  Copyright © 2018 Dan Brown. All rights reserved.
 //
 
-#import <UIKit/UIKit.h>
+#import <UIKit/UIKit.h> // XXX Replaced with Foundation.h for macos + ios build
+//#import <Foundation/Foundation.h>
 
 //! Project version number for Bubo.
 FOUNDATION_EXPORT double BuboVersionNumber;

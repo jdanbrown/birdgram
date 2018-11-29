@@ -1,3 +1,6 @@
+// XXX Debug Bubo-macos
+public func foo_bubo() -> Int { return 0 }
+
 import Foundation
 
 // Based on https://gist.github.com/nicklockwood/c5f075dd9e714ad8524859c6bd46069f
@@ -58,10 +61,6 @@ public func documentsDirectory() -> String {
   return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
 }
 
-// public func flatMap<XS: Collection>(_ xs: XS, _ f: (XS.Element) -> XS) -> FlattenCollection<[XS]> {
-//   return xs.map(f).joined()
-// }
-
 extension Collection {
 
   public func flatMap(_ xs: Self, _ f: (Element) -> Self) -> FlattenCollection<[Self]> {
@@ -72,14 +71,14 @@ extension Collection {
 
 extension Array {
 
-  // public func flatMap(_ xs: Array, _ f: (Element) -> Array) -> FlattenCollection<[Array]> {
-  //   return xs.map(f).joined()
-  // }
-
   public func chunked(_ chunkSize: Int) -> [[Element]] {
     return stride(from: 0, to: count, by: chunkSize).map {
       Array(self[$0 ..< Swift.min($0 + chunkSize, count)])
     }
+  }
+
+  public func repeated(_ n: Int) -> [Element] {
+    return [Element]([Array](repeating: self, count: n).joined())
   }
 
 }
@@ -90,6 +89,18 @@ extension ArraySlice {
     return stride(from: 0, to: count, by: chunkSize).map {
       Array(self[$0 ..< Swift.min($0 + chunkSize, count)])
     }
+  }
+
+}
+
+extension StringProtocol {
+
+  public func padLeft(_ n: Int, _ element: Element = " ") -> String {
+    return String(repeatElement(element, count: Swift.max(0, n - count))) + suffix(Swift.max(count, count - n))
+  }
+
+  public func padRight(_ n: Int, _ element: Element = " ") -> String {
+    return suffix(Swift.max(count, count - n)) + String(repeatElement(element, count: Swift.max(0, n - count)))
   }
 
 }

@@ -11,6 +11,57 @@ import AudioKitUI
 import Surge
 //import Promises
 
+print(np.linspace(0, 10, 5))
+
+let (sample_rate, n_fft) = (22050, 512)
+print(np.linspace(0, Float(sample_rate) / 2, 1 + n_fft / 2).count)
+print(np.linspace(0, Float(sample_rate) / 2, 1 + n_fft / 2)[250...])
+
+do { let (n,w,h) = (5119, 512, 256); Array(stride(from: 0, to: n - w, by: h)).count }
+do { let (n,w,h) = (5120, 512, 256); Array(stride(from: 0, to: n - w, by: h)).count }
+do { let (n,w,h) = (5121, 512, 256); Array(stride(from: 0, to: n - w, by: h)).count }
+
+do { let (n,w,h) = (5119, 512, 256); Array(stride(from: 0, through: n - w, by: h)).count }
+do { let (n,w,h) = (5120, 512, 256); Array(stride(from: 0, through: n - w, by: h)).count }
+do { let (n,w,h) = (5121, 512, 256); Array(stride(from: 0, through: n - w, by: h)).count }
+
+Array(stride(from: 0, to: 5210 - 512, by: 256)).count
+
+3 <= -Float.infinity
+3 <= Float.infinity
+Float.greatestFiniteMagnitude <= Float.infinity
+Float.infinity <= Float.infinity
+Float.infinity < Float.infinity
+Float.leastNormalMagnitude
+Float.leastNonzeroMagnitude
+
+let xs = [0,1,2,3,4,5,6,7,8,9]
+let hop_length = 3
+print(Array(stride(from: 0, to: xs.count, by: hop_length)))
+print(Array(stride(from: 0, to: xs.count - hop_length, by: hop_length)))
+
+let xs: [Float] = [1,2,4,7,0]
+let ys: [Float] = Array(xs[1...])
+let zs: [Float] = Array(xs[..<(xs.count - 1)])
+ys .- zs
+
+print(fft(xs))
+
+exp(2.0)
+log(2.0)
+log10(2.0)
+Float(3.0) / 2
+0...5
+print(Array(stride(from: 0.0, through: 1.0, by: 1.0/5.0)))
+
+print(Matrix([1,2,3,4].chunked(2)).vop { xs in log10(xs as [Float]) })
+
+Matrix([1,2,3,4].chunked(2)).map { (x: ArraySlice<Double>) in x*2.0 }
+
+max(1,2,3)
+abs(-3)
+2.0 * Matrix([1,2,3,4].chunked(2))
+
 print(Matrix([1,2,3,4].chunked(2)))
 print(Matrix(rows: 0, columns: 0, repeatedValue: 0 as Float))
 // Matrix([] as [[Double]])

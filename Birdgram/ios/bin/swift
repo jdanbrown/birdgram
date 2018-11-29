@@ -1,0 +1,11 @@
+#!/bin/bash -eu
+# vi: ft=sh
+
+# Parse args
+if [ $# -gt 1 ]; then
+  xcode_build_dir="$1"; shift
+else
+  xcode_build_dir='/Users/danb/Library/Developer/Xcode/DerivedData/Birdgram-higoicbsnkwebceboubdaasypfhd/Build/Products/Debug'
+fi
+
+(set -x && swift -F"$xcode_build_dir"/{,Yams-macOS,SwiftyJSON-macOS} "$@")

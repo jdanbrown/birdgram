@@ -1,3 +1,9 @@
+// To expose a method from swift to js:
+//  - app/native/Spectro.ts      - add js Spectro.f() calling objc NativeModules.RNSpectro.f()
+//  - ios/Birdgram/Spectro.m     - add objc extern for swift RNSpectro.f()
+//  - ios/Birdgram/Spectro.swift - add swift RNSpectro.f() calling Spectro.f()
+//  - ios/Birdgram/Spectro.swift - add swift Spectro.f()
+
 // Based on:
 //  - https://github.com/goodatlas/react-native-audio-record
 //  - https://github.com/chadsmith/react-native-microphone-stream

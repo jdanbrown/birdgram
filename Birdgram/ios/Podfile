@@ -19,18 +19,33 @@ use_frameworks!
 
 workspace 'Birdgram.xcworkspace'
 
-def all_pods
+def bubo_pods
   pod 'AudioKit', '~> 4.5'
-  # pod 'Surge', '~> 2.2.0' # XXX Vendored
-  pod 'PromisesSwift', '~> 1.2.4'
+  # pod 'Surge', '~> 2.2.0' # XXX Vendored [why?]
+  pod 'SigmaSwiftStatistics', '~> 8.0'
   pod 'SwiftyJSON', '~> 4.0'
   pod 'Yams', '~> 1.0.1'
+end
+
+def birdgram_pods
+  pod 'PromisesSwift', '~> 1.2.4' # Moved here b/c it gave me trouble in the Bubo-macos target
+end
+
+def all_pods
+  bubo_pods
+  birdgram_pods
 end
 
 # TODO How to fix warning "contains framework ... for which the Podfile does not contain host targets"?
 target 'Bubo' do
   project 'Bubo/Bubo.xcodeproj'
-  all_pods
+  bubo_pods
+end
+
+target 'Bubo-macos' do
+  project 'Bubo/Bubo.xcodeproj'
+  platform :osx, '10.11'
+  bubo_pods
 end
 
 target 'Playgrounds' do
@@ -46,16 +61,3 @@ target 'Birdgram' do
   #   inherit! :search_paths
   # end
 end
-
-# # XXX Trying https://github.com/CocoaPods/CocoaPods/issues/3773#issuecomment-125305143
-# post_install do |installer|
-#   installer.pods_project.targets.each do |target|
-#     target.build_configurations.each do |config|
-#       # config.build_settings["OTHER_LDFLAGS"] = '$(inherited) "-ObjC"'
-#       puts target.name, config.build_settings["OTHER_LDFLAGS"]
-#       # if target.name == "Appboy-iOS-SDK"
-#       #   config.build_settings["OTHER_LDFLAGS"] = '$(inherited) "-ObjC"'
-#       # end
-#     end
-#   end
-# end

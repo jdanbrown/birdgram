@@ -1,3 +1,9 @@
+// To expose a method from swift to js:
+//  - app/native/Spectro.ts      - add js Spectro.f() calling objc NativeModules.RNSpectro.f()
+//  - ios/Birdgram/Spectro.m     - add objc extern for swift RNSpectro.f()
+//  - ios/Birdgram/Spectro.swift - add swift RNSpectro.f() calling Spectro.f()
+//  - ios/Birdgram/Spectro.swift - add swift Spectro.f()
+
 import Foundation
 
 import Bubo // Before Bubo_Pods imports
@@ -376,6 +382,9 @@ class Spectro
 //  - https://github.com/carsonmcdonald/AVSExample-Swift/blob/master/AVSExample/SimplePCMRecorder.swift
 //  - https://github.com/goodatlas/react-native-audio-record/blob/master/ios/RNAudioRecord.m
 //  - https://github.com/chadsmith/react-native-microphone-stream/blob/master/ios/MicrophoneStream.m
+//  - https://github.com/rochars/wavefile
+//    - e.g. a-law:  https://github.com/rochars/wavefile/blob/846f66c/dist/wavefile.js#L2456
+//    - e.g. mu-law: https://github.com/rochars/wavefile/blob/846f66c/dist/wavefile.js#L2490
 class _SpectroBasic {
 
   static func supportedEvents() -> [String] {
@@ -650,7 +659,7 @@ class _SpectroBasic {
         ))
         numPacketsWritten += ioNumPackets
       }
-      debugTimes.append(("foo", timer.lap()))
+      debugTimes.append(("audioFile", timer.lap()))
 
       // XXX Disable js audio->spectro while we dev native audio->spectro
       // Send audio samples to js (via event)
@@ -672,21 +681,53 @@ class _SpectroBasic {
       // Don't emit event if no samples (e.g. flushing empty buffers on stop)
       if (nSamples > 0) {
 
-        // xs = audio samples
+        // xs: audio samples
         var xs: [Float] = Array(repeating: Float.nan, count: nSamples)
         let pAudioData = inBuffer.pointee.mAudioData.assumingMemoryBound(to: Sample.self)
         for i in 0..<nSamples {
           xs[i] = Float(pAudioData.advanced(by: i).pointee)
         }
-        RCTLogTrace(String(format: "xs[%d]: %@", xs.count, show(xs[0..<min(100, xs.count)], prec: 0))) // XXX Debug
+        RCTLogTrace(String(format: "xs[%d]: %@", xs.count, show(xs[0..<min(100, xs.count)], prec: 0))) // XXX Debug [XXX Bottleneck]
         debugTimes.append(("xs", timer.lap()))
 
-        // fs = frequencies (via fft)
+        // S: stft(xs)
+        //  - (fs/ts aren't yet implemented, both are mocked as [])
+        let (_, _, S) = Features.spectro(
+          xs,
+          sample_rate: Int(format.mSampleRate)
+        )
+        do {
+          let S_debug = S.vect { grid in Array(grid[0..<min(100, grid.count)]) }
+          do {
+            var s = ""
+            print(S_debug, to: &s)
+            RCTLogTrace(String(format: "S[%d,%d]: print\n%@", S.rows, S.columns, s))
+          }
+          do {
+            var s = ""
+            debugPrint(S_debug, to: &s)
+            RCTLogTrace(String(format: "S[%d,%d]: debugPrint\n%@", S.rows, S.columns, s))
+          }
+          do {
+            var s = ""
+            dump(S_debug, to: &s)
+            RCTLogTrace(String(format: "S[%d,%d]: dump\n%@", S.rows, S.columns, s))
+          }
+          // RCTLogTrace(String(format: "S[%d,%d]: %@",
+          //   S.rows, S.columns,
+          //   show(S.vect { grid in Array(grid[0..<min(100, grid.count)]) }, prec: 0)
+          // )) // XXX Debug [XXX Bottleneck]
+        }
+
+        // TODO TODO
+
+        // fs: fft(xs) (freqs)
         let fs = fft(xs)
-        RCTLogTrace(String(format: "fs[%d]: %@", fs.count, show(fs[0..<min(100, fs.count)], prec: 0))) // XXX Debug
+        RCTLogTrace(String(format: "fs[%d]: %@", fs.count, show(fs[0..<min(100, fs.count)], prec: 0))) // XXX Debug [XXX Bottleneck]
         debugTimes.append(("fs", timer.lap()))
 
-        // TODO Mock pixels: grayscale from fs
+        // pixels: grayscale from fs
+        //  - TODO Magma scale
         let nSlice    = Int(100) // XXX Debug
         let imgWidth  = Int32(4)
         // let imgHeight = Int32(fs.count)
@@ -698,7 +739,7 @@ class _SpectroBasic {
         )
         // let fMin = fs.min() // Assume 0
         let fMax = fs.max()
-        var rgba: [UInt8] = Array(imgVals as [Float]).flatMap { f in [
+        var pixels: [UInt8] = Array(imgVals as [Float]).flatMap { f in [
           // Grayscale [works]
           fMax == 0 ? 0 : UInt8(f / fMax! * 255),
           // RGBA [works, but segfaults typechecker]
@@ -714,20 +755,20 @@ class _SpectroBasic {
           //   255,
           // ]
         ]}
-        RCTLogTrace(String(format: "rgba[%d]: %@", rgba.count, show(rgba))) // XXX Debug
-        // let _X: [[Float]] = rgba.map{Float($0)}.chunked(4)
+        RCTLogTrace(String(format: "pixels[%d]: %@", pixels.count, show(pixels))) // XXX Debug [XXX Bottleneck]
+        // let _X: [[Float]] = pixels.map{Float($0)}.chunked(4)
         // let X: Matrix = Matrix(_X)
-        // RCTLogTrace(String(format: "X[(%d,%d)]:\n%@", X.rows, X.columns, transpose(X).description)) // XXX Debug
-        debugTimes.append(("rgba", timer.lap()))
+        // RCTLogTrace(String(format: "X[(%d,%d)]:\n%@", X.rows, X.columns, transpose(X).description)) // XXX Debug [XXX Bottleneck]
+        debugTimes.append(("pixels", timer.lap()))
 
         // TODO Pixels -> image file
         //  - TODO Is convertBitmapRGBA8 expecting row or col major?
         var spectroFilePath: String? = nil
-        let pRgba = UnsafeMutablePointer<UInt8>.allocate(capacity: rgba.count) // Else ImageHelper tries to free &pixels and crashes
-        pRgba.initialize(from: &rgba, count: rgba.count)
+        // let pRgba = UnsafeMutablePointer<UInt8>.allocate(capacity: pixels.count) // Else ImageHelper tries to free &pixels and crashes
+        // pRgba.initialize(from: &pixels, count: pixels.count)
         if let image = ImageHelper.convertBitmapRGBA8(
-          toUIImage: pRgba,
-          // toUIImage: &rgba, // TODO Can we avoid the memcpy? Make drawing actually work before committing
+          // toUIImage: pRgba,
+          toUIImage: &pixels, // TODO Can we avoid the memcpy? Make drawing actually work before committing
           withWidth: imgWidth, withHeight: imgHeight
         ) {
           if let pngData = image.pngData() {

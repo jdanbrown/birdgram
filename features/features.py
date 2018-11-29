@@ -253,7 +253,7 @@ class SpectroLike:
 
     # TODO Recompute rec.audio after denoising rec.spectro? (e.g. playing audio should sound denoised)
     def clip_below_median_per_freq(self) -> 'SpectroLike':
-        """For each freq bin, substract the median and then zero out negative values"""
+        """For each freq bin (row), subtract the median and then zero out negative values"""
         S = self.S
         S = (S.T - np.median(S, axis=1)).T
         S = np.clip(S, 0, None)

@@ -10,11 +10,25 @@
 		B70DB74E21A1F7AC00968F4D /* Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B70DB74421A1F7AC00968F4D /* Bubo.framework */; };
 		B70DB75321A1F7AC00968F4D /* BuboTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70DB75221A1F7AC00968F4D /* BuboTests.swift */; };
 		B70DB75521A1F7AC00968F4D /* Bubo.h in Headers */ = {isa = PBXBuildFile; fileRef = B70DB74721A1F7AC00968F4D /* Bubo.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		B7286C1321AE1E4E00E954D7 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7286C1221AE1E4E00E954D7 /* Surge.framework */; };
+		B7286C1521AE1E5F00E954D7 /* Pods_Bubo_macos.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7286C1421AE1E5F00E954D7 /* Pods_Bubo_macos.framework */; };
 		B72CC81521A36331009D8690 /* Pods_Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */; };
-		B754382221A3734300705EE3 /* SpectroImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = B754382121A3734300705EE3 /* SpectroImpl.swift */; };
 		B76003BE21A3A3C200E1347A /* Util.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003BD21A3A3C100E1347A /* Util.swift */; };
 		B78BFDED21A61C9F0046AB77 /* Show.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78BFDEC21A61C9F0046AB77 /* Show.swift */; };
+		B7A49D9121AF263E0076B0A2 /* Util.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003BD21A3A3C100E1347A /* Util.swift */; };
+		B7A49D9221AF26670076B0A2 /* np.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098D21AC90F800F90D4C /* np.swift */; };
+		B7A49D9321AF26A10076B0A2 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099321ACAC3C00F90D4C /* Model.swift */; };
+		B7A49D9421AF26A10076B0A2 /* librosa.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0097E21AC81F200F90D4C /* librosa.swift */; };
+		B7A49D9521AF26A10076B0A2 /* scipy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099121ACA80300F90D4C /* scipy.swift */; };
+		B7A49D9621AF26A10076B0A2 /* Surge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098F21ACA1CE00F90D4C /* Surge.swift */; };
+		B7A49D9721AF26A10076B0A2 /* Show.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78BFDEC21A61C9F0046AB77 /* Show.swift */; };
 		B7B1EB0121AAEC50003EE032 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0021AAEC50003EE032 /* Surge.framework */; };
+		B7D0960121AE0F450044A720 /* Bubo_macos.h in Headers */ = {isa = PBXBuildFile; fileRef = B7D095FF21AE0F450044A720 /* Bubo_macos.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		B7E0097F21AC81F200F90D4C /* librosa.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0097E21AC81F200F90D4C /* librosa.swift */; };
+		B7E0098E21AC90F800F90D4C /* np.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098D21AC90F800F90D4C /* np.swift */; };
+		B7E0099021ACA1CE00F90D4C /* Surge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098F21ACA1CE00F90D4C /* Surge.swift */; };
+		B7E0099221ACA80300F90D4C /* scipy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099121ACA80300F90D4C /* scipy.swift */; };
+		B7E0099421ACAC3C00F90D4C /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099321ACAC3C00F90D4C /* Model.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -29,6 +43,8 @@
 
 /* Begin PBXFileReference section */
 		0275CB86FEB77DF021B4CD29 /* Pods-Bubo.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Bubo.release.xcconfig"; path = "../Pods/Target Support Files/Pods-Bubo/Pods-Bubo.release.xcconfig"; sourceTree = "<group>"; };
+		36AA075AEEB598309B7E2A42 /* Pods-Bubo-macos.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Bubo-macos.release.xcconfig"; path = "../Pods/Target Support Files/Pods-Bubo-macos/Pods-Bubo-macos.release.xcconfig"; sourceTree = "<group>"; };
+		7575E787C5105A77108D7BA7 /* Pods-Bubo-macos.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Bubo-macos.debug.xcconfig"; path = "../Pods/Target Support Files/Pods-Bubo-macos/Pods-Bubo-macos.debug.xcconfig"; sourceTree = "<group>"; };
 		8D2602E1555A4329442FE06D /* Pods-Bubo.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Bubo.debug.xcconfig"; path = "../Pods/Target Support Files/Pods-Bubo/Pods-Bubo.debug.xcconfig"; sourceTree = "<group>"; };
 		B70DB74421A1F7AC00968F4D /* Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B70DB74721A1F7AC00968F4D /* Bubo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Bubo.h; sourceTree = "<group>"; };
@@ -36,10 +52,23 @@
 		B70DB74D21A1F7AC00968F4D /* BuboTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BuboTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B70DB75221A1F7AC00968F4D /* BuboTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuboTests.swift; sourceTree = "<group>"; };
 		B70DB75421A1F7AC00968F4D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		B754382121A3734300705EE3 /* SpectroImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectroImpl.swift; sourceTree = "<group>"; };
+		B7286C1221AE1E4E00E954D7 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7286C1421AE1E5F00E954D7 /* Pods_Bubo_macos.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Pods_Bubo_macos.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B73C769421AE2B8200E04F17 /* SigmaSwiftStatistics.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = SigmaSwiftStatistics.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B73C769621AE2C6200E04F17 /* SigmaSwiftStatistics.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = SigmaSwiftStatistics.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B76003BD21A3A3C100E1347A /* Util.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Util.swift; sourceTree = "<group>"; };
 		B78BFDEC21A61C9F0046AB77 /* Show.swift */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.swift; path = Show.swift; sourceTree = "<group>"; tabWidth = 2; };
+		B7A2133121AE10460026C8CD /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7B1EB0021AAEC50003EE032 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7D095FD21AE0F440044A720 /* Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7D095FF21AE0F450044A720 /* Bubo_macos.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Bubo_macos.h; sourceTree = "<group>"; };
+		B7D0960021AE0F450044A720 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B7E0097E21AC81F200F90D4C /* librosa.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = librosa.swift; sourceTree = "<group>"; };
+		B7E0098D21AC90F800F90D4C /* np.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = np.swift; sourceTree = "<group>"; };
+		B7E0098F21ACA1CE00F90D4C /* Surge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Surge.swift; sourceTree = "<group>"; };
+		B7E0099121ACA80300F90D4C /* scipy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = scipy.swift; sourceTree = "<group>"; };
+		B7E0099321ACAC3C00F90D4C /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
+		D94709A6A0D3C85310CD2511 /* Pods_Bubo_macos.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bubo_macos.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -61,6 +90,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B7D095FA21AE0F440044A720 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B7286C1521AE1E5F00E954D7 /* Pods_Bubo_macos.framework in Frameworks */,
+				B7286C1321AE1E4E00E954D7 /* Surge.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -68,6 +106,7 @@
 			isa = PBXGroup;
 			children = (
 				B70DB74621A1F7AC00968F4D /* Bubo */,
+				B7D095FE21AE0F440044A720 /* Bubo-macos */,
 				B70DB75121A1F7AC00968F4D /* BuboTests */,
 				B70DB74521A1F7AC00968F4D /* Products */,
 				C8895AFFA27C962F0F1F9B76 /* Pods */,
@@ -80,6 +119,7 @@
 			children = (
 				B70DB74421A1F7AC00968F4D /* Bubo.framework */,
 				B70DB74D21A1F7AC00968F4D /* BuboTests.xctest */,
+				B7D095FD21AE0F440044A720 /* Bubo.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,11 +127,15 @@
 		B70DB74621A1F7AC00968F4D /* Bubo */ = {
 			isa = PBXGroup;
 			children = (
-				B70DB74721A1F7AC00968F4D /* Bubo.h */,
 				B70DB74821A1F7AC00968F4D /* Info.plist */,
-				B78BFDEC21A61C9F0046AB77 /* Show.swift */,
-				B754382121A3734300705EE3 /* SpectroImpl.swift */,
+				B70DB74721A1F7AC00968F4D /* Bubo.h */,
+				B7E0099321ACAC3C00F90D4C /* Model.swift */,
+				B7E0097E21AC81F200F90D4C /* librosa.swift */,
+				B7E0099121ACA80300F90D4C /* scipy.swift */,
+				B7E0098D21AC90F800F90D4C /* np.swift */,
+				B7E0098F21ACA1CE00F90D4C /* Surge.swift */,
 				B76003BD21A3A3C100E1347A /* Util.swift */,
+				B78BFDEC21A61C9F0046AB77 /* Show.swift */,
 			);
 			path = Bubo;
 			sourceTree = "<group>";
@@ -105,11 +149,22 @@
 			path = BuboTests;
 			sourceTree = "<group>";
 		};
+		B7D095FE21AE0F440044A720 /* Bubo-macos */ = {
+			isa = PBXGroup;
+			children = (
+				B7D095FF21AE0F450044A720 /* Bubo_macos.h */,
+				B7D0960021AE0F450044A720 /* Info.plist */,
+			);
+			path = "Bubo-macos";
+			sourceTree = "<group>";
+		};
 		C8895AFFA27C962F0F1F9B76 /* Pods */ = {
 			isa = PBXGroup;
 			children = (
 				8D2602E1555A4329442FE06D /* Pods-Bubo.debug.xcconfig */,
 				0275CB86FEB77DF021B4CD29 /* Pods-Bubo.release.xcconfig */,
+				7575E787C5105A77108D7BA7 /* Pods-Bubo-macos.debug.xcconfig */,
+				36AA075AEEB598309B7E2A42 /* Pods-Bubo-macos.release.xcconfig */,
 			);
 			name = Pods;
 			sourceTree = "<group>";
@@ -117,8 +172,14 @@
 		D52B7F095958C74123E4660D /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				B73C769621AE2C6200E04F17 /* SigmaSwiftStatistics.framework */,
+				B73C769421AE2B8200E04F17 /* SigmaSwiftStatistics.framework */,
+				B7286C1421AE1E5F00E954D7 /* Pods_Bubo_macos.framework */,
+				B7286C1221AE1E4E00E954D7 /* Surge.framework */,
+				B7A2133121AE10460026C8CD /* Surge.framework */,
 				B7B1EB0021AAEC50003EE032 /* Surge.framework */,
 				E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */,
+				D94709A6A0D3C85310CD2511 /* Pods_Bubo_macos.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -131,6 +192,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				B70DB75521A1F7AC00968F4D /* Bubo.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B7D095F821AE0F440044A720 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B7D0960121AE0F450044A720 /* Bubo_macos.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -174,6 +243,25 @@
 			productReference = B70DB74D21A1F7AC00968F4D /* BuboTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		B7D095FC21AE0F440044A720 /* Bubo-macos */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B7D0960221AE0F450044A720 /* Build configuration list for PBXNativeTarget "Bubo-macos" */;
+			buildPhases = (
+				695414970B4A68B15449EDAB /* [CP] Check Pods Manifest.lock */,
+				B7D095F821AE0F440044A720 /* Headers */,
+				B7D095F921AE0F440044A720 /* Sources */,
+				B7D095FA21AE0F440044A720 /* Frameworks */,
+				B7D095FB21AE0F440044A720 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Bubo-macos";
+			productName = "Bubo-macos";
+			productReference = B7D095FD21AE0F440044A720 /* Bubo.framework */;
+			productType = "com.apple.product-type.framework";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -189,6 +277,9 @@
 						LastSwiftMigration = 1010;
 					};
 					B70DB74C21A1F7AC00968F4D = {
+						CreatedOnToolsVersion = 10.1;
+					};
+					B7D095FC21AE0F440044A720 = {
 						CreatedOnToolsVersion = 10.1;
 					};
 				};
@@ -207,6 +298,7 @@
 			targets = (
 				B70DB74321A1F7AC00968F4D /* Bubo */,
 				B70DB74C21A1F7AC00968F4D /* BuboTests */,
+				B7D095FC21AE0F440044A720 /* Bubo-macos */,
 			);
 		};
 /* End PBXProject section */
@@ -226,9 +318,34 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B7D095FB21AE0F440044A720 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		695414970B4A68B15449EDAB /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-Bubo-macos-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
 		D597FFA5C881C21AA648FA65 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -254,9 +371,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B7E0097F21AC81F200F90D4C /* librosa.swift in Sources */,
 				B78BFDED21A61C9F0046AB77 /* Show.swift in Sources */,
-				B754382221A3734300705EE3 /* SpectroImpl.swift in Sources */,
+				B7E0099221ACA80300F90D4C /* scipy.swift in Sources */,
+				B7E0099021ACA1CE00F90D4C /* Surge.swift in Sources */,
+				B7E0098E21AC90F800F90D4C /* np.swift in Sources */,
 				B76003BE21A3A3C200E1347A /* Util.swift in Sources */,
+				B7E0099421ACAC3C00F90D4C /* Model.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -265,6 +386,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				B70DB75321A1F7AC00968F4D /* BuboTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B7D095F921AE0F440044A720 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B7A49D9521AF26A10076B0A2 /* scipy.swift in Sources */,
+				B7A49D9421AF26A10076B0A2 /* librosa.swift in Sources */,
+				B7A49D9621AF26A10076B0A2 /* Surge.swift in Sources */,
+				B7A49D9321AF26A10076B0A2 /* Model.swift in Sources */,
+				B7A49D9721AF26A10076B0A2 /* Show.swift in Sources */,
+				B7A49D9121AF263E0076B0A2 /* Util.swift in Sources */,
+				B7A49D9221AF26670076B0A2 /* np.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -496,6 +631,68 @@
 			};
 			name = Release;
 		};
+		B7D0960321AE0F450044A720 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7575E787C5105A77108D7BA7 /* Pods-Bubo-macos.debug.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = NO;
+				CODE_SIGN_IDENTITY = "Mac Developer";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_VERSION = A;
+				INFOPLIST_FILE = "Bubo-macos/Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.jdanbrown.Bubo-macos";
+				PRODUCT_NAME = Bubo;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 4.2;
+			};
+			name = Debug;
+		};
+		B7D0960421AE0F450044A720 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 36AA075AEEB598309B7E2A42 /* Pods-Bubo-macos.release.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = NO;
+				CODE_SIGN_IDENTITY = "Mac Developer";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_VERSION = A;
+				INFOPLIST_FILE = "Bubo-macos/Info.plist";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				PRODUCT_BUNDLE_IDENTIFIER = "org.jdanbrown.Bubo-macos";
+				PRODUCT_NAME = Bubo;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 4.2;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -522,6 +719,15 @@
 			buildConfigurations = (
 				B70DB75C21A1F7AC00968F4D /* Debug */,
 				B70DB75D21A1F7AC00968F4D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B7D0960221AE0F450044A720 /* Build configuration list for PBXNativeTarget "Bubo-macos" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7D0960321AE0F450044A720 /* Debug */,
+				B7D0960421AE0F450044A720 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

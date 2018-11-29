@@ -8,12 +8,14 @@ PODS:
   - PromisesObjC (1.2.4)
   - PromisesSwift (1.2.4):
     - PromisesObjC (= 1.2.4)
+  - SigmaSwiftStatistics (8.0.1)
   - SwiftyJSON (4.2.0)
   - Yams (1.0.1)
 
 DEPENDENCIES:
   - AudioKit (~> 4.5)
   - PromisesSwift (~> 1.2.4)
+  - SigmaSwiftStatistics (~> 8.0)
   - SwiftyJSON (~> 4.0)
   - Yams (~> 1.0.1)
 
@@ -22,6 +24,7 @@ SPEC REPOS:
     - AudioKit
     - PromisesObjC
     - PromisesSwift
+    - SigmaSwiftStatistics
     - SwiftyJSON
     - Yams
 
@@ -29,9 +32,10 @@ SPEC CHECKSUMS:
   AudioKit: af3f5b73e22f85f3cd03076fea8afbb9658f0938
   PromisesObjC: 4a3f2e30a0eb793e9bbb32cd367b625d4a14de5a
   PromisesSwift: 8e1d2cdbc3cafb4f09d4b82df12f645bc19ab64e
+  SigmaSwiftStatistics: 063591f136428920b3083e3d9c181c9c6b1a9dec
   SwiftyJSON: c4bcba26dd9ec7a027fc8eade48e2c911f229e96
   Yams: 572f625a8b719b73e0b57fd313c680f3e2161fe9
 
-PODFILE CHECKSUM: 508b3c719e1f5d51a41eedc233d94d2e2233b5e0
+PODFILE CHECKSUM: 4b7c8b445db333bac283d67da065fd477c4ce292
 
 COCOAPODS: 1.5.3
