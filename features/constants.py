@@ -30,6 +30,9 @@ uploads_dir = f'{data_dir}/uploads'
 uploads_recs_dir = f'{uploads_dir}/recs'
 #   - data/cache/
 cache_audio_dir = f'{cache_dir}/audio'
+#   - Birdgram/
+birdgram_dir = f'{code_dir}/../Birdgram'
+birdgram_ios_tests_data_dir = f'{birdgram_dir}/ios/Tests/data'
 
 standard_sample_rate_hz = 22050  # Can resolve 11025Hz (by Nyquist), which most/all birds are below
 default_log_ylim_min_hz = 512  # Most/all birds are above 512Hz (but make sure to clip noise below 512Hz)

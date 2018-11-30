@@ -5,7 +5,13 @@
 if [ $# -gt 1 ]; then
   xcode_build_dir="$1"; shift
 else
+  # HACK Hardcoded framework deps path from Xcode build (Build -> click any Product/*.framework -> copy path)
   xcode_build_dir='/Users/danb/Library/Developer/Xcode/DerivedData/Birdgram-higoicbsnkwebceboubdaasypfhd/Build/Products/Debug'
 fi
 
-(set -x && swift -F"$xcode_build_dir"/{,Yams-macOS,SwiftyJSON-macOS} "$@")
+cmd=(
+  swift
+  -F"$xcode_build_dir"/{,Yams-macOS,SwiftyJSON-macOS} # HACK Hardcoded framework deps (inspect the build dir to find more)
+  "$@"
+)
+exec "${cmd[@]}"

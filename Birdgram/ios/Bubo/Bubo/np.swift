@@ -4,12 +4,24 @@ import Surge
 // Functions ported from python numpy
 public enum np {
 
+  public static func zeros(_ shape: Int) -> [Float] {
+    return Array(repeating: 0, count: shape)
+  }
+
+  public static func zeros(_ shape: (Int, Int)) -> Matrix<Float> {
+    return Matrix(rows: shape.0, columns: shape.1, repeatedValue: 0)
+  }
+
+  public static func arange(_ stop: Int) -> [Float] {
+    return Array(0..<stop).map { Float($0) }
+  }
+
   public static func linspace(_ start: Float, _ stop: Float, _ num: Int) -> [Float] {
     return Array(stride(from: start, through: stop, by: (stop - start) / Float(num - 1)))
   }
 
   public static func diff(_ xs: [Float]) -> [Float] {
-    return Array(xs[1...]) .- Array(xs[..<(xs.count - 1)])
+    return Array(xs.slice(from: 1)) .- Array(xs.slice(to: -1))
   }
 
   // np.subtract.outer
@@ -100,6 +112,16 @@ public enum np {
     return transpose(broadcast_to(row: column, (columns, rows)))
   }
 
+  // In the spirit of np.testing.assert_almost_equal(xs, np.zeros(len(xs)))
+  public static func almost_zero(_ xs: [Float], tol: Float = 1e-7) -> Bool {
+    return almost_equal(xs, zeros(xs.count), tol: tol)
+  }
+
+  // In the spirit of np.testing.assert_almost_equal(xs, ys)
+  public static func almost_equal(_ xs: [Float], _ ys: [Float], tol: Float = 1e-7) -> Bool {
+    return (xs .- ys).allSatisfy { abs($0) < tol }
+  }
+
   public enum random {
 
     public static func rand(_ n: Int) -> [Float] {
@@ -118,12 +140,6 @@ public enum np {
     //  - Based on:
     //    - https://github.com/dboyliao/NumSwift/blob/master/NumSwift/Source/FFT.swift
     //    - https://forum.openframeworks.cc/t/a-guide-to-speeding-up-your-of-app-with-accelerate-osx-ios/10560
-    //
-    // Tests
-    //  - Tested manually vs. py np.abs(np.fft.rfft(xs))
-    //    - notebooks/181128_mobile_np_fft_rfft.{ipynb,swift}
-    //  - TODO Write automated tests
-    //
     public static func abs_rfft(_ xs: [Float]) -> [Float] {
       // print("rfft") // XXX Debug
 
@@ -164,7 +180,7 @@ public enum np {
 
       // Drop symmetric values (b/c real-to-real)
       let nf = Int(n / 2) + 1
-      return Array(fs[0..<nf])
+      return fs.slice(from: 0, to: nf)
 
     }
 
@@ -199,5 +215,5 @@ public enum np {
 
 // XXX Debug
 private func sig(_ name: String, _ xs: [Float], limit: Int? = 7) {
-  print(String(format: "%@ %3d %@", name, xs.count, show(Array(xs[0..<min(xs.count, limit ?? xs.count)]), prec: 3)))
+  print(String(format: "%@ %3d %@", name, xs.count, show(xs.slice(to: limit), prec: 3)))
 }

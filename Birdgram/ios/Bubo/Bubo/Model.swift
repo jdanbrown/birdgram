@@ -7,10 +7,11 @@ import Surge
 
 public enum Features {
 
-  // Like Features._spectro_nocache
+  // Like Features._spectro_nocache_from_audio
   public static func spectro(
     _ xs:        [Float],
-    sample_rate: Int
+    sample_rate: Int,
+    denoise:     Bool = true
   ) -> Melspectro {
 
     // Like Features config
@@ -21,7 +22,6 @@ public enum Features {
     let frame_window  = "hann"
     // let patch_length  = 4   // (46ms @ 22050hz) // For model predict
     // Like Features._spectro_nocache
-    let denoise       = true
     let nperseg       = frame_length
     let overlap       = 1 - Double(hop_length) / Double(frame_length)
     let window        = frame_window
@@ -50,16 +50,18 @@ public enum Features {
 
     // Linear freq -> mel-scale freq
     //  - Like Melspectro
-    let mel_basis = librosa.filters.mel(sample_rate: sample_rate, n_fft: nperseg, n_mels: n_mels)
+    let mel_basis = librosa.filters.mel(sample_rate, n_fft: nperseg, n_mels: n_mels)
     S = mel_basis * S
 
     // Linear power -> log power
     //  - Like Melspectro
     S = librosa.power_to_db(S)
 
+    // [NOTE fs currently unused in mobile]
     // Mel-scale fs to match S[i]
     //  - Like Melspectro
-    // fs = librosa.mel_frequencies(n_mels, min(fs), max(fs)) // TODO Need fs from scipy.signal.spectrogram
+    //  - TODO Blocked on non-mock fs from scipy.signal.spectrogram
+    // fs = librosa.mel_frequencies(n_mels, min(fs), max(fs))
 
     // Denoise
     //  - Like Features._spectro_denoise
@@ -72,7 +74,9 @@ public enum Features {
   }
 
   public static func _spectro_denoise(_ S: Matrix<Float>) -> Matrix<Float> {
-    return clip_below_median_per_freq(norm_rms(S))
+    return SpectroLike.clip_below_median_per_freq(
+      SpectroLike.norm_rms(S)
+    )
   }
 
 }
@@ -81,8 +85,8 @@ public enum Features {
 // TODO -> Features.swift
 //
 
-public typealias Melspectro = ([Float], [Float], Matrix<Float>)
-public typealias Spectro    = ([Float], [Float], Matrix<Float>)
+public typealias Spectro    = scipy.signal.Spectrogram
+public typealias Melspectro = Spectro
 
 // public func Melspectro(...) -> Melspectro {
 //   ...
@@ -92,23 +96,27 @@ public typealias Spectro    = ([Float], [Float], Matrix<Float>)
 //   ...
 // }
 
-// Normalize by RMS (like "normalize a spectro by its RMS energy" from [SP14])
-//  - Like SpectroLike.norm_rms
-public func norm_rms(_ S: Matrix<Float>) -> Matrix<Float> {
-  return S / sqrt(mean(S.grid ** 2))
-}
+public enum SpectroLike {
 
-// For each freq bin (row), subtract the median and then zero out negative values
-//  - Like SpectroLike.clip_below_median_per_freq
-public func clip_below_median_per_freq(_ S: Matrix<Float>) -> Matrix<Float> {
-  let fss = Array(S) // freqs = rows = Matrix.Iterator
-  let S_demedianed = Matrix(fss.map { fs -> [Float] in
-    if let median = Sigma.median(fs.map { Double($0) }) {
-      return fs - Float(median)
-    } else {
-      assert(fs.count == 0)
-      return []
-    }
-  })
-  return np.clip(S_demedianed, 0, nil)
+  // Normalize by RMS (like "normalize a spectro by its RMS energy" from [SP14])
+  //  - Like SpectroLike.norm_rms
+  public static func norm_rms(_ S: Matrix<Float>) -> Matrix<Float> {
+    return S / sqrt(mean(S.grid ** 2))
+  }
+
+  // For each freq bin (row), subtract the median and then zero out negative values
+  //  - Like SpectroLike.clip_below_median_per_freq
+  public static func clip_below_median_per_freq(_ S: Matrix<Float>) -> Matrix<Float> {
+    let fss = Array(S) // freqs = rows = Matrix.Iterator
+    let S_demedianed = Matrix(fss.map { fs -> [Float] in
+      if let median = Sigma.median(fs.map { Double($0) }) {
+        return fs - Float(median)
+      } else {
+        assert(fs.count == 0)
+        return []
+      }
+    })
+    return np.clip(S_demedianed, 0, nil)
+  }
+
 }

@@ -1,0 +1,25 @@
+#!/bin/bash -eu
+#
+# A lightweight "testing framework" that lets me avoid mucking with Xcode / Package.swift and losing ~hours–days of time
+# - Avoids coupling to Xcode, which seems to always take >30s for simple tasks, or just crashes
+# - Uses the bin/swift hack to avoid having to port my framework deps from Xcode to Package.swift
+# - TODO Exit nonzero if any test fails [will require maintaining some state via Testing.swift utils]
+
+show_cmd() { echo "\$ $@" >&2; "$@"; }
+realpath() { python -c "import os.path, sys; [_, path] = sys.argv; print(os.path.realpath(path))" "$@"; }
+relpath()  { python -c "import os.path, sys; [_, path] = sys.argv; print(os.path.relpath(path))" "$@"; }
+
+dir="`relpath $(dirname $0)/..`"
+cd "$dir"
+
+if [ $# -eq 0 ]; then
+  # Run all tests
+  find Tests/ -name '*.swift' -type f | while read test_file; do
+    show_cmd bin/swift "$test_file"
+  done
+else
+  # Run test files given as args
+  for test_file in "$@"; do
+    show_cmd bin/swift "$test_file"
+  done
+fi

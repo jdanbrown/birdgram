@@ -95,27 +95,31 @@ public func rounded(_ x: Float, _ prec: Int) -> Float {
 public enum Json {
 
   // XXX -> SwiftyJSON
-  public static func dump<X>(_ x: X) throws -> String {
+  public static func dumps<X>(_ x: X) throws -> String {
     return try String(data: JSONSerialization.data(withJSONObject: x), encoding: .utf8)!
   }
 
-  // TODO How to normal dump with SwiftyJSON? Currently relying on normal JSONSerialization for non-pretty dump
+  // TODO How to normal dumps with SwiftyJSON? Currently relying on normal JSONSerialization for non-pretty dumps
   public static func pretty<X>(_ x: X) throws -> String {
     guard let s = JSON(x).rawString() else {
-      throw AppError("Failed to dump to json: \(x)")
+      throw AppError("Failed to dumps to json: \(x)")
     }
     return s
   }
 
-  public static func load(_ x: String) -> JSON {
+  public static func loads(_ x: String) -> JSON {
     return JSON(parseJSON: x)
+  }
+
+  public static func loadFromPath(_ path: String, encoding: String.Encoding = .utf8) throws -> JSON {
+    return loads(try String(contentsOfFile: path, encoding: encoding))
   }
 
 }
 
 public enum Yaml {
 
-  public static func dump<X>(_ x: X) throws -> String {
+  public static func dumps<X>(_ x: X) throws -> String {
     return try Yams.dump(
       object: x,
       width: -1,

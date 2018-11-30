@@ -41,6 +41,14 @@ public func checkStatus(_ status: OSStatus) throws -> Void {
   }
 }
 
+public func pathJoin(_ paths: String...) -> String {
+  return paths.joined(separator: "/")
+}
+
+public func / (x: String, y: String) -> String {
+  return pathJoin(x, y)
+}
+
 public func pathDirname(_ path: String) -> String {
   return (path as NSString).deletingLastPathComponent
 }
@@ -61,10 +69,45 @@ public func documentsDirectory() -> String {
   return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
 }
 
+extension Comparable {
+
+  public func clamped(_ lo: Self, _ hi: Self) -> Self {
+    return min(max(self, lo), hi)
+  }
+
+}
+
 extension Collection {
 
   public func flatMap(_ xs: Self, _ f: (Element) -> Self) -> FlattenCollection<[Self]> {
     return xs.map(f).joined()
+  }
+
+}
+
+extension String {
+
+  // https://stackoverflow.com/a/46133083/397334
+  subscript(_ range: CountableRange<Int>) -> String {
+    let a = index(startIndex, offsetBy: max(0, range.lowerBound))
+    let b = index(startIndex, offsetBy: min(self.count, range.upperBound))
+    return String(self[a..<b])
+  }
+
+  // Less fussy alternative to subscript[RangeExpression]
+  //  - Ignores out-of-range indices (like py) i/o fatal-ing
+  //  - Returns eager Collection i/o potentially lazy SubSequence (e.g. xs.slice(...) i/o Array(xs.slice(...)))
+  //  - TODO Move up to Collection: how to generically init(...) at the end?
+  public func slice(from: Int? = nil, to: Int? = nil) -> String {
+    // precondition(to == nil || through == nil, "Can't specify both to[\(to)] and through[\(through)]") // TODO through:
+    let (startIndex, endIndex) = (0, count)
+    var a = from ?? startIndex
+    var b = to   ?? endIndex
+    if a < 0 { a = count + a }
+    if b < 0 { b = count + b }
+    a = a.clamped(startIndex, endIndex)
+    b = b.clamped(a,          endIndex)
+    return String(self[a..<b])
   }
 
 }
@@ -79,6 +122,22 @@ extension Array {
 
   public func repeated(_ n: Int) -> [Element] {
     return [Element]([Array](repeating: self, count: n).joined())
+  }
+
+  // Less fussy alternative to subscript[RangeExpression]
+  //  - Ignores out-of-range indices (like py) i/o fatal-ing
+  //  - Returns eager Collection i/o potentially lazy SubSequence (e.g. xs.slice(...) i/o Array(xs.slice(...)))
+  //  - Impose `Index == Int` constraint so we don't have to figure out how to do non-crashing arithmetic with .formIndex
+  //  - TODO Move up to Collection: how to generically init(...) at the end?
+  public func slice(from: Index? = nil, to: Index? = nil) -> Array {
+    // precondition(to == nil || through == nil, "Can't specify both to[\(to)] and through[\(through)]") // TODO through:
+    var a = from ?? startIndex
+    var b = to   ?? endIndex
+    if a < 0 { a = count + a }
+    if b < 0 { b = count + b }
+    a = a.clamped(startIndex, endIndex)
+    b = b.clamped(a,          endIndex)
+    return Array(self[a..<b])
   }
 
 }

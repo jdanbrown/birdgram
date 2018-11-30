@@ -236,7 +236,7 @@ class Features(DataclassConfig):
     def _spectro_cache(self, rec: Row, **kwargs) -> Melspectro:
         return self._spectro_nocache(rec, **kwargs)
 
-    def _spectro_nocache(self, rec: Row, denoise=True, **kwargs) -> Melspectro:
+    def _spectro_nocache(self, rec: Row, **kwargs) -> Melspectro:
         """
         .spectro (f,t) <- .audio (samples,)
           - f: freq indexes (Hz), mel-scaled
@@ -248,9 +248,7 @@ class Features(DataclassConfig):
         assert audio.frame_rate == c.sample_rate, 'Unsupported sample_rate[%s != %s] for audio[%s]' % (
             audio.frame_rate, c.sample_rate, audio,
         )
-        # TODO Filter by c.f_min
-        #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
-        spectro = Melspectro(
+        return self._spectro_nocache_from_audio(
             # Pass rec instead of just audio so that Melspectro can lazy-load audio from disk (it doesn't store it)
             Recording(
                 dataset=None,  # HACK Required arg that spectro doesn't rely on (maybe dataset shouldn't be a required arg?)
@@ -258,6 +256,16 @@ class Features(DataclassConfig):
                 duration_s=rec.duration_s,
                 audio=audio,
             ),
+            **kwargs,
+        )
+
+    # (Isolate for testing)
+    def _spectro_nocache_from_audio(self, rec_or_audio_or_signal, denoise=True, **kwargs) -> Melspectro:
+        c = self.spectro_config
+        # TODO Filter by c.f_min
+        #   - In Melspectro, try librosa.filters.mel(..., fmin=..., fmax=...) and see if that does what we want...
+        spectro = Melspectro(
+            rec_or_audio_or_signal,
             **{
                 'nperseg': c.frame_length,
                 'overlap': 1 - c.hop_length / c.frame_length,
