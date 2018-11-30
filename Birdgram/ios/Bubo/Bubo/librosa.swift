@@ -21,13 +21,6 @@ public enum librosa {
       let fmin = Float(0.0)
       let fmax = Float(sample_rate) / 2
 
-      // Initialize the weights
-      var weights = Matrix<Float>(
-        rows:          n_mels,
-        columns:       1 + n_fft / 2,
-        repeatedValue: 0
-      )
-
       // Center freqs of each FFT bin
       let fftfreqs = fft_frequencies(sample_rate, n_fft: n_fft)
 
@@ -36,14 +29,17 @@ public enum librosa {
 
       let fdiff = np.diff(mel_f)
       let ramps = np.subtract_outer(mel_f, fftfreqs)
-
-      for i in 0..<n_mels {
-        // lower and upper slopes for all bins
-        let lower = ramps[row: i]   / fdiff[i] * -1
-        let upper = ramps[row: i+2] / fdiff[i+1]
-        // ... then intersect them with each other and zero
-        weights[row: i] = np.maximum(np.minimum(lower, upper), 0)
-      }
+      var weights = Matrix<Float>(
+        rows:     n_mels,
+        columns:  1 + n_fft / 2,
+        gridRows: (0..<n_mels).map { (i: Int) -> [Float] in
+          // lower and upper slopes for all bins
+          let lower = ramps[row: i]   / fdiff[i] * -1
+          let upper = ramps[row: i+2] / fdiff[i+1]
+          // ... then intersect them with each other and zero
+          return np.maximum(np.minimum(lower, upper), 0)
+        }
+      )
 
       // Slaney-style mel is scaled to be approx constant energy per channel
       let enorm = 2.0 / (mel_f.slice(from: 2, to: 2+n_mels) .- mel_f.slice(from: 0, to: n_mels))

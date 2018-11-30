@@ -1,4 +1,3 @@
-%%
 // NOTE Must first import every module from Bubo's "Linked Frameworks and Libraries", else "error: Couldn't lookup symbols"
 import Surge; import SigmaSwiftStatistics; import SwiftyJSON; import Yams; import Bubo
 

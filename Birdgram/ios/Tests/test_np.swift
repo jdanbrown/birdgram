@@ -94,6 +94,12 @@ testEqual("np.random.rand", np.random.rand(5).count, 5)
 // np.fft.abs_rfft
 //
 
+// XXX vDSP requires n≥16
+// testAlmostEqual("np.fft.abs_rfft", [1],       np.fft.abs_rfft([1]))
+// testAlmostEqual("np.fft.abs_rfft", [1,1],     np.fft.abs_rfft([2,0]))
+// testAlmostEqual("np.fft.abs_rfft", [1,1,1],   np.fft.abs_rfft([3,0]))
+// testAlmostEqual("np.fft.abs_rfft", [1,1,1,1], np.fft.abs_rfft([4,0,0]))
+
 do {
 
   // Copied from .ipynb

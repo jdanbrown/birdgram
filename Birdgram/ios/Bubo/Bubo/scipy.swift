@@ -38,15 +38,17 @@ public enum scipy {
       precondition(return_onesided == true,        "Hardcoded impl")
       precondition(scaling         == "spectrum",  "Hardcoded impl")
       precondition(mode            == "magnitude", "Hardcoded impl")
+      // let timer = Timer() // XXX Perf
 
       let hop_length = noverlap
       let win        = hann(nperseg, sym: false)
       let f          = Int(nperseg / 2) + 1
       let t          = xs.count < nperseg ? 0 : (xs.count - nperseg) / hop_length + 1 // Round down b/c no padding
-      let detrend    = { (xs: [Float]) -> [Float] in xs - mean(xs) } // detrend="constant"
       let scale      = sqrt(1.0 / sum(win)**2)                       // scaling="spectrum"
+      // print(String(format: "[time] scipy.signal.spectrogram: params: %d", Int(1000 * timer.lap()))) // XXX Perf
 
-      // print(String(format: "spectrogram: %@", ["xs.count": xs.count, "nperseg": nperseg])) // XXX Debug
+      // Setup fft (reuse across multiple calls)
+      let abs_rfft = np.fft.reuse_abs_rfft(nperseg)
 
       // Compute S_cols (freqs per time segment)
       var S_cols: [[Float]] = []
@@ -55,28 +57,25 @@ public enum scipy {
         for i in stride(from: 0, through: xs.count - nperseg, by: hop_length) {
           let (start, end) = (i, i + nperseg)
           assert(end <= xs.count)          // No padding
-          var seg = xs.slice(from: start, to: end) // Slice segment from xs (nperseg)
-          // if i == 0 { sig("strid", seg) } // XXX Debug
-          seg     = detrend(seg)           // Detrend
-          // if i == 0 { sig("detre", seg) } // XXX Debug
-          seg     = seg .* win             // Apply window (elem-wise multiplication)
-          // if i == 0 { sig("windo", seg) } // XXX Debug
-          var fs  = np.fft.abs_rfft(seg)   // Compute abs(rfft) (after window)
-          // if i == 0 { sig("abfft", fs) } // XXX Debug
-          fs      = fs * scale             // Scale (commutes with abs)
-          // if i == 0 { sig("scale", fs) } // XXX Debug
+          var seg = Array(xs[start..<end]) // Slice segment from xs (nperseg)
+          seg    -=  mean(seg)             // Detrend (detrend="constant")
+          seg    .*= win                   // Apply window (elem-wise multiplication)
+          var fs =   abs_rfft.call(seg)    // Compute abs(rfft) (after window)
+          fs     *=  scale                 // Scale (commutes with abs)
           S_cols.append(fs)
           assert(fs.count == f)
         }
       }
+      // print(String(format: "[time] scipy.signal.spectrogram: S_cols: %d", Int(1000 * timer.lap()))) // XXX Perf
 
       // Join S_cols into S matrix (freq x time)
       //  - transpose(Matrix(...)) for vectorized vDSP_mtrans, i/o trying to zip cols->rows in swift
       let S = transpose(Matrix(
-        rows:    t,
-        columns: f,
-        grid:    Array(S_cols.joined())
+        rows:     t,
+        columns:  f,
+        gridRows: S_cols
       ))
+      // print(String(format: "[time] scipy.signal.spectrogram: S: %d", Int(1000 * timer.lap()))) // XXX Perf
 
       // TODO Compute freq/time labels (not yet needed for mobile)
       let (fs, ts) = ([Float](), [Float]())

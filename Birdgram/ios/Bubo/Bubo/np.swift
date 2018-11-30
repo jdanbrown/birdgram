@@ -100,9 +100,9 @@ public enum np {
     let (rows, columns) = shape
     precondition(row.count == columns)
     return Matrix(
-      rows: rows,
-      columns: columns,
-      grid: Array(Array(repeating: row, count: rows).joined()) // grid is row major
+      rows:     rows,
+      columns:  columns,
+      gridRows: Array(repeating: row, count: rows)
     )
   }
 
@@ -140,53 +140,76 @@ public enum np {
     //  - https://developer.apple.com/documentation/accelerate/vdsp/fast_fourier_transforms
 
     // Like py np.abs(np.rfft(xs))
-    //  - Includes abs() because I don't have a great representation of complex numbers
+    //  - Fuses abs() because I don't have a great representation of complex numbers
     //  - Based on:
     //    - https://github.com/dboyliao/NumSwift/blob/master/NumSwift/Source/FFT.swift
     //    - https://forum.openframeworks.cc/t/a-guide-to-speeding-up-your-of-app-with-accelerate-osx-ios/10560
     public static func abs_rfft(_ xs: [Float]) -> [Float] {
-      // print("rfft") // XXX Debug
+      return reuse_abs_rfft(xs.count).call(xs)
+    }
 
-      let n  = xs.count
-      let nf = Int(n / 2) + 1
+    // Faster version of abs_rfft() if you're going to call it multiple times
+    //  - Reuses setup across calls
+    public class reuse_abs_rfft {
 
-      // Checks
-      //  - https://developer.apple.com/documentation/accelerate/1449930-vdsp_dct_createsetup
-      let k = Int(log2(Double(n)))
-      precondition(
-        k >= 4 && [1, 3, 5, 15].contains(where: { f in n == 1 << k * f }),
-        "n[\(n)] must be 2**k * f, where k ≥ 4 and f in [1,3,5,15]"
-      )
+      let n:     Int
+      let setup: vDSP_DFT_Setup
 
-      // Setup DFT
-      //  - TODO Meaningfully faster to reuse setup across calls?
-      guard let setup = vDSP_DFT_zop_CreateSetup(
-        nil,                       // To reuse previous setup (optional)
-        vDSP_Length(n),            // (vDSP_Length = UInt)
-        vDSP_DFT_Direction.FORWARD // vDSP_DFT_FORWARD | vDSP_DFT_INVERSE
-      ) else {
-        assertionFailure("Failed to vDSP_DFT_zop_CreateSetup")
-        return [Float](repeating: .nan, count: nf) // Return for Release, which omits assert [NOTE but not precondition]
+      init(_ n: Int) {
+        let k = Int(log2(Double(n)))
+        precondition(
+          // https://developer.apple.com/documentation/accelerate/1449930-vdsp_dct_createsetup
+          k >= 4 && [1, 3, 5, 15].contains(where: { f in n == 1 << k * f }),
+          "n[\(n)] must be 2**k * f, where k ≥ 4 and f in [1,3,5,15]"
+        )
+        guard let setup = vDSP_DFT_zop_CreateSetup(
+          nil,                       // To reuse previous setup (optional)
+          vDSP_Length(n),            // (vDSP_Length = UInt)
+          vDSP_DFT_Direction.FORWARD // vDSP_DFT_FORWARD | vDSP_DFT_INVERSE
+        ) else {
+          preconditionFailure("Failed to vDSP_DFT_zop_CreateSetup")
+        }
+        self.n = n
+        self.setup = setup
       }
-      defer {
+
+      deinit {
         vDSP_DFT_DestroySetup(setup)
       }
 
-      // Compute DFT (like np.fft.fft)
-      let xsReal = xs
-      let xsImag = [Float](repeating: 0,    count: n)
-      var fsReal = [Float](repeating: .nan, count: n)
-      var fsImag = [Float](repeating: .nan, count: n)
-      vDSP_DFT_Execute(setup, xsReal, xsImag, &fsReal, &fsImag)
-      // sig(" fsReal ", fsReal) // XXX Debug
-      // sig(" fsImag ", fsImag) // XXX Debug
+      func call(_ xs: [Float]) -> [Float] {
+        precondition(xs.count == n, "abs_rfft.call(xs) must match abs_rfft(n): xs.count[\(xs.count)] != n[\(n)]")
+        // let timer = Timer() // XXX Perf
 
-      // Compute complex magnitude (like np.abs)
-      let fs = sqrt(pow(fsReal, 2) .+ pow(fsImag, 2))
-      // sig(" fs     ", fs) // XXX Debug
+        // Compute DFT (like np.fft.fft)
+        //  - TODO Can maybe speed up by ~2x using vDSP_DFT_zrop_CreateSetup (r->z) i/o vDSP_DFT_zop_CreateSetup (z->z)
+        //    - I tried once, briefly, and didn't succeed:
+        //        guard let setup = vDSP_DFT_zrop_CreateSetup(...)
+        //        let xsEven = stride(from: 0, to: xs.count, by: 2).map { xs[$0] } as [Float]
+        //        let xsOdd  = stride(from: 1, to: xs.count, by: 2).map { xs[$0] } as [Float]
+        //        vDSP_DFT_Execute(setup, xsEven, xsOdd, &fsReal, &fsImag)
+        //        Failing tests: output seemed off by ~1/2 (simple?), and also the last fs value was nan (not simple?)
+        let xsReal = xs
+        let xsImag = [Float](repeating: 0,    count: n)
+        var fsReal = [Float](repeating: .nan, count: n)
+        var fsImag = [Float](repeating: .nan, count: n)
+        vDSP_DFT_Execute(setup, xsReal, xsImag, &fsReal, &fsImag)
+        // print(String(format: "[time] np.fft.abs_rfft: execute:  %f", timer.lap())) // XXX Perf
 
-      // Drop symmetric values (b/c real-to-real)
-      return fs.slice(from: 0, to: nf)
+        // Fused:
+        //  - Compute complex magnitude (like np.abs)
+        //  - Drop symmetric values (b/c real-to-real)
+        let nf = Int(n / 2) + 1
+        var zs = DSPSplitComplex(realp: &fsReal, imagp: &fsImag)
+        var fs = [Float](repeating: .nan, count: numericCast(nf))
+        fs.withUnsafeMutableBufferPointer { fsP in
+          vDSP_zvabs(&zs, 1, fsP.baseAddress!, 1, numericCast(nf))
+        }
+        // print(String(format: "[time] np.fft.abs_rfft: abs+slice:%f", timer.lap())) // XXX Perf
+
+        return fs
+
+      }
 
     }
 

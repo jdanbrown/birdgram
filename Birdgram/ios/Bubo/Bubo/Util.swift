@@ -79,9 +79,12 @@ extension Comparable {
 
 extension Collection {
 
-  public func flatMap(_ xs: Self, _ f: (Element) -> Self) -> FlattenCollection<[Self]> {
-    return xs.map(f).joined()
-  }
+  // Already exists! https://developer.apple.com/documentation/swift/sequence/2905332-flatmap
+  //  - NOTE flatMap seems to be _way_ faster than `Array(....joined())` [just optimized multiple occurrences for big gains]
+  //  - NOTE To avoid deprecation errors, make sure f returns [C.Element] instead of C
+  // public func flatMap(_ xs: Self, _ f: (Element) -> Self) -> FlattenCollection<[Self]> {
+  //   return xs.map(f).joined()
+  // }
 
 }
 
@@ -188,4 +191,22 @@ public class Timer {
     return _time
   }
 
+}
+
+public func timed<X>(_ f: () throws -> X) rethrows -> (x: X, time: Double) {
+  let timer = Timer()
+  let x = try f()
+  return (x: x, time: timer.time())
+}
+
+public func printTime<X>(_ format: String = "[%.3fs]", _ f: () throws -> X) rethrows {
+  let (x: x, time: time) = try timed(f)
+  print(String(format: format, time))
+  // return x // Don't return (uncommon case), else caller has to silence unused result warnings (common case)
+}
+
+public func timeit<X>(_ n: Int = 3, _ format: String = "[%.3fs]", _ f: () throws -> X) rethrows {
+  for _ in 0..<n {
+    try printTime(format, f)
+  }
 }
