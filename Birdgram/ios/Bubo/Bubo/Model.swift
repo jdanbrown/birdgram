@@ -14,6 +14,9 @@ public enum Features {
     denoise:     Bool = true
   ) -> Melspectro {
 
+    let timer = Timer() // XXX XXX
+    print(String(format: "[time] Features.spectro: start: %d", Int(1000 * timer.lap()))) // XXX
+
     // Like Features config
     assert(sample_rate == 22050, "Spectro params are hardcoded for sampleRate=22050, got: \(sample_rate)")
     let f_bins        = 40
@@ -30,6 +33,7 @@ public enum Features {
     // let mels_div      = 2 // Overridden by n_mels
     let scaling       = "spectrum"  // Return units X**2 ('spectrum'), not units X**2/Hz ('density')
     let mode          = "magnitude" // Return |STFT(x)**2|, not STFT(x)**2 (because "humans can't hear complex phase")
+    print(String(format: "[time] Features.spectro: config: %d", Int(1000 * timer.lap()))) // XXX
 
     // STFT(xs)
     //  - TODO Compute fs/ts in scipy.signal.spectrogram
@@ -42,20 +46,28 @@ public enum Features {
       scaling:     scaling,
       mode:        mode
     )
+    // print(String(format: "Features.spectro: scipy.signal.spectrogram: %@", show(["S.shape": S.shape]))) // XXX Debug
+    print(String(format: "[time] Features.spectro: scipy.signal.spectrogram: %d", Int(1000 * timer.lap()))) // XXX
 
     // HACK Apply unknown transforms to match librosa.feature.melspectrogram
     //  - Like Melspectro
     S = Float(nperseg / 2) * S // No leads on this one...
     S = S**2                   // Like energy->power, but spectro already gives us power instead of energy...
+    // print(String(format: "Features.spectro: unknown transforms: %@", show(["S.shape": S.shape]))) // XXX Debug
+    print(String(format: "[time] Features.spectro: unknown transforms: %d", Int(1000 * timer.lap()))) // XXX
 
     // Linear freq -> mel-scale freq
     //  - Like Melspectro
     let mel_basis = librosa.filters.mel(sample_rate, n_fft: nperseg, n_mels: n_mels)
     S = mel_basis * S
+    // print(String(format: "Features.spectro: librosa.filters.mel: %@", show(["S.shape": S.shape]))) // XXX Debug
+    print(String(format: "[time] Features.spectro: librosa.filters.mel: %d", Int(1000 * timer.lap()))) // XXX
 
     // Linear power -> log power
     //  - Like Melspectro
     S = librosa.power_to_db(S)
+    // print(String(format: "Features.spectro: librosa.power_to_db: %@", show(["S.shape": S.shape]))) // XXX Debug
+    print(String(format: "[time] Features.spectro: librosa.power_to_db: %d", Int(1000 * timer.lap()))) // XXX
 
     // [NOTE fs currently unused in mobile]
     // Mel-scale fs to match S[i]
@@ -68,6 +80,8 @@ public enum Features {
     if denoise {
       S = _spectro_denoise(S)
     }
+    // print(String(format: "Features.spectro: _spectro_denoise: %@", show(["S.shape": S.shape]))) // XXX Debug
+    print(String(format: "[time] Features.spectro: _spectro_denoise: %d", Int(1000 * timer.lap()))) // XXX
 
     return (_fs, _ts, S)
 
@@ -107,15 +121,10 @@ public enum SpectroLike {
   // For each freq bin (row), subtract the median and then zero out negative values
   //  - Like SpectroLike.clip_below_median_per_freq
   public static func clip_below_median_per_freq(_ S: Matrix<Float>) -> Matrix<Float> {
-    let fss = Array(S) // freqs = rows = Matrix.Iterator
-    let S_demedianed = Matrix(fss.map { fs -> [Float] in
-      if let median = Sigma.median(fs.map { Double($0) }) {
-        return fs - Float(median)
-      } else {
-        assert(fs.count == 0)
-        return []
-      }
-    })
+    let S_demedianed = S.mapRows { fs in // (.mapRows i/o Matrix(contents) to preserve rows=0/columns=0)
+      let median = fs.count > 0 ? Sigma.median(fs.map { Double($0) })! : .nan
+      return fs - Float(median)
+    }
     return np.clip(S_demedianed, 0, nil)
   }
 

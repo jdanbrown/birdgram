@@ -144,240 +144,6 @@ class RNSpectro: RCTEventEmitter {
 
 }
 
-class Spectro
-  // : _SpectroAudioKit
-  : _SpectroBasic
-{}
-
-// class _SpectroAudioKit {
-//
-//   static func supportedEvents() -> [String] {
-//     return [
-//       "audioChunk"
-//     ]
-//   }
-//
-//   static func constantsToExport() -> Dictionary<AnyHashable, Any> {
-//     return [:]
-//   }
-//
-//   static func create(
-//     emitter:          RCTEventEmitter,
-//     outputFile:       String,
-//     // TODO Clean up unused params
-//     bufferSize:       UInt32?,
-//     sampleRate:       Double?,
-//     channels:         UInt32?,
-//     bytesPerPacket:   UInt32?,
-//     framesPerPacket:  UInt32?,
-//     bytesPerFrame:    UInt32?,
-//     channelsPerFrame: UInt32?,
-//     bitsPerChannel:   UInt32?
-//   ) throws -> Spectro {
-//     RCTLogInfo("Spectro.create")
-//     return Spectro(
-//       emitter:    emitter,
-//       outputFile: outputFile,
-//       bufferSize: bufferSize ?? 8192,
-//       format:     AudioStreamBasicDescription(
-//         // TODO Clean up unused params
-//         // https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
-//         // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/1572096-audio_data_format_identifiers
-//         // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/mpeg-4_audio_object_type_constants
-//         mSampleRate:       sampleRate       ?? 44100,
-//         mFormatID:         kAudioFormatLinearPCM, // TODO kAudioFormatMPEG4AAC [how to specify bitrate? else just try aac_he_v2]
-//         mFormatFlags:      0,
-//         mBytesPerPacket:   bytesPerPacket   ?? 2, // TODO Function of bitsPerChannel (and ...)?
-//         mFramesPerPacket:  framesPerPacket  ?? 1, // 1 for uncompressed
-//         mBytesPerFrame:    bytesPerFrame    ?? 2, // TODO Function of bitsPerChannel (and ...)?
-//         mChannelsPerFrame: channelsPerFrame ?? channels ?? 1,
-//         mBitsPerChannel:   bitsPerChannel   ?? 16,
-//         mReserved:         0
-//       )
-//     )
-//   }
-//
-//   // Params
-//   let emitter:    RCTEventEmitter
-//   let outputFile: String
-//   let format:     AudioStreamBasicDescription
-//
-//   // State
-//   var recorder: AKNodeRecorder?
-//   var recPath:  String?
-//
-//   init(
-//     emitter:    RCTEventEmitter,
-//     outputFile: String,
-//     bufferSize: UInt32,
-//     format:     AudioStreamBasicDescription
-//   ) {
-//     RCTLogInfo("Spectro.init")
-//     self.emitter    = emitter
-//     self.outputFile = outputFile
-//     self.format     = format
-//   }
-//
-//   deinit {
-//     RCTLogInfo("Spectro.deinit")
-//     do { let _ = try _stop() } catch { RCTLogWarn("Spectro.deinit: Ignoring error from .stop: \(error)") }
-//   }
-//
-//   func start() throws -> Void {
-//     RCTLogInfo("Spectro.start")
-//
-//     if (recorder?.isRecording ?? false) {
-//       try _stop()
-//     }
-//
-//     // WARNING Crash on app startup [wat]
-//     // AKSettings.bufferLength = .huge // 2^11 = 2048 samples (92.9ms @ 22050hz)
-//     // AKSettings.recordingBufferLength = .huge
-//
-//     // Settings
-//     try AKSettings.session.setCategory(.playAndRecord, mode: .default, options: [])
-//
-//     // WARNING Set AKSettings, not AudioKit.format
-//     //  - IDK WTF AudioKit.format is for, but AKAudioFile() uses params from AKSettings.format and ignores AudioKit.format
-//     AKSettings.sampleRate = format.mSampleRate
-//     AKSettings.channelCount = format.mChannelsPerFrame
-//     //  - XXX DONT USE AudioKit.format, use AKSettings (above)
-//     // AudioKit.format = AVAudioFormat(
-//     //   // WARNING .pcmFormatInt16 crashes AudioKit.start(); convert manually [https://stackoverflow.com/a/9153854/397334]
-//     //   commonFormat: .pcmFormatFloat32, // TODO Convert float32 -> uint16 downstream (+ assert format.mBitsPerChannel == 16)
-//     //   sampleRate: format.mSampleRate,
-//     //   channels: format.mChannelsPerFrame,
-//     //   interleaved: false
-//     // )!
-//
-//     RCTLogTrace("Spectro.start: AudioKit.inputDevices: \(String(describing: AudioKit.inputDevices))")
-//     RCTLogTrace("Spectro.start: AudioKit.inputDevice: \(String(describing: AudioKit.inputDevice))")
-//     RCTLogTrace("Spectro.start: AudioKit.format: \(AudioKit.format)")
-//     RCTLogTrace("Spectro.start: AKSettings.session: \(AKSettings.session)")
-//
-//     let mic = AKMicrophone()
-//     recorder = try AKNodeRecorder(node: AKMixer(mic)) // WARNING AKMixer before .installTap else crash
-//     let output = AKBooster(mic, gain: 0) // Playback silent output else speaker->mic feedback
-//
-//     let bufSize: UInt32 = AKSettings.recordingBufferLength.samplesCount
-//     RCTLogTrace("Spectro.start: Installing tap: bufSize[\(bufSize)]")
-//     AKMixer(mic).avAudioUnitOrNode.installTap( // WARNING AKMixer before .installTap else crash
-//        onBus: 0, bufferSize: bufSize, format: nil
-//     ) { (buffer: AVAudioPCMBuffer!, time: AVAudioTime!) -> Void in
-//       RCTLogTrace(String(format: "Spectro.start: Tap: %@, %d, %d, %@",
-//         buffer, buffer.frameLength, buffer.stride, String(describing: self.recorder?.recordedDuration)
-//         // TODO TODO De-risk this (else we should question whether to stick with AudioKit)
-//       ))
-//     }
-//
-//     recPath = nil
-//     try recorder!.reset()  // Calls .removeTap + resets .internalAudioFile
-//     try recorder!.record() // Calls .installTap
-//
-//     RCTLogTrace(String(format: "Spectro.start: audioFile.url[%s]", String(describing: recorder!.audioFile?.url))) // XXX Dev
-//
-//     AudioKit.output = output
-//     try AudioKit.start()
-//
-//   }
-//
-//   func _stop() throws -> Void {
-//     RCTLogTrace("Spectro._stop")
-//     try AudioKit.stop()
-//     recorder?.stop()
-//     try AKSettings.session.setCategory(.playback, mode: .default, options: [])
-//   }
-//
-//   func stop() -> Promise<String?> {
-//     return Promise<String?> { fulfill, reject in
-//       RCTLogTrace("Spectro.stop: recordedDuration: \(String(describing: self.recorder?.recordedDuration))")
-//
-//       // Guards before stopping
-//       guard let recorder = self.recorder else {
-//         return fulfill(nil)
-//       }
-//       guard recorder.isRecording else {
-//         return fulfill(nil)
-//       }
-//
-//       RCTLogTrace(String(format: "Spectro.stop: Stopping: %@", [ // XXX Dev
-//         "AudioKit.format": AudioKit.format,
-//         "audioFile.fileFormat": recorder.audioFile!.fileFormat,
-//       ]))
-//
-//       // Stop recording
-//       try self._stop()
-//
-//       RCTLogTrace(String(format: "Spectro.stop: Stopped: %@", [ // XXX Dev
-//         "AudioKit.format": AudioKit.format,
-//         "audioFile.fileFormat": recorder.audioFile!.fileFormat,
-//       ]))
-//
-//       // Guards before export
-//       guard recorder.recordedDuration > 1e-6 else {
-//         RCTLogInfo("Spectro.stop: Skipping export for empty recordedDuration[\(recorder.recordedDuration)]")
-//         return fulfill(nil)
-//       }
-//       let (filename, ext) = pathSplitExt(pathBasename(self.outputFile))
-//       guard ext == "mp4" else {
-//         throw AppError("Output file extension must be mp4, got \(ext) (from outputFile: \(self.outputFile))")
-//       }
-//       guard AKSettings.sampleRate == 44100 else {
-//         throw AppError("sampleRate[\(AKSettings.sampleRate)] not supported, must be 44100 (see comments in Spectro.swift)")
-//       }
-//
-//       // Export <temp>/*.caf -> <documents>/*.mp4
-//       //  - NOTE Can't make sampleRate=22050 work, going with 44100
-//       //    - Maybe related? https://github.com/AudioKit/AudioKit/issues/1009
-//       //  - NOTE sampleRate/channels are set by AKSettings.sampleRate/.channelCount, which we set above (in .start)
-//       //    - via AKAudioFile() with no args, which reads from AKSettings (WARNING and not AudioKit.format)
-//       //  - NOTE AKAudioFile.exportAsynchronously seems to trigger fewer mysterious failures then AKConverter
-//       //    - e.g. AKConverter kept failing with https://www.osstatus.com/search/results?search=2003334207
-//       recorder.audioFile!.exportAsynchronously(
-//         name: filename,
-//         baseDir: .documents, // Poop: .custom -> "not implemented yet" + NSError.fileCreateError [AKAudioFile.swift]
-//         exportFormat: .mp4
-//       ) { (outputFile: AKAudioFile?, error: NSError?) -> Void in
-//         if let _error = error {
-//           reject(_error)
-//         } else if let _outputFile = outputFile {
-//           self.recPath = _outputFile.url.path
-//           RCTLogInfo(String(format: "Spectro.stop: Exported recorded audio: %@", [
-//             "fileFormat": _outputFile.fileFormat,
-//             "settings": _outputFile.fileFormat.settings,
-//             "duration": recorder.recordedDuration,
-//             "recPath": self.recPath!,
-//           ]))
-//           fulfill(self.recPath)
-//         }
-//       }
-//
-//     }
-//   }
-//
-//   func onAudioData(
-//     _ inAQ:                       AudioQueueRef,
-//     _ inBuffer:                   AudioQueueBufferRef,
-//     _ inStartTime:                UnsafePointer<AudioTimeStamp>,
-//     _ inNumberPacketDescriptions: UInt32,
-//     _ inPacketDescs:              UnsafePointer<AudioStreamPacketDescription>?
-//   ) -> Void {
-//     RCTLogInfo("Spectro.onAudioData")
-//     // TODO(swift_spectro)
-//   }
-//
-//   func stats() -> Dictionary<String, Any> {
-//     return [
-//       "sampleRate": format.mSampleRate,
-//       "channels": format.mChannelsPerFrame,
-//       // "bitsPerSample": format.mBitsPerChannel, // TODO
-//       "duration": recorder?.recordedDuration as Any,
-//       "path": recPath as Any,
-//     ]
-//   }
-//
-// }
-
 // Leaned heavily on these very simple and clear examples to make this thing work
 //  - https://github.com/carsonmcdonald/AVSExample-Swift/blob/master/AVSExample/SimplePCMRecorder.swift
 //  - https://github.com/goodatlas/react-native-audio-record/blob/master/ios/RNAudioRecord.m
@@ -385,7 +151,7 @@ class Spectro
 //  - https://github.com/rochars/wavefile
 //    - e.g. a-law:  https://github.com/rochars/wavefile/blob/846f66c/dist/wavefile.js#L2456
 //    - e.g. mu-law: https://github.com/rochars/wavefile/blob/846f66c/dist/wavefile.js#L2490
-class _SpectroBasic {
+class Spectro {
 
   static func supportedEvents() -> [String] {
     return [
@@ -412,7 +178,7 @@ class _SpectroBasic {
     channelsPerFrame: UInt32?,
     bitsPerChannel:   UInt32?
   ) throws -> Spectro {
-    RCTLogInfo("Spectro.create")
+    Log.info("Spectro.create")
     let mSampleRate       = sampleRate       ?? 44100
     let mBitsPerChannel   = bitsPerChannel   ?? 16
     let mChannelsPerFrame = channelsPerFrame ?? channels ?? 2
@@ -478,7 +244,7 @@ class _SpectroBasic {
     numBuffers: Int = 3, // ≥3 on iphone? [https://books.google.com/books?id=jiwEcrb_H0EC&pg=PA160]
     format:     AudioStreamBasicDescription
   ) {
-    RCTLogInfo(String(format: "Spectro.init: %@", [
+    Log.info(String(format: "Spectro.init: %@", [
       "outputFile": outputFile,
       "bufferSize": bufferSize,
       "numBuffers": numBuffers,
@@ -492,7 +258,7 @@ class _SpectroBasic {
   }
 
   deinit {
-    RCTLogInfo("Spectro.deinit")
+    Log.info("Spectro.deinit")
 
     // Stop recording + dealloc queue [which also deallocs its buffers, I hope?]
     if let _queue = queue {
@@ -508,7 +274,7 @@ class _SpectroBasic {
   }
 
   func start() throws -> Void {
-    RCTLogInfo(String(format: "Spectro.start: %@", pretty([
+    Log.info(String(format: "Spectro.start: %@", pretty([
       "outputFile": outputFile,
       "numBuffers": numBuffers,
       "queue": queue as Any,
@@ -519,7 +285,7 @@ class _SpectroBasic {
     guard queue == nil else { return }
 
     // Set audio session mode for recording
-    RCTLogTrace("Spectro.start: AVAudioSession.setCategory(.playAndRecord)")
+    Log.trace("Spectro.start: AVAudioSession.setCategory(.playAndRecord)")
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(.playAndRecord, mode: .default, options: [])
 
@@ -531,7 +297,7 @@ class _SpectroBasic {
     //  - TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
     let outputUrl  = NSURL(fileURLWithPath: outputPath)
     let fileType   = kAudioFileWAVEType // TODO .mp4 [Timesink! Need muck with format + general trial and error]
-    RCTLogTrace(String(format: "Spectro.start: AudioFileCreateWithURL: %@", pretty([
+    Log.trace(String(format: "Spectro.start: AudioFileCreateWithURL: %@", pretty([
       "outputUrl": outputUrl,
       "fileType": fileType,
       "format": format,
@@ -545,7 +311,7 @@ class _SpectroBasic {
     )
 
     // Allocate audio queue
-    RCTLogTrace(String(format: "Spectro.start: AudioQueueNewInput: %@", pretty([
+    Log.trace(String(format: "Spectro.start: AudioQueueNewInput: %@", pretty([
       "format": format,
     ])))
     try checkStatus(AudioQueueNewInput(
@@ -566,14 +332,14 @@ class _SpectroBasic {
     buffers = []
     for _ in 0..<numBuffers {
       var buffer: AudioQueueBufferRef?
-      RCTLogTrace(String(format: "Spectro.start: AudioQueueAllocateBuffer: %@", show([
+      Log.trace(String(format: "Spectro.start: AudioQueueAllocateBuffer: %@", show([
         "numBuffers": numBuffers,
         "queue": _queue,
         "bufferSize": bufferSize,
       ])))
       try checkStatus(AudioQueueAllocateBuffer(_queue, bufferSize, &buffer))
       let _buffer = buffer!
-      RCTLogTrace(String(format: "Spectro.start: AudioQueueEnqueueBuffer: %@", show([
+      Log.trace(String(format: "Spectro.start: AudioQueueEnqueueBuffer: %@", show([
         "numBuffers": numBuffers,
         "queue": _queue,
         "buffer": _buffer,
@@ -583,7 +349,7 @@ class _SpectroBasic {
     }
 
     // Start recording
-    RCTLogTrace(String(format: "Spectro.start: AudioQueueStart: %@", show([
+    Log.trace(String(format: "Spectro.start: AudioQueueStart: %@", show([
       "queue": queue,
     ])))
     try checkStatus(AudioQueueStart(_queue, nil))
@@ -592,19 +358,19 @@ class _SpectroBasic {
 
   func stop() -> Promise<String?> {
     return Promise { () -> String? in
-      RCTLogInfo("Spectro.stop")
+      Log.info("Spectro.stop")
 
       // Noop unless recording
       guard let _queue     = self.queue     else { return nil }
       guard let _audioFile = self.audioFile else { return nil } // Should be defined if queue is, but let's not risk races
 
       // Stop recording
-      RCTLogTrace("Spectro.start: AudioQueueStop + AudioQueueDispose")
+      Log.trace("Spectro.start: AudioQueueStop + AudioQueueDispose")
       try checkStatus(AudioQueueStop(_queue, true))
       try checkStatus(AudioQueueDispose(_queue, true))
 
       // Reset audio session mode for playback
-      RCTLogTrace("Spectro.stop: AVAudioSession.setCategory(.playback)")
+      Log.trace("Spectro.stop: AVAudioSession.setCategory(.playback)")
       let session = AVAudioSession.sharedInstance()
       try session.setCategory(.playback, mode: .default, options: [])
 
@@ -630,7 +396,7 @@ class _SpectroBasic {
       let timer = Timer()
       var debugTimes: Array<(String, Double)> = [] // (Array of tuples b/c Dictionary is ordered by key i/o insertion)
 
-      RCTLogInfo(String(format: "Spectro.onAudioData: %@", show([
+      Log.info(String(format: "Spectro.onAudioData: %@", show([
         // "self.queue": self.queue,         // For debug
         // "self.audioFile": self.audioFile, // For debug
         "inQueue": inQueue,
@@ -659,7 +425,7 @@ class _SpectroBasic {
         ))
         numPacketsWritten += ioNumPackets
       }
-      debugTimes.append(("audioFile", timer.lap()))
+      debugTimes.append(("file", timer.lap()))
 
       // XXX Disable js audio->spectro while we dev native audio->spectro
       // Send audio samples to js (via event)
@@ -687,115 +453,120 @@ class _SpectroBasic {
         for i in 0..<nSamples {
           xs[i] = Float(pAudioData.advanced(by: i).pointee)
         }
-        RCTLogTrace(String(format: "xs[%d]: %@", xs.count, show(xs[0..<min(100, xs.count)], prec: 0))) // XXX Debug [XXX Bottleneck]
+        Log.trace(String(format: "Spectro.onAudioData: xs[%d]: %@", // XXX Debug [XXX Bottleneck]
+          xs.count, show(xs.slice(to: 100), prec: 0)
+        ))
         debugTimes.append(("xs", timer.lap()))
 
         // S: stft(xs)
-        //  - (fs/ts aren't yet implemented, both are mocked as [])
+        //  - NOTE fs/ts are mocked as [] (we don't use them yet, so they're not implemented)
         let (_, _, S) = Features.spectro(
           xs,
           sample_rate: Int(format.mSampleRate)
         )
-        do {
-          let S_debug = S.vect { grid in Array(grid[0..<min(100, grid.count)]) }
-          do {
-            var s = ""
-            print(S_debug, to: &s)
-            RCTLogTrace(String(format: "S[%d,%d]: print\n%@", S.rows, S.columns, s))
-          }
-          do {
-            var s = ""
-            debugPrint(S_debug, to: &s)
-            RCTLogTrace(String(format: "S[%d,%d]: debugPrint\n%@", S.rows, S.columns, s))
-          }
-          do {
-            var s = ""
-            dump(S_debug, to: &s)
-            RCTLogTrace(String(format: "S[%d,%d]: dump\n%@", S.rows, S.columns, s))
-          }
-          // RCTLogTrace(String(format: "S[%d,%d]: %@",
-          //   S.rows, S.columns,
-          //   show(S.vect { grid in Array(grid[0..<min(100, grid.count)]) }, prec: 0)
-          // )) // XXX Debug [XXX Bottleneck]
+        debugTimes.append(("S", timer.lap()))
+
+        // pixels: grayscale from S
+        //  - TODO magma i/o grayscale
+        let imgHeight = Int32(S.rows)
+        let imgWidth  = Int32(S.columns)
+        // let imgVals   = S.grid as [Float] // Row major // TODO Which major? pixels aren't right yet
+        let imgVals   = transpose(S).grid as [Float] // Col major
+
+        // XXX S i/o fs
+        // // fs: fft(xs) (freqs)
+        // let fs = fft(xs)
+        // Log.trace(String(format: "Spectro.onAudioData: fs[%d]: %@", // XXX Debug [XXX Bottleneck]
+        //   fs.count, show(fs.slice(to: 100), prec: 0)
+        // ))
+        // debugTimes.append(("fs", timer.lap()))
+        // // pixels: grayscale from fs
+        // //  - TODO Magma scale
+        // let nSlice    = Int(100) // XXX Debug
+        // let imgWidth  = Int32(4)
+        // // let imgHeight = Int32(fs.count)
+        // let imgHeight = Int32(nSlice)
+        // // let imgVals   = Array(repeating: fs, count: Int(imgWidth)).joined() // XXX Wrong major
+        // let imgVals   = Array( // XXX Debug
+        //   // XXX Debug: nSlice
+        //   fs.slice(to: nSlice).map { f in Array(repeating: f, count: Int(imgWidth))}.joined()
+        // )
+
+        let vMin = imgVals.min() ?? Float.nan
+        let vMax = imgVals.max() ?? Float.nan
+        // HACK Grayscale
+        var pixels: [UInt8] = imgVals.map { (v: Float) -> UInt8 in
+          vMax == 0 ? 0 : UInt8((v - vMin) / (vMax - vMin) * 255)
         }
-
-        // TODO TODO
-
-        // fs: fft(xs) (freqs)
-        let fs = fft(xs)
-        RCTLogTrace(String(format: "fs[%d]: %@", fs.count, show(fs[0..<min(100, fs.count)], prec: 0))) // XXX Debug [XXX Bottleneck]
-        debugTimes.append(("fs", timer.lap()))
-
-        // pixels: grayscale from fs
-        //  - TODO Magma scale
-        let nSlice    = Int(100) // XXX Debug
-        let imgWidth  = Int32(4)
-        // let imgHeight = Int32(fs.count)
-        let imgHeight = Int32(nSlice)
-        // let imgVals   = Array(repeating: fs, count: Int(imgWidth)).joined() // XXX Wrong major
-        let imgVals   = Array(
-          // XXX Debug: nSlice
-          fs[0..<min(nSlice, fs.count)].map { f in Array(repeating: f, count: Int(imgWidth))}.joined()
-        )
-        // let fMin = fs.min() // Assume 0
-        let fMax = fs.max()
-        var pixels: [UInt8] = Array(imgVals as [Float]).flatMap { f in [
-          // Grayscale [works]
-          fMax == 0 ? 0 : UInt8(f / fMax! * 255),
-          // RGBA [works, but segfaults typechecker]
-          // UInt8(fMax == 0 ? 0 : f / fMax! * 255),
-          // UInt8(fMax == 0 ? 0 : f / fMax! * 255),
-          // UInt8(fMax == 0 ? 0 : f / fMax! * 255),
-          // UInt8(255),
-          // RGBA [works, but segfaults typechecker]
-          // fMax == 0 ? [0, 0, 0, 255] : [
-          //   f / fMax! * 255,
-          //   f / fMax! * 255,
-          //   f / fMax! * 255,
-          //   255,
-          // ]
-        ]}
-        RCTLogTrace(String(format: "pixels[%d]: %@", pixels.count, show(pixels))) // XXX Debug [XXX Bottleneck]
+        // TODO Need flatMap for RGB -- blocked on "The compiler is unable to type-check this expression in a reasonable time..."
+        // var pixels: [UInt8] = Array(imgVals as [Float]).flatMap { v in [
+        //   // Grayscale [works]
+        //   vMax == 0 ? 0 : UInt8((v - vMin) / (vMax - vMin) * 255),
+        //   // RGBA [works, but segfaults typechecker]
+        //   // UInt8(vMax == 0 ? 0 : v / vMax! * 255),
+        //   // UInt8(vMax == 0 ? 0 : v / vMax! * 255),
+        //   // UInt8(vMax == 0 ? 0 : v / vMax! * 255),
+        //   // UInt8(255),
+        //   // RGBA [works, but segfaults typechecker]
+        //   // vMax == 0 ? [0, 0, 0, 255] : [
+        //   //   v / vMax! * 255,
+        //   //   v / vMax! * 255,
+        //   //   v / vMax! * 255,
+        //   //   255,
+        //   // ]
+        // ]}
+        Log.trace(String(format: "Spectro.onAudioData: pixels[%d]: %@", pixels.count, show(pixels))) // XXX Debug [XXX Bottleneck]
         // let _X: [[Float]] = pixels.map{Float($0)}.chunked(4)
         // let X: Matrix = Matrix(_X)
-        // RCTLogTrace(String(format: "X[(%d,%d)]:\n%@", X.rows, X.columns, transpose(X).description)) // XXX Debug [XXX Bottleneck]
-        debugTimes.append(("pixels", timer.lap()))
+        // Log.trace(String(format: "Spectro.onAudioData: X[(%d,%d)]:\n%@", // XXX Debug [XXX Bottleneck]
+        //   X.rows, X.columns, transpose(X).description
+        // ))
+        debugTimes.append(("px", timer.lap()))
 
-        // TODO Pixels -> image file
-        //  - TODO Is convertBitmapRGBA8 expecting row or col major?
-        var spectroFilePath: String? = nil
-        // let pRgba = UnsafeMutablePointer<UInt8>.allocate(capacity: pixels.count) // Else ImageHelper tries to free &pixels and crashes
-        // pRgba.initialize(from: &pixels, count: pixels.count)
-        if let image = ImageHelper.convertBitmapRGBA8(
-          // toUIImage: pRgba,
-          toUIImage: &pixels, // TODO Can we avoid the memcpy? Make drawing actually work before committing
-          withWidth: imgWidth, withHeight: imgHeight
-        ) {
-          if let pngData = image.pngData() {
-            do {
-              let path = "\(FileManager.default.temporaryDirectory.path)-\(DispatchTime.now().uptimeNanoseconds).png"
-              try pngData.write(to: URL(fileURLWithPath: path))
-              spectroFilePath = path
-            } catch {
-              RCTLogError("Failed to pngData.write(): \(error)")
+        // Skip images for empty pixels (e.g. spectrogram returned an Nx0 matrix b/c xs.count < nperseg)
+        if pixels.count == 0 {
+          Log.info("Spectro.onAudioData: Skipping image for empty pixels: xs[\(xs.count)] -> S[\(S.shape)]")
+        } else {
+
+          // Pixels -> image file
+          //  - TODO Is convertBitmapRGBA8 expecting row or col major?
+          var spectroFilePath: String? = nil
+          // let pRgba = UnsafeMutablePointer<UInt8>.allocate(capacity: pixels.count) // Else ImageHelper tries to free &pixels and crashes
+          // pRgba.initialize(from: &pixels, count: pixels.count)
+          if let image = ImageHelper.convertBitmapRGBA8(
+            // toUIImage: pRgba,
+            toUIImage: &pixels, // TODO Can we avoid the memcpy? Make drawing actually work before committing
+            withWidth: imgWidth, withHeight: imgHeight
+          ) {
+            if let pngData = image.pngData() {
+              do {
+                let path = FileManager.default.temporaryDirectory.path / "\(DispatchTime.now().uptimeNanoseconds).png"
+                try pngData.write(to: URL(fileURLWithPath: path))
+                spectroFilePath = path
+              } catch {
+                Log.error("Spectro.onAudioData: Failed to pngData.write(): \(error)")
+              }
+            } else {
+              Log.error("Spectro.onAudioData: Failed to image.pngData()")
             }
           } else {
-            RCTLogError("Failed to image.pngData()")
+            Log.error("Spectro.onAudioData: Failed to ImageHelper.convertBitmapRGBA8")
           }
-        } else {
-          RCTLogError("Failed to ImageHelper.convertBitmapRGBA8")
-        }
-        debugTimes.append(("image", timer.lap()))
+          debugTimes.append(("img", timer.lap()))
 
-        // TODO Image file path -> js (via event)
-        RCTLogTrace(String(format: "debugTimes: %@", debugTimes.map { (k, v) in (k, Int(v * 1000)) } )) // XXX Debug
-        emitter.sendEvent(withName: "spectroFilePath", body: [
-          "spectroFilePath": spectroFilePath as Any,
-          "width": imgWidth,
-          "height": imgHeight,
-          "nSamples": xs.count,
-          "debugTimes": Array(debugTimes.map { (k, v) in v }),
-        ] as Dictionary<String, Any>)
+          // TODO Image file path -> js (via event)
+          Log.trace(String(format: "Spectro.onAudioData: debugTimes: %@", // XXX Debug
+            debugTimes.map { (k, v) in (k, Int(v * 1000)) }.description
+          ))
+          emitter.sendEvent(withName: "spectroFilePath", body: [
+            "spectroFilePath": spectroFilePath as Any,
+            "width": imgWidth,
+            "height": imgHeight,
+            "nSamples": xs.count,
+            "debugTimes": Array(debugTimes.map { (k, v) in ["k": k, "v": v] }),
+          ] as Dictionary<String, Any>)
+
+        }
 
         //
         // \ TODO
@@ -809,7 +580,7 @@ class _SpectroBasic {
       }
 
     } catch {
-      RCTLogError("Spectro.onAudioData: Error: \(error)")
+      Log.error("Spectro.onAudioData: Error: \(error)")
     }
   }
 

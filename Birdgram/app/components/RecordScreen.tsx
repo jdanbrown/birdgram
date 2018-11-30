@@ -92,8 +92,10 @@ interface SpectroImage {
   source: {uri?: string};
   width: number;
   height: number;
-  debugTimes?: Array<number>;
+  debugTimes?: DebugTimes;
 }
+
+type DebugTimes = Array<{k: string, v: number}>; // Array<{k,v}> because swift Dictionary doesn't preserve order
 
 export class RecordScreen extends PureComponent<Props, State> {
 
@@ -478,7 +480,7 @@ export class RecordScreen extends PureComponent<Props, State> {
     width: number,
     height: number,
     nSamples: number,
-    debugTimes: Array<number>,
+    debugTimes: DebugTimes,
   }) => {
     log.info('RecordScreen.onSpectroFilePath', json({
       spectroFilePath: _.defaultTo(spectroFilePath, null),
@@ -713,7 +715,7 @@ export class RecordScreen extends PureComponent<Props, State> {
       source,
       width: w_img,
       height: h_img,
-      debugTimes: Array.from(_.values(debugTimes)),
+      debugTimes: Array.from(_.entries(debugTimes).map(([k, v]) => ({k, v}))),
     };
 
     // XXX Globals for dev
@@ -767,7 +769,7 @@ export interface SpectroImageCompProps {
   source: {uri?: string};
   width: number;
   height: number;
-  debugTimes?: Array<number>;
+  debugTimes?: DebugTimes;
   showDebug: boolean;
 }
 export interface SpectroImageCompState {}
@@ -801,13 +803,13 @@ export class SpectroImageComp extends PureComponent<SpectroImageCompProps, Spect
             paddingVertical: 1, backgroundColor: 'red', // XXX(swift_spectro): Debug
           }}
           source={this.props.source}
-          // resizeMode='stretch' // TODO(swift_spectro): Re-enable
-          resizeMode='center' // XXX(swift_spectro): Debug
+          resizeMode='stretch' // TODO(swift_spectro): Re-enable
+          // resizeMode='center' // XXX(swift_spectro): Debug
         />
         {this.props.showDebug && (
           <this.DebugView style={{flexDirection: 'column', padding: 0, marginRight: 1}}>
-            {(this.props.debugTimes || []).map((debugTime, i) => (
-              <this.DebugText key={i} style={{fontSize: 8}}>{Math.round(debugTime * 1000)}</this.DebugText>
+            {(this.props.debugTimes || []).map(({k, v}, i) => (
+              <this.DebugText key={i} style={{fontSize: 8}}>{k}:{Math.round(v * 1000)}</this.DebugText>
             ))}
           </this.DebugView>
         )}

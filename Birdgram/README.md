@@ -118,10 +118,10 @@ android
   - Build the framework (e.g. Bubo) _once_ against a non-device device (e.g. "Generic iOS Device" / "iPhone 8")
   - Then it doesn't matter which device you run against
   - https://stackoverflow.com/a/37737190/397334
-- App fails on startup with cryptic stacktrace `__dyld_start` -> `__abort_with_payload`
+- App fails on startup with cryptic stacktrace `__dyld_start` -> `__abort_with_payload` (or other `SIGABRT`)
   - This happened once when app Birdgram depended on framework Bubo
     - Solution: in Birdgram project, "Embedded Binaries" -> + -> "Bubo.framework" (in addition to "Linked Libraries and Frameworks")
-  - This happens occasionally for no reason
+  - This happens occasionally for no reason [+2 times]
     - Solution: try again (build -> run)
 - js code doesn't update in Xcode Release build
   - Silent js build error [e.g. next bullet]
@@ -138,6 +138,11 @@ android
     - ✅ Release build
   - Try toggling "Debug JS Remotely" back and forth
     - I've observed this make Debug build + no "Debug JS Remotely" go from blank screen to a working app...
+- App hangs on startup
+  - Solution: if using chrome rn debugger, try toggling http://192.168.0.196:8081/debugger-ui/ vs. http://localhost:8081/debugger-ui/
+    - Simulator wants http://localhost:8081/debugger-ui/
+    - Phone wants http://192.168.0.196:8081/debugger-ui/
+    - If wrong one you should see a "cross-origin read blocking (CORB)" warning in the console
 - App hangs/dies on startup and ios device logs show a bunch of tcp errors (when trying to connect to metro bundler)
   - Solution: temporarily comment out `export SKIP_BUNDLING=true` in Build Phases: [...like below]
 - App fails on startup with "No bundle URL present" (Debug build)

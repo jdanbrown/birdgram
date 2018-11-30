@@ -128,6 +128,10 @@ public enum np {
       return (0..<n).map { _ in Float.random(in: 0..<1) }
     }
 
+    public static func rand(_ rows: Int, _ columns: Int) -> Matrix<Float> {
+      return Matrix(rows: rows, columns: columns, grid: rand(rows * columns))
+    }
+
   }
 
   public enum fft {
@@ -143,13 +147,15 @@ public enum np {
     public static func abs_rfft(_ xs: [Float]) -> [Float] {
       // print("rfft") // XXX Debug
 
+      let n  = xs.count
+      let nf = Int(n / 2) + 1
+
       // Checks
       //  - https://developer.apple.com/documentation/accelerate/1449930-vdsp_dct_createsetup
-      let n = xs.count
-      let i = Int(log2(Double(n)))
+      let k = Int(log2(Double(n)))
       precondition(
-        i >= 4 && [1, 3, 5, 15].contains(where: { f in n == 1 << i * f }),
-        "n[\(n)] must be 2**i * f, where i ≥ 4 and f in [1,3,5,15]"
+        k >= 4 && [1, 3, 5, 15].contains(where: { f in n == 1 << k * f }),
+        "n[\(n)] must be 2**k * f, where k ≥ 4 and f in [1,3,5,15]"
       )
 
       // Setup DFT
@@ -159,7 +165,8 @@ public enum np {
         vDSP_Length(n),            // (vDSP_Length = UInt)
         vDSP_DFT_Direction.FORWARD // vDSP_DFT_FORWARD | vDSP_DFT_INVERSE
       ) else {
-        assert(false, "Failed to vDSP_DFT_zop_CreateSetup")
+        assertionFailure("Failed to vDSP_DFT_zop_CreateSetup")
+        return [Float](repeating: .nan, count: nf) // Return for Release, which omits assert [NOTE but not precondition]
       }
       defer {
         vDSP_DFT_DestroySetup(setup)
@@ -179,7 +186,6 @@ public enum np {
       // sig(" fs     ", fs) // XXX Debug
 
       // Drop symmetric values (b/c real-to-real)
-      let nf = Int(n / 2) + 1
       return fs.slice(from: 0, to: nf)
 
     }
@@ -196,7 +202,8 @@ public enum np {
         vDSP_Length(n), // (vDSP_Length = UInt)
         type            // Supports .II/.III/.IV
       ) else {
-        assert(false, "Failed to vDSP_DCT_CreateSetup")
+        assertionFailure("Failed to vDSP_DCT_CreateSetup")
+        return [Float](repeating: .nan, count: n) // Return for Release, which omits assert [NOTE but not precondition]
       }
       defer {
         vDSP_DFT_DestroySetup(setup)

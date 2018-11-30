@@ -46,6 +46,8 @@ public enum scipy {
       let detrend    = { (xs: [Float]) -> [Float] in xs - mean(xs) } // detrend="constant"
       let scale      = sqrt(1.0 / sum(win)**2)                       // scaling="spectrum"
 
+      // print(String(format: "spectrogram: %@", ["xs.count": xs.count, "nperseg": nperseg])) // XXX Debug
+
       // Compute S_cols (freqs per time segment)
       var S_cols: [[Float]] = []
       if xs.count >= nperseg {
