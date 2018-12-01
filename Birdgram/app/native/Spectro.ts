@@ -12,25 +12,43 @@ import { EmitterSubscription, NativeEventEmitter, NativeModules } from 'react-na
 
 const {RNSpectro} = NativeModules;
 
-export interface SpectroOpts {
-  outputFile: string;
-  sampleRate?: number;
-  bitsPerChannel?: number;
-  channelsPerFrame?: number;
-  refreshRate?: number;
-  bufferSize?: number;
-}
-
 const _emitter = new NativeEventEmitter(RNSpectro);
 
 export const Spectro = {
 
   _emitter,
 
-  setup: async (opts: SpectroOpts): Promise<void> => RNSpectro.setup(opts),
-  start: async (): Promise<void>                  => RNSpectro.start(),
-  stop:  async (): Promise<string | null>         => RNSpectro.stop(),
-  stats: async (): Promise<object>                => RNSpectro.stats(),
+  setup: async (
+    opts: {
+      outputFile: string;
+      sampleRate?: number;
+      bitsPerChannel?: number;
+      channelsPerFrame?: number;
+      refreshRate?: number;
+      bufferSize?: number;
+    },
+  ): Promise<void> => RNSpectro.setup(
+    opts,
+  ),
+
+  start: async (): Promise<void>          => RNSpectro.start(),
+  stop:  async (): Promise<string | null> => RNSpectro.stop(),
+  stats: async (): Promise<object>        => RNSpectro.stats(),
+
+  renderAudioPathToSpectroPath: async (
+    audioPath: string,
+    spectroPath: string,
+    opts: {
+      denoise?: boolean,
+    },
+  ): Promise<{
+    width: number,
+    height: number,
+  }> => RNSpectro.renderAudioPathToSpectroPath(
+    audioPath,
+    spectroPath,
+    opts,
+  ),
 
   onAudioChunk:      (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('audioChunk', f),
   onSpectroFilePath: (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('spectroFilePath', f),

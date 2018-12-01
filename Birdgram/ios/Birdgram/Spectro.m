@@ -30,4 +30,12 @@ RCT_EXTERN_METHOD(
   reject:(RCTPromiseRejectBlock)reject
 );
 
+RCT_EXTERN_METHOD(
+  renderAudioPathToSpectroPath:(NSString *)audioPath
+  spectroPath:(NSString *)spectroPath
+  opts:(NSDictionary *)opts
+  resolve:(RCTPromiseResolveBlock)resolve
+  reject:(RCTPromiseRejectBlock)reject
+);
+
 @end

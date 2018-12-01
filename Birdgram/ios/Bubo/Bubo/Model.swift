@@ -30,7 +30,7 @@ public class Features {
     sample_rate: Int,
     denoise:     Bool = true
   ) -> Melspectro {
-    assert(sample_rate == Features.sample_rate, "Impl hardcoded for sampleRate=\(Features.sample_rate), got: \(sample_rate)")
+    precondition(sample_rate == Features.sample_rate, "Impl hardcoded for sampleRate=\(Features.sample_rate), got: \(sample_rate)")
     // let timer = Timer() // XXX Perf
 
     // Like Melspectro

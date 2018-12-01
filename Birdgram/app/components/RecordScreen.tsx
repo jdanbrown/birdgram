@@ -9,8 +9,8 @@ import Humanize from 'humanize-plus';
 import _ from 'lodash';
 import React, { PureComponent, RefObject } from 'react';
 import {
-  ActivityIndicator, Button, Dimensions, EmitterSubscription, Image, ImageStyle, Platform, ScrollView, Text, TextProps,
-  View, ViewProps,
+  ActivityIndicator, Animated, Button, Dimensions, EmitterSubscription, Image, ImageStyle, Platform, ScrollView, Text,
+  TextProps, View, ViewProps,
 } from 'react-native';
 import AudioRecord from 'react-native-audio-record';
 import FastImage from 'react-native-fast-image';
@@ -37,8 +37,8 @@ import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
-  chance, deepEqual, ExpWeightedMean, global, json, match, matchNil, matchNull, matchUndefined, pretty, round,
-  shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty,
+  chance, deepEqual, Dim, ExpWeightedMean, finallyAsync, global, json, match, matchNil, matchNull, matchUndefined,
+  pretty, round, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty,
 } from '../utils';
 
 global.Spectro = Spectro; // XXX Debug
@@ -74,10 +74,21 @@ interface State {
   recordingState: RecordingState;
   refreshRate: number;
   follow: boolean;
+  // In-progress recording
   spectroImages: Array<SpectroImage>;
   nSamples: number;
   nSpectroWidth: number;
-  nativeSpectro: object | null; // TODO(swift_spectro)
+  nativeSpectro: null | object; // TODO(swift_spectro)
+  // Done recording
+  doneRecording: null | DoneRecording;
+}
+
+interface DoneRecording {
+  audioPath: string;
+  spectros: Array<{
+    path: string,
+    dims: Dim<number>,
+  }>;
 }
 
 type Library = 'MicStream' | 'AudioRecord' | 'Spectro';
@@ -119,6 +130,7 @@ export class RecordScreen extends PureComponent<Props, State> {
     nSamples: 0,
     nSpectroWidth: 0,
     nativeSpectro: null,
+    doneRecording: null,
   };
 
   // Getters for state
@@ -248,6 +260,28 @@ export class RecordScreen extends PureComponent<Props, State> {
           }
         </ScrollView>
 
+        {/* Done recording */}
+        {this.state.doneRecording && (
+          // TODO ScrollView for horizontal scroll (and pinch to zoom, and tap to play, ...)
+          <View>
+            {this.state.doneRecording.spectros.map(spectro => (
+              <Animated.Image
+                key={spectro.path}
+                style={{
+                  width: Dimensions.get('window').width, // HACK Want parent width (and '100%' seems to not work)
+                  // width:  spectro.dims.width,
+                  height: spectro.dims.height,
+                }}
+                // resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
+                resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
+                // resizeMode='stretch' // Scale both dims to =container, ignoring aspect
+                // resizeMode='center'  // Maintain dims and aspect
+                source={{uri: spectro.path}}
+              />
+            ))}
+          </View>
+        )}
+
         {/* Debug info */}
         <this.DebugView style={{
           width: '100%',
@@ -308,6 +342,7 @@ export class RecordScreen extends PureComponent<Props, State> {
         spectroImages: [],
         nSamples: 0,
         nSpectroWidth: 0,
+        doneRecording: null,
       });
 
       await match(this.props.library,
@@ -436,39 +471,45 @@ export class RecordScreen extends PureComponent<Props, State> {
         }],
       );
 
-      // TODO(mel_spectro): Debug
       log.info(`RecordScreen.stopRecording: Got audioPath[${audioPath}]`);
-      if (audioPath !== null) {
+      var doneRecording: null | DoneRecording;
+      if (audioPath === null) {
+        doneRecording = null;
+      } else {
 
-        // log.info('Writing this._samplesChunks to file');
-        // const samplesForJson = Array.from(concatSamples(this._samplesChunks));
-        // await fs.writeFile(`${audioPath}.samples.json`, json(samplesForJson));
+        // Render audioPath -> spectros
+        const spectros = await Promise.all([true, false].map(async denoise => {
+          const path = `${audioPath}-denoise=${denoise}.png`;
+          const dims = await Spectro.renderAudioPathToSpectroPath(audioPath, path, {denoise});
+          return {path, dims};
+        }));
+        doneRecording = {
+          audioPath,
+          spectros,
+        };
 
-        const sound = await Sound.newAsync(audioPath);
-        log.debug('RecordScreen.stopRecording: sound', json({duration: sound.getDuration(), filename: sound.getFilename()}))
-
-        // XXX Debug
-        global.audioPath = audioPath;
-        global.sound = sound;
-
-        // XXX Debug
-        log.info('XXX Playing rec');
-        Sound.setActive(true);
-        Sound.setCategory(
-          'PlayAndRecord',
-          true, // mixWithOthers
-        );
-        Sound.setMode(
-          'Default',
-          // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
-        );
-        sound.play();
-        Sound.setActive(false);
+        // // XXX Debug: Play rec
+        // const sound = await Sound.newAsync(audioPath);
+        // log.debug('XXX Playing rec', json({duration: sound.getDuration(), filename: sound.getFilename()}))
+        // Sound.setActive(true);
+        // Sound.setCategory(
+        //   'PlayAndRecord',
+        //   true, // mixWithOthers
+        // );
+        // Sound.setMode(
+        //   'Default',
+        //   // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
+        // );
+        // finallyAsync(sound.playAsync(), async () => {
+        //   sound.release();
+        //   Sound.setActive(false);
+        // });
 
       }
 
       this.setState({
         recordingState: RecordingState.Stopped,
+        doneRecording,
       });
 
     }
@@ -803,8 +844,10 @@ export class SpectroImageComp extends PureComponent<SpectroImageCompProps, Spect
             paddingVertical: 1, backgroundColor: 'red', // XXX(swift_spectro): Debug
           }}
           source={this.props.source}
-          // resizeMode='stretch' // TODO(swift_spectro): Re-enable
-          resizeMode='center' // XXX(swift_spectro): Debug
+          // resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
+          // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
+          // resizeMode='stretch' // Scale both dims to =container, ignoring aspect
+          resizeMode='center'  // Maintain dims and aspect
         />
         {this.props.showDebug && (
           <this.DebugView style={{flexDirection: 'column', padding: 0, marginRight: 1}}>

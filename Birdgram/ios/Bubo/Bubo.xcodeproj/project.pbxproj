@@ -33,6 +33,8 @@
 		B7E0099021ACA1CE00F90D4C /* Surge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098F21ACA1CE00F90D4C /* Surge.swift */; };
 		B7E0099221ACA80300F90D4C /* scipy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099121ACA80300F90D4C /* scipy.swift */; };
 		B7E0099421ACAC3C00F90D4C /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099321ACAC3C00F90D4C /* Model.swift */; };
+		B7FB674621B3307D00A4D6A7 /* Stats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7FB674521B3307D00A4D6A7 /* Stats.swift */; };
+		B7FB674721B3307D00A4D6A7 /* Stats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7FB674521B3307D00A4D6A7 /* Stats.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +76,7 @@
 		B7E0098F21ACA1CE00F90D4C /* Surge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Surge.swift; sourceTree = "<group>"; };
 		B7E0099121ACA80300F90D4C /* scipy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = scipy.swift; sourceTree = "<group>"; };
 		B7E0099321ACAC3C00F90D4C /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
+		B7FB674521B3307D00A4D6A7 /* Stats.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Stats.swift; sourceTree = "<group>"; };
 		D94709A6A0D3C85310CD2511 /* Pods_Bubo_macos.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bubo_macos.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -140,6 +143,7 @@
 				B7E0099121ACA80300F90D4C /* scipy.swift */,
 				B7E0098D21AC90F800F90D4C /* np.swift */,
 				B7E0098F21ACA1CE00F90D4C /* Surge.swift */,
+				B7FB674521B3307D00A4D6A7 /* Stats.swift */,
 				B7A49DDD21B2FB340076B0A2 /* Colors.swift */,
 				B76003BD21A3A3C100E1347A /* Util.swift */,
 				B78BFDEC21A61C9F0046AB77 /* Show.swift */,
@@ -380,6 +384,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B7E0097F21AC81F200F90D4C /* librosa.swift in Sources */,
+				B7FB674621B3307D00A4D6A7 /* Stats.swift in Sources */,
 				B7A49DDE21B2FB340076B0A2 /* Colors.swift in Sources */,
 				B78BFDED21A61C9F0046AB77 /* Show.swift in Sources */,
 				B7E0099221ACA80300F90D4C /* scipy.swift in Sources */,
@@ -404,6 +409,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B7A49D9521AF26A10076B0A2 /* scipy.swift in Sources */,
+				B7FB674721B3307D00A4D6A7 /* Stats.swift in Sources */,
 				B7A49DDF21B2FB350076B0A2 /* Colors.swift in Sources */,
 				B7A49D9421AF26A10076B0A2 /* librosa.swift in Sources */,
 				B7A49D9621AF26A10076B0A2 /* Surge.swift in Sources */,

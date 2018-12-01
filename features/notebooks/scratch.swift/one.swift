@@ -1,5 +1,6 @@
 // NOTE Must first import every module from Bubo's "Linked Frameworks and Libraries", else "error: Couldn't lookup symbols"
-import Surge; import SigmaSwiftStatistics; import SwiftyJSON; import Yams; import Bubo
+// NOTE Must afterwards import other stuff like AudioKit, else "no such module" [why?]
+import Surge; import SigmaSwiftStatistics; import SwiftyJSON; import Yams; import Bubo; import AudioKit
 
 %%
 // XXX PULL HAIR OUT LIGHT EVERYTHING ON FIRE RUN AWAY

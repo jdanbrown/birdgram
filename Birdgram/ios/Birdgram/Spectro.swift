@@ -32,6 +32,8 @@ class RNSpectro: RCTEventEmitter {
   // Boilerplate
   //
 
+  typealias Props = Dictionary<String, Any>
+
   var proxy: Proxy?
 
   func withPromise<X>(
@@ -76,7 +78,7 @@ class RNSpectro: RCTEventEmitter {
     return Proxy.supportedEvents()
   }
 
-  func getProp<X>(_ props: Dictionary<String, Any>, _ key: String) throws -> X? {
+  func getProp<X>(_ props: Props, _ key: String) throws -> X? {
     guard let x = props[key] else { return nil }
     guard let y = x as? X else { throw AppError("Failed to convert \(key)[\(x)] to type \(X.self)") }
     return y
@@ -97,7 +99,7 @@ class RNSpectro: RCTEventEmitter {
   }
 
   @objc func setup(
-    _ opts: Dictionary<String, Any>,
+    _ opts: Props,
     resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
     withPromise(resolve, reject, "setup") {
@@ -130,7 +132,7 @@ class RNSpectro: RCTEventEmitter {
     _ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
     if let _proxy = proxy {
-      withPromiseAsync(resolve, reject, "stop") { _proxy.stop() }
+      withPromiseAsync(resolve, reject, "stop") { return _proxy.stop() }
     }
   }
 
@@ -139,6 +141,27 @@ class RNSpectro: RCTEventEmitter {
   ) -> Void {
     if let _proxy = proxy {
       withPromise(resolve, reject, "stats") { _proxy.stats() }
+    }
+  }
+
+  @objc func renderAudioPathToSpectroPath(
+    _ audioPath: String,
+    spectroPath: String,
+    opts: Props,
+    resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
+  ) -> Void {
+    if let _proxy = proxy {
+      withPromise(resolve, reject, "renderAudioPathToSpectroPath") { () -> Props in
+        let ret = try _proxy.renderAudioPathToSpectroPath(
+          audioPath,
+          spectroPath,
+          denoise: self.getProp(opts, "denoise")
+        )
+        return [
+          "width":  ret.width,
+          "height": ret.height,
+        ]
+      }
     }
   }
 
@@ -209,7 +232,10 @@ class Spectro {
         // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/1572096-audio_data_format_identifiers
         // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/mpeg-4_audio_object_type_constants
         mSampleRate:       mSampleRate,
-        mFormatID:         kAudioFormatLinearPCM, // TODO kAudioFormatMPEG4AAC [how to specify bitrate? else just try aac_he_v2]
+        // TODO kAudioFormatMPEG4AAC [how to specify bitrate? else just try aac_he_v2]
+        //  - Check out examples using AVAudioFile(...).{fileFormat,processingFormat}.formatDescription
+        //  - e.g. scratch/read-audio-file.swift
+        mFormatID:         kAudioFormatLinearPCM,
         mFormatFlags:      mFormatFlags,
         mBytesPerPacket:   mBytesPerPacket,
         mFramesPerPacket:  mFramesPerPacket,
@@ -444,17 +470,17 @@ class Spectro {
       // Don't emit event if no samples (e.g. flushing empty buffers on stop)
       if (nSamples > 0) {
 
-        // xs: audio samples
-        let xs: [Float] = [Sample](UnsafeBufferPointer(
+        // samples
+        let samples: [Float] = [Sample](UnsafeBufferPointer(
           start: inBuffer.pointee.mAudioData.bindMemory(to: Sample.self, capacity: nSamples),
           count: nSamples
         )).map {
           Float($0)
         }
-        Log.trace(String(format: "Spectro.onAudioData: xs[%d]: %@", // XXX Debug [XXX Bottleneck]
-          xs.count, show(xs.slice(to: 20), prec: 0)
+        Log.trace(String(format: "Spectro.onAudioData: samples[%d]: %@", // XXX Debug [XXX Bottleneck]
+          samples.count, show(samples.slice(to: 20), prec: 0)
         ))
-        debugTimes.append(("xs", timer.lap()))
+        debugTimes.append(("samples", timer.lap()))
 
         // TODO How to tune lo/hi?
         //  - TODO Tuning: watching logs while whistling at simulator indoors
@@ -465,36 +491,36 @@ class Spectro {
           false, 80.0, 100.0
         )
 
-        // S: stft(xs)
+        // S: stft(samples)
         //  - (fs/ts are mocked as [] since we don't use them yet)
         let (_, _, S) = Features.spectro(
-          xs,
+          samples,
           sample_rate: Int(format.mSampleRate),
           denoise: denoise
         )
         debugTimes.append(("S", timer.lap()))
         Log.trace(String(format: "Spectro.onAudioData: %@",
-          "S[\(S.shape)], min[\(min(S.grid))], max[\(max(S.grid))], lo[\(lo)], hi[\(hi)]"
+          "S[\(S.shape)], quantiles[\(Stats.quantiles(S.grid, bins: 5))], min[\(min(S.grid))], max[\(max(S.grid))], lo[\(lo)], hi[\(hi)]"
         ))
 
-        // Skip empty spectros (e.g. spectrogram returned an Nx0 matrix b/c xs.count < nperseg)
+        // Skip empty spectros (e.g. spectrogram returned an Nx0 matrix b/c samples.count < nperseg)
         if S.isEmpty {
-          Log.info("Spectro.onAudioData: Skipping image for empty spectro: xs[\(xs.count)] -> S[\(S.shape)]")
+          Log.info("Spectro.onAudioData: Skipping image for empty spectro: samples[\(samples.count)] -> S[\(S.shape)]")
         } else {
           // Spectro -> image file
           let path = FileManager.default.temporaryDirectory.path / "\(DispatchTime.now().uptimeNanoseconds).png"
           let (width, height) = try matrixToImageFile(
             path,
-            S.vect { $0.map { v in (v.clamped(lo, hi) - lo) / (hi - lo) }},
-            Colors.magma_r,
-            timer, &debugTimes // XXX Debug
+            S.vect { $0.map { x in (x.clamped(lo, hi) - lo) / (hi - lo) }},
+            colors: Colors.magma_r,
+            timer: timer, debugTimes: &debugTimes // XXX Debug
           )
           // Image file path -> js (via rn event)
           emitter.sendEvent(withName: "spectroFilePath", body: [
             "spectroFilePath": path as Any,
             "width": width,
             "height": height,
-            "nSamples": xs.count,
+            "nSamples": samples.count,
             "debugTimes": Array(debugTimes.map { (k, v) in ["k": k, "v": v] }),
           ] as Dictionary<String, Any>)
         }
@@ -523,6 +549,57 @@ class Spectro {
       "numPacketsWritten": numPacketsWritten,
       "outputFile": outputFile,
     ]
+  }
+
+  func renderAudioPathToSpectroPath(
+    _ audioPath: String,
+    _ spectroPath: String,
+    denoise: Bool? = nil
+  ) throws -> (
+    width: Int,
+    height: Int
+  ) {
+
+    // TODO Expose as params (to js via opts)
+    let colors = Colors.magma_r
+
+    // Read samples from file
+    let file = try AKAudioFile(forReading: URL(fileURLWithPath: audioPath))
+    guard let floatChannelData = file.floatChannelData else {
+      throw AppError("No floatChannelData in file[\(file.url)]")
+    }
+    let Samples = Matrix(floatChannelData)
+    let samples = transpose(Samples).map { mean($0) } // Convert to 1ch if >1ch
+    if samples.count == 0 {
+      throw AppError("No samples in file[\(file.url)]")
+    }
+
+    // S: stft(samples)
+    if file.processingFormat.sampleRate != 22050 {
+      // Throw i/o crashing (via precondition in Features.spectro)
+      throw AppError("sampleRate[\(file.processingFormat.sampleRate)] must be 22050 for Features.spectro, in file[\(file.url)]")
+    }
+    let (_, _, S) = Features.spectro(
+      samples,
+      sample_rate: Int(file.processingFormat.sampleRate),
+      denoise: denoise ?? true
+    )
+
+    // TODO Figure out lo/hi
+    let (lo, hi) = (min(S.grid), max(S.grid))
+
+    // Spectro -> image file
+    if S.isEmpty {
+      throw AppError("Empty spectro: samples[\(samples.count)] -> S[\(S.shape)] (probably samples.count < nperseg)")
+    }
+    let dims = try matrixToImageFile(
+      spectroPath,
+      S.vect { $0.map { x in (x.clamped(lo, hi) - lo) / (hi - lo) }},
+      colors: colors
+    )
+
+    return dims
+
   }
 
 }

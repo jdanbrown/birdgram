@@ -1,6 +1,10 @@
 import Foundation
 import Surge
 
+// HACK What's the idiomatic way to do these more generally?
+public func toFloats  (_ xs: [Double]) -> [Float]  { return xs.map { Float($0) } }
+public func toDoubles (_ xs: [Float])  -> [Double] { return xs.map { Double($0) } }
+
 // TODO Maybe faster with cblas_sgemv? But probably fast enough as is (with cblas_sgemm), since Matrix() doesn't copy.
 public func * (xs: Matrix<Float>, ys: [Float]) -> Matrix<Float> {
   return xs * Matrix(rows: ys.count, columns: 1, grid: ys)
