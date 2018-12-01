@@ -484,8 +484,9 @@ class Spectro {
           // Spectro -> image file
           let path = FileManager.default.temporaryDirectory.path / "\(DispatchTime.now().uptimeNanoseconds).png"
           let (width, height) = try matrixToImageFile(
-            S.vect { $0.map { v in (v.clamped(lo, hi) - lo) / (hi - lo) }},
             path,
+            S.vect { $0.map { v in (v.clamped(lo, hi) - lo) / (hi - lo) }},
+            Colors.magma_r,
             timer, &debugTimes // XXX Debug
           )
           // Image file path -> js (via rn event)

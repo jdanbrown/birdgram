@@ -5,8 +5,9 @@ import Surge
 
 // Assumes X values are in [0,1), for mapping to color scales
 public func matrixToImageFile(
-  _ X: Matrix<Float>,
   _ path: String,
+  _ X: Matrix<Float>,
+  _ colors: Colormap,
   _ timer: Bubo.Timer, // XXX Debug (for Features.spectro)
   _ debugTimes: inout Array<(String, Double)>, // XXX Debug (for Features.spectro)
   bottomUp: Bool = true
@@ -22,7 +23,7 @@ public func matrixToImageFile(
   let width        = Int32(P.columns)
   let pxF: [Float] = P.grid // .grid is row major
   let pxI: [UInt8] = pxF.map     { x in UInt8((x * 256).clamped(0, 255)) }
-  var pxB: [UInt8] = pxI.flatMap { i in Colors.magma[Int(i)].bytes }
+  var pxB: [UInt8] = pxI.flatMap { i in colors[Int(i)].bytes }
   Log.trace(String(format: "Spectro.onAudioData: pxB[%d]: %@", pxB.count, show(pxB.slice(to: 20)))) // XXX Debug [XXX Bottleneck]
   debugTimes.append(("pxB", timer.lap()))
 
