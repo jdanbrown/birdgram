@@ -427,7 +427,7 @@ class Spectro {
       }
       debugTimes.append(("file", timer.lap()))
 
-      // XXX Disable js audio->spectro while we dev native audio->spectro
+      // XXX [Old] js audio->spectro
       // Send audio samples to js (via event)
       // let bytes: UnsafeMutableRawPointer = inBuffer.pointee.mAudioData
       // let base64: String = NSData(
@@ -435,9 +435,6 @@ class Spectro {
       //   length: Int(inBuffer.pointee.mAudioDataByteSize)
       // ).base64EncodedString()
       // emitter.sendEvent(withName: "audioChunk", body: base64)
-
-      // / TODO Compute spectro chunks from audio samples
-      //
 
       // Read UInt16 samples from inBuffer->mAudioData
       typealias Sample = UInt16
@@ -459,16 +456,17 @@ class Spectro {
         ))
         debugTimes.append(("xs", timer.lap()))
 
-        // TODO Expose as params / tune lo,hi
+        // TODO How to tune lo/hi?
         //  - TODO Tuning: watching logs while whistling at simulator indoors
         //  - TODO Tune for device
+        //  - TODO Expose as params?
         let (denoise, lo, hi): (Bool, Float, Float) = (
-          true, 0.0, 0.3
-          // false, 80.0, 100.0
+          // true, 0.0, 0.1 // TODO Probably shouldn't denoise each segment in isolation?
+          false, 80.0, 100.0
         )
 
         // S: stft(xs)
-        //  - NOTE fs/ts are mocked as [] (we don't use them yet, so they're not implemented)
+        //  - (fs/ts are mocked as [] since we don't use them yet)
         let (_, _, S) = Features.spectro(
           xs,
           sample_rate: Int(format.mSampleRate),
@@ -496,11 +494,10 @@ class Spectro {
           ] as Dictionary<String, Any>)
         }
 
-        Log.trace(String(format: "Spectro.onAudioData: debugTimes: %@", // XXX Debug
-          debugTimes.map { (k, v) in (k, Int(v * 1000)) }.description
-        ))
-
       }
+
+      // XXX Debug
+      // Log.trace(String(format: "Spectro.onAudioData: debugTimes: %@", debugTimes.map { (k, v) in (k, Int(v * 1000)) }.description))
 
       // Re-enqueue consumed buffer to receive more audio data
       switch AudioQueueEnqueueBuffer(inQueue, inBuffer, 0, nil) {
@@ -533,7 +530,7 @@ public func matrixToImageFile(
   _ hi: Float,
   _ timer: inout Bubo.Timer, // XXX Debug
   _ debugTimes: inout Array<(String, Double)>, // XXX Debug
-  bottomUp: Bool = false
+  bottomUp: Bool = true
 ) throws -> (
   width: Int32,
   height: Int32
@@ -542,15 +539,13 @@ public func matrixToImageFile(
 
   // Pixels: monochrome from X
   //  - TODO magma i/o grayscale
-  var P      = X // Row major
+  var P = X
   if bottomUp { P = P.flipVertically() } // Flip vertically for bottomUp
   let height = Int32(P.rows)
   let width  = Int32(P.columns)
-  let pxF    = P.grid as [Float] // .grid is row major
-
-  var pxB: [UInt8] = (pxF as [Float]).flatMap { (v: Float) -> [UInt8] in [
-    // Grayscale
-    // UInt8((v - lo) / (hi - lo) * 255),
+  let pxF: [Float] = P.grid // .grid is row major
+  var pxB: [UInt8] = pxF.flatMap { (v: Float) -> [UInt8] in [
+    // UInt8((v - lo) / (hi - lo) * 255), // Grayscale
     // RGBA
     UInt8((v.clamped(lo, hi) - lo) / (hi - lo) * 255),
     UInt8((v.clamped(lo, hi) - lo) / (hi - lo) * 255),
@@ -563,11 +558,7 @@ public func matrixToImageFile(
   debugTimes.append(("pxB", timer.lap()))
 
   // Pixels -> image file
-  let pxP: UnsafeMutablePointer<UInt8> = UnsafeMutablePointer(&pxB)        // TODO Without memcpy
-  // let pRgba = UnsafeMutablePointer<UInt8>.allocate(capacity: pxB.count) // XXX With memcpy
-  // pRgba.initialize(from: &pxB, count: pxB.count)
-  // let pxP: UnsafeMutablePointer<UInt8> = UnsafeMutablePointer(pRgba)
-  if let image = ImageHelper.convertBitmapRGBA8(toUIImage: pxP, withWidth: width, withHeight: height,
+  if let image = ImageHelper.convertBitmapRGBA8(toUIImage: &pxB, withWidth: width, withHeight: height,
     // grayscale: true
     grayscale: false
   ) {
@@ -586,4 +577,5 @@ public func matrixToImageFile(
   debugTimes.append(("img", timer.lap()))
 
   return (width: width, height: height)
+
 }
