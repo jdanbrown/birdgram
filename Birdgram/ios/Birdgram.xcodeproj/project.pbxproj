@@ -45,7 +45,6 @@
 		ADBDB9381DFEBF1600ED6528 /* libRCTBlob.a in Frameworks */ = {isa = PBXBuildFile; fileRef = ADBDB9271DFEBF0700ED6528 /* libRCTBlob.a */; };
 		AE7E5791EAF94C0C8C2EED80 /* SimpleLineIcons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2633B94505234B6DA1A33BA9 /* SimpleLineIcons.ttf */; };
 		B2CE4D585E83481DB2A6B031 /* Entypo.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2CEE8CD9DE4841FCBC38447E /* Entypo.ttf */; };
-		B711089B21A7569200AB1B3D /* ImageHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = B711089A21A7569200AB1B3D /* ImageHelper.m */; };
 		B72CC80B21A34706009D8690 /* Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7019D5821A1FA6300F6E12B /* Bubo.framework */; };
 		B72CC80C21A34706009D8690 /* Bubo.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B7019D5821A1FA6300F6E12B /* Bubo.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B72CC80F21A349FA009D8690 /* Spectro.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72CC80E21A349FA009D8690 /* Spectro.swift */; };
@@ -54,6 +53,7 @@
 		B76003CD21A3A7E200E1347A /* RCTLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003CB21A3A7E200E1347A /* RCTLog.swift */; };
 		B771632D21A7AB0100BBF1DD /* search_recs in Resources */ = {isa = PBXBuildFile; fileRef = B771632C21A7AB0100BBF1DD /* search_recs */; };
 		B771632F21AA032000BBF1DD /* Pods_Birdgram.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 84DD8563EA53EA75065B87DD /* Pods_Birdgram.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B7A49DDC21B20CDA0076B0A2 /* ImageHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = B7A49DDA21B20CDA0076B0A2 /* ImageHelper.m */; };
 		B7B1EB0321AAEC5C003EE032 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0221AAEC5C003EE032 /* Surge.framework */; };
 		B7B1EB0421AAEC5C003EE032 /* Surge.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0221AAEC5C003EE032 /* Surge.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BF7C9911FA9C4338B0BF698C /* AntDesign.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E0D3CAC7BEF84537A4FD221A /* AntDesign.ttf */; };
@@ -482,14 +482,14 @@
 		B1811E90C52768853A485721 /* Pods-Birdgram.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Birdgram.release.xcconfig"; path = "Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram.release.xcconfig"; sourceTree = "<group>"; };
 		B7019D5821A1FA6300F6E12B /* Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B70DB6D921A1F45100968F4D /* Birdgram-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Birdgram-Bridging-Header.h"; sourceTree = "<group>"; };
-		B711089A21A7569200AB1B3D /* ImageHelper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = ImageHelper.m; path = Birdgram/ImageHelper.m; sourceTree = "<group>"; };
-		B711089C21A756C300AB1B3D /* ImageHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ImageHelper.h; path = Birdgram/ImageHelper.h; sourceTree = "<group>"; };
 		B72CC80E21A349FA009D8690 /* Spectro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Spectro.swift; path = Birdgram/Spectro.swift; sourceTree = "<group>"; };
 		B72CC81221A34DBC009D8690 /* Spectro.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Spectro.m; path = Birdgram/Spectro.m; sourceTree = "<group>"; };
 		B76003C921A3A7E200E1347A /* RCTSwiftLog.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = RCTSwiftLog.m; path = Birdgram/RCTSwiftLog.m; sourceTree = "<group>"; };
 		B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RCTSwiftLog.h; path = Birdgram/RCTSwiftLog.h; sourceTree = "<group>"; };
 		B76003CB21A3A7E200E1347A /* RCTLog.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RCTLog.swift; path = Birdgram/RCTLog.swift; sourceTree = "<group>"; };
 		B771632C21A7AB0100BBF1DD /* search_recs */ = {isa = PBXFileReference; lastKnownFileType = folder; name = search_recs; path = "../../data/cache/payloads/search_recs-version[8],limit[100],audio_s[10],countries_k[na],com_names_k[ca],num_recs[None]-fb42447/mobile-version[1]/search_recs"; sourceTree = "<group>"; };
+		B7A49DDA21B20CDA0076B0A2 /* ImageHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = ImageHelper.m; path = Birdgram/ImageHelper.m; sourceTree = "<group>"; };
+		B7A49DDB21B20CDA0076B0A2 /* ImageHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ImageHelper.h; path = Birdgram/ImageHelper.h; sourceTree = "<group>"; };
 		B7B1EB0221AAEC5C003EE032 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B8ED9E6567504A149A09641B /* SQLite.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = SQLite.xcodeproj; path = "../node_modules/react-native-sqlite-storage/src/ios/SQLite.xcodeproj"; sourceTree = "<group>"; };
 		C6B6829AB2D043BB990531DD /* FontAwesome.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome.ttf"; sourceTree = "<group>"; };
@@ -640,11 +640,11 @@
 				B70DB6D921A1F45100968F4D /* Birdgram-Bridging-Header.h */,
 				B72CC81221A34DBC009D8690 /* Spectro.m */,
 				B72CC80E21A349FA009D8690 /* Spectro.swift */,
+				B7A49DDB21B20CDA0076B0A2 /* ImageHelper.h */,
+				B7A49DDA21B20CDA0076B0A2 /* ImageHelper.m */,
 				B76003CB21A3A7E200E1347A /* RCTLog.swift */,
 				B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */,
 				B76003C921A3A7E200E1347A /* RCTSwiftLog.m */,
-				B711089C21A756C300AB1B3D /* ImageHelper.h */,
-				B711089A21A7569200AB1B3D /* ImageHelper.m */,
 			);
 			name = Birdgram;
 			sourceTree = "<group>";
@@ -1529,7 +1529,7 @@
 				B72CC81321A34DBC009D8690 /* Spectro.m in Sources */,
 				13B07FBC1A68108700A75B9A /* AppDelegate.m in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
-				B711089B21A7569200AB1B3D /* ImageHelper.m in Sources */,
+				B7A49DDC21B20CDA0076B0A2 /* ImageHelper.m in Sources */,
 				B76003CD21A3A7E200E1347A /* RCTLog.swift in Sources */,
 				B72CC80F21A349FA009D8690 /* Spectro.swift in Sources */,
 			);

@@ -803,8 +803,8 @@ export class SpectroImageComp extends PureComponent<SpectroImageCompProps, Spect
             paddingVertical: 1, backgroundColor: 'red', // XXX(swift_spectro): Debug
           }}
           source={this.props.source}
-          resizeMode='stretch' // TODO(swift_spectro): Re-enable
-          // resizeMode='center' // XXX(swift_spectro): Debug
+          // resizeMode='stretch' // TODO(swift_spectro): Re-enable
+          resizeMode='center' // XXX(swift_spectro): Debug
         />
         {this.props.showDebug && (
           <this.DebugView style={{flexDirection: 'column', padding: 0, marginRight: 1}}>

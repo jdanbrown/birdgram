@@ -115,20 +115,14 @@
 
 + (UIImage *) convertBitmapRGBA8ToUIImage:(unsigned char *) buffer
                                 withWidth:(int) width
-                               withHeight:(int) height {
+                               withHeight:(int) height
+                                grayscale:(bool) grayscale {
 
-
-  // Grayscale [works]
-  size_t bitsPerComponent = 8;
-  size_t componentsPerPixel = 1;
-  CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault | kCGImageAlphaNone;
-  CGColorSpaceRef colorSpaceRef = CGColorSpaceCreateDeviceGray();
-
-  // // RGBA [works]
-  // size_t bitsPerComponent = 8;
-  // size_t componentsPerPixel = 4;
-  // CGBitmapInfo bitmapInfo = kCGBitmapByteOrderDefault | kCGImageAlphaPremultipliedLast;
-  // CGColorSpaceRef colorSpaceRef = CGColorSpaceCreateDeviceRGB();
+  // Grayscale vs. RGBA
+  size_t bitsPerComponent       = grayscale ? 8 : 8;
+  size_t componentsPerPixel     = grayscale ? 1 : 4;
+  CGBitmapInfo bitmapInfo       = (grayscale ? kCGImageAlphaNone : kCGImageAlphaPremultipliedLast) | kCGBitmapByteOrderDefault;
+  CGColorSpaceRef colorSpaceRef = grayscale ? CGColorSpaceCreateDeviceGray() : CGColorSpaceCreateDeviceRGB();
 
   size_t bitsPerPixel = bitsPerComponent * componentsPerPixel;
   size_t bytesPerRow = componentsPerPixel * width;

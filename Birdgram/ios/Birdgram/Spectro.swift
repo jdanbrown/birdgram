@@ -393,7 +393,7 @@ class Spectro {
   ) -> Void {
     do {
 
-      let timer = Timer()
+      var timer = Timer()
       var debugTimes: Array<(String, Double)> = [] // (Array of tuples b/c Dictionary is ordered by key i/o insertion)
 
       Log.info(String(format: "Spectro.onAudioData: %@", show([
@@ -448,128 +448,57 @@ class Spectro {
       if (nSamples > 0) {
 
         // xs: audio samples
-        var xs: [Float] = Array(repeating: Float.nan, count: nSamples)
-        let pAudioData = inBuffer.pointee.mAudioData.assumingMemoryBound(to: Sample.self)
-        for i in 0..<nSamples {
-          xs[i] = Float(pAudioData.advanced(by: i).pointee)
+        let xs: [Float] = [Sample](UnsafeBufferPointer(
+          start: inBuffer.pointee.mAudioData.bindMemory(to: Sample.self, capacity: nSamples),
+          count: nSamples
+        )).map {
+          Float($0)
         }
         Log.trace(String(format: "Spectro.onAudioData: xs[%d]: %@", // XXX Debug [XXX Bottleneck]
-          xs.count, show(xs.slice(to: 100), prec: 0)
+          xs.count, show(xs.slice(to: 20), prec: 0)
         ))
         debugTimes.append(("xs", timer.lap()))
+
+        // TODO Expose as params / tune lo,hi
+        //  - TODO Tuning: watching logs while whistling at simulator indoors
+        //  - TODO Tune for device
+        let (denoise, lo, hi): (Bool, Float, Float) = (
+          true, 0.0, 0.3
+          // false, 80.0, 100.0
+        )
 
         // S: stft(xs)
         //  - NOTE fs/ts are mocked as [] (we don't use them yet, so they're not implemented)
         let (_, _, S) = Features.spectro(
           xs,
-          sample_rate: Int(format.mSampleRate)
+          sample_rate: Int(format.mSampleRate),
+          denoise: denoise
         )
         debugTimes.append(("S", timer.lap()))
+        Log.trace(String(format: "Spectro.onAudioData: %@",
+          "S[\(S.shape)], min[\(min(S.grid))], max[\(max(S.grid))], lo[\(lo)], hi[\(hi)]"
+        ))
 
-        // pixels: grayscale from S
-        //  - TODO magma i/o grayscale
-        let imgHeight = Int32(S.rows)
-        let imgWidth  = Int32(S.columns)
-        // let imgVals   = S.grid as [Float] // Row major // TODO Which major? pixels aren't right yet
-        let imgVals   = transpose(S).grid as [Float] // Col major
-
-        // XXX S i/o fs
-        // // fs: fft(xs) (freqs)
-        // let fs = fft(xs)
-        // Log.trace(String(format: "Spectro.onAudioData: fs[%d]: %@", // XXX Debug [XXX Bottleneck]
-        //   fs.count, show(fs.slice(to: 100), prec: 0)
-        // ))
-        // debugTimes.append(("fs", timer.lap()))
-        // // pixels: grayscale from fs
-        // //  - TODO Magma scale
-        // let nSlice    = Int(100) // XXX Debug
-        // let imgWidth  = Int32(4)
-        // // let imgHeight = Int32(fs.count)
-        // let imgHeight = Int32(nSlice)
-        // // let imgVals   = Array(repeating: fs, count: Int(imgWidth)).joined() // XXX Wrong major
-        // let imgVals   = Array( // XXX Debug
-        //   // XXX Debug: nSlice
-        //   fs.slice(to: nSlice).map { f in Array(repeating: f, count: Int(imgWidth))}.joined()
-        // )
-
-        let vMin = imgVals.min() ?? Float.nan
-        let vMax = imgVals.max() ?? Float.nan
-        // HACK Grayscale
-        var pixels: [UInt8] = imgVals.map { (v: Float) -> UInt8 in
-          vMax == 0 ? 0 : UInt8((v - vMin) / (vMax - vMin) * 255)
-        }
-        // TODO Need flatMap for RGB -- blocked on "The compiler is unable to type-check this expression in a reasonable time..."
-        // var pixels: [UInt8] = Array(imgVals as [Float]).flatMap { v in [
-        //   // Grayscale [works]
-        //   vMax == 0 ? 0 : UInt8((v - vMin) / (vMax - vMin) * 255),
-        //   // RGBA [works, but segfaults typechecker]
-        //   // UInt8(vMax == 0 ? 0 : v / vMax! * 255),
-        //   // UInt8(vMax == 0 ? 0 : v / vMax! * 255),
-        //   // UInt8(vMax == 0 ? 0 : v / vMax! * 255),
-        //   // UInt8(255),
-        //   // RGBA [works, but segfaults typechecker]
-        //   // vMax == 0 ? [0, 0, 0, 255] : [
-        //   //   v / vMax! * 255,
-        //   //   v / vMax! * 255,
-        //   //   v / vMax! * 255,
-        //   //   255,
-        //   // ]
-        // ]}
-        Log.trace(String(format: "Spectro.onAudioData: pixels[%d]: %@", pixels.count, show(pixels))) // XXX Debug [XXX Bottleneck]
-        // let _X: [[Float]] = pixels.map{Float($0)}.chunked(4)
-        // let X: Matrix = Matrix(_X)
-        // Log.trace(String(format: "Spectro.onAudioData: X[(%d,%d)]:\n%@", // XXX Debug [XXX Bottleneck]
-        //   X.rows, X.columns, transpose(X).description
-        // ))
-        debugTimes.append(("px", timer.lap()))
-
-        // Skip images for empty pixels (e.g. spectrogram returned an Nx0 matrix b/c xs.count < nperseg)
-        if pixels.count == 0 {
-          Log.info("Spectro.onAudioData: Skipping image for empty pixels: xs[\(xs.count)] -> S[\(S.shape)]")
+        // Skip empty spectros (e.g. spectrogram returned an Nx0 matrix b/c xs.count < nperseg)
+        if S.isEmpty {
+          Log.info("Spectro.onAudioData: Skipping image for empty spectro: xs[\(xs.count)] -> S[\(S.shape)]")
         } else {
-
-          // Pixels -> image file
-          //  - TODO Is convertBitmapRGBA8 expecting row or col major?
-          var spectroFilePath: String? = nil
-          // let pRgba = UnsafeMutablePointer<UInt8>.allocate(capacity: pixels.count) // Else ImageHelper tries to free &pixels and crashes
-          // pRgba.initialize(from: &pixels, count: pixels.count)
-          if let image = ImageHelper.convertBitmapRGBA8(
-            // toUIImage: pRgba,
-            toUIImage: &pixels, // TODO Can we avoid the memcpy? Make drawing actually work before committing
-            withWidth: imgWidth, withHeight: imgHeight
-          ) {
-            if let pngData = image.pngData() {
-              do {
-                let path = FileManager.default.temporaryDirectory.path / "\(DispatchTime.now().uptimeNanoseconds).png"
-                try pngData.write(to: URL(fileURLWithPath: path))
-                spectroFilePath = path
-              } catch {
-                Log.error("Spectro.onAudioData: Failed to pngData.write(): \(error)")
-              }
-            } else {
-              Log.error("Spectro.onAudioData: Failed to image.pngData()")
-            }
-          } else {
-            Log.error("Spectro.onAudioData: Failed to ImageHelper.convertBitmapRGBA8")
-          }
-          debugTimes.append(("img", timer.lap()))
-
-          // TODO Image file path -> js (via event)
-          Log.trace(String(format: "Spectro.onAudioData: debugTimes: %@", // XXX Debug
-            debugTimes.map { (k, v) in (k, Int(v * 1000)) }.description
-          ))
+          // Spectro -> image file
+          let path = FileManager.default.temporaryDirectory.path / "\(DispatchTime.now().uptimeNanoseconds).png"
+          let (width, height) = try matrixToImageFile(S, path, lo, hi, &timer, &debugTimes)
+          // Image file path -> js (via rn event)
           emitter.sendEvent(withName: "spectroFilePath", body: [
-            "spectroFilePath": spectroFilePath as Any,
-            "width": imgWidth,
-            "height": imgHeight,
+            "spectroFilePath": path as Any,
+            "width": width,
+            "height": height,
             "nSamples": xs.count,
             "debugTimes": Array(debugTimes.map { (k, v) in ["k": k, "v": v] }),
           ] as Dictionary<String, Any>)
-
         }
 
-        //
-        // \ TODO
+        Log.trace(String(format: "Spectro.onAudioData: debugTimes: %@", // XXX Debug
+          debugTimes.map { (k, v) in (k, Int(v * 1000)) }.description
+        ))
 
       }
 
@@ -594,4 +523,67 @@ class Spectro {
     ]
   }
 
+}
+
+// Must take lo/hi as static args because isolated audio segs don't represent them well
+public func matrixToImageFile(
+  _ X: Matrix<Float>,
+  _ path: String,
+  _ lo: Float,
+  _ hi: Float,
+  _ timer: inout Bubo.Timer, // XXX Debug
+  _ debugTimes: inout Array<(String, Double)>, // XXX Debug
+  bottomUp: Bool = false
+) throws -> (
+  width: Int32,
+  height: Int32
+) {
+  precondition(!X.isEmpty, "matrixToImageFile: X must be nonempty (for path[\(path)])")
+
+  // Pixels: monochrome from X
+  //  - TODO magma i/o grayscale
+  var P      = X // Row major
+  if bottomUp { P = P.flipVertically() } // Flip vertically for bottomUp
+  let height = Int32(P.rows)
+  let width  = Int32(P.columns)
+  let pxF    = P.grid as [Float] // .grid is row major
+
+  var pxB: [UInt8] = (pxF as [Float]).flatMap { (v: Float) -> [UInt8] in [
+    // Grayscale
+    // UInt8((v - lo) / (hi - lo) * 255),
+    // RGBA
+    UInt8((v.clamped(lo, hi) - lo) / (hi - lo) * 255),
+    UInt8((v.clamped(lo, hi) - lo) / (hi - lo) * 255),
+    0,
+    UInt8(255),
+  ]}
+  Log.trace(String(format: "Spectro.onAudioData: pxB[%d]: %@", // XXX Debug [XXX Bottleneck]
+    pxB.count, show(pxB.slice(to: 20))
+  ))
+  debugTimes.append(("pxB", timer.lap()))
+
+  // Pixels -> image file
+  let pxP: UnsafeMutablePointer<UInt8> = UnsafeMutablePointer(&pxB)        // TODO Without memcpy
+  // let pRgba = UnsafeMutablePointer<UInt8>.allocate(capacity: pxB.count) // XXX With memcpy
+  // pRgba.initialize(from: &pxB, count: pxB.count)
+  // let pxP: UnsafeMutablePointer<UInt8> = UnsafeMutablePointer(pRgba)
+  if let image = ImageHelper.convertBitmapRGBA8(toUIImage: pxP, withWidth: width, withHeight: height,
+    // grayscale: true
+    grayscale: false
+  ) {
+    if let pngData = image.pngData() {
+      do {
+        try pngData.write(to: URL(fileURLWithPath: path))
+      } catch {
+        Log.error("Spectro.onAudioData: Failed to pngData.write(): \(error)")
+      }
+    } else {
+      Log.error("Spectro.onAudioData: Failed to image.pngData()")
+    }
+  } else {
+    Log.error("Spectro.onAudioData: Failed to ImageHelper.convertBitmapRGBA8")
+  }
+  debugTimes.append(("img", timer.lap()))
+
+  return (width: width, height: height)
 }

@@ -37,6 +37,7 @@
  */
 + (UIImage *) convertBitmapRGBA8ToUIImage:(unsigned char *)buffer
                                 withWidth:(int)width
-                               withHeight:(int)height;
+                               withHeight:(int)height
+                                grayscale:(bool)grayscale;
 
 @end
