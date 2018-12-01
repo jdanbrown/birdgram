@@ -483,7 +483,11 @@ class Spectro {
         } else {
           // Spectro -> image file
           let path = FileManager.default.temporaryDirectory.path / "\(DispatchTime.now().uptimeNanoseconds).png"
-          let (width, height) = try matrixToImageFile(S, path, lo, hi, &timer, &debugTimes)
+          let (width, height) = try matrixToImageFile(
+            S.vect { $0.map { v in (v.clamped(lo, hi) - lo) / (hi - lo) }},
+            path,
+            timer, &debugTimes // XXX Debug
+          )
           // Image file path -> js (via rn event)
           emitter.sendEvent(withName: "spectroFilePath", body: [
             "spectroFilePath": path as Any,
@@ -519,50 +523,5 @@ class Spectro {
       "outputFile": outputFile,
     ]
   }
-
-}
-
-// Must take lo/hi as static args because isolated audio segs don't represent them well
-public func matrixToImageFile(
-  _ X: Matrix<Float>,
-  _ path: String,
-  _ lo: Float,
-  _ hi: Float,
-  _ timer: inout Bubo.Timer, // XXX Debug
-  _ debugTimes: inout Array<(String, Double)>, // XXX Debug
-  bottomUp: Bool = true
-) throws -> (
-  width: Int32,
-  height: Int32
-) {
-  precondition(!X.isEmpty, "matrixToImageFile: X must be nonempty (for path[\(path)])")
-
-  // Pixels: monochrome from X
-  let P            = !bottomUp ? X : X.flipVertically()
-  let height       = Int32(P.rows)
-  let width        = Int32(P.columns)
-  let pxF: [Float] = P.grid // .grid is row major
-  let pxI: [UInt8] = pxF.map { v in UInt8((v.clamped(lo, hi) - lo) / (hi - lo) * 255)}
-  var pxB: [UInt8] = pxI.flatMap { i in Colors.magma[Int(i)].bytes }
-  Log.trace(String(format: "Spectro.onAudioData: pxB[%d]: %@", pxB.count, show(pxB.slice(to: 20)))) // XXX Debug [XXX Bottleneck]
-  debugTimes.append(("pxB", timer.lap()))
-
-  // Pixels -> image file
-  if let image = ImageHelper.convertBitmapRGBA8(toUIImage: &pxB, withWidth: width, withHeight: height, grayscale: false) {
-    if let pngData = image.pngData() {
-      do {
-        try pngData.write(to: URL(fileURLWithPath: path))
-      } catch {
-        Log.error("Spectro.onAudioData: Failed to pngData.write(): \(error)")
-      }
-    } else {
-      Log.error("Spectro.onAudioData: Failed to image.pngData()")
-    }
-  } else {
-    Log.error("Spectro.onAudioData: Failed to ImageHelper.convertBitmapRGBA8")
-  }
-  debugTimes.append(("img", timer.lap()))
-
-  return (width: width, height: height)
 
 }
