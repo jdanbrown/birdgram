@@ -538,30 +538,17 @@ public func matrixToImageFile(
   precondition(!X.isEmpty, "matrixToImageFile: X must be nonempty (for path[\(path)])")
 
   // Pixels: monochrome from X
-  //  - TODO magma i/o grayscale
-  var P = X
-  if bottomUp { P = P.flipVertically() } // Flip vertically for bottomUp
-  let height = Int32(P.rows)
-  let width  = Int32(P.columns)
+  let P            = !bottomUp ? X : X.flipVertically()
+  let height       = Int32(P.rows)
+  let width        = Int32(P.columns)
   let pxF: [Float] = P.grid // .grid is row major
-  var pxB: [UInt8] = pxF.flatMap { (v: Float) -> [UInt8] in [
-    // UInt8((v - lo) / (hi - lo) * 255), // Grayscale
-    // RGBA
-    UInt8((v.clamped(lo, hi) - lo) / (hi - lo) * 255),
-    UInt8((v.clamped(lo, hi) - lo) / (hi - lo) * 255),
-    0,
-    UInt8(255),
-  ]}
-  Log.trace(String(format: "Spectro.onAudioData: pxB[%d]: %@", // XXX Debug [XXX Bottleneck]
-    pxB.count, show(pxB.slice(to: 20))
-  ))
+  let pxI: [UInt8] = pxF.map { v in UInt8((v.clamped(lo, hi) - lo) / (hi - lo) * 255)}
+  var pxB: [UInt8] = pxI.flatMap { i in Colors.magma[Int(i)].bytes }
+  Log.trace(String(format: "Spectro.onAudioData: pxB[%d]: %@", pxB.count, show(pxB.slice(to: 20)))) // XXX Debug [XXX Bottleneck]
   debugTimes.append(("pxB", timer.lap()))
 
   // Pixels -> image file
-  if let image = ImageHelper.convertBitmapRGBA8(toUIImage: &pxB, withWidth: width, withHeight: height,
-    // grayscale: true
-    grayscale: false
-  ) {
+  if let image = ImageHelper.convertBitmapRGBA8(toUIImage: &pxB, withWidth: width, withHeight: height, grayscale: false) {
     if let pngData = image.pngData() {
       do {
         try pngData.write(to: URL(fileURLWithPath: path))

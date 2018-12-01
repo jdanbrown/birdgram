@@ -24,6 +24,8 @@
 		B7A49D9721AF26A10076B0A2 /* Show.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78BFDEC21A61C9F0046AB77 /* Show.swift */; };
 		B7A49D9921B07CF30076B0A2 /* Testing.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A49D9821B07CF30076B0A2 /* Testing.swift */; };
 		B7A49D9A21B07CF90076B0A2 /* Testing.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A49D9821B07CF30076B0A2 /* Testing.swift */; };
+		B7A49DDE21B2FB340076B0A2 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A49DDD21B2FB340076B0A2 /* Colors.swift */; };
+		B7A49DDF21B2FB350076B0A2 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A49DDD21B2FB340076B0A2 /* Colors.swift */; };
 		B7B1EB0121AAEC50003EE032 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0021AAEC50003EE032 /* Surge.framework */; };
 		B7D0960121AE0F450044A720 /* Bubo_macos.h in Headers */ = {isa = PBXBuildFile; fileRef = B7D095FF21AE0F450044A720 /* Bubo_macos.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		B7E0097F21AC81F200F90D4C /* librosa.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0097E21AC81F200F90D4C /* librosa.swift */; };
@@ -62,6 +64,7 @@
 		B78BFDEC21A61C9F0046AB77 /* Show.swift */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.swift; path = Show.swift; sourceTree = "<group>"; tabWidth = 2; };
 		B7A2133121AE10460026C8CD /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7A49D9821B07CF30076B0A2 /* Testing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Testing.swift; sourceTree = "<group>"; };
+		B7A49DDD21B2FB340076B0A2 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
 		B7B1EB0021AAEC50003EE032 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7D095FD21AE0F440044A720 /* Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7D095FF21AE0F450044A720 /* Bubo_macos.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Bubo_macos.h; sourceTree = "<group>"; };
@@ -137,6 +140,7 @@
 				B7E0099121ACA80300F90D4C /* scipy.swift */,
 				B7E0098D21AC90F800F90D4C /* np.swift */,
 				B7E0098F21ACA1CE00F90D4C /* Surge.swift */,
+				B7A49DDD21B2FB340076B0A2 /* Colors.swift */,
 				B76003BD21A3A3C100E1347A /* Util.swift */,
 				B78BFDEC21A61C9F0046AB77 /* Show.swift */,
 				B7A49D9821B07CF30076B0A2 /* Testing.swift */,
@@ -376,6 +380,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B7E0097F21AC81F200F90D4C /* librosa.swift in Sources */,
+				B7A49DDE21B2FB340076B0A2 /* Colors.swift in Sources */,
 				B78BFDED21A61C9F0046AB77 /* Show.swift in Sources */,
 				B7E0099221ACA80300F90D4C /* scipy.swift in Sources */,
 				B7E0099021ACA1CE00F90D4C /* Surge.swift in Sources */,
@@ -399,6 +404,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B7A49D9521AF26A10076B0A2 /* scipy.swift in Sources */,
+				B7A49DDF21B2FB350076B0A2 /* Colors.swift in Sources */,
 				B7A49D9421AF26A10076B0A2 /* librosa.swift in Sources */,
 				B7A49D9621AF26A10076B0A2 /* Surge.swift in Sources */,
 				B7A49D9321AF26A10076B0A2 /* Model.swift in Sources */,
