@@ -10,6 +10,12 @@ import _ from 'lodash';
 // @ts-ignore
 export const global: any = window.global || {};
 
+// Useful for pattern matching in an expression context
+//  - Example usage: into(<complex-expression>, x => ...)
+export function into<X, Y>(x: X, f: (x: X) => Y): Y {
+  return f(x);
+}
+
 export function all(...xs: Array<any>): boolean { return xs.every(Boolean); }
 export function any(...xs: Array<any>): boolean { return xs.some(Boolean); }
 

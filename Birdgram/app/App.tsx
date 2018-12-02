@@ -63,7 +63,7 @@ timed('base64-js',          () => global.base64js        = require('base64-js'))
 // timed('d3',              () => global.d3              = require('d3'));                      // 50ms [heavy, don't need full d3]
 timed('d3-color',           () => global.d3c             = require('d3-color'));                // 2ms
 timed('d3-scale-chromatic', () => global.d3sc            = require('d3-scale-chromatic'));      // 6ms
-timed('jimp',               () => global.Jimp            = require('jimp'));                    // 170ms
+// timed('jimp',               () => global.Jimp            = require('jimp'));                    // 170ms // XXX Unused
 timed('lodash',             () => global._               = require('lodash'));                  // 0ms
 timed('path-to-regexp',     () => global.pathToRegexp    = require('path-to-regexp'));          // ?
 timed('ndarray',            () => global.ndarray         = require('ndarray'));                 // 1ms
