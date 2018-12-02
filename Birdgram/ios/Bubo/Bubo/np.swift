@@ -194,7 +194,7 @@ public enum np {
         var fsReal = [Float](repeating: .nan, count: n)
         var fsImag = [Float](repeating: .nan, count: n)
         vDSP_DFT_Execute(setup, xsReal, xsImag, &fsReal, &fsImag)
-        // print(String(format: "[time] np.fft.abs_rfft: execute:  %f", timer.lap())) // XXX Perf
+        // _Log.debug(String(format: "[time] np.fft.abs_rfft: execute:  %f", timer.lap())) // XXX Perf
 
         // Fused:
         //  - Compute complex magnitude (like np.abs)
@@ -205,7 +205,7 @@ public enum np {
         fs.withUnsafeMutableBufferPointer { fsP in
           vDSP_zvabs(&zs, 1, fsP.baseAddress!, 1, numericCast(nf))
         }
-        // print(String(format: "[time] np.fft.abs_rfft: abs+slice:%f", timer.lap())) // XXX Perf
+        // _Log.debug(String(format: "[time] np.fft.abs_rfft: abs+slice:%f", timer.lap())) // XXX Perf
 
         return fs
 
@@ -245,5 +245,5 @@ public enum np {
 
 // XXX Debug
 private func sig(_ name: String, _ xs: [Float], limit: Int? = 7) {
-  print(String(format: "%@ %3d %@", name, xs.count, show(xs.slice(to: limit), prec: 3)))
+  _Log.debug(String(format: "%@ %3d %@", name, xs.count, show(xs.slice(to: limit), prec: 3)))
 }

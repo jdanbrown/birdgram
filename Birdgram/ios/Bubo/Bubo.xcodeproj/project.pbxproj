@@ -27,6 +27,8 @@
 		B7A49DDE21B2FB340076B0A2 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A49DDD21B2FB340076B0A2 /* Colors.swift */; };
 		B7A49DDF21B2FB350076B0A2 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A49DDD21B2FB340076B0A2 /* Colors.swift */; };
 		B7B1EB0121AAEC50003EE032 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0021AAEC50003EE032 /* Surge.framework */; };
+		B7CC8D1C21B47EBB0008EEDA /* _Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7CC8D1B21B47EBB0008EEDA /* _Log.swift */; };
+		B7CC8D1D21B47EBB0008EEDA /* _Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7CC8D1B21B47EBB0008EEDA /* _Log.swift */; };
 		B7D0960121AE0F450044A720 /* Bubo_macos.h in Headers */ = {isa = PBXBuildFile; fileRef = B7D095FF21AE0F450044A720 /* Bubo_macos.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		B7E0097F21AC81F200F90D4C /* librosa.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0097E21AC81F200F90D4C /* librosa.swift */; };
 		B7E0098E21AC90F800F90D4C /* np.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098D21AC90F800F90D4C /* np.swift */; };
@@ -68,6 +70,7 @@
 		B7A49D9821B07CF30076B0A2 /* Testing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Testing.swift; sourceTree = "<group>"; };
 		B7A49DDD21B2FB340076B0A2 /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
 		B7B1EB0021AAEC50003EE032 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7CC8D1B21B47EBB0008EEDA /* _Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = _Log.swift; sourceTree = "<group>"; };
 		B7D095FD21AE0F440044A720 /* Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7D095FF21AE0F450044A720 /* Bubo_macos.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Bubo_macos.h; sourceTree = "<group>"; };
 		B7D0960021AE0F450044A720 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -145,6 +148,7 @@
 				B7E0098F21ACA1CE00F90D4C /* Surge.swift */,
 				B7FB674521B3307D00A4D6A7 /* Stats.swift */,
 				B7A49DDD21B2FB340076B0A2 /* Colors.swift */,
+				B7CC8D1B21B47EBB0008EEDA /* _Log.swift */,
 				B76003BD21A3A3C100E1347A /* Util.swift */,
 				B78BFDEC21A61C9F0046AB77 /* Show.swift */,
 				B7A49D9821B07CF30076B0A2 /* Testing.swift */,
@@ -385,6 +389,7 @@
 			files = (
 				B7E0097F21AC81F200F90D4C /* librosa.swift in Sources */,
 				B7FB674621B3307D00A4D6A7 /* Stats.swift in Sources */,
+				B7CC8D1C21B47EBB0008EEDA /* _Log.swift in Sources */,
 				B7A49DDE21B2FB340076B0A2 /* Colors.swift in Sources */,
 				B78BFDED21A61C9F0046AB77 /* Show.swift in Sources */,
 				B7E0099221ACA80300F90D4C /* scipy.swift in Sources */,
@@ -410,6 +415,7 @@
 			files = (
 				B7A49D9521AF26A10076B0A2 /* scipy.swift in Sources */,
 				B7FB674721B3307D00A4D6A7 /* Stats.swift in Sources */,
+				B7CC8D1D21B47EBB0008EEDA /* _Log.swift in Sources */,
 				B7A49DDF21B2FB350076B0A2 /* Colors.swift in Sources */,
 				B7A49D9421AF26A10076B0A2 /* librosa.swift in Sources */,
 				B7A49D9621AF26A10076B0A2 /* Surge.swift in Sources */,

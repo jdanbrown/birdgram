@@ -43,7 +43,7 @@ public func matrixToImageFile(
   let pxF: [Float] = P.grid // .grid is row major
   let pxI: [UInt8] = pxF.map     { x in UInt8((x * 256).clamped(0, 255)) }
   var pxB: [UInt8] = pxI.flatMap { i in colors[Int(i)].bytes }
-  Log.trace(String(format: "Spectro.onAudioData: pxB[%d]: %@", pxB.count, show(pxB.slice(to: 20)))) // XXX Debug [XXX Bottleneck]
+  Log.debug(String(format: "Spectro.onAudioData: pxB[%d]: %@", pxB.count, show(pxB.slice(to: 20)))) // XXX Debug
   debugTimes.append(("pxB", timer.lap()))
 
   // Pixels -> .png file

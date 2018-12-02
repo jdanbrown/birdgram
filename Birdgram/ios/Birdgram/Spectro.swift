@@ -12,7 +12,9 @@ import Promises
 import Surge
 
 // Docs
-//  - react-native/React/Base/RCTBridgeModule.h
+//  - https://facebook.github.io/react-native/docs/native-modules-ios
+//  - https://facebook.github.io/react-native/docs/communication-ios
+//  - react-native/React/Base/RCTBridgeModule.h -- many code comments not covered in the docs
 //
 // Examples
 //  - https://github.com/carsonmcdonald/AVSExample-Swift/blob/master/AVSExample/SimplePCMRecorder.swift
@@ -25,14 +27,14 @@ import Surge
 //  - @objc for functions with args(/ only if they return a promise?) requires `_ foo` on first arg
 //    - https://stackoverflow.com/a/39840952/397334
 
+typealias Props = Dictionary<String, Any>
+
 @objc(RNSpectro)
 class RNSpectro: RCTEventEmitter {
 
   //
   // Boilerplate
   //
-
-  typealias Props = Dictionary<String, Any>
 
   var proxy: Proxy?
 
@@ -259,6 +261,8 @@ class Spectro {
   var buffers:           [AudioQueueBufferRef] = []
   var audioFile:         AudioFileID?          = nil
   var numPacketsWritten: UInt32                = 0
+  var spectroRange:      Interval<Float>       = Spectro.zeroSpectroRange
+  static let zeroSpectroRange = Interval.bottom // Unit for union
 
   // TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
   var outputPath: String { get { return "\(documentsDirectory())/\(outputFile)" } }
@@ -311,19 +315,20 @@ class Spectro {
     guard queue == nil else { return }
 
     // Set audio session mode for recording
-    Log.trace("Spectro.start: AVAudioSession.setCategory(.playAndRecord)")
+    Log.debug("Spectro.start: AVAudioSession.setCategory(.playAndRecord)")
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(.playAndRecord, mode: .default, options: [])
 
     // Reset audio file state
     audioFile         = nil
     numPacketsWritten = 0
+    spectroRange      = Spectro.zeroSpectroRange
 
     // Create audio file to record to
     //  - TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
     let outputUrl  = NSURL(fileURLWithPath: outputPath)
     let fileType   = kAudioFileWAVEType // TODO .mp4 [Timesink! Need muck with format + general trial and error]
-    Log.trace(String(format: "Spectro.start: AudioFileCreateWithURL: %@", pretty([
+    Log.debug(String(format: "Spectro.start: AudioFileCreateWithURL: %@", pretty([
       "outputUrl": outputUrl,
       "fileType": fileType,
       "format": format,
@@ -337,7 +342,7 @@ class Spectro {
     )
 
     // Allocate audio queue
-    Log.trace(String(format: "Spectro.start: AudioQueueNewInput: %@", pretty([
+    Log.debug(String(format: "Spectro.start: AudioQueueNewInput: %@", pretty([
       "format": format,
     ])))
     try checkStatus(AudioQueueNewInput(
@@ -358,14 +363,14 @@ class Spectro {
     buffers = []
     for _ in 0..<numBuffers {
       var buffer: AudioQueueBufferRef?
-      Log.trace(String(format: "Spectro.start: AudioQueueAllocateBuffer: %@", show([
+      Log.debug(String(format: "Spectro.start: AudioQueueAllocateBuffer: %@", show([
         "numBuffers": numBuffers,
         "queue": _queue,
         "bufferSize": bufferSize,
       ])))
       try checkStatus(AudioQueueAllocateBuffer(_queue, bufferSize, &buffer))
       let _buffer = buffer!
-      Log.trace(String(format: "Spectro.start: AudioQueueEnqueueBuffer: %@", show([
+      Log.debug(String(format: "Spectro.start: AudioQueueEnqueueBuffer: %@", show([
         "numBuffers": numBuffers,
         "queue": _queue,
         "buffer": _buffer,
@@ -375,7 +380,7 @@ class Spectro {
     }
 
     // Start recording
-    Log.trace(String(format: "Spectro.start: AudioQueueStart: %@", show([
+    Log.debug(String(format: "Spectro.start: AudioQueueStart: %@", show([
       "queue": queue,
     ])))
     try checkStatus(AudioQueueStart(_queue, nil))
@@ -391,12 +396,12 @@ class Spectro {
       guard let _audioFile = self.audioFile else { return nil } // Should be defined if queue is, but let's not risk races
 
       // Stop recording
-      Log.trace("Spectro.start: AudioQueueStop + AudioQueueDispose")
+      Log.debug("Spectro.stop: AudioQueueStop + AudioQueueDispose")
       try checkStatus(AudioQueueStop(_queue, true))
       try checkStatus(AudioQueueDispose(_queue, true))
 
       // Reset audio session mode for playback
-      Log.trace("Spectro.stop: AVAudioSession.setCategory(.playback)")
+      Log.debug("Spectro.stop: AVAudioSession.setCategory(.playback)")
       let session = AVAudioSession.sharedInstance()
       try session.setCategory(.playback, mode: .default, options: [])
 
@@ -419,7 +424,7 @@ class Spectro {
   ) -> Void {
     do {
 
-      var timer = Timer()
+      let timer = Timer()
       var debugTimes: Array<(String, Double)> = [] // (Array of tuples b/c Dictionary is ordered by key i/o insertion)
 
       Log.info(String(format: "Spectro.onAudioData: %@", show([
@@ -462,8 +467,10 @@ class Spectro {
       // ).base64EncodedString()
       // emitter.sendEvent(withName: "audioChunk", body: base64)
 
-      // Read UInt16 samples from inBuffer->mAudioData
-      typealias Sample = UInt16
+      // Read samples from inBuffer->mAudioData
+      //  - 16-bit (because mBitsPerChannel)
+      //  - Signed [QUESTION Empirically correct, but what determines signed vs. unsigned?]
+      typealias Sample = Int16
       assert(format.mBitsPerChannel == 16, "Expected 16bit PCM data, got: \(format)") // TODO Probably more checks needed here
       let nSamples = Int(inBuffer.pointee.mAudioDataByteSize) / (Sample.bitWidth / 8)
 
@@ -477,19 +484,16 @@ class Spectro {
         )).map {
           Float($0)
         }
-        Log.trace(String(format: "Spectro.onAudioData: samples[%d]: %@", // XXX Debug [XXX Bottleneck]
+        Log.debug(String(format: "Spectro.onAudioData: samples[%d]: %@", // XXX Debug
           samples.count, show(samples.slice(to: 20), prec: 0)
         ))
         debugTimes.append(("samples", timer.lap()))
 
-        // TODO How to tune lo/hi?
-        //  - TODO Tuning: watching logs while whistling at simulator indoors
-        //  - TODO Tune for device
-        //  - TODO Expose as params?
-        let (denoise, lo, hi): (Bool, Float, Float) = (
-          // true, 0.0, 0.1 // TODO Probably shouldn't denoise each segment in isolation?
-          false, 80.0, 100.0
-        )
+        // Denoise doesn't make sense for streaming chunks in isolation:
+        //  - Median filtering only makes sense when Δt is long enough for variation, which small chunks don't have
+        //  - RMS norm would dampen variance for loud chunks and expand variance for quiet chunks, which is undesirable
+        //  - There's probably a streaming denoise approach we could devise, but would it even be helpful to the user? [Probably not]
+        let denoise = false
 
         // S: stft(samples)
         //  - (fs/ts are mocked as [] since we don't use them yet)
@@ -499,8 +503,13 @@ class Spectro {
           denoise: denoise
         )
         debugTimes.append(("S", timer.lap()))
-        Log.trace(String(format: "Spectro.onAudioData: %@",
-          "S[\(S.shape)], quantiles[\(Stats.quantiles(S.grid, bins: 5))], min[\(min(S.grid))], max[\(max(S.grid))], lo[\(lo)], hi[\(hi)]"
+
+        // Accumulate lo/hi over time of each recording
+        //  - A very simple adaptive approach to lo/hi [think carefully about user benefit vs. dev cost before complexifying this]
+        spectroRange = spectroRange | Interval(min(S.grid), max(S.grid))
+        let (lo, hi) = (spectroRange.lo, spectroRange.hi)
+        Log.debug(String(format: "Spectro.onAudioData: %@", // XXX Debug
+          "S[\(S.shape)], spectroRange[\(spectroRange)], lo[\(lo)], hi[\(hi)], quantiles[\(Stats.quantiles(S.grid, bins: 3))]"
         ))
 
         // Skip empty spectros (e.g. spectrogram returned an Nx0 matrix b/c samples.count < nperseg)
@@ -522,13 +531,13 @@ class Spectro {
             "height": height,
             "nSamples": samples.count,
             "debugTimes": Array(debugTimes.map { (k, v) in ["k": k, "v": v] }),
-          ] as Dictionary<String, Any>)
+          ] as Props)
         }
 
       }
 
       // XXX Debug
-      // Log.trace(String(format: "Spectro.onAudioData: debugTimes: %@", debugTimes.map { (k, v) in (k, Int(v * 1000)) }.description))
+      // Log.debug(String(format: "Spectro.onAudioData: debugTimes: %@", debugTimes.map { (k, v) in (k, Int(v * 1000)) }.description))
 
       // Re-enqueue consumed buffer to receive more audio data
       switch AudioQueueEnqueueBuffer(inQueue, inBuffer, 0, nil) {
@@ -541,12 +550,13 @@ class Spectro {
     }
   }
 
-  func stats() -> Dictionary<String, Any> {
+  func stats() -> Props {
     return [
       "sampleRate": format.mSampleRate,
       "channels": format.mChannelsPerFrame,
       "bitsPerSample": format.mBitsPerChannel,
       "numPacketsWritten": numPacketsWritten,
+      "spectroRange": spectroRange.description,
       "outputFile": outputFile,
     ]
   }
@@ -559,6 +569,11 @@ class Spectro {
     width: Int,
     height: Int
   ) {
+    Log.info(String(format: "Spectro.renderAudioPathToSpectroPath: %@", [
+      "audioPath": audioPath,
+      "spectroPath": spectroPath,
+      "denoise": denoise as Any,
+    ]))
 
     // TODO Expose as params (to js via opts)
     let colors = Colors.magma_r
@@ -585,13 +600,11 @@ class Spectro {
       denoise: denoise ?? true
     )
 
-    // TODO Figure out lo/hi
-    let (lo, hi) = (min(S.grid), max(S.grid))
-
     // Spectro -> image file
     if S.isEmpty {
       throw AppError("Empty spectro: samples[\(samples.count)] -> S[\(S.shape)] (probably samples.count < nperseg)")
     }
+    let (lo, hi) = (min(S.grid), max(S.grid)) // HACK Is min/max a good behavior in general? Works well for doneRecording, at least
     let dims = try matrixToImageFile(
       spectroPath,
       S.vect { $0.map { x in (x.clamped(lo, hi) - lo) / (hi - lo) }},

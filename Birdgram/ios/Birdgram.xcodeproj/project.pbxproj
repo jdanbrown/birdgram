@@ -50,7 +50,7 @@
 		B72CC80F21A349FA009D8690 /* Spectro.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72CC80E21A349FA009D8690 /* Spectro.swift */; };
 		B72CC81321A34DBC009D8690 /* Spectro.m in Sources */ = {isa = PBXBuildFile; fileRef = B72CC81221A34DBC009D8690 /* Spectro.m */; };
 		B76003CC21A3A7E200E1347A /* RCTSwiftLog.m in Sources */ = {isa = PBXBuildFile; fileRef = B76003C921A3A7E200E1347A /* RCTSwiftLog.m */; };
-		B76003CD21A3A7E200E1347A /* RCTLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003CB21A3A7E200E1347A /* RCTLog.swift */; };
+		B76003CD21A3A7E200E1347A /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003CB21A3A7E200E1347A /* Log.swift */; };
 		B771632D21A7AB0100BBF1DD /* search_recs in Resources */ = {isa = PBXBuildFile; fileRef = B771632C21A7AB0100BBF1DD /* search_recs */; };
 		B771632F21AA032000BBF1DD /* Pods_Birdgram.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 84DD8563EA53EA75065B87DD /* Pods_Birdgram.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B7A49DDC21B20CDA0076B0A2 /* ImageHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = B7A49DDA21B20CDA0076B0A2 /* ImageHelper.m */; };
@@ -487,7 +487,7 @@
 		B72CC81221A34DBC009D8690 /* Spectro.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Spectro.m; path = Birdgram/Spectro.m; sourceTree = "<group>"; };
 		B76003C921A3A7E200E1347A /* RCTSwiftLog.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = RCTSwiftLog.m; path = Birdgram/RCTSwiftLog.m; sourceTree = "<group>"; };
 		B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RCTSwiftLog.h; path = Birdgram/RCTSwiftLog.h; sourceTree = "<group>"; };
-		B76003CB21A3A7E200E1347A /* RCTLog.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = RCTLog.swift; path = Birdgram/RCTLog.swift; sourceTree = "<group>"; };
+		B76003CB21A3A7E200E1347A /* Log.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Log.swift; path = Birdgram/Log.swift; sourceTree = "<group>"; };
 		B771632C21A7AB0100BBF1DD /* search_recs */ = {isa = PBXFileReference; lastKnownFileType = folder; name = search_recs; path = "../../data/cache/payloads/search_recs-version[8],limit[100],audio_s[10],countries_k[na],com_names_k[ca],num_recs[None]-fb42447/mobile-version[1]/search_recs"; sourceTree = "<group>"; };
 		B7A49DDA21B20CDA0076B0A2 /* ImageHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = ImageHelper.m; path = Birdgram/ImageHelper.m; sourceTree = "<group>"; };
 		B7A49DDB21B20CDA0076B0A2 /* ImageHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ImageHelper.h; path = Birdgram/ImageHelper.h; sourceTree = "<group>"; };
@@ -645,7 +645,7 @@
 				B7A49DE021B318120076B0A2 /* Image.swift */,
 				B7A49DDB21B20CDA0076B0A2 /* ImageHelper.h */,
 				B7A49DDA21B20CDA0076B0A2 /* ImageHelper.m */,
-				B76003CB21A3A7E200E1347A /* RCTLog.swift */,
+				B76003CB21A3A7E200E1347A /* Log.swift */,
 				B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */,
 				B76003C921A3A7E200E1347A /* RCTSwiftLog.m */,
 			);
@@ -1534,7 +1534,7 @@
 				13B07FBC1A68108700A75B9A /* AppDelegate.m in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
 				B7A49DDC21B20CDA0076B0A2 /* ImageHelper.m in Sources */,
-				B76003CD21A3A7E200E1347A /* RCTLog.swift in Sources */,
+				B76003CD21A3A7E200E1347A /* Log.swift in Sources */,
 				B72CC80F21A349FA009D8690 /* Spectro.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

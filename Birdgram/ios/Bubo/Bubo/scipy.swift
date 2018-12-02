@@ -45,7 +45,7 @@ public enum scipy {
       let f          = Int(nperseg / 2) + 1
       let t          = xs.count < nperseg ? 0 : (xs.count - nperseg) / hop_length + 1 // Round down b/c no padding
       let scale      = sqrt(1.0 / sum(win)**2)                       // scaling="spectrum"
-      // print(String(format: "[time] scipy.signal.spectrogram: params: %d", Int(1000 * timer.lap()))) // XXX Perf
+      // _Log.debug(String(format: "[time] scipy.signal.spectrogram: params: %d", Int(1000 * timer.lap()))) // XXX Perf
 
       // Setup fft (reuse across multiple calls)
       let abs_rfft = np.fft.reuse_abs_rfft(nperseg)
@@ -66,7 +66,7 @@ public enum scipy {
           assert(fs.count == f)
         }
       }
-      // print(String(format: "[time] scipy.signal.spectrogram: S_cols: %d", Int(1000 * timer.lap()))) // XXX Perf
+      // _Log.debug(String(format: "[time] scipy.signal.spectrogram: S_cols: %d", Int(1000 * timer.lap()))) // XXX Perf
 
       // Join S_cols into S matrix (freq x time)
       //  - transpose(Matrix(...)) for vectorized vDSP_mtrans, i/o trying to zip cols->rows in swift
@@ -75,7 +75,7 @@ public enum scipy {
         columns:  f,
         gridRows: S_cols
       ))
-      // print(String(format: "[time] scipy.signal.spectrogram: S: %d", Int(1000 * timer.lap()))) // XXX Perf
+      // _Log.debug(String(format: "[time] scipy.signal.spectrogram: S: %d", Int(1000 * timer.lap()))) // XXX Perf
 
       // TODO Compute freq/time labels (not yet needed for mobile)
       let (fs, ts) = ([Float](), [Float]())
@@ -113,5 +113,5 @@ public enum scipy {
 
 // XXX Debug
 private func sig(_ name: String, _ xs: [Float], limit: Int? = 7) {
-  print(String(format: "%@ %3d %@", name, xs.count, show(xs.slice(to: limit), prec: 3)))
+  _Log.debug(String(format: "%@ %3d %@", name, xs.count, show(xs.slice(to: limit), prec: 3)))
 }

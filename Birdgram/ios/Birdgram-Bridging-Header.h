@@ -3,6 +3,7 @@
 
 #import <AVFoundation/AVFoundation.h>
 #import <React/RCTBridgeModule.h>
+#import <React/RCTDefines.h>
 #import <React/RCTEventDispatcher.h>
 #import <React/RCTEventEmitter.h>
 #import <React/RCTLog.h>

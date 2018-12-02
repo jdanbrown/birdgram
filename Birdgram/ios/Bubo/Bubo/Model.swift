@@ -1,6 +1,6 @@
 // Like python sp14/model.py (+ sp14/features.py, for now)
 
-// import AudioKit // XXX Failing to build for macos
+// import AudioKit // FIXME How to build for macos (works for ios)?
 import Foundation
 import SigmaSwiftStatistics
 import Surge
@@ -37,7 +37,7 @@ public class Features {
     // let mels_div      = 2 // Overridden by n_mels
     let scaling       = "spectrum"  // Return units X**2 ('spectrum'), not units X**2/Hz ('density')
     let mode          = "magnitude" // Return |STFT(x)**2|, not STFT(x)**2 (because "humans can't hear complex phase")
-    // print(String(format: "[time] Features.spectro: config: %d", Int(1000 * timer.lap()))) // XXX Perf
+    // _Log.debug(String(format: "[time] Features.spectro: config: %d", Int(1000 * timer.lap()))) // XXX Perf
 
     // STFT(xs)
     //  - TODO Compute fs/ts in scipy.signal.spectrogram
@@ -50,27 +50,27 @@ public class Features {
       scaling:     scaling,
       mode:        mode
     )
-    // print(String(format: "Features.spectro: scipy.signal.spectrogram: %@", show(["S.shape": S.shape]))) // XXX Debug
-    // print(String(format: "[time] Features.spectro: scipy.signal.spectrogram: %d", Int(1000 * timer.lap()))) // XXX Perf
+    // _Log.debug(String(format: "Features.spectro: scipy.signal.spectrogram: %@", show(["S.shape": S.shape]))) // XXX Debug
+    // _Log.debug(String(format: "[time] Features.spectro: scipy.signal.spectrogram: %d", Int(1000 * timer.lap()))) // XXX Perf
 
     // HACK Apply unknown transforms to match librosa.feature.melspectrogram
     //  - Like Melspectro
     S = Float(nperseg / 2) * S // No leads on this one...
     S = S**2                   // Like energy->power, but spectro already gives us power instead of energy...
-    // print(String(format: "Features.spectro: unknown transforms: %@", show(["S.shape": S.shape]))) // XXX Debug
-    // print(String(format: "[time] Features.spectro: unknown transforms: %d", Int(1000 * timer.lap()))) // XXX Perf
+    // _Log.debug(String(format: "Features.spectro: unknown transforms: %@", show(["S.shape": S.shape]))) // XXX Debug
+    // _Log.debug(String(format: "[time] Features.spectro: unknown transforms: %d", Int(1000 * timer.lap()))) // XXX Perf
 
     // Linear freq -> mel-scale freq
     //  - Like Melspectro
     S = mel_basis * S
-    // print(String(format: "Features.spectro: mel_basis: %@", show(["S.shape": S.shape]))) // XXX Debug
-    // print(String(format: "[time] Features.spectro: mel_basis: %d", Int(1000 * timer.lap()))) // XXX Perf
+    // _Log.debug(String(format: "Features.spectro: mel_basis: %@", show(["S.shape": S.shape]))) // XXX Debug
+    // _Log.debug(String(format: "[time] Features.spectro: mel_basis: %d", Int(1000 * timer.lap()))) // XXX Perf
 
     // Linear power -> log power
     //  - Like Melspectro
     S = librosa.power_to_db(S)
-    // print(String(format: "Features.spectro: librosa.power_to_db: %@", show(["S.shape": S.shape]))) // XXX Debug
-    // print(String(format: "[time] Features.spectro: librosa.power_to_db: %d", Int(1000 * timer.lap()))) // XXX Perf
+    // _Log.debug(String(format: "Features.spectro: librosa.power_to_db: %@", show(["S.shape": S.shape]))) // XXX Debug
+    // _Log.debug(String(format: "[time] Features.spectro: librosa.power_to_db: %d", Int(1000 * timer.lap()))) // XXX Perf
 
     // [NOTE fs currently unused in mobile]
     // Mel-scale fs to match S[i]
@@ -83,8 +83,18 @@ public class Features {
     if denoise {
       S = _spectro_denoise(S)
     }
-    // print(String(format: "Features.spectro: _spectro_denoise: %@", show(["S.shape": S.shape]))) // XXX Debug
-    // print(String(format: "[time] Features.spectro: _spectro_denoise: %d", Int(1000 * timer.lap()))) // XXX Perf
+    // _Log.debug(String(format: "Features.spectro: _spectro_denoise: %@", show(["S.shape": S.shape]))) // XXX Debug
+    // _Log.debug(String(format: "[time] Features.spectro: _spectro_denoise: %d", Int(1000 * timer.lap()))) // XXX Perf
+
+    // XXX Debug
+    _Log.debug(String(format: "Features.spectro: S: %@", [
+      "xs.count": xs.count,
+      "xs": xs.slice(to: 10),
+      "xs.quantiles": Stats.quantiles(xs, bins: 5),
+      "S.shape": S.shape,
+      "S": S.grid.slice(to: 10),
+      "S.quantiles": Stats.quantiles(S.grid, bins: 5),
+    ]))
 
     return (_fs, _ts, S)
 

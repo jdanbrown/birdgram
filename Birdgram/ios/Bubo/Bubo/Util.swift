@@ -1,7 +1,12 @@
-// XXX Debug Bubo-macos
-public func foo_bubo() -> Int { return 0 }
-
 import Foundation
+
+// Mimic react-native js __DEV__ to distinguish Xcode Debug vs. Release build
+//  - Keep same name across js + swift for grep-ability
+#if DEBUG
+public let __DEV__ = true
+#else
+public let __DEV__ = false
+#endif
 
 // Based on https://gist.github.com/nicklockwood/c5f075dd9e714ad8524859c6bd46069f
 public enum AppError: Error, CustomStringConvertible {
@@ -67,6 +72,42 @@ public func pathSplitExt(_ path: String) -> (String, String) {
 public func documentsDirectory() -> String {
   // https://stackoverflow.com/questions/24055146/how-to-find-nsdocumentdirectory-in-swift
   return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
+}
+
+public struct Interval<X: Comparable>: CustomStringConvertible {
+
+  public let lo: X
+  public let hi: X
+
+  public init(_ lo: X, _ hi: X) {
+    self.lo = lo
+    self.hi = hi
+  }
+
+  public func clamp(_ x: X) -> X {
+    return x.clamped(lo, hi)
+  }
+
+  // Union (expand ranges)
+  public static func | (_ a: Interval<X>, _ b: Interval<X>) -> Interval<X> {
+    return Interval(min(a.lo, b.lo), max(a.hi, b.hi))
+  }
+
+  // Intersect (contract ranges)
+  public static func & (_ a: Interval<X>, _ b: Interval<X>) -> Interval<X>? {
+    let (lo, hi) = (max(a.lo, b.lo), min(a.hi, b.hi))
+    return lo > hi ? nil : Interval(lo, hi)
+  }
+
+  public var description: String {
+    get { return "Interval(\(lo), \(hi))" }
+  }
+
+}
+
+extension Interval where X == Float {
+  public static let bottom = Interval(Float.infinity,  -Float.infinity) // Unit for union, zero for intersect
+  public static let top    = Interval(-Float.infinity, Float.infinity)  // Unit for intersect, zero for union
 }
 
 extension Comparable {
