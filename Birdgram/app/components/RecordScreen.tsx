@@ -47,6 +47,9 @@ global.Spectro = Spectro; // XXX Debug
 //   new Jimp(...args, (err: Error | null, img: Jimp) => err ? reject(err) : resolve(img));
 // });
 
+export const refreshRateMin = 1;
+export const refreshRateMax = 64;
+
 // "Samples" means "audio samples" throughout
 export type Samples = Int16Array; // HACK Assumes bitsPerSample=16
 export const Samples = Int16Array;
@@ -87,7 +90,7 @@ interface DoneRecording {
   spectros: DoneRecordingSpectros;
 }
 
-type DoneRecordingSpectros = Map<Denoise, DoneRecordingSpectro>;
+type DoneRecordingSpectros = Map<Denoise, null | DoneRecordingSpectro>;
 type Denoise = boolean;
 interface DoneRecordingSpectro {
   path: string;
@@ -121,7 +124,8 @@ export class RecordScreen extends PureComponent<Props, State> {
 
   state: State = {
     recordingState: RecordingState.Stopped,
-    refreshRate: 16,
+    // refreshRate: 16,
+    refreshRate: 64, // XXX(measure_lag)
     spectroScale: 2, // TODO Expose controls like SearchScreen [think through RecordScreen.state vs. Settings vs. SearchScreen.state]
     follow: true,
     denoised: true,
@@ -167,9 +171,8 @@ export class RecordScreen extends PureComponent<Props, State> {
     // Avoid logging in tight loop (bottleneck at refreshRate=16)
     // log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
 
-    if (this.state.follow) {
-      // (Not a bottleneck at refreshRate=16)
-      this._scrollViewRef.current!.scrollToEnd();
+    if (!prevState.follow && this.state.follow) {
+      this.scrollToEnd();
     }
 
     // XXX Debug
@@ -208,6 +211,12 @@ export class RecordScreen extends PureComponent<Props, State> {
             log.debug('onScrollBeginDrag'); // XXX
             this.setState({follow: false});
           }}
+          onContentSizeChange={(width, height) => {
+            log.debug('onContentSizeChange', json({width, height}));
+            if (this.state.follow) {
+              this.scrollToEnd();
+            }
+          }}
         >
           {/* Condition on !doneRecording so that the transition from recording->stop->rendered is gapless */}
           {!this.state.doneRecording ? (
@@ -233,7 +242,7 @@ export class RecordScreen extends PureComponent<Props, State> {
 
             // Done recording: recorded spectro
             <View>
-              {into(this.state.doneRecording.spectros.get(this.state.denoised)!, spectro => (
+              {into(this.state.doneRecording.spectros.get(this.state.denoised), spectro => spectro && (
                 <SpectroImageComp
                   key={spectro.path}
                   source={{uri: spectro.path}}
@@ -279,7 +288,8 @@ export class RecordScreen extends PureComponent<Props, State> {
           follow={this.state.follow}
           denoised={this.state.denoised}
           doneRecording={this.state.doneRecording}
-          parentSetState={f => this.setState(f)}
+          // NOTE Pass these as bound methods i/o lambdas else ControlsBar will unnecessarily update on every render (and be slow)
+          setStateProxy={this} // Had some 'undefined' trouble with passing this.setState, so passing this instead
           startRecording={this.startRecording}
           stopRecording={this.stopRecording}
         />
@@ -288,87 +298,102 @@ export class RecordScreen extends PureComponent<Props, State> {
     );
   }
 
+  scrollToEnd = () => {
+    log.debug('scrollToEnd');
+    this._scrollViewRef.current!.scrollToEnd();
+  }
+
+  // Catches and logs errors so callers don't have to (e.g. event handlers)
   startRecording = async () => {
-    if (this.state.recordingState === RecordingState.Stopped) {
-      log.info('RecordScreen.startRecording', yaml({
-        sampleRate: this.props.sampleRate,
-        channels: this.props.channels,
-        bitsPerSample: this.props.bitsPerSample,
-      }));
+    try {
+      if (this.state.recordingState === RecordingState.Stopped) {
+        log.info('RecordScreen.startRecording', yaml({
+          sampleRate: this.props.sampleRate,
+          channels: this.props.channels,
+          bitsPerSample: this.props.bitsPerSample,
+        }));
 
-      // Reset recordingState
-      this.setState({
-        recordingState: RecordingState.Recording,
-        spectroImages: [],
-        nSamples: 0,
-        nSpectroWidth: 0,
-        doneRecording: null,
-      });
+        // Reset recordingState
+        this.setState({
+          recordingState: RecordingState.Recording,
+          spectroImages: [],
+          nSamples: 0,
+          nSpectroWidth: 0,
+          doneRecording: null,
+        });
 
-      await Spectro.setup({
-        outputFile: this.freshFilename('wav'), // FIXME dir is hardcoded to BaseDirectory.temp (in Spectro.swift)
-        sampleRate: this.props.sampleRate,
-        bitsPerChannel: this.props.bitsPerSample,
-        channelsPerFrame: this.props.channels,
-        refreshRate: this.state.refreshRate, // NOTE Only updates on stop/record
-        // bufferSize: 2048, // HACK Manually tuned for (22050hz,1ch,16bit)
-      });
-      await Spectro.start();
+        await Spectro.setup({
+          outputFile: this.freshFilename('wav'), // FIXME dir is hardcoded to BaseDirectory.temp (in Spectro.swift)
+          sampleRate: this.props.sampleRate,
+          bitsPerChannel: this.props.bitsPerSample,
+          channelsPerFrame: this.props.channels,
+          refreshRate: this.state.refreshRate, // NOTE Only updates on stop/record
+          // bufferSize: 2048, // HACK Manually tuned for (22050hz,1ch,16bit)
+        });
+        await Spectro.start();
 
+      }
+    } catch (e) {
+      log.error('Error in startRecording', e);
     }
   }
 
+  // Catches and logs errors so callers don't have to (e.g. event handlers)
   stopRecording = async () => {
-    if (this.state.recordingState === RecordingState.Recording) {
-      log.info('RecordScreen.stopRecording');
+    try {
+      if (this.state.recordingState === RecordingState.Recording) {
+        log.info('RecordScreen.stopRecording');
 
-      this.setState({
-        recordingState: RecordingState.Saving,
-      });
-      const audioPath = await Spectro.stop();
+        this.setState({
+          recordingState: RecordingState.Saving,
+        });
+        const audioPath = await Spectro.stop();
 
-      log.info(`RecordScreen.stopRecording: Got audioPath[${audioPath}]`);
-      var doneRecording: null | DoneRecording;
-      if (audioPath === null) {
-        doneRecording = null;
-      } else {
+        log.info(`RecordScreen.stopRecording: Got audioPath[${audioPath}]`);
+        var doneRecording: null | DoneRecording;
+        if (audioPath === null) {
+          doneRecording = null;
+        } else {
 
-        // Render audioPath -> spectros
-        const spectros = new Map(await Promise.all([true, false].map(async denoise => {
-          const path = `${audioPath}-denoise=${denoise}.png`;
-          const dims = await Spectro.renderAudioPathToSpectroPath(audioPath, path, {denoise});
-          return [denoise, {path, dims}] as [Denoise, DoneRecordingSpectro];
-        })));
-        doneRecording = {
-          audioPath,
-          spectros,
-        };
+          // Render audioPath -> spectros
+          const spectros: DoneRecordingSpectros = new Map(await Promise.all([true, false].map(async denoise => {
+            const path = `${audioPath}-denoise=${denoise}.png`;
+            const dims: null | Dim<number> = await Spectro.renderAudioPathToSpectroPath(audioPath, path, {denoise});
+            return [denoise, dims && {path, dims}] as [Denoise, null | DoneRecordingSpectro];
+          })));
+          doneRecording = {
+            audioPath,
+            spectros,
+          };
 
-        // TODO Add tap to play for recorded rec
-        // // XXX Debug: Play rec
-        // const sound = await Sound.newAsync(audioPath);
-        // log.debug('XXX Playing rec', json({duration: sound.getDuration(), filename: sound.getFilename()}))
-        // Sound.setActive(true);
-        // Sound.setCategory(
-        //   'PlayAndRecord',
-        //   true, // mixWithOthers
-        // );
-        // Sound.setMode(
-        //   'Default',
-        //   // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
-        // );
-        // finallyAsync(sound.playAsync(), async () => {
-        //   sound.release();
-        //   Sound.setActive(false);
-        // });
+          // TODO Add tap to play for recorded rec
+          // // XXX Debug: Play rec
+          // const sound = await Sound.newAsync(audioPath);
+          // log.debug('XXX Playing rec', json({duration: sound.getDuration(), filename: sound.getFilename()}))
+          // Sound.setActive(true);
+          // Sound.setCategory(
+          //   'PlayAndRecord',
+          //   true, // mixWithOthers
+          // );
+          // Sound.setMode(
+          //   'Default',
+          //   // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
+          // );
+          // finallyAsync(sound.playAsync(), async () => {
+          //   sound.release();
+          //   Sound.setActive(false);
+          // });
+
+        }
+
+        this.setState({
+          recordingState: RecordingState.Stopped,
+          doneRecording,
+        });
 
       }
-
-      this.setState({
-        recordingState: RecordingState.Stopped,
-        doneRecording,
-      });
-
+    } catch (e) {
+      log.error('Error in stopRecording', e);
     }
   }
 
@@ -511,7 +536,7 @@ export interface ControlsBarProps {
   follow:         State["follow"];
   denoised:       State["denoised"];
   doneRecording:  State["doneRecording"];
-  parentSetState: typeof RecordScreen.prototype.setState;
+  setStateProxy:  RecordScreen;
   startRecording: typeof RecordScreen.prototype.startRecording;
   stopRecording:  typeof RecordScreen.prototype.stopRecording;
 }
@@ -542,7 +567,9 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
         {/* Refresh rate +/– */}
         <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {
-          this.props.parentSetState((state, props) => ({refreshRate: _.clamp(state.refreshRate / 2, 1, 16)}))
+          this.props.setStateProxy.setState((state, props) => ({
+            refreshRate: _.clamp(state.refreshRate / 2, refreshRateMin, refreshRateMax),
+          }))
         }}>
           <Feather name='minus' style={styles.buttonIcon} />
         </RectButton>
@@ -552,7 +579,9 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           </Text>
         </RectButton>
         <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {
-          this.props.parentSetState((state, props) => ({refreshRate: _.clamp(state.refreshRate * 2, 1, 16)}))
+          this.props.setStateProxy.setState((state, props) => ({
+            refreshRate: _.clamp(state.refreshRate * 2, refreshRateMin, refreshRateMax),
+          }))
         }}>
           <Feather name='plus' style={styles.buttonIcon} />
         </RectButton>
@@ -560,7 +589,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         {!this.props.doneRecording ? (
           // Toggle follow
           <RectButton style={styles.button} onPress={() => {
-            this.props.parentSetState((state, props) => ({follow: !state.follow}))
+            this.props.setStateProxy.setState((state, props) => ({follow: !state.follow}))
           }}>
             <Feather name='chevrons-down' style={[styles.buttonIcon, {
               color: this.props.follow ? iOSColors.blue : iOSColors.black,
@@ -569,7 +598,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         ) : (
           // Toggle denoised
           <RectButton style={styles.button} onPress={() => {
-            this.props.parentSetState((state, props) => ({denoised: !state.denoised}))
+            this.props.setStateProxy.setState((state, props) => ({denoised: !state.denoised}))
           }}>
             {/* 'eye' / 'zap' / 'sun' */}
             <Feather name='eye' style={[styles.buttonIcon, {

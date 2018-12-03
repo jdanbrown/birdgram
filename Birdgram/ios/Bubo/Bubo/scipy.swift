@@ -38,9 +38,10 @@ public enum scipy {
       precondition(return_onesided == true,        "Hardcoded impl")
       precondition(scaling         == "spectrum",  "Hardcoded impl")
       precondition(mode            == "magnitude", "Hardcoded impl")
+      precondition(noverlap < nperseg, "noverlap[\(noverlap)] < nperseg[\(nperseg)]")
       // let timer = Timer() // XXX Perf
 
-      let hop_length = noverlap
+      let hop_length = nperseg - noverlap
       let win        = hann(nperseg, sym: false)
       let f          = Int(nperseg / 2) + 1
       let t          = xs.count < nperseg ? 0 : (xs.count - nperseg) / hop_length + 1 // Round down b/c no padding

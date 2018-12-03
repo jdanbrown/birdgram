@@ -9,17 +9,17 @@ public class Features {
   private init() {} // (Disallow instances to enforce class singleton via statics)
 
   // Like Features config
-  static let sample_rate   = 22050
-  static let f_bins        = 40
-  static let hop_length    = 256 // (12ms @ 22050hz)
-  static let frame_length  = 512 // (23ms @ 22050hz)
-  static let frame_window  = "hann"
-  // static let patch_length  = 4   // (46ms @ 22050hz) // For model predict
+  public static let sample_rate   = 22050
+  public static let f_bins        = 40
+  public static let hop_length    = 256 // (12ms @ 22050hz)
+  public static let frame_length  = 512 // (23ms @ 22050hz)
+  public static let frame_window  = "hann"
+  // public static let patch_length  = 4   // (46ms @ 22050hz) // For model predict
   // Like Features._spectro_nocache
-  static let nperseg       = frame_length
-  static let overlap       = 1 - Double(hop_length) / Double(frame_length)
-  static let window        = frame_window
-  static let n_mels        = f_bins
+  public static let nperseg       = frame_length
+  public static let overlap       = 1 - Double(hop_length) / Double(frame_length)
+  public static let window        = frame_window
+  public static let n_mels        = f_bins
 
   // Extracted as constant to remove bottleneck in spectro()
   static let mel_basis = librosa.filters.mel(sample_rate, n_fft: nperseg, n_mels: n_mels)
@@ -88,13 +88,13 @@ public class Features {
 
     // XXX Debug
     _Log.debug(String(format: "Features.spectro: S: %@", [
-      "xs.count": xs.count,
-      "xs": xs.slice(to: 10),
-      "xs.quantiles": Stats.quantiles(xs, bins: 5),
-      "S.shape": S.shape,
-      "S": S.grid.slice(to: 10),
-      "S.quantiles": Stats.quantiles(S.grid, bins: 5),
-    ]))
+      "xs.count[\(xs.count)]",
+      "xs[\(xs.slice(to: 10))]",
+      // "xs.quantiles[\(Stats.quantiles(xs, bins: 5))]", // XXX Slow (sorting)
+      "S.shape[\(S.shape)]",
+      "S[\(S.grid.slice(to: 10))]",
+      // "S.quantiles[\(Stats.quantiles(S.grid, bins: 5))]", // XXX Slow (sorting)
+    ].joined(separator: ", ")))
 
     return (_fs, _ts, S)
 

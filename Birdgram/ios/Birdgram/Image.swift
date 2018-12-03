@@ -3,10 +3,10 @@ import Foundation
 import Bubo // Before Bubo_Pods imports
 import Surge
 
-// Assumes X values are in [0,1), for mapping to color scales
 public func matrixToImageFile(
   _ path: String,
   _ X: Matrix<Float>,
+  range: Interval<Float>,
   colors: Colormap,
   bottomUp: Bool? = nil
 ) throws -> (
@@ -17,16 +17,17 @@ public func matrixToImageFile(
   return try matrixToImageFile(
     path,
     X,
+    range: range,
     colors: colors,
     bottomUp: bottomUp,
     timer: Timer(), debugTimes: &debugTimes // XXX Debug (For Features.spectro)
   )
 }
 
-// Assumes X values are in [0,1), for mapping to color scales
 public func matrixToImageFile(
   _ path: String,
   _ X: Matrix<Float>,
+  range: Interval<Float>,
   colors: Colormap,
   bottomUp: Bool? = nil,
   timer: Bubo.Timer, debugTimes: inout Array<(String, Double)> // XXX Debug (for Features.spectro)
@@ -41,9 +42,9 @@ public func matrixToImageFile(
   let height       = P.rows
   let width        = P.columns
   let pxF: [Float] = P.grid // .grid is row major
-  let pxI: [UInt8] = pxF.map     { x in UInt8((x * 256).clamped(0, 255)) }
+  let pxI: [UInt8] = pxF.map     { x in UInt8((range.norm(x) * 256).clamped(0, 255)) } // Infinitesimal edge case: force 1->255 i/o 256
   var pxB: [UInt8] = pxI.flatMap { i in colors[Int(i)].bytes }
-  Log.debug(String(format: "Spectro.onAudioData: pxB[%d]: %@", pxB.count, show(pxB.slice(to: 20)))) // XXX Debug
+  // Log.debug(String(format: "Image.matrixToImageFile: pxB[%d]: %@", pxB.count, show(pxB.slice(to: 20)))) // XXX Debug
   debugTimes.append(("pxB", timer.lap()))
 
   // Pixels -> .png file

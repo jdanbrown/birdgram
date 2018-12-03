@@ -153,15 +153,15 @@ class RNSpectro: RCTEventEmitter {
     resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
     if let _proxy = proxy {
-      withPromise(resolve, reject, "renderAudioPathToSpectroPath") { () -> Props in
+      withPromise(resolve, reject, "renderAudioPathToSpectroPath") { () -> Props? in
         let ret = try _proxy.renderAudioPathToSpectroPath(
           audioPath,
           spectroPath,
           denoise: self.getProp(opts, "denoise")
         )
-        return [
-          "width":  ret.width,
-          "height": ret.height,
+        return ret == nil ? nil : [
+          "width":  ret!.width,
+          "height": ret!.height,
         ]
       }
     }
@@ -261,8 +261,23 @@ class Spectro {
   var buffers:           [AudioQueueBufferRef] = []
   var audioFile:         AudioFileID?          = nil
   var numPacketsWritten: UInt32                = 0
+  var samplesBuffer:     [Float]               = [] // Pad audio chunks to ≥nperseg with past audio, else gaps in streaming spectro stft
   var spectroRange:      Interval<Float>       = Spectro.zeroSpectroRange
   static let zeroSpectroRange = Interval.bottom // Unit for union
+
+  // // XXX(measure_lag)
+  // //  - Docs:
+  // //    - https://developer.apple.com/documentation/dispatch
+  // //  - Helpful examples:
+  // //    - https://stackoverflow.com/questions/37805885/how-to-create-dispatch-queue-in-swift-3
+  // //    - https://www.raywenderlich.com/5370-grand-central-dispatch-tutorial-for-swift-4-part-1-2
+  // let heavyQueue = DispatchQueue(
+  //   label: "app.birdgram.Birdgram.Spectro.heavyQueue",
+  //   attributes: [] // Serial queue (i/o .concurrent)
+  //   // qos: .default,
+  //   // autoreleaseFrequency: .default,
+  //   // target: .default,
+  // )
 
   // TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
   var outputPath: String { get { return "\(documentsDirectory())/\(outputFile)" } }
@@ -322,6 +337,7 @@ class Spectro {
     // Reset audio file state
     audioFile         = nil
     numPacketsWritten = 0
+    samplesBuffer     = []
     spectroRange      = Spectro.zeroSpectroRange
 
     // Create audio file to record to
@@ -352,9 +368,9 @@ class Spectro {
         return selfTyped.onAudioData(inAQ, inBuffer, inStartTime, inNumberPacketDescriptions, inPacketDescs)
       },
       UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()),
-      nil,
-      nil,
-      0, // Must be 0 (reserved)
+      nil, // inCallbackRunLoop:     nil = run callback on one of the audio queue's internal threads
+      nil, // inCallbackRunLoopMode: nil = kCFRunLoopCommonModes
+      0,   // inFlags: Must be 0 (reserved)
       &queue
     ))
     let _queue = queue!
@@ -422,25 +438,25 @@ class Spectro {
     _ numPackets:   UInt32,
     _ pPacketDescs: UnsafePointer<AudioStreamPacketDescription>? // nil for uncompressed formats
   ) -> Void {
+    let timer = Timer()
+    var debugTimes: Array<(String, Double)> = [] // (Array of tuples b/c Dictionary is ordered by key i/o insertion)
+
+    Log.info(String(format: "Spectro.onAudioData: %@", show([
+      // "queue": queue,         // For debug
+      // "audioFile": audioFile, // For debug
+      "inQueue": inQueue,
+      "inBuffer": inBuffer,
+      // "startTime": pStartTime.pointee, // Lots of info I don't care about
+      "numPackets": numPackets,
+      "pPacketDescs": pPacketDescs,
+    ])))
+
+    // Noop unless recording
+    guard queue != nil               else { return }
+    guard queue == inQueue           else { return } // This would be a stop/start race, in which case audioFile is wrong
+    guard let _audioFile = audioFile else { return } // Should be defined if queue is, but let's not risk races
+
     do {
-
-      let timer = Timer()
-      var debugTimes: Array<(String, Double)> = [] // (Array of tuples b/c Dictionary is ordered by key i/o insertion)
-
-      Log.info(String(format: "Spectro.onAudioData: %@", show([
-        // "self.queue": self.queue,         // For debug
-        // "self.audioFile": self.audioFile, // For debug
-        "inQueue": inQueue,
-        "inBuffer": inBuffer,
-        // "startTime": pStartTime.pointee, // Lots of info I don't care about
-        "numPackets": numPackets,
-        "pPacketDescs": pPacketDescs,
-      ])))
-
-      // Noop unless recording
-      guard self.queue != nil               else { return }
-      guard self.queue == inQueue           else { return } // This would be a stop/start race, in which case audioFile is wrong
-      guard let _audioFile = self.audioFile else { return } // Should be defined if queue is, but let's not risk races
 
       // Append to audioFile
       if numPackets > 0 {
@@ -457,15 +473,6 @@ class Spectro {
         numPacketsWritten += ioNumPackets
       }
       debugTimes.append(("file", timer.lap()))
-
-      // XXX [Old] js audio->spectro
-      // Send audio samples to js (via event)
-      // let bytes: UnsafeMutableRawPointer = inBuffer.pointee.mAudioData
-      // let base64: String = NSData(
-      //   bytes: bytes,
-      //   length: Int(inBuffer.pointee.mAudioDataByteSize)
-      // ).base64EncodedString()
-      // emitter.sendEvent(withName: "audioChunk", body: base64)
 
       // Read samples from inBuffer->mAudioData
       //  - 16-bit (because mBitsPerChannel)
@@ -484,54 +491,83 @@ class Spectro {
         )).map {
           Float($0)
         }
-        Log.debug(String(format: "Spectro.onAudioData: samples[%d]: %@", // XXX Debug
-          samples.count, show(samples.slice(to: 20), prec: 0)
-        ))
+        // Log.debug(String(format: "Spectro.onAudioData: samples[%d]: %@", // XXX Debug
+        //   samples.count, show(samples.slice(to: 20), prec: 0)
+        // ))
         debugTimes.append(("samples", timer.lap()))
 
-        // Denoise doesn't make sense for streaming chunks in isolation:
-        //  - Median filtering only makes sense when Δt is long enough for variation, which small chunks don't have
-        //  - RMS norm would dampen variance for loud chunks and expand variance for quiet chunks, which is undesirable
-        //  - There's probably a streaming denoise approach we could devise, but would it even be helpful to the user? [Probably not]
-        let denoise = false
-
-        // S: stft(samples)
-        //  - (fs/ts are mocked as [] since we don't use them yet)
-        let (_, _, S) = Features.spectro(
-          samples,
-          sample_rate: Int(format.mSampleRate),
-          denoise: denoise
-        )
-        debugTimes.append(("S", timer.lap()))
-
-        // Accumulate lo/hi over time of each recording
-        //  - A very simple adaptive approach to lo/hi [think carefully about user benefit vs. dev cost before complexifying this]
-        spectroRange = spectroRange | Interval(min(S.grid), max(S.grid))
-        let (lo, hi) = (spectroRange.lo, spectroRange.hi)
-        Log.debug(String(format: "Spectro.onAudioData: %@", // XXX Debug
-          "S[\(S.shape)], spectroRange[\(spectroRange)], lo[\(lo)], hi[\(hi)], quantiles[\(Stats.quantiles(S.grid, bins: 3))]"
-        ))
-
-        // Skip empty spectros (e.g. spectrogram returned an Nx0 matrix b/c samples.count < nperseg)
-        if S.isEmpty {
-          Log.info("Spectro.onAudioData: Skipping image for empty spectro: samples[\(samples.count)] -> S[\(S.shape)]")
+        // Pad audio chunks to ≥nperseg with past audio, else gaps in streaming spectro stft
+        //  - [Lots of pencil and paper...]
+        //  - TODO Write tests for this gnar (tested manually)
+        let nperseg      = Features.nperseg
+        let hop_length   = Features.hop_length
+        let _nPreSamples = samplesBuffer.count
+        samplesBuffer    = samplesBuffer + samples
+        if samplesBuffer.count < nperseg {
+          Log.debug(String(format: "Spectro.onAudioData: %@", [
+            "samplesBuffer[\(_nPreSamples)]+samples[\(samples.count)]->\(samplesBuffer.count) -> ",
+            "waiting for ≥nperseg[\(nperseg)]",
+          ].joined()))
         } else {
-          // Spectro -> image file
-          let path = FileManager.default.temporaryDirectory.path / "\(DispatchTime.now().uptimeNanoseconds).png"
-          let (width, height) = try matrixToImageFile(
-            path,
-            S.vect { $0.map { x in (x.clamped(lo, hi) - lo) / (hi - lo) }},
-            colors: Colors.magma_r,
-            timer: timer, debugTimes: &debugTimes // XXX Debug
+          let ready        = samplesBuffer.count / hop_length * hop_length
+          let next         = (samplesBuffer.count / hop_length * hop_length) - nperseg + hop_length
+          let samplesReady = Array(samplesBuffer.slice(to: ready))
+          let _nPreNext    = samplesBuffer.count
+          samplesBuffer    = Array(samplesBuffer.slice(from: next))
+          Log.debug(String(format: "Spectro.onAudioData: %@", [
+            "samplesBuffer[\(_nPreSamples)]+samples[\(samples.count)]->\(_nPreNext) -> ",
+            "(ready[\(ready)], next[\(next)]) -> ",
+            "samplesBuffer[\(_nPreNext)-\(next)->\(samplesBuffer.count)] (",
+            "nperseg[\(nperseg)], hop_length[\(hop_length)]",
+            ")",
+          ].joined()))
+
+          // S: spectro(samples)
+          //  - (fs/ts are mocked as [] since we don't use them yet)
+          let (_, _, S) = Features.spectro(
+            samplesReady,
+            sample_rate: Int(format.mSampleRate),
+            // Denoise doesn't make sense for streaming chunks in isolation:
+            //  - Median filtering only makes sense when Δt is long enough for variation, which small chunks don't have
+            //  - RMS norm would dampen variance for loud chunks and expand variance for quiet chunks, which is undesirable
+            //  - We could probably devise a streaming denoise approach, but would it even be helpful to the user? [Probably not]
+            denoise: false
           )
-          // Image file path -> js (via rn event)
-          emitter.sendEvent(withName: "spectroFilePath", body: [
-            "spectroFilePath": path as Any,
-            "width": width,
-            "height": height,
-            "nSamples": samples.count,
-            "debugTimes": Array(debugTimes.map { (k, v) in ["k": k, "v": v] }),
-          ] as Props)
+          debugTimes.append(("S", timer.lap()))
+
+          // Accumulate spectroRange over time from each recorded chunk
+          //  - This is the simplest adaptive approach [think carefully about user benefit vs. dev cost before complexifying this]
+          spectroRange = spectroRange | Interval(min(S.grid), max(S.grid))
+          Log.debug(String(format: "Spectro.onAudioData: %@", [
+            "S[\(S.shape)]",
+            "spectroRange[\(spectroRange)]",
+            // "quantiles[\(Stats.quantiles(S.grid, bins: 3))]" // XXX Slow (sorting)
+          ].joined(separator: ", ")))
+
+          // Skip empty spectros (e.g. spectrogram returned an Nx0 matrix b/c samples.count < nperseg)
+          //  - (This might not be necessary anymore since we added samplesBuffer, but let's keep it for safety)
+          if S.isEmpty {
+            Log.info("Spectro.onAudioData: Skipping image for empty spectro: samples[\(samples.count)] -> S[\(S.shape)]")
+          } else {
+            // Spectro -> image file
+            let path = FileManager.default.temporaryDirectory.path / "\(DispatchTime.now().uptimeNanoseconds).png"
+            let (width, height) = try matrixToImageFile(
+              path,
+              S,
+              range: spectroRange,
+              colors: Colors.magma_r,
+              timer: timer, debugTimes: &debugTimes // XXX Debug
+            )
+            // Image file path -> js (via rn event)
+            emitter.sendEvent(withName: "spectroFilePath", body: [
+              "spectroFilePath": path as Any,
+              "width": width,
+              "height": height,
+              "nSamples": samples.count,
+              "debugTimes": Array(debugTimes.map { (k, v) in ["k": k, "v": v] }),
+            ] as Props)
+          }
+
         }
 
       }
@@ -568,7 +604,7 @@ class Spectro {
   ) throws -> (
     width: Int,
     height: Int
-  ) {
+  )? {
     Log.info(String(format: "Spectro.renderAudioPathToSpectroPath: %@", [
       "audioPath": audioPath,
       "spectroPath": spectroPath,
@@ -581,12 +617,17 @@ class Spectro {
     // Read samples from file
     let file = try AKAudioFile(forReading: URL(fileURLWithPath: audioPath))
     guard let floatChannelData = file.floatChannelData else {
-      throw AppError("No floatChannelData in file[\(file.url)]")
+      throw AppError("Null floatChannelData in file[\(file.url)]")
     }
     let Samples = Matrix(floatChannelData)
-    let samples = transpose(Samples).map { mean($0) } // Convert to 1ch if >1ch
+    // Log.debug("Spectro.renderAudioPathToSpectroPath: Samples.shape[\(Samples.shape)]") // XXX Debug
+    let samples: [Float] = (Samples.shape.0 == 1
+      ? Samples.grid                        // 1ch -> 1ch
+      : transpose(Samples).map { mean($0) } // 2ch -> 1ch [NOTE Slow-ish: record produces 1ch, but plotting xc recs will produce 2ch]
+    )
     if samples.count == 0 {
-      throw AppError("No samples in file[\(file.url)]")
+      Log.info("Spectro.renderAudioPathToSpectroPath: No samples in file[\(file.url)]")
+      return nil
     }
 
     // S: stft(samples)
@@ -602,12 +643,13 @@ class Spectro {
 
     // Spectro -> image file
     if S.isEmpty {
-      throw AppError("Empty spectro: samples[\(samples.count)] -> S[\(S.shape)] (probably samples.count < nperseg)")
+      Log.info("Spectro.renderAudioPathToSpectroPath: Empty spectro: samples[\(samples.count)] -> S[\(S.shape)] (e.g. <nperseg)")
+      return nil
     }
-    let (lo, hi) = (min(S.grid), max(S.grid)) // HACK Is min/max a good behavior in general? Works well for doneRecording, at least
     let dims = try matrixToImageFile(
       spectroPath,
-      S.vect { $0.map { x in (x.clamped(lo, hi) - lo) / (hi - lo) }},
+      S,
+      range: Interval(min(S.grid), max(S.grid)), // [Is min/max a robust behavior in general? Works well for doneRecording, at least]
       colors: colors
     )
 

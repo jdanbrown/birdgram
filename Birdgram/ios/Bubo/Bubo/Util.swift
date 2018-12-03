@@ -106,8 +106,15 @@ public struct Interval<X: Comparable>: CustomStringConvertible {
 }
 
 extension Interval where X == Float {
+
+  // Normalize [lo,hi] -> [0,1] (clamp values out of [lo,hi])
+  public func norm(_ x: Float) -> Float {
+    return (x.clamped(lo, hi) - lo) / (hi - lo)
+  }
+
   public static let bottom = Interval(Float.infinity,  -Float.infinity) // Unit for union, zero for intersect
   public static let top    = Interval(-Float.infinity, Float.infinity)  // Unit for intersect, zero for union
+
 }
 
 extension Comparable {

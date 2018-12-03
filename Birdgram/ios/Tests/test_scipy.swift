@@ -15,6 +15,7 @@ func mat(_ name: String, _ X: Matrix<Float>) {
 
 //
 // scipy.signal.spectrogram
+//  - TODO Add a test for noverlap != nperseg//2 [already found and fixed that bug once]
 //
 
 do {

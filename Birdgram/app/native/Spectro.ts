@@ -41,7 +41,7 @@ export const Spectro = {
     opts: {
       denoise?: boolean,
     },
-  ): Promise<{
+  ): Promise<null | {
     width: number,
     height: number,
   }> => RNSpectro.renderAudioPathToSpectroPath(
