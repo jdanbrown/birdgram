@@ -305,13 +305,13 @@ export class RecordScreen extends Component<Props, State> {
             recordingState: {this.state.recordingState}
           </this.DebugText>
           <this.DebugText>
-            refreshRate: {this.props.refreshRate} ({round(this.nSamplesPerImage, 1)} samples/img / {this.props.sampleRate} Hz)
+            refreshRate: {round(this._renderRate.value, 2)} / {this.props.refreshRate}
+          </this.DebugText>
+          <this.DebugText>
+            sampleRate: {this.props.sampleRate} Hz (/ {this.props.refreshRate} = {round(this.nSamplesPerImage, 1)} samples/img)
           </this.DebugText>
           <this.DebugText>
             spectroImageLimit: {this.props.spectroImageLimit}
-          </this.DebugText>
-          <this.DebugText>
-            _renderRate: {round(this._renderRate.value, 3)}
           </this.DebugText>
           <this.DebugText>
             audio: {}
