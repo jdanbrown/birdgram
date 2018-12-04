@@ -22,7 +22,7 @@ import { TabRoutes, TabLink } from './components/TabRoutes';
 import * as Colors from './colors';
 import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
-import { log } from './log';
+import { Log, rich } from './log';
 import { Spectro } from './native/Spectro';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
 import {
@@ -37,6 +37,8 @@ import {
   deepEqual, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
 } from './utils';
 
+const log = new Log('App');
+
 // // XXX Debug: log bridge msgs
 // //  - https://blog.callstack.io/reactnative-how-to-check-what-passes-through-your-bridge-e435571ffd85
 // //  - https://github.com/jondot/rn-snoopy
@@ -45,7 +47,7 @@ import {
 // MessageQueue.spy((x: any) => {
 //   const msg       = `${json(x)}`;
 //   const taggedMsg = `[bridge] ${msg}`;
-//   log.debug(taggedMsg);
+//   log.debug('', taggedMsg);
 //   if (!msg.includes('[bridge]')) Spectro.debugPrintNative(taggedMsg); // Avoid infinite recursion
 // });
 
@@ -132,7 +134,7 @@ export default class App extends PureComponent<Props, State> {
   }
 
   componentDidMount = async () => {
-    log.info(`${this.constructor.name}.componentDidMount`);
+    log.info('componentDidMount');
 
     // Load/create histories
     //  - Save histories on change
@@ -176,13 +178,13 @@ export default class App extends PureComponent<Props, State> {
   }
 
   componentDidUpdate = (prevProps: Props, prevState: State) => {
-    log.info('App.componentDidUpdate', shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
     global.histories = this.state.histories; // XXX Debug
     global.settings = this.state.settings; // XXX Debug
   }
 
   render = () => {
-    log.info(`${this.constructor.name}.render`);
+    log.info('render');
     return (
 
       // Avoid rounded corners and camera notches (ios ≥11)
@@ -339,14 +341,14 @@ export default class App extends PureComponent<Props, State> {
   }
 
   onLayout = () => {
-    // log.info('App.onLayout');
+    // log.info('onLayout');
     this.setState({
       orientation: getOrientation(),
     });
   }
 
   go = (tab: TabName, path: string) => {
-    log.info('App.go', yaml({tab, path}));
+    log.info('go', {tab, path});
     if (tab) {
       // Show tab
       this.state.histories!.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)

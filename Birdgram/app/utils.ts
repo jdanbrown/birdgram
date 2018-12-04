@@ -324,6 +324,15 @@ export function shallowDiffPropsState<Props, State>(prevProps: Props, prevState:
 // react-native
 //
 
+// Like the RCT_IF_DEV() objc macro, to distinguish Xcode Debug vs. Release build
+//  - Structured as a higher-order function for js
+//  - Example usage: `f = __F_IF_DEV__(x => ...)`
+//  - See log.ts for examples
+export function __F_IF_DEV__<F extends (...args: any[]) => void>(f: F): F {
+  const noop = ((...args: any[]) => {}) as F; // HACK How to typecheck this properly?
+  return __DEV__ ? f : noop;
+}
+
 export type Point = {
   x: number;
   y: number;

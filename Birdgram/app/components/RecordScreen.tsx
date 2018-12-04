@@ -28,7 +28,7 @@ import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-par
 import nj from '../../third-party/numjs/dist/numjs.min';
 import * as Colors from '../colors';
 import { SourceId } from '../datatypes';
-import { log, puts } from '../log';
+import { Log, puts, rich } from '../log';
 import { Spectro, SpectroStats } from '../native/Spectro';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
@@ -39,6 +39,8 @@ import {
   chance, deepEqual, Dim, ExpWeightedMean, ExpWeightedRate, finallyAsync, global, into, json, match, matchNil, matchNull, matchUndefined,
   pretty, round, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty,
 } from '../utils';
+
+const log = new Log('RecordScreen');
 
 global.Spectro = Spectro; // XXX Debug
 
@@ -166,14 +168,14 @@ export class RecordScreen extends Component<Props, State> {
   _renderRate = new ExpWeightedRate(.1);
 
   componentDidMount = () => {
-    log.info(`${this.constructor.name}.componentDidMount`);
+    log.info('componentDidMount');
     global.RecordScreen = this; // XXX Debug
 
     // Request mic permissions
     Permissions.request('microphone').then(status => {
       // NOTE Buggy on ios simulator [https://github.com/yonahforst/react-native-permissions/issues/58]
       //  - Recording works, but permissions always return 'undetermined'
-      log.info(`${this.constructor.name}.componentDidMount Permissions.request: microphone`, status);
+      log.info('componentDidMount: Permissions.request: microphone', {status});
     });
 
     this._listeners.push(Spectro.onSpectroFilePath(this.onSpectroFilePath));
@@ -181,7 +183,7 @@ export class RecordScreen extends Component<Props, State> {
   }
 
   componentWillUnmount = () => {
-    log.info(`${this.constructor.name}.componentWillUnmount`);
+    log.info('componentWillUnmount');
     // Unregisterd callbacks
     this._listeners.forEach(listener => listener.remove());
   }
@@ -194,7 +196,7 @@ export class RecordScreen extends Component<Props, State> {
     if (this.state.recordingState === RecordingState.Recording) {
       const lag = this.lag; // (Observe once to avoid races)
       if (lag !== null && lag > 0) {
-        // log.debug('RecordScreen.shouldComponentUpdate=false', {lag}); // XXX Debug
+        // log.debug('shouldComponentUpdate', '->false', {lag}); // XXX Debug
         this.updateNativeStats();
         return false;
       }
@@ -207,8 +209,7 @@ export class RecordScreen extends Component<Props, State> {
 
   // Component updates in tight loop (spectro refresh)
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    // XXX bottleneck at refreshRate=16
-    // log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
 
     // If we're updating then shouldComponentUpdate didn't call updateNativeStats, so we should do it instead
     //  - Avoid calling updateNativeStats on every call to shouldComponentUpdate since that could be many more
@@ -224,7 +225,7 @@ export class RecordScreen extends Component<Props, State> {
 
   // TODO Bigger button hitbox: https://stackoverflow.com/questions/50065928/change-button-font-size-on-react-native
   render = () => {
-    log.debug(`${this.constructor.name}.render`, json({lag: this.lag}));
+    log.info('render', {lag: this.lag});
     this._renderRate.mark();
     return (
       <View style={[
@@ -246,11 +247,11 @@ export class RecordScreen extends Component<Props, State> {
             alignItems: 'flex-start',
           }}
           onScrollBeginDrag={() => {
-            log.debug('onScrollBeginDrag');
+            log.debug('render: onScrollBeginDrag');
             this.setState({follow: false});
           }}
           onContentSizeChange={(width, height) => {
-            log.debug('onContentSizeChange', json({width, height}));
+            log.debug('render: onContentSizeChange', {width, height});
             if (this.state.follow) {
               this.scrollToEnd();
             }
@@ -355,11 +356,11 @@ export class RecordScreen extends Component<Props, State> {
   startRecording = async () => {
     try {
       if (this.state.recordingState === RecordingState.Stopped) {
-        log.info('RecordScreen.startRecording', yaml({
+        log.info('startRecording', {
           sampleRate: this.props.sampleRate,
           channels: this.props.channels,
           bitsPerSample: this.props.bitsPerSample,
-        }));
+        });
 
         // Reset recordingState
         this.setState({
@@ -384,7 +385,7 @@ export class RecordScreen extends Component<Props, State> {
 
       }
     } catch (e) {
-      log.error('Error in startRecording', e);
+      log.error('startRecording', e);
     }
   }
 
@@ -392,7 +393,7 @@ export class RecordScreen extends Component<Props, State> {
   stopRecording = async () => {
     try {
       if (this.state.recordingState === RecordingState.Recording) {
-        log.info('RecordScreen.stopRecording');
+        log.info('stopRecording');
 
         // Reset state (1/2)
         this.setState({
@@ -401,7 +402,7 @@ export class RecordScreen extends Component<Props, State> {
         this._nativeStats = null; // Else shouldComponentUpdate gets stuck with lag>0
         const audioPath = await Spectro.stop();
 
-        log.info(`RecordScreen.stopRecording: Got audioPath[${audioPath}]`);
+        log.info('stopRecording: Got', {audioPath});
         var doneRecording: null | DoneRecording;
         if (audioPath === null) {
           doneRecording = null;
@@ -421,7 +422,7 @@ export class RecordScreen extends Component<Props, State> {
           // TODO Add tap to play for recorded rec
           // // XXX Debug: Play rec
           // const sound = await Sound.newAsync(audioPath);
-          // log.debug('XXX Playing rec', json({duration: sound.getDuration(), filename: sound.getFilename()}))
+          // log.debug('stopRecording: XXX Playing rec', {duration: sound.getDuration(), filename: sound.getFilename()})
           // Sound.setActive(true);
           // Sound.setCategory(
           //   'PlayAndRecord',
@@ -446,7 +447,7 @@ export class RecordScreen extends Component<Props, State> {
 
       }
     } catch (e) {
-      log.error('Error in stopRecording', e);
+      log.error('stopRecording', e);
     }
   }
 
@@ -458,16 +459,16 @@ export class RecordScreen extends Component<Props, State> {
     debugTimes: DebugTimes,
   }) => {
     if (this.state.recordingState !== RecordingState.Recording) {
-      log.info('RecordScreen.onSpectroFilePath: skipping', json({recordingState: this.state.recordingState}));
+      log.info('onSpectroFilePath: Skipping', {recordingState: this.state.recordingState});
     } else {
-      log.info('RecordScreen.onSpectroFilePath', json({
+      log.info('onSpectroFilePath', {
         spectroFilePath: _.defaultTo(spectroFilePath, null),
         size: !spectroFilePath ? undefined : (await fs.stat(spectroFilePath)).size,
         width,
         height,
         nSamples,
         debugTimes,
-      }));
+      });
       const spectroImage: SpectroImage = {
         source: !spectroFilePath ? {} : {uri: `file://${spectroFilePath}`},
         width,
@@ -526,23 +527,25 @@ export interface SpectroImageCompProps {
 export interface SpectroImageCompState {}
 export class SpectroImageComp extends PureComponent<SpectroImageCompProps, SpectroImageCompState> {
 
+  log = new Log('SpectroImageComp');
+
   static defaultProps = {};
   state = {};
 
   componentDidMount = async () => {
-    // log.info(`${this.constructor.name}.componentDidMount`);
+    // this.log.info('componentDidMount');
   }
 
   componentWillUnmount = async () => {
-    // log.info(`${this.constructor.name}.componentWillUnmount`);
+    // this.log.info('componentWillUnmount');
   }
 
   componentDidUpdate = async (prevProps: SpectroImageCompProps, prevState: SpectroImageCompState) => {
-    // log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    // this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   }
 
   render = () => {
-    // log.info(`${this.constructor.name}.render`);
+    // this.log.info('render');
     return (
       <View>
         <FastImage
@@ -605,23 +608,25 @@ export interface ControlsBarProps {
 export interface ControlsBarState {}
 export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarState> {
 
+  log = new Log('ControlsBarState');
+
   static defaultProps = {};
   state = {};
 
   componentDidMount = async () => {
-    log.info(`${this.constructor.name}.componentDidMount`);
+    this.log.info('componentDidMount');
   }
 
   componentWillUnmount = async () => {
-    log.info(`${this.constructor.name}.componentWillUnmount`);
+    this.log.info('componentWillUnmount');
   }
 
   componentDidUpdate = async (prevProps: ControlsBarProps, prevState: ControlsBarState) => {
-    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   }
 
   render = () => {
-    log.info(`${this.constructor.name}.render`);
+    this.log.info('render');
     return (
       <View style={{
         flexDirection: 'row',

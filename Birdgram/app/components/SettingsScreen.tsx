@@ -8,11 +8,13 @@ import SettingsList from 'react-native-settings-list';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 
-import { log } from '../log';
+import { Log, rich } from '../log';
 import { DEFAULTS, SettingsWrites } from '../settings';
 import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
 import { global, json, pretty, shallowDiffPropsState, yaml, yamlPretty } from '../utils';
+
+const log = new Log('SettingsScreen');
 
 export const refreshRateMin = 1;
 export const refreshRateMax = 64;
@@ -44,20 +46,20 @@ export class SettingsScreen extends PureComponent<Props, State> {
   }
 
   componentDidMount = async () => {
-    log.info(`${this.constructor.name}.componentDidMount`);
+    log.info('componentDidMount');
   }
 
   componentWillUnmount = async () => {
-    log.info(`${this.constructor.name}.componentWillUnmount`);
+    log.info('componentWillUnmount');
   }
 
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   }
 
   // TODO https://github.com/evetstech/react-native-settings-list#a-more-realistic-example
   render = () => {
-    log.info(`${this.constructor.name}.render`);
+    log.info('render');
     return (
       <View style={{
         flex: 1,

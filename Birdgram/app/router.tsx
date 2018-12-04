@@ -5,9 +5,11 @@ import { Alert, AsyncStorage } from 'react-native';
 import { MemoryRouterProps } from 'react-router';
 import { Route, Router } from 'react-router-native';
 
-import { log } from './log';
+import { Log, rich } from './log';
 import { Settings } from './settings';
 import { global, json, shallowDiffPropsState, yaml } from './utils';
+
+const log = new Log('router');
 
 //
 // Utils
@@ -74,7 +76,7 @@ function prefixKey(key: string): string {
 };
 
 export async function saveHistories(histories: Histories): Promise<void> {
-  log.debug('router.saveHistories', histories);
+  log.debug('saveHistories', rich(histories));
   await AsyncStorage.setItem(prefixKey('histories'), JSON.stringify(histories));
 }
 
@@ -93,7 +95,7 @@ export async function loadHistories(): Promise<null | Histories> {
       // getUserConfirmation: ... // Use default
     })) as unknown as Histories // HACK Work around bunk type (Dictionary<X> instead of Record<K,V>)
   );
-  // log.debug('router.loadHistories', histories);
+  // log.debug('loadHistories', rich(histories));
   return histories;
 }
 
@@ -132,16 +134,18 @@ export class RouterWithHistory extends PureComponent<RouterWithHistoryProps, Rou
     }
   };
 
+  log = new Log(this.constructor.name);
+
   componentDidMount = async () => {
-    log.info(`${this.constructor.name}.componentDidMount`);
+    this.log.info('componentDidMount');
   }
 
   componentWillUnmount = async () => {
-    log.info(`${this.constructor.name}.componentWillUnmount`);
+    this.log.info('componentWillUnmount');
   }
 
   componentDidUpdate = async (prevProps: RouterWithHistoryProps, prevState: RouterWithHistoryState) => {
-    // log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    // this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   }
 
   // Like MemoryRouter

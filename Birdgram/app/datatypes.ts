@@ -119,7 +119,7 @@ export const Rec = {
 
 import { matchPath } from 'react-router-native';
 
-import { log } from './log';
+import { log, rich } from './log';
 
 export type SearchPathParams =
   | SearchPathParamsNone

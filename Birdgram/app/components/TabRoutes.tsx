@@ -8,11 +8,13 @@ import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
 import Feather from 'react-native-vector-icons/Feather';
 import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-router-native';
 
-import { log, puts } from '../log';
+import { Log, puts, rich } from '../log';
 import { getOrientation, matchOrientation, Orientation } from '../orientation';
 import { Histories, HistoryConsumer, ObserveHistory, RouterWithHistory, TabName } from '../router';
 import { StyleSheet } from '../stylesheet';
 import { json, pretty, shallowDiffPropsState, Style } from '../utils';
+
+const log = new Log('TabRoutes');
 
 //
 // TabRoutes
@@ -64,19 +66,19 @@ export class TabRoutes extends PureComponent<TabRoutesProps, TabRoutesState> {
   };
 
   componentDidMount = async () => {
-    log.info(`${this.constructor.name}.componentDidMount`);
+    log.info('componentDidMount');
   }
 
   componentWillUnmount = async () => {
-    log.info(`${this.constructor.name}.componentWillUnmount`);
+    log.info('componentWillUnmount');
   }
 
   componentDidUpdate = async (prevProps: TabRoutesProps, prevState: TabRoutesState) => {
-    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   }
 
   render = () => {
-    log.info(`${this.constructor.name}.render`);
+    log.info('render');
     return (
       <Route children={({location}) => (
         <View style={{flex: 1}}>
@@ -192,9 +194,9 @@ export function routeMatchesLocation(route: TabRouteRoute, location: Location): 
   return !!matchPath(location.pathname, route);
 }
 
-// TODO How to fix type to accpet no children?
+// TODO How to fix type to accept no children?
 export function Warn<X>(props: {msg: string, children: X}): X | null {
-  log.warn(props.msg);
+  log.warn('', props.msg);
   return props.children || null;
 }
 

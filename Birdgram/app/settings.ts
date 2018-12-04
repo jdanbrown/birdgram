@@ -4,8 +4,10 @@ import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from './components/MetadataColumns';
-import { log, puts } from './log';
+import { Log, puts, rich } from './log';
 import { json, objectKeysTyped, yaml } from './utils';
+
+const log = new Log('Settings');
 
 // All 5 of these lists of attrs (4 here + constructor) must be kept in sync, else load/setItem/etc. aren't typesafe
 export interface Props {
@@ -154,7 +156,7 @@ export class Settings implements SettingsWrites, Props {
         .value()
       );
     } catch (e) {
-      log.warn(`Settings: Failed to load saved state, using defaults: keys[${KEYS}]`, e);
+      log.warn(`load: Failed to load saved state, using defaults: keys[${KEYS}]`, e);
       saved = {};
     }
 
@@ -170,9 +172,7 @@ export class Settings implements SettingsWrites, Props {
       } else if (!Settings.keyHasType(key, typeof value)) {
         // Warn and use default for saved values with the wrong type (probably a bug)
         //  - TODO Make sure this warning doesn't show in Release builds (e.g. when we change the type for an existing key)
-        log.warn(
-          `Settings: Dropping saved value with invalid type: {${key}: ${value}} has type ${typeof value} != ${TYPES[key]}`,
-        );
+        log.warn(`load: Dropping saved value with invalid type: {${key}: ${value}} has type ${typeof value} != ${TYPES[key]}`);
         return def;
       } else {
         // Else this key:value should be safe to use
@@ -186,13 +186,13 @@ export class Settings implements SettingsWrites, Props {
       ...values,
     );
 
-    log.info('Settings.load', settings);
+    log.info('load', rich(settings));
     return settings;
 
   }
 
   async set<K extends keyof Props>(key: K, value: Props[K]): Promise<void> {
-    log.info('Settings.set', yaml({key, value}));
+    log.info('set', {key, value});
     // Set locally
     //  - Before persist: faster App.state response, async persist (which has high variance runtime)
     this.appSetState(this.withProps({

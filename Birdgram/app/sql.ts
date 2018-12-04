@@ -2,8 +2,10 @@ import _ from 'lodash';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import _SQL from 'sqlstring-sqlite';
 
-import { log } from './log';
+import { Log, rich } from './log';
 import { noawait, Timer, yamlPretty } from './utils';
+
+const log = new Log('sql');
 
 // Re-export sqlstring as SQL + add extra methods
 export const SQL = {..._SQL,
@@ -60,7 +62,7 @@ export function querySql<Row>(
           (tx, {rows}) => {
             const planRows = rows.raw() as QueryPlanRow[];
             const plan = queryPlanFromRows(planRows);
-            log.debug('[querySql] EXPLAIN QUERY PLAN', `time[${timer.time()}s]`,
+            log.debug('querySql: EXPLAIN QUERY PLAN', `time[${timer.time()}s]`,
               '\n' + queryPlanPretty(plan),
             );
             resolve();
@@ -74,7 +76,7 @@ export function querySql<Row>(
   // Run query
   const timer = new Timer();
   const sqlTrunc = !opts.logTruncate ? sql : _.truncate(sql, {length: opts.logTruncate});
-  log.debug('[querySql] Running...', sqlTrunc);
+  log.debug('querySql: Running...', sqlTrunc);
   return onResults => new Promise((resolve, reject) => {
     // TODO How to also `await db.transaction`? (Do we even want to?)
     db.transaction(tx => {
@@ -83,7 +85,7 @@ export function querySql<Row>(
         sql,
         [],
         (tx, {rows, rowsAffected, insertId}) => {
-          log.info('[querySql]', `time[${timer.time()}s]`, `rows[${rows.length}]`, sqlTrunc);
+          log.info(`querySql: time[${timer.time()}s]`, `rows[${rows.length}]`, sqlTrunc);
           resolve(onResults({
             rows: {
               length: rows.length,

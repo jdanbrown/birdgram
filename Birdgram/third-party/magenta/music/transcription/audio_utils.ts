@@ -19,7 +19,7 @@ export function measurePerf(n: number = 10000, r: number = 5) {
     const time = timed(() => {
       melSpectrogram(y, {sampleRate: 22050});
     });
-    log.info({time});
+    log.info('measurePerf', {time});
   });
 }
 

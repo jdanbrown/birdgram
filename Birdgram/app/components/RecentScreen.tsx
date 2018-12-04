@@ -6,12 +6,14 @@ import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { matchSearchPathParams, searchPathParamsFromPath, showSourceId } from '../datatypes';
-import { log } from '../log';
+import { Log, rich } from '../log';
 import { Go, Histories } from '../router';
 import { Settings } from '../settings';
 import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
 import { global, json, pretty, shallowDiffPropsState } from '../utils';
+
+const log = new Log('RecentScreen');
 
 interface Props {
   // App globals
@@ -58,7 +60,7 @@ export class RecentScreen extends PureComponent<Props, State> {
   }
 
   componentDidMount = async () => {
-    log.info(`${this.constructor.name}.componentDidMount`);
+    log.info('componentDidMount');
     global.RecentScreen = this; // XXX Debug
 
     // Capture all locations from histories.search
@@ -75,15 +77,15 @@ export class RecentScreen extends PureComponent<Props, State> {
   }
 
   componentWillUnmount = async () => {
-    log.info(`${this.constructor.name}.componentWillUnmount`);
+    log.info('componentWillUnmount');
   }
 
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   }
 
   render = () => {
-    log.info(`${this.constructor.name}.render`);
+    log.info('render');
     return (
       <View style={{
         flex: 1,

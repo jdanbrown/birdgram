@@ -40,7 +40,7 @@ import {
   ModelsSearch, matchSearchPathParams, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
   searchPathParamsFromPath, SearchRecs, ServerConfig, showSourceId, SourceId,
 } from '../datatypes';
-import { log, puts, tap } from '../log';
+import { Log, puts, rich, tap } from '../log';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
@@ -51,6 +51,8 @@ import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait,
   objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, Timer, yaml, yamlPretty, zipSame,
 } from '../utils';
+
+const log = new Log('SearchScreen');
 
 const sidewaysTextWidth = 14;
 const recEditingButtonWidth = 30;
@@ -208,7 +210,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   //    - First render() happens before this (don't try to avoid it, it's ok)
   //    - Immediate setState() will trigger render() a second time before the first screen draw
   componentDidMount = async () => {
-    log.info(`${this.constructor.name}.componentDidMount`);
+    log.info('componentDidMount');
     global.SearchScreen = this; // XXX Debug
 
     // Configure react-native-sound
@@ -232,7 +234,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     const dbFilename = SearchRecs.dbPath;
     const dbExists = await fs.exists(`${fs.dirs.MainBundleDir}/${dbFilename}`);
     if (!dbExists) {
-      log.error(`DB file not found: ${dbFilename}`);
+      log.error(`componentDidMount: DB file not found: ${dbFilename}`);
     } else {
       const dbLocation = `~/${dbFilename}`; // Relative to app bundle (copied into the bundle root by react-native-asset)
       this.db = await SQLite.openDatabase({
@@ -243,12 +245,12 @@ export class SearchScreen extends PureComponent<Props, State> {
     }
 
     // Query db size (once)
-    log.info(`${this.constructor.name}.componentDidMount: Querying db size`);
+    log.info('componentDidMount: Querying db size');
     await querySql<{totalRecs: number}>(this.db!, `
       select count(*) as totalRecs
       from search_recs
     `)(async results => {
-      log.info('SearchScreen.componentDidMount: state.totalRecs');
+      log.info('componentDidMount: state.totalRecs');
       const [{totalRecs}] = results.rows.raw();
       this.setState({
         totalRecs,
@@ -256,13 +258,13 @@ export class SearchScreen extends PureComponent<Props, State> {
     });
 
     // Query f_preds_* cols (once)
-    log.info(`${this.constructor.name}.componentDidMount: Querying f_preds_* cols`);
+    log.info('componentDidMount: Querying f_preds_* cols');
     await querySql<Rec>(this.db!, `
       select *
       from search_recs
       limit 1
     `)(async results => {
-      log.info('SearchScreen.componentDidMount: state.f_preds_cols');
+      log.info('componentDidMount: state.f_preds_cols');
       const [rec] = results.rows.raw();
       const n = Object.keys(rec).filter(k => k.startsWith('f_preds_')).length;
       // Reconstruct strings from .length to enforce ordering
@@ -273,7 +275,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     });
 
     // Query recs (from navParams.species)
-    // log.debug('componentDidMount -> loadRecsFromQuery');
+    // log.debug('componentDidMount: loadRecsFromQuery()');
     await this.loadRecsFromQuery();
 
   }
@@ -284,7 +286,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   //    - Do unsubscribe listeners / cancel timers (created in componentDidMount)
   //    - Don't setState(), since no more render() will happen for this instance
   componentWillUnmount = async () => {
-    log.info(`${this.constructor.name}.componentWillUnmount`);
+    log.info('componentWillUnmount');
 
     // Tell other apps we're no longer using the audio device
     Sound.setActive(false);
@@ -304,12 +306,12 @@ export class SearchScreen extends PureComponent<Props, State> {
   //    - Do fetch data, conditioned on changed props/state (else update loops)
   //    - Do setState(), conditioned on changed props (else update loops)
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    log.info('SearchScreen.componentDidUpdate', shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
 
     // Reset view state if query changed
     //  - TODO Pass props.key to reset _all_ state? [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
     if (!deepEqual(this.query, this._query(prevProps))) {
-      log.info('SearchScreen.componentDidUpdate: Reset view state');
+      log.info('componentDidUpdate: Reset view state');
       this.setState({
         filterQueryText: undefined,
         excludeSpecies: [],
@@ -330,7 +332,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
     // Query recs (from updated navParams.species)
     //  - (Will noop if deepEqual(query, state.recsQueryShown))
-    // log.debug('componentDidUpdate -> loadRecsFromQuery');
+    // log.debug('componentDidUpdate: loadRecsFromQuery()');
     await this.loadRecsFromQuery();
 
   }
@@ -408,7 +410,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         rec:     ({sourceId}) => sourceId !== '',
       })
     ) {
-      log.info('loadRecsFromQuery', pretty({query: this.query}));
+      log.info('loadRecsFromQuery', () => pretty({query: this.query}));
 
       // Set loading state
       //  - TODO Fade previous recs instead of showing a blank screen while loading
@@ -442,7 +444,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         // TODO Weight species uniformly (e.g. select random species, then select random recs)
         // TODO Get deterministic results from seed [how? sqlite doesn't support random(seed) or hash()]
         random: async ({seed}) => {
-          log.info(`loadRecsFromQuery: Querying random recs`, yaml({seed}));
+          log.info(`loadRecsFromQuery: Querying random recs`, {seed});
           await querySql<Rec>(this.db!, sqlf`
             select *
             from (
@@ -466,7 +468,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         },
 
         species: async ({species}) => {
-          log.info('loadRecsFromQuery: Querying recs for species', yaml({species}));
+          log.info('loadRecsFromQuery: Querying recs for species', {species});
           await querySql<Rec>(this.db!, sqlf`
             select *
             from (
@@ -491,7 +493,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         },
 
         rec: async ({sourceId}) => {
-          log.info('loadRecsFromQuery: Loading recs for query_rec', yaml({sourceId}));
+          log.info('loadRecsFromQuery: Loading recs for query_rec', {sourceId});
 
           // Compute top n_per_sp recs per species by d_pc (cosine_distance)
           //  - TODO Replace with window functions after sqlite upgrade
@@ -511,11 +513,11 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Load query_rec from db
           const query_rec = await this.loadRec(sourceId);
-          // log.debug('query_rec', query_rec); // XXX Debug
+          // log.debug('loadRecsFromQuery: query_rec', rich(query_rec)); // XXX Debug
 
           // Bail if sourceId not found (e.g. from persisted history)
           if (!query_rec) {
-            log.warn('loadRecsFromQuery: sourceId not found:', sourceId);
+            log.warn(`loadRecsFromQuery: sourceId not found: ${sourceId}`);
             _setRecs({recs: 'loading'});
             return;
           }
@@ -593,7 +595,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           `;
 
           // Run query
-          log.info('loadRecsFromQuery: Querying recs for query_rec', yaml({sourceId}));
+          log.info('loadRecsFromQuery: Querying recs for query_rec', {sourceId});
           await querySql<Rec>(this.db!, sql, {
             // logTruncate: null, // XXX Debug
           })(async results => {
@@ -613,7 +615,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   }
 
   loadRec = async (sourceId: SourceId): Promise<Rec> => {
-    log.info('[loadRec]', yaml({sourceId}));
+    log.info('loadRec', {sourceId});
     return await querySql<Rec>(this.db!, sqlf`
       select *
       from search_recs
@@ -625,10 +627,10 @@ export class SearchScreen extends PureComponent<Props, State> {
   }
 
   releaseSounds = async () => {
-    log.info(`[releaseSounds] Releasing ${this.soundsCache.size} cached sounds`);
+    log.info(`releaseSounds: Releasing ${this.soundsCache.size} cached sounds`);
     await Promise.all(
       Array.from(this.soundsCache).map(async ([sourceId, soundAsync]) => {
-        log.debug('Releasing sound',
+        log.debug('releaseSounds: Releasing sound',
           showSourceId(sourceId), // Noisy (but these log lines don't de-dupe anyway when rndebugger timestamps are shown)
         );
         (await soundAsync).release();
@@ -644,7 +646,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     // Is sound already allocated (in the cache)?
     let soundAsync = this.soundsCache.get(rec.source_id);
     if (!soundAsync) {
-      log.debug('Allocating sound',
+      log.debug('getOrAllocateSoundAsync: Allocating sound',
         showSourceId(rec.source_id), // Noisy (but these log lines don't de-dupe anyway when rndebugger timestamps are shown)
       );
       // Allocate + cache sound resource
@@ -672,7 +674,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         oldState === Gesture.State.ACTIVE &&
         state !== Gesture.State.CANCELLED
       ) {
-        log.debug('toggleRecPlaying', pretty({x, sourceId: rec.source_id,
+        log.debug('toggleRecPlaying', () => pretty({x, sourceId: rec.source_id,
           playing: this.state.playing && {sourceId: this.state.playing.rec.source_id},
         }));
 
@@ -687,7 +689,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
         // Workaround: Manually clean up on done/stop b/c the .play done callback doesn't trigger on .stop
         const onDone = async () => {
-          log.info('Done: rec', rec.source_id);
+          log.info('toggleRecPlaying: Done', {source_id: rec.source_id});
           timer.clearInterval(this, 'playingCurrentTime');
           this.setState({
             playing: undefined,
@@ -700,7 +702,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           global.sound = sound; // XXX Debug
 
           // Stop sound playback
-          log.info('Stopping: rec', rec.source_id);
+          log.info('toggleRecPlaying: Stopping', {source_id: rec.source_id});
           if (sound.isLoaded()) { // Else we'll hang if sound was released while playing (e.g. play -> load new search)
             await sound.stopAsync();
           }
@@ -724,7 +726,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Play rec (if startTime is valid)
           if (!startTime || startTime < sound.getDuration()) {
-            log.info('Playing: rec', rec.source_id);
+            log.info('toggleRecPlaying: Playing', {source_id: rec.source_id});
 
             // setState
             this.setState({
@@ -776,7 +778,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     const {audio_s} = this.props.serverConfig.api.recs.search_recs.params;
     const duration = sound.getDuration();
     const time = x / width * audio_s;
-    // log.debug('spectroTimeFromX', pretty({time, x, absoluteX, contentOffset, width, audio_s, duration}));
+    // log.debug('spectroTimeFromX', () => pretty({time, x, absoluteX, contentOffset, width, audio_s, duration}));
     return time;
   }
 
@@ -786,7 +788,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     const {audio_s} = this.props.serverConfig.api.recs.search_recs.params;
     const duration = sound.getDuration();
     const x = time / audio_s * width;
-    // log.debug('spectroXFromTime', pretty({x, time, contentOffset, width, audio_s, duration}));
+    // log.debug('spectroXFromTime', () => pretty({x, time, contentOffset, width, audio_s, duration}));
     return x;
   }
 
@@ -807,10 +809,6 @@ export class SearchScreen extends PureComponent<Props, State> {
       [Gesture.State.ACTIVE, () => this.setState({showHelp: true})],
       [Gesture.State.END,    () => this.setState({showHelp: false})],
     );
-  }
-
-  onMockPress = (rec: Rec) => async () => {
-    console.log('renderLeftAction.onMockPress');
   }
 
   Filters = () => (
@@ -1459,7 +1457,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   // Map props/state to a DOM node
   //  - Render phase (pure, no read/write DOM, may be called multiple times per commit or interrupted)
   render = () => {
-    log.info(`${this.constructor.name}.render`);
+    log.info('render');
     const styleForSpecies = this.stylesForSpecies(_.uniq(this.recsOrEmpty.map(rec => rec.species)));
     return (
       <View style={{
@@ -1499,7 +1497,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             }}
             // This is (currently) the only place we use state.scrollViewState i/o this._scrollViewState
             contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
-              // log.debug('render.contentOffset', yaml(x)); // XXX Debug
+              // log.debug('render.contentOffset', {x}); // XXX Debug
             })}
             bounces={false}
             bouncesZoom={false}
@@ -1507,7 +1505,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             minimumZoomScale={this.props.spectroScaleClamp.min / this.state._spectroScale}
             maximumZoomScale={this.props.spectroScaleClamp.max / this.state._spectroScale}
             onScrollEndDrag={async ({nativeEvent}) => {
-              // log.debug('onScrollEndDrag', yaml(nativeEvent)); // XXX Debug
+              // log.debug('onScrollEndDrag', {nativeEvent}); // XXX Debug
               const {contentOffset, zoomScale, velocity} = nativeEvent;
               this._scrollViewState = {contentOffset};
               if (
@@ -1515,7 +1513,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 // && velocity !== undefined // [XXX Unreliable] Don't trigger zoom on 1/2 fingers released, wait for 2/2
               ) {
                 const scale = zoomScale * this.state._spectroScale;
-                // log.debug('ZOOM', yaml(nativeEvent)); // XXX Debug
+                // log.debug('ZOOM', {nativeEvent}); // XXX Debug
                 // Trigger re-layout so non-image components (e.g. text) redraw at non-zoomed size
                 this.setState({
                   scrollViewState: this._scrollViewState,
@@ -1788,6 +1786,7 @@ interface KeyboardDismissingViewState {
   isKeyboardShown: boolean;
 }
 export class KeyboardDismissingView extends PureComponent<RN.ViewProps, KeyboardDismissingViewState> {
+  log = new Log('KeyboardDismissingView');
   state = {
     isKeyboardShown: false,
   };
@@ -1802,7 +1801,7 @@ export class KeyboardDismissingView extends PureComponent<RN.ViewProps, Keyboard
     this._keyboardDidHideListener!.remove();
   };
   componentDidUpdate = (prevProps: RN.ViewProps, prevState: KeyboardDismissingViewState) => {
-    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   };
   keyboardDidShow = () => this.setState({isKeyboardShown: true});
   keyboardDidHide = () => this.setState({isKeyboardShown: false});
