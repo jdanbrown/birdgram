@@ -22,7 +22,10 @@ type Props = {
   settings: SettingsWrites;
   showDebug: boolean;
   allowUploads: boolean;
+  // RecordScreen
   refreshRate: number;
+  spectroImageLimit: number;
+  // SearchScreen
   playingProgressEnable: boolean;
   playingProgressInterval: number;
 };
@@ -112,6 +115,20 @@ export class SettingsScreen extends PureComponent<Props, State> {
                 const x = parseInt(str);
                 const refreshRate = _.clamp(_.isNaN(x) ? 1 : x, refreshRateMin, refreshRateMax);
                 await this.props.settings.set('refreshRate', refreshRate);
+              }}
+            />
+
+            {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
+            <SettingsList.Item
+              id='Limit num spectro images (0 to disable)'
+              title='Limit num spectro images (0 to disable)'
+              isEditable={true}
+              hasNavArrow={false}
+              value={(this.props.spectroImageLimit || '').toString()}
+              onTextChange={async str => {
+                const x = parseInt(str);
+                const spectroImageLimit = _.isNaN(x) ? 1 : x;
+                await this.props.settings.set('spectroImageLimit', spectroImageLimit);
               }}
             />
 

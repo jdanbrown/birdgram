@@ -250,6 +250,7 @@ export default class App extends PureComponent<Props, State> {
                               settings                = {this.state.settingsWrites!}
                               showDebug               = {this.state.settings!.showDebug}
                               refreshRate             = {this.state.settings!.refreshRate}
+                              spectroImageLimit       = {this.state.settings!.spectroImageLimit}
                             />
                           ),
                         }, {
@@ -302,6 +303,7 @@ export default class App extends PureComponent<Props, State> {
                               showDebug               = {this.state.settings!.showDebug}
                               allowUploads            = {this.state.settings!.allowUploads}
                               refreshRate             = {this.state.settings!.refreshRate}
+                              spectroImageLimit       = {this.state.settings!.spectroImageLimit}
                               playingProgressEnable   = {this.state.settings!.playingProgressEnable}
                               playingProgressInterval = {this.state.settings!.playingProgressInterval}
                             />

@@ -63,6 +63,7 @@ export interface Props {
   showDebug: boolean;
   // RecordScreen
   refreshRate: number;
+  spectroImageLimit: number;
   spectroHeight: number;
   sampleRate: number;
   channels: number;
@@ -77,6 +78,7 @@ interface State {
   denoised: boolean;
   // In-progress recording
   spectroImages: Array<SpectroImage>;
+  nSpectroImages: number; // Separate from spectroImages b/c we truncate the latter
   nSamples: number;
   nSpectroWidth: number;
   // Done recording
@@ -128,6 +130,7 @@ export class RecordScreen extends Component<Props, State> {
     follow: true,
     denoised: true,
     spectroImages: [],
+    nSpectroImages: 0,
     nSamples: 0,
     nSpectroWidth: 0,
     doneRecording: null,
@@ -147,7 +150,7 @@ export class RecordScreen extends Component<Props, State> {
   //  - Store as internal state i/o react state to avoid unnecessary updates (~2x)
   _nativeStats: null | SpectroStats = null
   get lag(): null | number {
-    return !this._nativeStats ? null : this._nativeStats.nPathsSent - this.state.spectroImages.length;
+    return !this._nativeStats ? null : this._nativeStats.nPathsSent - this.state.nSpectroImages;
   }
   updateNativeStats = () => {
     // We're updating internal state, so prevent caller from trying to block on our completion
@@ -204,8 +207,8 @@ export class RecordScreen extends Component<Props, State> {
 
   // Component updates in tight loop (spectro refresh)
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    // XXX Debug: avoid logging in tight loop (bottleneck at refreshRate=16)
-    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+    // XXX bottleneck at refreshRate=16
+    // log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
 
     // If we're updating then shouldComponentUpdate didn't call updateNativeStats, so we should do it instead
     //  - Avoid calling updateNativeStats on every call to shouldComponentUpdate since that could be many more
@@ -262,8 +265,7 @@ export class RecordScreen extends Component<Props, State> {
             //    - https://github.com/DylanVann/react-native-fast-image
             (this.state.spectroImages.map(({source, width, height, debugTimes}, index) => (
               <SpectroImageComp
-                key={index} // (Use source.uri if index causes trouble)
-                // key={this.props.source.uri}
+                key={source.uri}
                 source={source}
                 spectroScale={this.state.spectroScale}
                 width={width}
@@ -303,6 +305,9 @@ export class RecordScreen extends Component<Props, State> {
           </this.DebugText>
           <this.DebugText>
             refreshRate: {this.props.refreshRate} ({round(this.nSamplesPerImage, 1)} samples/img / {this.props.sampleRate} Hz)
+          </this.DebugText>
+          <this.DebugText>
+            spectroImageLimit: {this.props.spectroImageLimit}
           </this.DebugText>
           <this.DebugText>
             _renderRate: {round(this._renderRate.value, 3)}
@@ -360,6 +365,7 @@ export class RecordScreen extends Component<Props, State> {
         this.setState({
           recordingState: RecordingState.Recording,
           spectroImages: [],
+          nSpectroImages: 0,
           nSamples: 0,
           nSpectroWidth: 0,
           doneRecording: null,
@@ -469,9 +475,12 @@ export class RecordScreen extends Component<Props, State> {
         debugTimes,
       };
       this.setState((state, props) => ({
-        spectroImages: [...state.spectroImages, spectroImage],
-        nSamples:      state.nSamples      + nSamples,
-        nSpectroWidth: state.nSpectroWidth + width,
+        // Truncate spectroImages else the record UX gets very slow after a few minutes
+        //  - Use spectroImageLimit=0 to not truncate
+        spectroImages:  [...state.spectroImages, spectroImage].slice(-this.props.spectroImageLimit),
+        nSpectroImages: state.nSpectroImages + 1, // Separate from spectroImages b/c we truncate the latter
+        nSamples:       state.nSamples       + nSamples,
+        nSpectroWidth:  state.nSpectroWidth  + width,
       }));
     }
   }
