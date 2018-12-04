@@ -9,6 +9,11 @@
 
 @interface RCT_EXTERN_MODULE(RNSpectro, RCTEventEmitter)
 
+// XXX Debug
+RCT_EXTERN_METHOD(
+  debugPrintNative:(NSString *)msg
+);
+
 RCT_EXTERN_METHOD(
   setup:(NSDictionary *)opts
   resolve:(RCTPromiseResolveBlock)resolve

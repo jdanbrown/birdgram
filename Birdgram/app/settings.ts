@@ -12,6 +12,8 @@ export interface Props {
   // NOTE Keep attrs in sync (1/5)
   readonly showDebug: boolean;
   readonly allowUploads: boolean;
+  // For RecordScreen
+  readonly refreshRate: number;
   // For SearchScreen
   readonly showMetadataLeft: boolean;
   readonly showMetadataBelow: boolean;
@@ -27,6 +29,8 @@ export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
   showDebug: false,
   allowUploads: true,
+  // For RecordScreen
+  refreshRate: 16,
   // For SearchScreen
   showMetadataLeft: false,
   showMetadataBelow: false,
@@ -43,6 +47,8 @@ export const TYPES: {[key: string]: string} = {
   // NOTE Keep attrs in sync (3/5)
   showDebug: 'boolean',
   allowUploads: 'boolean',
+  // For RecordScreen
+  refreshRate: 'number',
   // For SearchScreen
   showMetadataLeft: 'boolean',
   showMetadataBelow: 'boolean',
@@ -59,6 +65,8 @@ export const KEYS = [
   //  - Keys in the order expected by the constructor
   'showDebug',
   'allowUploads',
+  // For RecordScreen
+  'refreshRate',
   // For SearchScreen
   'showMetadataLeft',
   'showMetadataBelow',
@@ -105,7 +113,9 @@ export class Settings implements SettingsWrites, Props {
     // NOTE Keep attrs in sync (4/5)
     public readonly showDebug: boolean,
     public readonly allowUploads: boolean,
-  // For SearchScreen
+    // For RecordScreen
+    public readonly refreshRate: number,
+    // For SearchScreen
     public readonly showMetadataLeft: boolean,
     public readonly showMetadataBelow: boolean,
     public readonly metadataColumnsLeft: Array<MetadataColumnLeft>,

@@ -14,7 +14,14 @@ const {RNSpectro} = NativeModules;
 
 const _emitter = new NativeEventEmitter(RNSpectro);
 
+export interface SpectroStats {
+  nPathsSent: number;
+}
+
 export const Spectro = {
+
+  // XXX Debug
+  debugPrintNative: (msg: string): void => RNSpectro.debugPrintNative(msg),
 
   _emitter,
 
@@ -31,9 +38,9 @@ export const Spectro = {
     opts,
   ),
 
-  start: async (): Promise<void>          => RNSpectro.start(),
-  stop:  async (): Promise<string | null> => RNSpectro.stop(),
-  stats: async (): Promise<object>        => RNSpectro.stats(),
+  start: async (): Promise<void>                => RNSpectro.start(),
+  stop:  async (): Promise<null | string>       => RNSpectro.stop(),
+  stats: async (): Promise<null | SpectroStats> => RNSpectro.stats(),
 
   renderAudioPathToSpectroPath: async (
     audioPath: string,

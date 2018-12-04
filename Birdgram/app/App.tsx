@@ -23,6 +23,7 @@ import * as Colors from './colors';
 import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { log } from './log';
+import { Spectro } from './native/Spectro';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
 import {
   createDefaultHistories, Go, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
@@ -35,6 +36,18 @@ import { urlpack } from './urlpack';
 import {
   deepEqual, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
 } from './utils';
+
+// // XXX Debug: log bridge msgs
+// //  - https://blog.callstack.io/reactnative-how-to-check-what-passes-through-your-bridge-e435571ffd85
+// //  - https://github.com/jondot/rn-snoopy
+// // @ts-ignore (no d.ts file)
+// import MessageQueue from 'react-native/Libraries/BatchedBridge/MessageQueue.js';
+// MessageQueue.spy((x: any) => {
+//   const msg       = `${json(x)}`;
+//   const taggedMsg = `[bridge] ${msg}`;
+//   log.debug(taggedMsg);
+//   if (!msg.includes('[bridge]')) Spectro.debugPrintNative(taggedMsg); // Avoid infinite recursion
+// });
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Animated = Animated;
@@ -236,6 +249,7 @@ export default class App extends PureComponent<Props, State> {
                               // Settings
                               settings                = {this.state.settingsWrites!}
                               showDebug               = {this.state.settings!.showDebug}
+                              refreshRate             = {this.state.settings!.refreshRate}
                             />
                           ),
                         }, {
@@ -287,6 +301,7 @@ export default class App extends PureComponent<Props, State> {
                               settings                = {this.state.settingsWrites!}
                               showDebug               = {this.state.settings!.showDebug}
                               allowUploads            = {this.state.settings!.allowUploads}
+                              refreshRate             = {this.state.settings!.refreshRate}
                               playingProgressEnable   = {this.state.settings!.playingProgressEnable}
                               playingProgressInterval = {this.state.settings!.playingProgressInterval}
                             />

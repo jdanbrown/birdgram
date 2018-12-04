@@ -9,16 +9,20 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 
 import { log } from '../log';
-import { SettingsWrites } from '../settings';
+import { DEFAULTS, SettingsWrites } from '../settings';
 import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
 import { global, json, pretty, shallowDiffPropsState, yaml, yamlPretty } from '../utils';
+
+export const refreshRateMin = 1;
+export const refreshRateMax = 64;
 
 type Props = {
   // Settings
   settings: SettingsWrites;
   showDebug: boolean;
   allowUploads: boolean;
+  refreshRate: number;
   playingProgressEnable: boolean;
   playingProgressInterval: number;
 };
@@ -95,6 +99,20 @@ export class SettingsScreen extends PureComponent<Props, State> {
               id='Test modal'
               title='Test modal'
               onPress={() => this.setState({showModal: true})}
+            />
+
+            {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
+            <SettingsList.Item
+              id='Recording spectro refresh rate (/sec)'
+              title='Recording spectro refresh rate (/sec)'
+              isEditable={true}
+              hasNavArrow={false}
+              value={(this.props.refreshRate || '').toString()}
+              onTextChange={async str => {
+                const x = parseInt(str);
+                const refreshRate = _.clamp(_.isNaN(x) ? 1 : x, refreshRateMin, refreshRateMax);
+                await this.props.settings.set('refreshRate', refreshRate);
+              }}
             />
 
             <SettingsList.Item

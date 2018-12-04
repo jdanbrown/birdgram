@@ -4,6 +4,7 @@
 //  - ios/Birdgram/Spectro.swift - add swift RNSpectro.f() calling Spectro.f()
 //  - ios/Birdgram/Spectro.swift - add swift Spectro.f()
 
+import os
 import Foundation
 
 import Bubo // Before Bubo_Pods imports
@@ -36,22 +37,29 @@ class RNSpectro: RCTEventEmitter {
   // Boilerplate
   //
 
+  // XXX Debug
+  @objc func debugPrintNative(_ msg: String) {
+    os_log("%@", msg) // (print() doesn't show up in device logs, even though it somehow shows up in xcode logs)
+  }
+
   var proxy: Proxy?
 
-  func withPromise<X>(
+  // TODO Simplify
+  func withPromiseNoProxy<X>(
     _ resolve: @escaping RCTPromiseResolveBlock,
     _ reject: @escaping RCTPromiseRejectBlock,
     _ name: String,
     _ f: @escaping () throws -> X
   ) -> Void {
-    withPromiseAsync(resolve, reject, name) { () -> Promise<X> in
+    withPromiseNoProxyAsync(resolve, reject, name) { () -> Promise<X> in
       return Promise { () -> X in
         return try f()
       }
     }
   }
 
-  func withPromiseAsync<X>(
+  // TODO Simplify
+  func withPromiseNoProxyAsync<X>(
     _ resolve: @escaping RCTPromiseResolveBlock,
     _ reject: @escaping RCTPromiseRejectBlock,
     _ name: String,
@@ -60,6 +68,51 @@ class RNSpectro: RCTEventEmitter {
     f().then { x in
       resolve(x)
     }.catch { error in
+      let method = "\(type(of: self)).\(name)"
+      let stack = Thread.callStackSymbols // TODO How to get stack from error i/o current frame? (which is doubly useless in async)
+      reject(
+        "\(method)",
+        "method[\(method)] error[\(error)] stack[\n\(stack.joined(separator: "\n"))\n]",
+        error
+      )
+    }
+  }
+
+  // TODO Simplify
+  func withPromise<X>(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    _ reject: @escaping RCTPromiseRejectBlock,
+    _ name: String,
+    _ f: @escaping (Proxy) throws -> X
+  ) -> Void {
+    withPromiseAsync(resolve, reject, name) { (_proxy: Proxy) -> Promise<X> in
+      return Promise { () -> X in
+        return try f(_proxy)
+      }
+    }
+  }
+
+  // TODO Simplify
+  func withPromiseAsync<X>(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    _ reject: @escaping RCTPromiseRejectBlock,
+    _ name: String,
+    _ f: (Proxy) -> Promise<X>
+  ) -> Void {
+    if let _proxy = proxy {
+      f(_proxy).then { x in
+        resolve(x)
+      }.catch { error in
+        let method = "\(type(of: self)).\(name)"
+        let stack = Thread.callStackSymbols // TODO How to get stack from error i/o current frame? (which is doubly useless in async)
+        reject(
+          "\(method)",
+          "method[\(method)] error[\(error)] stack[\n\(stack.joined(separator: "\n"))\n]",
+          error
+        )
+      }
+    } else {
+      let error = AppError("proxy=nil")
       let method = "\(type(of: self)).\(name)"
       let stack = Thread.callStackSymbols // TODO How to get stack from error i/o current frame? (which is doubly useless in async)
       reject(
@@ -104,7 +157,7 @@ class RNSpectro: RCTEventEmitter {
     _ opts: Props,
     resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
-    withPromise(resolve, reject, "setup") {
+    withPromiseNoProxy(resolve, reject, "setup") {
       self.proxy = try Spectro.create(
         emitter:          self,
         outputFile:       self.getProp(opts, "outputFile") ?? throw_(AppError("outputFile is required")),
@@ -125,25 +178,19 @@ class RNSpectro: RCTEventEmitter {
   @objc func start(
     _ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
-    if let _proxy = proxy {
-      withPromise(resolve, reject, "start") { try _proxy.start() }
-    }
+    withPromise(resolve, reject, "start") { _proxy in try _proxy.start() }
   }
 
   @objc func stop(
     _ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
-    if let _proxy = proxy {
-      withPromiseAsync(resolve, reject, "stop") { return _proxy.stop() }
-    }
+    withPromiseAsync(resolve, reject, "stop") { _proxy in _proxy.stop() }
   }
 
   @objc func stats(
     _ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
-    if let _proxy = proxy {
-      withPromise(resolve, reject, "stats") { _proxy.stats() }
-    }
+    withPromise(resolve, reject, "stats") { _proxy in _proxy.stats() }
   }
 
   @objc func renderAudioPathToSpectroPath(
@@ -152,18 +199,16 @@ class RNSpectro: RCTEventEmitter {
     opts: Props,
     resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
-    if let _proxy = proxy {
-      withPromise(resolve, reject, "renderAudioPathToSpectroPath") { () -> Props? in
-        let ret = try _proxy.renderAudioPathToSpectroPath(
-          audioPath,
-          spectroPath,
-          denoise: self.getProp(opts, "denoise")
-        )
-        return ret == nil ? nil : [
-          "width":  ret!.width,
-          "height": ret!.height,
-        ]
-      }
+    withPromise(resolve, reject, "renderAudioPathToSpectroPath") { _proxy -> Props? in
+      let ret = try _proxy.renderAudioPathToSpectroPath(
+        audioPath,
+        spectroPath,
+        denoise: self.getProp(opts, "denoise")
+      )
+      return ret == nil ? nil : [
+        "width":  ret!.width,
+        "height": ret!.height,
+      ]
     }
   }
 
@@ -257,30 +302,17 @@ class Spectro {
   var format:     AudioStreamBasicDescription
 
   // State
-  var queue:             AudioQueueRef?        = nil
-  var buffers:           [AudioQueueBufferRef] = []
-  var audioFile:         AudioFileID?          = nil
-  var numPacketsWritten: UInt32                = 0
-  var samplesBuffer:     [Float]               = [] // Pad audio chunks to ≥nperseg with past audio, else gaps in streaming spectro stft
-  var spectroRange:      Interval<Float>       = Spectro.zeroSpectroRange
+  var queue:           AudioQueueRef?        = nil
+  var buffers:         [AudioQueueBufferRef] = []
+  var audioFile:       AudioFileID?          = nil
+  var nPacketsWritten: UInt32                = 0
+  var nPathsSent:      UInt32                = 0
+  var samplesBuffer:   [Float]               = [] // Pad audio chunks to ≥nperseg with past audio, else gaps in streaming spectro stft
+  var spectroRange:    Interval<Float>       = Spectro.zeroSpectroRange
   static let zeroSpectroRange = Interval.bottom // Unit for union
 
-  // // XXX(measure_lag)
-  // //  - Docs:
-  // //    - https://developer.apple.com/documentation/dispatch
-  // //  - Helpful examples:
-  // //    - https://stackoverflow.com/questions/37805885/how-to-create-dispatch-queue-in-swift-3
-  // //    - https://www.raywenderlich.com/5370-grand-central-dispatch-tutorial-for-swift-4-part-1-2
-  // let heavyQueue = DispatchQueue(
-  //   label: "app.birdgram.Birdgram.Spectro.heavyQueue",
-  //   attributes: [] // Serial queue (i/o .concurrent)
-  //   // qos: .default,
-  //   // autoreleaseFrequency: .default,
-  //   // target: .default,
-  // )
-
   // TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
-  var outputPath: String { get { return "\(documentsDirectory())/\(outputFile)" } }
+  var outputPath: String { get { return documentsDirectory() / outputFile } }
 
   init(
     emitter:    RCTEventEmitter,
@@ -335,10 +367,11 @@ class Spectro {
     try session.setCategory(.playAndRecord, mode: .default, options: [])
 
     // Reset audio file state
-    audioFile         = nil
-    numPacketsWritten = 0
-    samplesBuffer     = []
-    spectroRange      = Spectro.zeroSpectroRange
+    audioFile       = nil
+    nPacketsWritten = 0
+    nPathsSent      = 0
+    samplesBuffer   = []
+    spectroRange    = Spectro.zeroSpectroRange
 
     // Create audio file to record to
     //  - TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
@@ -466,11 +499,11 @@ class Spectro {
           false, // Don't cache the writen data [what does this mean?]
           inBuffer.pointee.mAudioDataByteSize,
           pPacketDescs,
-          Int64(numPacketsWritten),
+          Int64(nPacketsWritten),
           &ioNumPackets, // in: num packets to write; out: num packets actually written
           inBuffer.pointee.mAudioData
         ))
-        numPacketsWritten += ioNumPackets
+        nPacketsWritten += ioNumPackets
       }
       debugTimes.append(("file", timer.lap()))
 
@@ -559,6 +592,7 @@ class Spectro {
               timer: timer, debugTimes: &debugTimes // XXX Debug
             )
             // Image file path -> js (via rn event)
+            nPathsSent += 1
             emitter.sendEvent(withName: "spectroFilePath", body: [
               "spectroFilePath": path as Any,
               "width": width,
@@ -591,7 +625,8 @@ class Spectro {
       "sampleRate": format.mSampleRate,
       "channels": format.mChannelsPerFrame,
       "bitsPerSample": format.mBitsPerChannel,
-      "numPacketsWritten": numPacketsWritten,
+      "nPacketsWritten": nPacketsWritten,
+      "nPathsSent": nPathsSent,
       "spectroRange": spectroRange.description,
       "outputFile": outputFile,
     ]

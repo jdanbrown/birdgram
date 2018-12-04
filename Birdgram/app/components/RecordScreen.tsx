@@ -5,7 +5,8 @@ import { interpolateMagma } from 'd3-scale-chromatic';
 // import Jimp from 'jimp'; // XXX Unused
 import Humanize from 'humanize-plus';
 import _ from 'lodash';
-import React, { PureComponent, RefObject } from 'react';
+import React, { Component, PureComponent, RefObject } from 'react';
+import shallowCompare from 'react-addons-shallow-compare';
 import {
   ActivityIndicator, Animated, Button, Dimensions, EmitterSubscription, Image, ImageStyle, Platform, ScrollView, Text,
   TextProps, View, ViewProps,
@@ -28,14 +29,14 @@ import nj from '../../third-party/numjs/dist/numjs.min';
 import * as Colors from '../colors';
 import { SourceId } from '../datatypes';
 import { log, puts } from '../log';
-import { Spectro } from '../native/Spectro';
+import { Spectro, SpectroStats } from '../native/Spectro';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
-  chance, deepEqual, Dim, ExpWeightedMean, finallyAsync, global, into, json, match, matchNil, matchNull, matchUndefined,
+  chance, deepEqual, Dim, ExpWeightedMean, ExpWeightedRate, finallyAsync, global, into, json, match, matchNil, matchNull, matchUndefined,
   pretty, round, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty,
 } from '../utils';
 
@@ -46,9 +47,6 @@ global.Spectro = Spectro; // XXX Debug
 // const JimpAsync = (...args: Array<any>): Promise<Jimp> => new Promise((resolve, reject) => {
 //   new Jimp(...args, (err: Error | null, img: Jimp) => err ? reject(err) : resolve(img));
 // });
-
-export const refreshRateMin = 1;
-export const refreshRateMax = 64;
 
 // "Samples" means "audio samples" throughout
 export type Samples = Int16Array; // HACK Assumes bitsPerSample=16
@@ -64,6 +62,7 @@ export interface Props {
   settings: SettingsWrites;
   showDebug: boolean;
   // RecordScreen
+  refreshRate: number;
   spectroHeight: number;
   sampleRate: number;
   channels: number;
@@ -71,8 +70,8 @@ export interface Props {
 }
 
 interface State {
+  showMoreDebug: boolean;
   recordingState: RecordingState;
-  refreshRate: number;
   spectroScale: number;
   follow: boolean;
   denoised: boolean;
@@ -80,7 +79,6 @@ interface State {
   spectroImages: Array<SpectroImage>;
   nSamples: number;
   nSpectroWidth: number;
-  nativeSpectroStats: null | object; // XXX Debug
   // Done recording
   doneRecording: null | DoneRecording;
 }
@@ -112,7 +110,7 @@ interface SpectroImage {
 
 type DebugTimes = Array<{k: string, v: number}>; // Array<{k,v}> because swift Dictionary doesn't preserve order
 
-export class RecordScreen extends PureComponent<Props, State> {
+export class RecordScreen extends Component<Props, State> {
 
   // Many of these are hardcoded to match Bubo/Models.swift
   static defaultProps: Partial<Props> = {
@@ -123,27 +121,45 @@ export class RecordScreen extends PureComponent<Props, State> {
   };
 
   state: State = {
+    showMoreDebug: false,
     recordingState: RecordingState.Stopped,
-    // refreshRate: 16,
-    refreshRate: 64, // XXX(measure_lag)
     spectroScale: 2, // TODO Expose controls like SearchScreen [think through RecordScreen.state vs. Settings vs. SearchScreen.state]
     follow: true,
     denoised: true,
     spectroImages: [],
     nSamples: 0,
     nSpectroWidth: 0,
-    nativeSpectroStats: null,
     doneRecording: null,
   };
 
   // Getters for state
-  get nSamplesPerImage(): number { return this.props.sampleRate / this.state.refreshRate; }
+  get nSamplesPerImage(): number { return this.props.sampleRate / this.props.refreshRate; }
 
   // Listeners
   _listeners: Array<EmitterSubscription> = [];
 
   // Refs
   _scrollViewRef: RefObject<ScrollView> = React.createRef();
+
+  // Throttle update/render if Spectro has produced more spectros than we have consumed
+  //  - Measure render vs. spectro lag using Spectro.stats (which is async)
+  //  - Store as internal state i/o react state to avoid unnecessary updates (~2x)
+  _nativeStats: null | SpectroStats = null
+  get lag(): null | number {
+    return !this._nativeStats ? null : this._nativeStats.nPathsSent - this.state.spectroImages.length;
+  }
+  updateNativeStats = () => {
+    // We're updating internal state, so prevent caller from trying to block on our completion
+    (async () => {
+      // Condition on Recording to avoid spurious failures before Spectro.setup()
+      if (this.state.recordingState === RecordingState.Recording) {
+        this._nativeStats = await tryElseAsync<null | SpectroStats>(null, Spectro.stats);
+      }
+    })();
+  }
+
+  // Measure rate of render() vs. nominal refreshRate (for showDebug)
+  _renderRate = new ExpWeightedRate(.1);
 
   componentDidMount = () => {
     log.info(`${this.constructor.name}.componentDidMount`);
@@ -166,28 +182,46 @@ export class RecordScreen extends PureComponent<Props, State> {
     this._listeners.forEach(listener => listener.remove());
   }
 
-  // Component updates in tight loop (spectro refresh)
-  componentDidUpdate = async (prevProps: Props, prevState: State) => {
-    // Avoid logging in tight loop (bottleneck at refreshRate=16)
-    // log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+  shouldComponentUpdate = (nextProps: Props, nextState: State): boolean => {
 
-    if (!prevState.follow && this.state.follow) {
-      this.scrollToEnd();
+    // Throttle update/render if Spectro has produced more spectros than we have consumed
+    //  - Not a foolproof approach to keeping the UI responsive, but it seems to be a good first step
+    //  - Condition on recordingState to avoid races where we get stuck without being able to update on stopRecording
+    if (this.state.recordingState === RecordingState.Recording) {
+      const lag = this.lag; // (Observe once to avoid races)
+      if (lag !== null && lag > 0) {
+        // log.debug('RecordScreen.shouldComponentUpdate=false', {lag}); // XXX Debug
+        this.updateNativeStats();
+        return false;
+      }
     }
 
-    // XXX Debug
-    const nativeSpectroStats: object = {
-      stats: await tryElseAsync<object | null>(null, () => Spectro.stats()),
-    };
-    if (!deepEqual(nativeSpectroStats, this.state.nativeSpectroStats)) {
-      this.setState({nativeSpectroStats});
+    // Else mimic PureComponent
+    return shallowCompare(this, nextProps, nextState);
+
+  }
+
+  // Component updates in tight loop (spectro refresh)
+  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+    // XXX Debug: avoid logging in tight loop (bottleneck at refreshRate=16)
+    log.info(`${this.constructor.name}.componentDidUpdate`, shallowDiffPropsState(prevProps, prevState, this.props, this.state));
+
+    // If we're updating then shouldComponentUpdate didn't call updateNativeStats, so we should do it instead
+    //  - Avoid calling updateNativeStats on every call to shouldComponentUpdate since that could be many more
+    this.updateNativeStats();
+
+    // If follow mode was just switched off->on, scroll ScollView to bottom
+    //  - Other calls handled elsewhere to avoid bottlenecks from calling scrollToEnd() >>1 times per scroll
+    if (!prevState.follow && this.state.follow) {
+      this.scrollToEnd();
     }
 
   }
 
   // TODO Bigger button hitbox: https://stackoverflow.com/questions/50065928/change-button-font-size-on-react-native
   render = () => {
-    log.info(`${this.constructor.name}.render`);
+    log.debug(`${this.constructor.name}.render`, json({lag: this.lag}));
+    this._renderRate.mark();
     return (
       <View style={[
         Styles.fill,
@@ -208,7 +242,7 @@ export class RecordScreen extends PureComponent<Props, State> {
             alignItems: 'flex-start',
           }}
           onScrollBeginDrag={() => {
-            log.debug('onScrollBeginDrag'); // XXX
+            log.debug('onScrollBeginDrag');
             this.setState({follow: false});
           }}
           onContentSizeChange={(width, height) => {
@@ -235,6 +269,7 @@ export class RecordScreen extends PureComponent<Props, State> {
                 height={height}
                 debugTimes={debugTimes}
                 showDebug={this.props.showDebug}
+                showMoreDebug={this.state.showMoreDebug}
               />
             )))
 
@@ -250,6 +285,7 @@ export class RecordScreen extends PureComponent<Props, State> {
                   width={spectro.dims.width}
                   height={spectro.dims.height}
                   showDebug={this.props.showDebug}
+                  showMoreDebug={this.state.showMoreDebug}
                 />
               ))}
             </View>
@@ -265,7 +301,10 @@ export class RecordScreen extends PureComponent<Props, State> {
             recordingState: {this.state.recordingState}
           </this.DebugText>
           <this.DebugText>
-            refreshRate: {this.state.refreshRate} ({this.nSamplesPerImage} samples per image / {this.props.sampleRate} Hz)
+            refreshRate: {this.props.refreshRate} ({round(this.nSamplesPerImage, 1)} samples/img / {this.props.sampleRate} Hz)
+          </this.DebugText>
+          <this.DebugText>
+            _renderRate: {round(this._renderRate.value, 3)}
           </this.DebugText>
           <this.DebugText>
             audio: {}
@@ -276,15 +315,18 @@ export class RecordScreen extends PureComponent<Props, State> {
             spectro: {}
             {this.state.nSpectroWidth} w × {this.props.spectroHeight} h ({this.state.spectroImages.length} images)
           </this.DebugText>
-          <this.DebugText>
-            Spectro: {json(this.state.nativeSpectroStats)}
-          </this.DebugText>
+          {this.state.showMoreDebug && (
+            <this.DebugText>
+              native: {json(this._nativeStats)}
+            </this.DebugText>
+          )}
         </this.DebugView>
 
         {/* Controls bar */}
         <ControlsBar
+          showDebug={this.props.showDebug}
+          showMoreDebug={this.state.showMoreDebug}
           recordingState={this.state.recordingState}
-          refreshRate={this.state.refreshRate}
           follow={this.state.follow}
           denoised={this.state.denoised}
           doneRecording={this.state.doneRecording}
@@ -321,13 +363,14 @@ export class RecordScreen extends PureComponent<Props, State> {
           nSpectroWidth: 0,
           doneRecording: null,
         });
+        this._renderRate.reset();
 
         await Spectro.setup({
           outputFile: this.freshFilename('wav'), // FIXME dir is hardcoded to BaseDirectory.temp (in Spectro.swift)
           sampleRate: this.props.sampleRate,
           bitsPerChannel: this.props.bitsPerSample,
           channelsPerFrame: this.props.channels,
-          refreshRate: this.state.refreshRate, // NOTE Only updates on stop/record
+          refreshRate: this.props.refreshRate, // NOTE Only updates on stop/record
           // bufferSize: 2048, // HACK Manually tuned for (22050hz,1ch,16bit)
         });
         await Spectro.start();
@@ -344,9 +387,11 @@ export class RecordScreen extends PureComponent<Props, State> {
       if (this.state.recordingState === RecordingState.Recording) {
         log.info('RecordScreen.stopRecording');
 
+        // Reset state (1/2)
         this.setState({
           recordingState: RecordingState.Saving,
         });
+        this._nativeStats = null; // Else shouldComponentUpdate gets stuck with lag>0
         const audioPath = await Spectro.stop();
 
         log.info(`RecordScreen.stopRecording: Got audioPath[${audioPath}]`);
@@ -386,6 +431,7 @@ export class RecordScreen extends PureComponent<Props, State> {
 
         }
 
+        // Reset state (2/2)
         this.setState({
           recordingState: RecordingState.Stopped,
           doneRecording,
@@ -404,25 +450,29 @@ export class RecordScreen extends PureComponent<Props, State> {
     nSamples: number,
     debugTimes: DebugTimes,
   }) => {
-    log.info('RecordScreen.onSpectroFilePath', json({
-      spectroFilePath: _.defaultTo(spectroFilePath, null),
-      size: !spectroFilePath ? undefined : (await fs.stat(spectroFilePath)).size,
-      width,
-      height,
-      nSamples,
-      debugTimes,
-    }));
-    const spectroImage: SpectroImage = {
-      source: !spectroFilePath ? {} : {uri: `file://${spectroFilePath}`},
-      width,
-      height,
-      debugTimes,
-    };
-    this.setState((state, props) => ({
-      spectroImages: [...state.spectroImages, spectroImage],
-      nSamples:      state.nSamples      + nSamples,
-      nSpectroWidth: state.nSpectroWidth + width,
-    }));
+    if (this.state.recordingState !== RecordingState.Recording) {
+      log.info('RecordScreen.onSpectroFilePath: skipping', json({recordingState: this.state.recordingState}));
+    } else {
+      log.info('RecordScreen.onSpectroFilePath', json({
+        spectroFilePath: _.defaultTo(spectroFilePath, null),
+        size: !spectroFilePath ? undefined : (await fs.stat(spectroFilePath)).size,
+        width,
+        height,
+        nSamples,
+        debugTimes,
+      }));
+      const spectroImage: SpectroImage = {
+        source: !spectroFilePath ? {} : {uri: `file://${spectroFilePath}`},
+        width,
+        height,
+        debugTimes,
+      };
+      this.setState((state, props) => ({
+        spectroImages: [...state.spectroImages, spectroImage],
+        nSamples:      state.nSamples      + nSamples,
+        nSpectroWidth: state.nSpectroWidth + width,
+      }));
+    }
   }
 
   freshFilename = (ext: string): string => {
@@ -461,6 +511,7 @@ export interface SpectroImageCompProps {
   height: number;
   debugTimes?: DebugTimes;
   showDebug: boolean;
+  showMoreDebug: boolean;
 }
 export interface SpectroImageCompState {}
 export class SpectroImageComp extends PureComponent<SpectroImageCompProps, SpectroImageCompState> {
@@ -489,7 +540,7 @@ export class SpectroImageComp extends PureComponent<SpectroImageCompProps, Spect
             width:  this.props.spectroScale * this.props.width,
             height: this.props.spectroScale * this.props.height,
             marginBottom: 1,
-            marginRight: this.props.showDebug ? 1 : 0, // Separate chunks for showDebug
+            marginRight: this.props.showDebug && this.props.showMoreDebug ? 1 : 0, // Separate chunks for debug
           }}
           source={this.props.source}
           // resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
@@ -497,7 +548,7 @@ export class SpectroImageComp extends PureComponent<SpectroImageCompProps, Spect
           resizeMode='stretch' // Scale both dims to =container, ignoring aspect
           // resizeMode='center'  // Maintain dims and aspect
         />
-        {this.props.showDebug && (
+        {this.props.showDebug && this.props.showMoreDebug && (
           <this.DebugView style={{flexDirection: 'column', padding: 0, marginRight: 1}}>
             {(this.props.debugTimes || []).map(({k, v}, i) => (
               <this.DebugText key={i} style={{fontSize: 8}}>{k}:{Math.round(v * 1000)}</this.DebugText>
@@ -531,8 +582,9 @@ export class SpectroImageComp extends PureComponent<SpectroImageCompProps, Spect
 
 // Split out control buttons as component else excessive updates cause render bottleneck
 export interface ControlsBarProps {
+  showDebug:      Props["showDebug"];
+  showMoreDebug:  State["showMoreDebug"];
   recordingState: State["recordingState"];
-  refreshRate:    State["refreshRate"];
   follow:         State["follow"];
   denoised:       State["denoised"];
   doneRecording:  State["doneRecording"];
@@ -565,26 +617,16 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         flexDirection: 'row',
       }}>
 
-        {/* Refresh rate +/– */}
-        <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {
-          this.props.setStateProxy.setState((state, props) => ({
-            refreshRate: _.clamp(state.refreshRate / 2, refreshRateMin, refreshRateMax),
-          }))
-        }}>
-          <Feather name='minus' style={styles.buttonIcon} />
-        </RectButton>
-        <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {}}>
-          <Text style={[styles.buttonIcon, material.headline]}>
-            {this.props.refreshRate}/s
-          </Text>
-        </RectButton>
-        <RectButton style={[styles.button, {flex: 2/3}]} onPress={() => {
-          this.props.setStateProxy.setState((state, props) => ({
-            refreshRate: _.clamp(state.refreshRate * 2, refreshRateMin, refreshRateMax),
-          }))
-        }}>
-          <Feather name='plus' style={styles.buttonIcon} />
-        </RectButton>
+        {this.props.showDebug && (
+          // Toggle showMoreDebug
+          <RectButton style={styles.button} onPress={() => {
+            this.props.setStateProxy.setState((state, props) => ({showMoreDebug: !state.showMoreDebug}))
+          }}>
+            <Feather name='terminal' style={[styles.buttonIcon, {
+              color: this.props.showMoreDebug ? iOSColors.blue : iOSColors.black,
+            }]}/>
+          </RectButton>
+        )}
 
         {!this.props.doneRecording ? (
           // Toggle follow

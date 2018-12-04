@@ -141,6 +141,20 @@ export class ExpWeightedMean {
   }
 }
 
+export class ExpWeightedRate {
+  _timer: Timer;
+  _mean:  ExpWeightedMean;
+  constructor(
+    public readonly alpha: number,
+  ) {
+    this._timer = new Timer();
+    this._mean  = new ExpWeightedMean(alpha);
+  }
+  reset = () => { this._timer.reset(); }
+  mark  = () => { this._mean.add(this._timer.lap()); }
+  get value(): number { return 1 / this._mean.value }
+}
+
 export function timed<X>(f: () => X): number {
   return _timed(f).time;
 }
