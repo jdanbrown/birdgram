@@ -74,6 +74,18 @@ public func documentsDirectory() -> String {
   return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
 }
 
+extension Float {
+
+  public func ifNan(_ x: Float) -> Float {
+    return !self.isNaN ? self : x;
+  }
+
+  public func isFiniteOr(_ x: Float) -> Float {
+    return self.isFinite ? self : x;
+  }
+
+}
+
 public struct Interval<X: Comparable>: CustomStringConvertible {
 
   public let lo: X

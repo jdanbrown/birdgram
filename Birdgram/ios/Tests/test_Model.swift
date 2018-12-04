@@ -30,6 +30,12 @@ test("SpectroLike.clip_below_median_per_freq") { name, data in
 }
 
 //
+// Features config
+//
+
+testEqual("Features.f_bins must be 40 for tests to pass", Features.f_bins, 40)
+
+//
 // Features._spectro_denoise
 //
 

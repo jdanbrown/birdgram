@@ -231,7 +231,10 @@ class Spectro {
   }
 
   static func constantsToExport() -> Dictionary<AnyHashable, Any> {
-    return [:]
+    return [
+      "sample_rate": Features.sample_rate,
+      "f_bins":      Features.f_bins,
+    ]
   }
 
   static func create(

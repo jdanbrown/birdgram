@@ -42,8 +42,12 @@ public func matrixToImageFile(
   let height       = P.rows
   let width        = P.columns
   let pxF: [Float] = P.grid // .grid is row major
-  let pxI: [UInt8] = pxF.map     { x in UInt8((range.norm(x) * 256).clamped(0, 255)) } // Infinitesimal edge case: force 1->255 i/o 256
-  var pxB: [UInt8] = pxI.flatMap { i in colors[Int(i)].bytes }
+  let pxI: [UInt8] = pxF.map     { x in
+    UInt8((range.norm(x).isFiniteOr(0) * 256).clamped(0, 255)) // Infinitesimal edge case: force 1->255 i/o 256
+  }
+  var pxB: [UInt8] = pxI.flatMap { i in
+    colors[Int(i)].bytes
+  }
   // Log.debug(String(format: "Image.matrixToImageFile: pxB[%d]: %@", pxB.count, show(pxB.slice(to: 20)))) // XXX Debug
   debugTimes.append(("pxB", timer.lap()))
 

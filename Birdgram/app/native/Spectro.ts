@@ -23,6 +23,10 @@ export const Spectro = {
   // XXX Debug
   debugPrintNative: (msg: string): void => RNSpectro.debugPrintNative(msg),
 
+  // constantsToExport
+  sample_rate: RNSpectro.sample_rate as number,
+  f_bins:      RNSpectro.f_bins      as number,
+
   _emitter,
 
   setup: async (

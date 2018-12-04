@@ -10,7 +10,10 @@ public class Features {
 
   // Like Features config
   public static let sample_rate   = 22050
-  public static let f_bins        = 40
+  // HACK(bigger_spectros)
+  //  - FIXME Tests only pass with f_bins=40
+  //  - TODO Expose f_bins as Spectro() param so that tests can pass as f_bins=40 and app can configure however it likes
+  public static let f_bins        = 80
   public static let hop_length    = 256 // (12ms @ 22050hz)
   public static let frame_length  = 512 // (23ms @ 22050hz)
   public static let frame_window  = "hann"

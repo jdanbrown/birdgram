@@ -112,18 +112,19 @@ type DebugTimes = Array<{k: string, v: number}>; // Array<{k,v}> because swift D
 
 export class RecordScreen extends Component<Props, State> {
 
-  // Many of these are hardcoded to match Bubo/Models.swift
+  // Many of these are hardcoded to match Bubo/Models.swift:Features (which is in turn hardcoded to match py Features config)
   static defaultProps: Partial<Props> = {
-    spectroHeight: 40, // = swift:Features.f_bins
-    sampleRate: 22050, // = swift:Features.sample_rate
-    channels: 1,
+    spectroHeight: Spectro.f_bins,
+    sampleRate:    Spectro.sample_rate,
+    channels:      1,
     bitsPerSample: 16,
   };
 
   state: State = {
     showMoreDebug: false,
     recordingState: RecordingState.Stopped,
-    spectroScale: 2, // TODO Expose controls like SearchScreen [think through RecordScreen.state vs. Settings vs. SearchScreen.state]
+    // TODO Expose controls like SearchScreen [think through RecordScreen.state vs. Settings vs. SearchScreen.state]
+    spectroScale: Spectro.f_bins / 80,
     follow: true,
     denoised: true,
     spectroImages: [],
