@@ -153,11 +153,11 @@ class RNSpectro: RCTEventEmitter {
     return false
   }
 
-  @objc func setup(
+  @objc func create(
     _ opts: Props,
     resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
-    withPromiseNoProxy(resolve, reject, "setup") {
+    withPromiseNoProxy(resolve, reject, "create") {
       self.proxy = try Spectro.create(
         emitter:          self,
         outputPath:       self.getProp(opts, "outputPath") ?? throw_(AppError("outputPath is required")),

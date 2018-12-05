@@ -25,16 +25,29 @@ public class Features {
   public static let n_mels        = f_bins
 
   // Extracted as constant to remove bottleneck in spectro()
-  static let mel_basis = librosa.filters.mel(sample_rate, n_fft: nperseg, n_mels: n_mels)
+  //  - TODO Cache new n_mels mappings dynamically
+  static let mel_basis_cache = Dictionary<Int, Matrix<Float>>(uniqueKeysWithValues: [
+    40, // Used in tests (to match py test cases)
+    80, // Used in mobile (RecordScreen)
+  ].map { n_mels in
+    (n_mels, librosa.filters.mel(sample_rate, n_fft: nperseg, n_mels: n_mels))
+  })
 
   // Like Features._spectro_nocache_from_audio
   public static func spectro(
     _ xs:        [Float],
     sample_rate: Int,
+    f_bins:      Int  = Features.f_bins,
     denoise:     Bool = true
   ) -> Melspectro {
     precondition(sample_rate == Features.sample_rate, "Impl hardcoded for sampleRate=\(Features.sample_rate), got: \(sample_rate)")
     // let timer = Timer() // XXX Perf
+
+    // Params
+    let n_mels = f_bins
+    guard let mel_basis = mel_basis_cache[n_mels] else {
+      preconditionFailure("n_mels[\(n_mels)] not in mel_basis_cache[\(mel_basis_cache.keys)]")
+    }
 
     // Like Melspectro
     // let mels_div      = 2 // Overridden by n_mels
@@ -89,15 +102,15 @@ public class Features {
     // _Log.debug(String(format: "Features.spectro: _spectro_denoise: %@", show(["S.shape": S.shape]))) // XXX Debug
     // _Log.debug(String(format: "[time] Features.spectro: _spectro_denoise: %d", Int(1000 * timer.lap()))) // XXX Perf
 
-    // XXX Debug
-    _Log.debug(String(format: "Features.spectro: S: %@", [
-      "xs.count[\(xs.count)]",
-      "xs[\(xs.slice(to: 10))]",
-      // "xs.quantiles[\(Stats.quantiles(xs, bins: 5))]", // XXX Slow (sorting)
-      "S.shape[\(S.shape)]",
-      "S[\(S.grid.slice(to: 10))]",
-      // "S.quantiles[\(Stats.quantiles(S.grid, bins: 5))]", // XXX Slow (sorting)
-    ].joined(separator: ", ")))
+    // // XXX Debug
+    // _Log.debug(String(format: "Features.spectro: S: %@", [
+    //   "xs.count[\(xs.count)]",
+    //   "xs[\(xs.slice(to: 10))]",
+    //   // "xs.quantiles[\(Stats.quantiles(xs, bins: 5))]", // XXX Slow (sorting)
+    //   "S.shape[\(S.shape)]",
+    //   "S[\(S.grid.slice(to: 10))]",
+    //   // "S.quantiles[\(Stats.quantiles(S.grid, bins: 5))]", // XXX Slow (sorting)
+    // ].joined(separator: ", ")))
 
     return (_fs, _ts, S)
 

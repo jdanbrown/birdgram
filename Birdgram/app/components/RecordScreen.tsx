@@ -158,7 +158,7 @@ export class RecordScreen extends Component<Props, State> {
   updateNativeStats = () => {
     // We're updating internal state, so prevent caller from trying to block on our completion
     (async () => {
-      // Condition on Recording to avoid spurious failures before Spectro.setup()
+      // Condition on Recording to avoid spurious failures before Spectro.create()
       if (this.state.recordingState === RecordingState.Recording) {
         this._nativeStats = await tryElseAsync<null | SpectroStats>(null, Spectro.stats);
       }
@@ -377,7 +377,7 @@ export class RecordScreen extends Component<Props, State> {
         });
         this._renderRate.reset();
 
-        await Spectro.setup({
+        await Spectro.create({
           outputPath: await this.freshPath('wav'),
           sampleRate: this.props.sampleRate,
           bitsPerChannel: this.props.bitsPerSample,
@@ -430,24 +430,6 @@ export class RecordScreen extends Component<Props, State> {
             spectros,
           };
 
-          // TODO Add tap to play for recorded rec
-          // // XXX Debug: Play rec
-          // const sound = await Sound.newAsync(audioPath);
-          // log.debug('stopRecording: XXX Playing rec', {duration: sound.getDuration(), filename: sound.getFilename()})
-          // Sound.setActive(true);
-          // Sound.setCategory(
-          //   'PlayAndRecord',
-          //   true, // mixWithOthers
-          // );
-          // Sound.setMode(
-          //   'Default',
-          //   // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
-          // );
-          // finallyAsync(sound.playAsync(), async () => {
-          //   sound.release();
-          //   Sound.setActive(false);
-          // });
-
         }
 
         // Reset state (2/2)
@@ -455,6 +437,26 @@ export class RecordScreen extends Component<Props, State> {
           recordingState: RecordingState.Stopped,
           doneRecording,
         });
+
+        // TODO Add tap to play for recorded rec
+        // // XXX Debug: Play rec
+        // if (audioPath) {
+        //   const sound = await Sound.newAsync(audioPath);
+        //   log.debug('stopRecording: XXX Playing rec', {duration: sound.getDuration(), filename: sound.getFilename()})
+        //   Sound.setActive(true);
+        //   Sound.setCategory(
+        //     'PlayAndRecord',
+        //     true, // mixWithOthers
+        //   );
+        //   Sound.setMode(
+        //     'Default',
+        //     // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
+        //   );
+        //   finallyAsync(sound.playAsync(), async () => {
+        //     sound.release();
+        //     Sound.setActive(false);
+        //   });
+        // }
 
       }
     } catch (e) {

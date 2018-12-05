@@ -35,7 +35,7 @@ export const Spectro = {
 
   _emitter,
 
-  setup: async (
+  create: async (
     opts: {
       outputPath: string;
       sampleRate?: number;
@@ -44,7 +44,7 @@ export const Spectro = {
       refreshRate?: number;
       bufferSize?: number;
     },
-  ): Promise<void> => RNSpectro.setup(
+  ): Promise<void> => RNSpectro.create(
     opts,
   ),
 

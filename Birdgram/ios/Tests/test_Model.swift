@@ -30,12 +30,6 @@ test("SpectroLike.clip_below_median_per_freq") { name, data in
 }
 
 //
-// Features config
-//
-
-testEqual("Features.f_bins must be 40 for tests to pass", Features.f_bins, 40)
-
-//
 // Features._spectro_denoise
 //
 
@@ -52,59 +46,65 @@ test("Features._spectro_denoise") { name, data in
 // WARNING tol
 test("Features.spectro: generate audio from hann window (denoise=false)") { name, data in
   let sample_rate = data["sample_rate"].intValue
+  let f_bins      = data["f_bins"].intValue
   let denoise     = data["denoise"].boolValue
   let _S          = Matrix(data["S"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
   let audio       = floor(scipy.signal.hann(512 * 3).slice(to: -100) * 1000) // floor to match .astype(np.int16)
-  let S           = Features.spectro(audio, sample_rate: sample_rate, denoise: denoise).S
+  let S           = Features.spectro(audio, sample_rate: sample_rate, f_bins: f_bins, denoise: denoise).S
   testAlmostEqual(name, S, _S, tol: 1e-3)
 }
 
 // WARNING tol
 test("Features.spectro: generate audio from hann window (denoise=true)") { name, data in
   let sample_rate = data["sample_rate"].intValue
+  let f_bins      = data["f_bins"].intValue
   let denoise     = data["denoise"].boolValue
   let _S          = Matrix(data["S"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
   let audio       = floor(scipy.signal.hann(512 * 3).slice(to: -100) * 1000) // floor to match .astype(np.int16)
-  let S           = Features.spectro(audio, sample_rate: sample_rate, denoise: denoise).S
+  let S           = Features.spectro(audio, sample_rate: sample_rate, f_bins: f_bins, denoise: denoise).S
   testAlmostEqual(name, S, _S, tol: 1e-4)
 }
 
 // WARNING tol
 test("Features.spectro: XC415272 start=2.05 end=2.25 (denoise=false)") { name, data in
   let sample_rate = data["sample_rate"].intValue
+  let f_bins      = data["f_bins"].intValue
   let denoise     = data["denoise"].boolValue
   let audio       = data["audio"].arrayValue.map { $0.floatValue }
   let _S          = Matrix(data["S"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
-  let S           = Features.spectro(audio, sample_rate: sample_rate, denoise: denoise).S
+  let S           = Features.spectro(audio, sample_rate: sample_rate, f_bins: f_bins, denoise: denoise).S
   testAlmostEqual(name, S, _S, tol: 1e-3)
 }
 
 // WARNING tol
 test("Features.spectro: XC415272 start=2.05 end=2.25 (denoise=true)") { name, data in
   let sample_rate = data["sample_rate"].intValue
+  let f_bins      = data["f_bins"].intValue
   let denoise     = data["denoise"].boolValue
   let audio       = data["audio"].arrayValue.map { $0.floatValue }
   let _S          = Matrix(data["S"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
-  let S           = Features.spectro(audio, sample_rate: sample_rate, denoise: denoise).S
+  let S           = Features.spectro(audio, sample_rate: sample_rate, f_bins: f_bins, denoise: denoise).S
   testAlmostEqual(name, S, _S, tol: 1e-3)
 }
 
 // WARNING tol
 test("Features.spectro: XC415272 start=0 end=10 (denoise=false)") { name, data in
   let sample_rate = data["sample_rate"].intValue
+  let f_bins      = data["f_bins"].intValue
   let denoise     = data["denoise"].boolValue
   let audio       = data["audio"].arrayValue.map { $0.floatValue }
   let _S          = Matrix(data["S"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
-  let S           = Features.spectro(audio, sample_rate: sample_rate, denoise: denoise).S
+  let S           = Features.spectro(audio, sample_rate: sample_rate, f_bins: f_bins, denoise: denoise).S
   testAlmostEqual(name, S, _S, tol: 1e-3)
 }
 
 // WARNING tol
 test("Features.spectro: XC415272 start=0 end=10 (denoise=true)") { name, data in
   let sample_rate = data["sample_rate"].intValue
+  let f_bins      = data["f_bins"].intValue
   let denoise     = data["denoise"].boolValue
   let audio       = data["audio"].arrayValue.map { $0.floatValue }
   let _S          = Matrix(data["S"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
-  let S           = Features.spectro(audio, sample_rate: sample_rate, denoise: denoise).S
+  let S           = Features.spectro(audio, sample_rate: sample_rate, f_bins: f_bins, denoise: denoise).S
   testAlmostEqual(name, S, _S, tol: 1e-4)
 }

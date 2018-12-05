@@ -15,7 +15,7 @@ RCT_EXTERN_METHOD(
 );
 
 RCT_EXTERN_METHOD(
-  setup:(NSDictionary *)opts
+  create:(NSDictionary *)opts
   resolve:(RCTPromiseResolveBlock)resolve
   reject:(RCTPromiseRejectBlock)reject
 );
