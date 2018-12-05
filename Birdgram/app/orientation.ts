@@ -16,13 +16,13 @@ export function matchOrientation<X>(orientation: Orientation, cases: {
 }
 
 export function getOrientation(): Orientation {
-  const {width, height} = Dimensions.get('screen');
+  const {width, height} = Dimensions.get('screen'); // NOTE 'screen' vs. 'window': https://stackoverflow.com/a/44979327/397334
   return width < height ? 'portrait' : 'landscape';
 }
 
 // Based on https://shellmonger.com/2017/07/26/handling-orientation-changes-in-react-native/
 export function isTablet(): boolean {
-  const {width, height, scale} = Dimensions.get('screen');
+  const {width, height, scale} = Dimensions.get('screen'); // NOTE 'screen' vs. 'window': https://stackoverflow.com/a/44979327/397334
 
   // [What's all this about?]
   const limit = scale < 2 ? 1000 : 1900;

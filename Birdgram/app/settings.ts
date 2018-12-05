@@ -16,6 +16,7 @@ export interface Props {
   readonly allowUploads: boolean;
   // For RecordScreen
   readonly refreshRate: number;
+  readonly doneSpectroChunkWidth: number
   readonly spectroImageLimit: number;
   // For SearchScreen
   readonly showMetadataLeft: boolean;
@@ -34,6 +35,7 @@ export const DEFAULTS: Props = {
   allowUploads: true,
   // For RecordScreen
   refreshRate: 8,
+  doneSpectroChunkWidth: 25, // (ios dims: https://tinyurl.com/y8xsdvnk)
   spectroImageLimit: 0, // (0: disable)
   // For SearchScreen
   showMetadataLeft: false,
@@ -53,6 +55,7 @@ export const TYPES: {[key: string]: string} = {
   allowUploads: 'boolean',
   // For RecordScreen
   refreshRate: 'number',
+  doneSpectroChunkWidth: 'number',
   spectroImageLimit: 'number',
   // For SearchScreen
   showMetadataLeft: 'boolean',
@@ -72,6 +75,7 @@ export const KEYS = [
   'allowUploads',
   // For RecordScreen
   'refreshRate',
+  'doneSpectroChunkWidth',
   'spectroImageLimit',
   // For SearchScreen
   'showMetadataLeft',
@@ -121,6 +125,7 @@ export class Settings implements SettingsWrites, Props {
     public readonly allowUploads: boolean,
     // For RecordScreen
     public readonly refreshRate: number,
+    public readonly doneSpectroChunkWidth: number,
     public readonly spectroImageLimit: number,
     // For SearchScreen
     public readonly showMetadataLeft: boolean,

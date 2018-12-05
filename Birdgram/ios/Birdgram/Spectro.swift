@@ -200,15 +200,35 @@ class RNSpectro: RCTEventEmitter {
     resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
     withPromise(resolve, reject, "renderAudioPathToSpectroPath") { _proxy -> Props? in
-      let ret = try _proxy.renderAudioPathToSpectroPath(
+      guard let imageFile = try _proxy.renderAudioPathToSpectroPath(
         audioPath,
         spectroPath,
         denoise: self.getProp(opts, "denoise")
-      )
-      return ret == nil ? nil : [
-        "width":  ret!.width,
-        "height": ret!.height,
+      ) else {
+        return nil
+      }
+      return [
+        "path":   imageFile.path,
+        "width":  imageFile.width,
+        "height": imageFile.height,
       ]
+    }
+  }
+
+  @objc func chunkImageFile(
+    _ path: String,
+    chunkWidth: Int,
+    resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
+  ) -> Void {
+    withPromiseNoProxy(resolve, reject, "chunkImageFile") { () -> Array<Props> in
+      return (try Birdgram.chunkImageFile(
+        path,
+        chunkWidth: chunkWidth
+      )).map { imageFile in [
+        "path":   imageFile.path,
+        "width":  imageFile.width,
+        "height": imageFile.height,
+      ]}
     }
   }
 
@@ -587,7 +607,7 @@ class Spectro {
           } else {
             // Spectro -> image file
             let path = FileManager.default.temporaryDirectory.path / "\(DispatchTime.now().uptimeNanoseconds).png"
-            let (width, height) = try matrixToImageFile(
+            let imageFile = try matrixToImageFile(
               path,
               S,
               range: spectroRange,
@@ -597,11 +617,11 @@ class Spectro {
             // Image file path -> js (via rn event)
             nPathsSent += 1
             emitter.sendEvent(withName: "spectroFilePath", body: [
-              "spectroFilePath": path as Any,
-              "width": width,
-              "height": height,
-              "nSamples": samples.count,
-              "debugTimes": Array(debugTimes.map { (k, v) in ["k": k, "v": v] }),
+              "spectroFilePath": imageFile.path as Any,
+              "width":           imageFile.width,
+              "height":          imageFile.height,
+              "nSamples":        samples.count,
+              "debugTimes":      Array(debugTimes.map { (k, v) in ["k": k, "v": v] }),
             ] as Props)
           }
 
@@ -637,15 +657,12 @@ class Spectro {
 
   func renderAudioPathToSpectroPath(
     _ audioPath: String,
-    _ spectroPath: String,
+    _ spectroPathBase: String,
     denoise: Bool? = nil
-  ) throws -> (
-    width: Int,
-    height: Int
-  )? {
+  ) throws -> ImageFile? {
     Log.info(String(format: "Spectro.renderAudioPathToSpectroPath: %@", [
       "audioPath": audioPath,
-      "spectroPath": spectroPath,
+      "spectroPathBase": spectroPathBase,
       "denoise": denoise as Any,
     ]))
 
@@ -684,14 +701,14 @@ class Spectro {
       Log.info("Spectro.renderAudioPathToSpectroPath: Empty spectro: samples[\(samples.count)] -> S[\(S.shape)] (e.g. <nperseg)")
       return nil
     }
-    let dims = try matrixToImageFile(
-      spectroPath,
+    let imageFile = try matrixToImageFile(
+      spectroPathBase,
       S,
       range: Interval(min(S.grid), max(S.grid)), // [Is min/max a robust behavior in general? Works well for doneRecording, at least]
       colors: colors
     )
 
-    return dims
+    return imageFile
 
   }
 

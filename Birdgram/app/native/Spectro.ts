@@ -18,6 +18,12 @@ export interface SpectroStats {
   nPathsSent: number;
 }
 
+export interface ImageFile {
+  path: string;
+  width: number;
+  height: number;
+}
+
 export const Spectro = {
 
   // XXX Debug
@@ -42,26 +48,31 @@ export const Spectro = {
     opts,
   ),
 
-  start: async (): Promise<void>                => RNSpectro.start(),
-  stop:  async (): Promise<null | string>       => RNSpectro.stop(),
-  stats: async (): Promise<null | SpectroStats> => RNSpectro.stats(),
-
-  renderAudioPathToSpectroPath: async (
-    audioPath: string,
-    spectroPath: string,
-    opts: {
-      denoise?: boolean,
-    },
-  ): Promise<null | {
-    width: number,
-    height: number,
-  }> => RNSpectro.renderAudioPathToSpectroPath(
-    audioPath,
-    spectroPath,
-    opts,
-  ),
+  start: async (): Promise<void>          => RNSpectro.start(),
+  stop:  async (): Promise<null | string> => RNSpectro.stop(),
+  stats: async (): Promise<SpectroStats>  => RNSpectro.stats(),
 
   onAudioChunk:      (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('audioChunk', f),
   onSpectroFilePath: (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('spectroFilePath', f),
+
+  renderAudioPathToSpectroPath: async (
+    audioPath: string,
+    spectroPathBase: string,
+    opts: {
+      denoise?: boolean,
+    },
+  ): Promise<null | ImageFile> => RNSpectro.renderAudioPathToSpectroPath(
+    audioPath,
+    spectroPathBase,
+    opts,
+  ),
+
+  chunkImageFile: async (
+    path: string,
+    chunkWidth: number
+  ): Promise<Array<ImageFile>> => RNSpectro.chunkImageFile(
+    path,
+    chunkWidth
+  ),
 
 };

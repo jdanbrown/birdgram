@@ -62,10 +62,10 @@ public func pathBasename(_ path: String) -> String {
   return (path as NSString).lastPathComponent
 }
 
-public func pathSplitExt(_ path: String) -> (String, String) {
+public func pathSplitExt(_ path: String) -> (name: String, ext: String) {
   return (
-    (path as NSString).deletingPathExtension,
-    (path as NSString).pathExtension
+    name: (path as NSString).deletingPathExtension,
+    ext:  (path as NSString).pathExtension
   )
 }
 

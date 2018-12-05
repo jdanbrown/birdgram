@@ -29,7 +29,7 @@ import nj from '../../third-party/numjs/dist/numjs.min';
 import * as Colors from '../colors';
 import { SourceId } from '../datatypes';
 import { Log, puts, rich } from '../log';
-import { Spectro, SpectroStats } from '../native/Spectro';
+import { ImageFile, Spectro, SpectroStats } from '../native/Spectro';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
@@ -65,6 +65,7 @@ export interface Props {
   showDebug: boolean;
   // RecordScreen
   refreshRate: number;
+  doneSpectroChunkWidth: number;
   spectroImageLimit: number;
   spectroHeight: number;
   sampleRate: number;
@@ -89,14 +90,13 @@ interface State {
 
 interface DoneRecording {
   audioPath: string;
-  spectros: DoneRecordingSpectros;
+  spectros: Map<Denoise, null | DoneRecordingSpectro>;
 }
 
-type DoneRecordingSpectros = Map<Denoise, null | DoneRecordingSpectro>;
 type Denoise = boolean;
 interface DoneRecordingSpectro {
-  path: string;
-  dims: Dim<number>;
+  single: ImageFile;
+  chunked: Array<ImageFile>;
 }
 
 enum RecordingState {
@@ -264,7 +264,7 @@ export class RecordScreen extends Component<Props, State> {
             //  - HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
             //    - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
             //    - https://github.com/DylanVann/react-native-fast-image
-            (this.state.spectroImages.map(({source, width, height, debugTimes}, index) => (
+            (this.state.spectroImages.map(({source, width, height, debugTimes}) => (
               <SpectroImageComp
                 key={source.uri}
                 source={source}
@@ -280,19 +280,19 @@ export class RecordScreen extends Component<Props, State> {
           ) : (
 
             // Done recording: recorded spectro
-            <View>
-              {into(this.state.doneRecording.spectros.get(this.state.denoised), spectro => spectro && (
+            into(this.state.doneRecording.spectros.get(this.state.denoised), spectros => spectros && (
+              spectros.chunked.map(({path, width, height}) => (
                 <SpectroImageComp
-                  key={spectro.path}
-                  source={{uri: spectro.path}}
+                  key={path}
+                  source={{uri: path}}
                   spectroScale={this.state.spectroScale}
-                  width={spectro.dims.width}
-                  height={spectro.dims.height}
+                  width={width}
+                  height={height}
                   showDebug={this.props.showDebug}
                   showMoreDebug={this.state.showMoreDebug}
                 />
-              ))}
-            </View>
+              ))
+            ))
 
           )}
         </ScrollView>
@@ -309,6 +309,9 @@ export class RecordScreen extends Component<Props, State> {
           </this.DebugText>
           <this.DebugText>
             sampleRate: {this.props.sampleRate} Hz (/ {this.props.refreshRate} = {round(this.nSamplesPerImage, 1)} samples/img)
+          </this.DebugText>
+          <this.DebugText>
+            doneSpectroChunkWidth: {this.props.doneSpectroChunkWidth} (screen: {Dimensions.get('window').width})
           </this.DebugText>
           <this.DebugText>
             spectroImageLimit: {this.props.spectroImageLimit}
@@ -409,10 +412,17 @@ export class RecordScreen extends Component<Props, State> {
         } else {
 
           // Render audioPath -> spectros
-          const spectros: DoneRecordingSpectros = new Map(await Promise.all([true, false].map(async denoise => {
-            const path = `${audioPath}-denoise=${denoise}.png`;
-            const dims: null | Dim<number> = await Spectro.renderAudioPathToSpectroPath(audioPath, path, {denoise});
-            return [denoise, dims && {path, dims}] as [Denoise, null | DoneRecordingSpectro];
+          const spectros: Map<Denoise, DoneRecordingSpectro> = new Map(await Promise.all([true, false].map(async denoise => {
+            const spectroPathBase = `${audioPath}-denoise=${denoise}.png`;
+            const single = await Spectro.renderAudioPathToSpectroPath(audioPath, spectroPathBase, {denoise});
+            var spectros: null | DoneRecordingSpectro;
+            if (!single) {
+              spectros = null;
+            } else {
+              const chunked = await Spectro.chunkImageFile(single.path, this.props.doneSpectroChunkWidth);
+              spectros = {single, chunked};
+            }
+            return [denoise, spectros] as [Denoise, DoneRecordingSpectro];
           })));
           doneRecording = {
             audioPath,
