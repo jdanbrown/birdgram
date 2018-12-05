@@ -1847,11 +1847,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-  bottomControlsButtonHelp: {
-    ...material.captionObject,
-  },
   bottomControlsButtonIcon: {
     ...material.headlineObject,
+  },
+  bottomControlsButtonHelp: {
+    ...material.captionObject,
   },
   queryInput: {
     borderWidth: 1, borderColor: 'gray',

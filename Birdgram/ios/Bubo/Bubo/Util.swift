@@ -69,6 +69,16 @@ public func pathSplitExt(_ path: String) -> (name: String, ext: String) {
   )
 }
 
+public func ensureDir(_ path: String) throws -> String {
+  try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+  return path
+}
+
+public func ensureParentDir(_ path: String) throws -> String {
+  let _ = try ensureDir(pathDirname(path))
+  return path
+}
+
 public func documentsDirectory() -> String {
   // https://stackoverflow.com/questions/24055146/how-to-find-nsdocumentdirectory-in-swift
   return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]

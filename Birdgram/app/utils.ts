@@ -349,11 +349,56 @@ export type Clamp<X> = {
 };
 
 //
+// path
+//  - Based on https://github.com/LittoCats/react-native-path/blob/master/index.js
+//
+
+// TODO Need more normalize()?
+//  - https://github.com/LittoCats/react-native-path/blob/master/index.js#L127-L129
+export function dirname(path: string): string {
+  return path.split(/\//g).slice(0, -1).join('/');
+}
+
+//
 // fs (via rn-fetch-blob)
 //
 
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
+
+export async function ensureParentDir(path: string): Promise<string> {
+  await ensureDir(dirname(path));
+  return path;
+}
+
+export async function ensureDir(path: string): Promise<string> {
+  await mkdir_p(path);
+  return path;
+}
+
+export async function mkdir_p(path: string): Promise<void> {
+  // Tricky
+  //  - Constraints
+  //    - fs.mkdir throws if path exists as file
+  //    - fs.mkdir throws if path exists as dir
+  //    - fs.mkdir succeeds and creates intermediate dirs if path doesn't exist
+  //    - And we need to be concurrency safe
+  //  - Approach
+  //    - Blindly do fs.mkdir()
+  //    - If it succeeds, we're done
+  //    - If it throws, then fail only if we can detect that path doesn't exist as a dir (via fs.isDir)
+  //      - This final check is still open to races, but the behavior is equivalent to a trace where the mkdir did
+  //        succeed before someone else rmdir'd it and then did whatever, so it's sound to claim success
+  try {
+    await fs.mkdir(path);
+  } catch {
+    if (!await fs.isDir(path)) {
+      throw Error(`mkdir_p: path already exists as a file: ${path}`);
+    } else {
+      // Already exists as dir (which is good)
+    }
+  }
+}
 
 export async function readJsonFile<X extends {}>(path: string): Promise<X> {
   const json = await fs.readFile(path, 'utf8');

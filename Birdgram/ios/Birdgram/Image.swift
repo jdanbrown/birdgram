@@ -102,9 +102,8 @@ public func chunkImageFile(
   // Chunk image
   let chunks: Array<(path: String, image: UIImage)> = (
     try stride(from: 0, to: cgImage.width, by: chunkWidth).map { x in
-      // WARNING Don't include ':' in ios paths
-      //  - They map to dir separator [I think], which in this case causes the images to silently, mysteriously render as blank
-      let path = "\(path)-chunk[\(x),\(cgImage.width),\(chunkWidth)].\(pathSplitExt(path).ext)"
+      // WARNING Avoid ':' in ios paths [they map to dir separator, I think?]
+      let path = try ensureParentDir("\(path).chunks" / "\(x)-\(cgImage.width)-\(chunkWidth).\(pathSplitExt(path).ext)")
       guard let image = image.cropping(to: CGRect(
         x: x,
         y: 0,

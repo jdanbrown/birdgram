@@ -36,8 +36,9 @@ import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
-  chance, deepEqual, Dim, ExpWeightedMean, ExpWeightedRate, finallyAsync, global, into, json, match, matchNil, matchNull, matchUndefined,
-  pretty, round, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty,
+  chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean, ExpWeightedRate, finallyAsync, global, into, json, match,
+  matchNil, matchNull, matchUndefined, pretty, round, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml,
+  yamlPretty,
 } from '../utils';
 
 const log = new Log('RecordScreen');
@@ -377,7 +378,7 @@ export class RecordScreen extends Component<Props, State> {
         this._renderRate.reset();
 
         await Spectro.setup({
-          outputFile: this.freshFilename('wav'), // FIXME dir is hardcoded to BaseDirectory.temp (in Spectro.swift)
+          outputPath: await this.freshPath('wav'),
           sampleRate: this.props.sampleRate,
           bitsPerChannel: this.props.bitsPerSample,
           channelsPerFrame: this.props.channels,
@@ -413,7 +414,7 @@ export class RecordScreen extends Component<Props, State> {
 
           // Render audioPath -> spectros
           const spectros: Map<Denoise, DoneRecordingSpectro> = new Map(await Promise.all([true, false].map(async denoise => {
-            const spectroPathBase = `${audioPath}-denoise=${denoise}.png`;
+            const spectroPathBase = await ensureParentDir(`${audioPath}.spectros/denoise=${denoise}.png`);
             const single = await Spectro.renderAudioPathToSpectroPath(audioPath, spectroPathBase, {denoise});
             var spectros: null | DoneRecordingSpectro;
             if (!single) {
@@ -496,10 +497,11 @@ export class RecordScreen extends Component<Props, State> {
     }
   }
 
-  freshFilename = (ext: string): string => {
-    const prefix = 'rec-v2';
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); // (Avoid at least ':' chars, for osx)
-    return puts(`${prefix}-${timestamp}-${chance.hash({length: 8})}.${ext}`);
+  freshPath = async (ext: string, dir: string = fs.dirs.DocumentDir): Promise<string> => {
+    // WARNING Avoid ':' in ios paths [they map to dir separator, I think?]
+    const subdir = 'user-recs-v0';
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); // (Avoid ':' chars for osx)
+    return ensureParentDir(`${dir}/${subdir}/${timestamp}-${chance.hash({length: 8})}.${ext}`);
   }
 
   // Debug components
@@ -638,16 +640,14 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
   render = () => {
     this.log.info('render');
     return (
-      <View style={{
-        flexDirection: 'row',
-      }}>
+      <View style={styles.bottomControls}>
 
         {this.props.showDebug && (
           // Toggle showMoreDebug
-          <RectButton style={styles.button} onPress={() => {
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
             this.props.setStateProxy.setState((state, props) => ({showMoreDebug: !state.showMoreDebug}))
           }}>
-            <Feather name='terminal' style={[styles.buttonIcon, {
+            <Feather name='terminal' style={[styles.bottomControlsButtonIcon, {
               color: this.props.showMoreDebug ? iOSColors.blue : iOSColors.black,
             }]}/>
           </RectButton>
@@ -655,20 +655,20 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
         {!this.props.doneRecording ? (
           // Toggle follow
-          <RectButton style={styles.button} onPress={() => {
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
             this.props.setStateProxy.setState((state, props) => ({follow: !state.follow}))
           }}>
-            <Feather name='chevrons-down' style={[styles.buttonIcon, {
+            <Feather name='chevrons-down' style={[styles.bottomControlsButtonIcon, {
               color: this.props.follow ? iOSColors.blue : iOSColors.black,
             }]}/>
           </RectButton>
         ) : (
           // Toggle denoised
-          <RectButton style={styles.button} onPress={() => {
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
             this.props.setStateProxy.setState((state, props) => ({denoised: !state.denoised}))
           }}>
             {/* 'eye' / 'zap' / 'sun' */}
-            <Feather name='eye' style={[styles.buttonIcon, {
+            <Feather name='eye' style={[styles.bottomControlsButtonIcon, {
               color: this.props.denoised ? iOSColors.blue : iOSColors.black,
             }]}/>
           </RectButton>
@@ -677,22 +677,22 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         {/* Record/stop */}
         {match(this.props.recordingState,
           [RecordingState.Stopped, () => (
-            <RectButton style={styles.button} onPress={this.props.startRecording}>
-              <FontAwesome5 style={[styles.buttonIcon, {color: Colors.Paired.darkGreen}]}
+            <RectButton style={styles.bottomControlsButton} onPress={this.props.startRecording}>
+              <FontAwesome5 style={[styles.bottomControlsButtonIcon, {color: Colors.Paired.darkGreen}]}
                 name='circle' solid
               />
             </RectButton>
           )],
           [RecordingState.Recording, () => (
-            <RectButton style={styles.button} onPress={this.props.stopRecording}>
-              <FontAwesome5 style={[styles.buttonIcon, {color: Colors.Paired.darkRed}]}
+            <RectButton style={styles.bottomControlsButton} onPress={this.props.stopRecording}>
+              <FontAwesome5 style={[styles.bottomControlsButtonIcon, {color: Colors.Paired.darkRed}]}
                 name='stop' solid
               />
             </RectButton>
           )],
           [RecordingState.Saving, () => (
-            <RectButton style={styles.button} onPress={() => {}}>
-              <ActivityIndicator size='large' />
+            <RectButton style={styles.bottomControlsButton} onPress={() => {}}>
+              <ActivityIndicator size='small' />
             </RectButton>
           )],
         )}
@@ -704,14 +704,17 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 }
 
 const styles = StyleSheet.create({
-  button: {
+  bottomControls: {
+    flexDirection: 'row',
+  },
+  bottomControlsButton: {
     ...Styles.center,
     flex: 1,
-    paddingVertical: 15,
+    paddingVertical: 5,
     backgroundColor: iOSColors.midGray,
   },
-  buttonIcon: {
-    ...material.display2Object,
+  bottomControlsButtonIcon: {
+    ...material.headlineObject,
     color: iOSColors.black
   },
 })

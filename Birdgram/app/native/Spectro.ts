@@ -37,7 +37,7 @@ export const Spectro = {
 
   setup: async (
     opts: {
-      outputFile: string;
+      outputPath: string;
       sampleRate?: number;
       bitsPerChannel?: number;
       channelsPerFrame?: number;

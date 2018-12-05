@@ -160,7 +160,7 @@ class RNSpectro: RCTEventEmitter {
     withPromiseNoProxy(resolve, reject, "setup") {
       self.proxy = try Spectro.create(
         emitter:          self,
-        outputFile:       self.getProp(opts, "outputFile") ?? throw_(AppError("outputFile is required")),
+        outputPath:       self.getProp(opts, "outputPath") ?? throw_(AppError("outputPath is required")),
         // TODO Clean up unused params
         refreshRate:      self.getProp(opts, "refreshRate"),
         bufferSize:       self.getProp(opts, "bufferSize"),
@@ -259,7 +259,7 @@ class Spectro {
 
   static func create(
     emitter:          RCTEventEmitter,
-    outputFile:       String,
+    outputPath:       String,
     // TODO Clean up unused params
     refreshRate:      UInt32?,
     bufferSize:       UInt32?,
@@ -294,7 +294,7 @@ class Spectro {
     )
     return Spectro(
       emitter:    emitter,
-      outputFile: outputFile,
+      outputPath: outputPath,
       bufferSize: _bufferSize,
       format:     AudioStreamBasicDescription(
         // TODO Clean up unused params
@@ -319,7 +319,7 @@ class Spectro {
 
   // Params
   let emitter:    RCTEventEmitter
-  let outputFile: String
+  let outputPath: String
   let bufferSize: UInt32
   let numBuffers: Int
   var format:     AudioStreamBasicDescription
@@ -334,24 +334,21 @@ class Spectro {
   var spectroRange:    Interval<Float>       = Spectro.zeroSpectroRange
   static let zeroSpectroRange = Interval.bottom // Unit for union
 
-  // TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
-  var outputPath: String { get { return documentsDirectory() / outputFile } }
-
   init(
     emitter:    RCTEventEmitter,
-    outputFile: String,
+    outputPath: String,
     bufferSize: UInt32,
     numBuffers: Int = 3, // ≥3 on iphone? [https://books.google.com/books?id=jiwEcrb_H0EC&pg=PA160]
     format:     AudioStreamBasicDescription
   ) {
     Log.info(String(format: "Spectro.init: %@", [
-      "outputFile": outputFile,
+      "outputPath": outputPath,
       "bufferSize": bufferSize,
       "numBuffers": numBuffers,
       "format": format,
     ]))
     self.emitter    = emitter
-    self.outputFile = outputFile
+    self.outputPath = outputPath
     self.bufferSize = bufferSize
     self.numBuffers = numBuffers
     self.format     = format
@@ -375,7 +372,7 @@ class Spectro {
 
   func start() throws -> Void {
     Log.info(String(format: "Spectro.start: %@", pretty([
-      "outputFile": outputFile,
+      "outputPath": outputPath,
       "numBuffers": numBuffers,
       "queue": queue as Any,
       "buffers": buffers,
@@ -405,13 +402,13 @@ class Spectro {
       "fileType": fileType,
       "format": format,
     ])))
-    AudioFileCreateWithURL(
+    try checkStatus(AudioFileCreateWithURL(
       outputUrl,
       fileType,
       &format,
       .eraseFile, // NOTE Silently overwrite existing files, else weird hangs _after_ recording starts when file already exists
       &audioFile
-    )
+    ))
 
     // Allocate audio queue
     Log.debug(String(format: "Spectro.start: AudioQueueNewInput: %@", pretty([
@@ -651,7 +648,7 @@ class Spectro {
       "nPacketsWritten": nPacketsWritten,
       "nPathsSent": nPathsSent,
       "spectroRange": spectroRange.description,
-      "outputFile": outputFile,
+      "outputPath": outputPath,
     ]
   }
 
