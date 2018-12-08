@@ -1,23 +1,55 @@
 import Foundation
 import Surge
 
-// HACK What's the idiomatic way to do these more generally?
-public func toFloats  (_ xs: [Double]) -> [Float]  { return xs.map { Float($0) } }
-public func toDoubles (_ xs: [Float])  -> [Double] { return xs.map { Double($0) } }
+// HACK How to do these more idiomatically / generically?
+public func toInts    (_ xs: [Double])       -> [Int]          { return xs.map  { Int($0) } }
+public func toFloats  (_ xs: [Double])       -> [Float]        { return xs.map  { Float($0) } }
+public func toInts    (_ xs: [Float])        -> [Int]          { return xs.map  { Int($0) } }
+public func toDoubles (_ xs: [Float])        -> [Double]       { return xs.map  { Double($0) } }
+public func toInts    (_ xs: [[Double]])     -> [[Int]]        { return xs.map  { toInts($0) } }
+public func toFloats  (_ xs: [[Double]])     -> [[Float]]      { return xs.map  { toFloats($0) } }
+public func toInts    (_ xs: [[Float]])      -> [[Int]]        { return xs.map  { toInts($0) } }
+public func toDoubles (_ xs: [[Float]])      -> [[Double]]     { return xs.map  { toDoubles($0) } }
+public func toFloats  (_ xs: Matrix<Double>) -> Matrix<Float>  { return xs.vect { toFloats($0) } }
+public func toDoubles (_ xs: Matrix<Float>)  -> Matrix<Double> { return xs.vect { toDoubles($0) } }
 
 // TODO Maybe faster with cblas_sgemv? But probably fast enough as is (with cblas_sgemm), since Matrix() doesn't copy.
-public func * (xs: Matrix<Float>, ys: [Float]) -> Matrix<Float> {
-  return xs * Matrix(rows: ys.count, columns: 1, grid: ys)
+public func * (X: Matrix<Float>, ys: [Float]) -> [Float] {
+  let Z  = X * Matrix(rows: ys.count, columns: 1, grid: ys)
+  let zs = Z.grid
+  precondition(Z.shape == (X.rows, 1))
+  precondition(zs.count == X.rows)
+  return zs
+}
+public func * (xs: [Float], Y: Matrix<Float>) -> [Float] {
+  let Z  = Matrix(rows: 1, columns: xs.count, grid: xs) * Y
+  let zs = Z.grid
+  precondition(Z.shape == (1, Y.columns))
+  precondition(zs.count == Y.columns)
+  return zs
 }
 
-// TODO Maybe faster with cblas_sgemv? But probably fast enough as is (with cblas_sgemm), since Matrix() doesn't copy.
-public func * (xs: [Float], ys: Matrix<Float>) -> Matrix<Float> {
-  return Matrix(rows: 1, columns: xs.count, grid: xs) * ys
-}
+public prefix func - (xs: [Float]) -> [Float] { return neg(xs) }
 
-public func / (x: Float, ys: [Float]) -> [Float] {
-  // Mimic the O(n) malloc in [Float]/Float [TODO How to vectorize without malloc?]
-  return Array<Float>(repeating: x, count: numericCast(ys.count)) ./ ys
+// Mimic the O(n) malloc in `[Float] op Float` [TODO How to vectorize without malloc?]
+public func + (x: Float, ys: [Float]) -> [Float] { return Array<Float>(repeating: x, count: numericCast(ys.count)) .+ ys }
+public func - (x: Float, ys: [Float]) -> [Float] { return Array<Float>(repeating: x, count: numericCast(ys.count)) .- ys }
+public func * (x: Float, ys: [Float]) -> [Float] { return Array<Float>(repeating: x, count: numericCast(ys.count)) .* ys }
+public func / (x: Float, ys: [Float]) -> [Float] { return Array<Float>(repeating: x, count: numericCast(ys.count)) ./ ys }
+
+// Elem-wise operations for Matrix, like for Array
+public func .+ (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op(X, Y, .+) }
+public func .- (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op(X, Y, .-) }
+public func .* (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op(X, Y, .*) }
+public func ./ (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op(X, Y, ./) }
+
+public func elem_op(_ X: Matrix<Float>, _ Y: Matrix<Float>, _ f: ([Float], [Float]) -> [Float]) -> Matrix<Float> {
+  precondition(X.shape == Y.shape, "Shapes must match: X[\(X.shape)] != Y[\(Y.shape)]")
+  return Matrix(
+    rows:    X.rows,
+    columns: X.columns,
+    grid:    f(X.grid, Y.grid)
+  )
 }
 
 //

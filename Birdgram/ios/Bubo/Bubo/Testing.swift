@@ -7,8 +7,9 @@ import SwiftyJSON
 import Surge
 
 // TODO Turn these into Xcode resources
-public let iosDir          = pathDirname(#file) / "../.." // TODO How robust is #file? Which types of builds will break it?
-public let iosTestsDataDir = iosDir / "Tests/data"
+public let iosDir            = pathDirname(#file) / "../.." // TODO How robust is #file? Which types of builds will break it?
+public let iosTestsDataDir   = iosDir / "Tests/data"
+public let iosTestsAssetsDir = iosDir / "Tests/assets"
 
 // Test with data
 public func test(
@@ -111,11 +112,18 @@ public func testAlmostEqual(
   _ name: String,
   _ xs: [Float],
   _ ys: [Float],
-  tol: Float = 1e-7
+  tol: Float = 1e-7,
+  // For show(), not for comparison
+  prec: Int = 3,
+  showLimit: Int? = nil
 ) {
   testEqual(name, xs, ys,
     with: { xs, ys in np.almost_equal(xs, ys, tol: tol) },
-    show: { xs in (xs.count, xs) }
+    show: { xs in
+      var _xs = xs
+      if let showLimit = showLimit { _xs = _xs.slice(to: showLimit) }
+      return "\(xs.count): \(show(_xs, prec: prec))"
+    }
   )
 }
 
@@ -123,11 +131,20 @@ public func testAlmostEqual(
   _ name: String,
   _ X: Matrix<Float>,
   _ Y: Matrix<Float>,
-  tol: Float = 1e-7
+  tol: Float = 1e-7,
+  // For show(), not for comparison
+  prec: Int = 3,
+  showLimit: (Int?, Int?) = (nil, nil)
 ) {
   testEqual(name, X, Y,
     with: { X, Y in X.shape == Y.shape && np.almost_equal(X.grid, Y.grid, tol: tol) },
-    show: { X in (X.shape, X) }
+    show: { X in
+      var _X = X
+      let (rows, columns) = showLimit
+      if let rows    = rows    { _X = _X[rows:    0..<rows] }
+      if let columns = columns { _X = _X[columns: 0..<columns] }
+      return "\(X.shape)\n\(show(_X, prec: prec))"
+    }
   )
 }
 

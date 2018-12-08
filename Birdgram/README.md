@@ -1,3 +1,13 @@
+# Setup
+- Clone git submodules
+  - `git submodule update --init`
+- Install cocoapod deps
+  - `cd ios/ && pod install`
+- Generate `*.xcodeproj` projects for manual deps
+  - `cd ios/swift-npy/ && swift package generate-xcodeproj`
+- Build/run
+  - Xcode `Birdgram.xcworkspace` -> scheme 'Birdgram' -> Build/Run
+
 # Run
 
 Run ios app in simulator
@@ -106,6 +116,21 @@ android
   - TODO
 
 # Troubleshooting (newest to oldest)
+- To add an SPM project (Package.swift) that doesn't have an *.xcodeproj
+  - (e.g. SwiftNpy: https://github.com/qoncept/swift-npy)
+  - `git clone` into Birdgram/ios/ dir
+  - `swift package generate-xcodeproj` inside the cloned repo to generate the *.xcodeproj
+  - HACK Fix `import SwiftNpy` -> "missing required module Cminimap"
+    - Critical help here: https://bugs.swift.org/browse/SR-4972
+      - Add swift flags: Xcode -> project Bubo -> targets {Bubo,Bubo-macos} -> Build Settings -> "Other Swift Flags" -> ...
+        - `-Xcc -fmodule-map-file=$(SRCROOT)/../swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap`
+      - Add swift flags: Xcode -> project Birdgram -> target Birdgram -> Build Settings -> "Other Swift Flags" -> ...
+        - `-Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap`
+      - Add swift flags: bin/swift
+        - `-Xcc -fmodule-map-file="$dir"/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap`
+    - Alternate approach I didn't try: vendor all the files into Bubo and import the *.c into *.swift
+      - No "bridging header" for framework target; use the "umbrella header" instead
+      - https://developer.apple.com/documentation/swift/imported_c_and_objective-c_apis/importing_objective-c_into_swift
 - `swift` repl fails with "error: Couldn't lookup symbols" for e.g. Bubo symbols
   - In the repl code, before `import Bubo`, manually `import` every module from xcode's "Linked Frameworks and Libraries", e.g.
     - Works: `import Bubo`

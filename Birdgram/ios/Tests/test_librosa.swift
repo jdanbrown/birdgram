@@ -34,7 +34,7 @@ do {
   // mat("got  ", M)
   // mat("exp  ", Matrix(_M))
   // mat("Δ    ", M - Matrix(_M))
-  // mat("log Δ", (M - Matrix(_M)).vect { log10($0) })
+  // mat("log Δ", (M - Matrix(_M)).vect { np.log10($0) })
 
   // QUESTION How does tol work well here when it's really bad (1e-2) in mel_frequencies?
   testAlmostEqual("librosa.filters.mel", M, Matrix(_M), tol: 1e-8)

@@ -1,3 +1,4 @@
+import gzip as _gzip
 import json
 
 import numpy as np
@@ -30,7 +31,8 @@ def json_sanitize(x: any) -> any:
     return json.loads(json_dumps_safe(x))
 
 
-def json_dump_path(obj: any, path: str, **kwargs):
-    with open(path, 'w') as f:
+def json_dump_path(obj: any, path: str, gzip: bool = False, **kwargs):
+    _open = open if not gzip else _gzip.open
+    with _open(path, 'wt') as f:
         json.dump(obj, f, **kwargs)
         f.write('\n')

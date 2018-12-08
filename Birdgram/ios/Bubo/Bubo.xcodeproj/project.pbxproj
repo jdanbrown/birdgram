@@ -14,10 +14,22 @@
 		B7286C1521AE1E5F00E954D7 /* Pods_Bubo_macos.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7286C1421AE1E5F00E954D7 /* Pods_Bubo_macos.framework */; };
 		B72CC81521A36331009D8690 /* Pods_Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */; };
 		B76003BE21A3A3C200E1347A /* Util.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003BD21A3A3C100E1347A /* Util.swift */; };
+		B77424EC21B8C0ED00DA249C /* SwiftNpy.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B77424EB21B8C0ED00DA249C /* SwiftNpy.framework */; };
+		B774251621B8C77700DA249C /* skm.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774251521B8C77700DA249C /* skm.swift */; };
+		B774251721B8C77700DA249C /* skm.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774251521B8C77700DA249C /* skm.swift */; };
+		B774251921B8C79C00DA249C /* sklearn.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774251821B8C79C00DA249C /* sklearn.swift */; };
+		B774251A21B8C79C00DA249C /* sklearn.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774251821B8C79C00DA249C /* sklearn.swift */; };
+		B774252021B8CA1C00DA249C /* SwiftNpy.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B774251F21B8CA1C00DA249C /* SwiftNpy.framework */; };
+		B774252221B9DA8100DA249C /* Npy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774252121B9DA8100DA249C /* Npy.swift */; };
+		B774252321B9DA8100DA249C /* Npy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774252121B9DA8100DA249C /* Npy.swift */; };
+		B774255521B9F54D00DA249C /* features.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774255421B9F54D00DA249C /* features.swift */; };
+		B774255621B9F54D00DA249C /* features.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774255421B9F54D00DA249C /* features.swift */; };
+		B774255921BA037D00DA249C /* FileProps.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774255821BA037C00DA249C /* FileProps.swift */; };
+		B774255A21BA037D00DA249C /* FileProps.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774255821BA037C00DA249C /* FileProps.swift */; };
 		B78BFDED21A61C9F0046AB77 /* Show.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78BFDEC21A61C9F0046AB77 /* Show.swift */; };
 		B7A49D9121AF263E0076B0A2 /* Util.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003BD21A3A3C100E1347A /* Util.swift */; };
-		B7A49D9221AF26670076B0A2 /* np.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098D21AC90F800F90D4C /* np.swift */; };
-		B7A49D9321AF26A10076B0A2 /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099321ACAC3C00F90D4C /* Model.swift */; };
+		B7A49D9221AF26670076B0A2 /* numpy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098D21AC90F800F90D4C /* numpy.swift */; };
+		B7A49D9321AF26A10076B0A2 /* model.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099321ACAC3C00F90D4C /* model.swift */; };
 		B7A49D9421AF26A10076B0A2 /* librosa.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0097E21AC81F200F90D4C /* librosa.swift */; };
 		B7A49D9521AF26A10076B0A2 /* scipy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099121ACA80300F90D4C /* scipy.swift */; };
 		B7A49D9621AF26A10076B0A2 /* Surge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098F21ACA1CE00F90D4C /* Surge.swift */; };
@@ -31,10 +43,10 @@
 		B7CC8D1D21B47EBB0008EEDA /* _Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7CC8D1B21B47EBB0008EEDA /* _Log.swift */; };
 		B7D0960121AE0F450044A720 /* Bubo_macos.h in Headers */ = {isa = PBXBuildFile; fileRef = B7D095FF21AE0F450044A720 /* Bubo_macos.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		B7E0097F21AC81F200F90D4C /* librosa.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0097E21AC81F200F90D4C /* librosa.swift */; };
-		B7E0098E21AC90F800F90D4C /* np.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098D21AC90F800F90D4C /* np.swift */; };
+		B7E0098E21AC90F800F90D4C /* numpy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098D21AC90F800F90D4C /* numpy.swift */; };
 		B7E0099021ACA1CE00F90D4C /* Surge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0098F21ACA1CE00F90D4C /* Surge.swift */; };
 		B7E0099221ACA80300F90D4C /* scipy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099121ACA80300F90D4C /* scipy.swift */; };
-		B7E0099421ACAC3C00F90D4C /* Model.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099321ACAC3C00F90D4C /* Model.swift */; };
+		B7E0099421ACAC3C00F90D4C /* model.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E0099321ACAC3C00F90D4C /* model.swift */; };
 		B7FB674621B3307D00A4D6A7 /* Stats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7FB674521B3307D00A4D6A7 /* Stats.swift */; };
 		B7FB674721B3307D00A4D6A7 /* Stats.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7FB674521B3307D00A4D6A7 /* Stats.swift */; };
 /* End PBXBuildFile section */
@@ -65,6 +77,15 @@
 		B73C769421AE2B8200E04F17 /* SigmaSwiftStatistics.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = SigmaSwiftStatistics.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B73C769621AE2C6200E04F17 /* SigmaSwiftStatistics.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = SigmaSwiftStatistics.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B76003BD21A3A3C100E1347A /* Util.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Util.swift; sourceTree = "<group>"; };
+		B77424EB21B8C0ED00DA249C /* SwiftNpy.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = SwiftNpy.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B774251521B8C77700DA249C /* skm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = skm.swift; sourceTree = "<group>"; };
+		B774251821B8C79C00DA249C /* sklearn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = sklearn.swift; sourceTree = "<group>"; };
+		B774251B21B8C8F400DA249C /* SwiftZip.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = SwiftZip.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B774251D21B8C8F800DA249C /* Cminizip.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = Cminizip.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B774251F21B8CA1C00DA249C /* SwiftNpy.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = SwiftNpy.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B774252121B9DA8100DA249C /* Npy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Npy.swift; sourceTree = "<group>"; };
+		B774255421B9F54D00DA249C /* features.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = features.swift; sourceTree = "<group>"; };
+		B774255821BA037C00DA249C /* FileProps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileProps.swift; sourceTree = "<group>"; };
 		B78BFDEC21A61C9F0046AB77 /* Show.swift */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 2; lastKnownFileType = sourcecode.swift; path = Show.swift; sourceTree = "<group>"; tabWidth = 2; };
 		B7A2133121AE10460026C8CD /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7A49D9821B07CF30076B0A2 /* Testing.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Testing.swift; sourceTree = "<group>"; };
@@ -75,10 +96,10 @@
 		B7D095FF21AE0F450044A720 /* Bubo_macos.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Bubo_macos.h; sourceTree = "<group>"; };
 		B7D0960021AE0F450044A720 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B7E0097E21AC81F200F90D4C /* librosa.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = librosa.swift; sourceTree = "<group>"; };
-		B7E0098D21AC90F800F90D4C /* np.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = np.swift; sourceTree = "<group>"; };
+		B7E0098D21AC90F800F90D4C /* numpy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = numpy.swift; sourceTree = "<group>"; };
 		B7E0098F21ACA1CE00F90D4C /* Surge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Surge.swift; sourceTree = "<group>"; };
 		B7E0099121ACA80300F90D4C /* scipy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = scipy.swift; sourceTree = "<group>"; };
-		B7E0099321ACAC3C00F90D4C /* Model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Model.swift; sourceTree = "<group>"; };
+		B7E0099321ACAC3C00F90D4C /* model.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = model.swift; sourceTree = "<group>"; };
 		B7FB674521B3307D00A4D6A7 /* Stats.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Stats.swift; sourceTree = "<group>"; };
 		D94709A6A0D3C85310CD2511 /* Pods_Bubo_macos.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bubo_macos.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E79F16D623CD3ABA70F6B07E /* Pods_Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -89,6 +110,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B774252021B8CA1C00DA249C /* SwiftNpy.framework in Frameworks */,
 				B7B1EB0121AAEC50003EE032 /* Surge.framework in Frameworks */,
 				B72CC81521A36331009D8690 /* Pods_Bubo.framework in Frameworks */,
 			);
@@ -106,6 +128,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B77424EC21B8C0ED00DA249C /* SwiftNpy.framework in Frameworks */,
 				B7286C1521AE1E5F00E954D7 /* Pods_Bubo_macos.framework in Frameworks */,
 				B7286C1321AE1E4E00E954D7 /* Surge.framework in Frameworks */,
 			);
@@ -141,16 +164,15 @@
 			children = (
 				B70DB74821A1F7AC00968F4D /* Info.plist */,
 				B70DB74721A1F7AC00968F4D /* Bubo.h */,
-				B7E0099321ACAC3C00F90D4C /* Model.swift */,
-				B7E0097E21AC81F200F90D4C /* librosa.swift */,
-				B7E0099121ACA80300F90D4C /* scipy.swift */,
-				B7E0098D21AC90F800F90D4C /* np.swift */,
-				B7E0098F21ACA1CE00F90D4C /* Surge.swift */,
+				B774255721B9F63D00DA249C /* py */,
+				B774255821BA037C00DA249C /* FileProps.swift */,
+				B774252121B9DA8100DA249C /* Npy.swift */,
 				B7FB674521B3307D00A4D6A7 /* Stats.swift */,
+				B7E0098F21ACA1CE00F90D4C /* Surge.swift */,
 				B7A49DDD21B2FB340076B0A2 /* Colors.swift */,
+				B78BFDEC21A61C9F0046AB77 /* Show.swift */,
 				B7CC8D1B21B47EBB0008EEDA /* _Log.swift */,
 				B76003BD21A3A3C100E1347A /* Util.swift */,
-				B78BFDEC21A61C9F0046AB77 /* Show.swift */,
 				B7A49D9821B07CF30076B0A2 /* Testing.swift */,
 			);
 			path = Bubo;
@@ -163,6 +185,20 @@
 				B70DB75421A1F7AC00968F4D /* Info.plist */,
 			);
 			path = BuboTests;
+			sourceTree = "<group>";
+		};
+		B774255721B9F63D00DA249C /* py */ = {
+			isa = PBXGroup;
+			children = (
+				B7E0099321ACAC3C00F90D4C /* model.swift */,
+				B774255421B9F54D00DA249C /* features.swift */,
+				B7E0097E21AC81F200F90D4C /* librosa.swift */,
+				B774251521B8C77700DA249C /* skm.swift */,
+				B774251821B8C79C00DA249C /* sklearn.swift */,
+				B7E0099121ACA80300F90D4C /* scipy.swift */,
+				B7E0098D21AC90F800F90D4C /* numpy.swift */,
+			);
+			path = py;
 			sourceTree = "<group>";
 		};
 		B7D095FE21AE0F440044A720 /* Bubo-macos */ = {
@@ -188,6 +224,10 @@
 		D52B7F095958C74123E4660D /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				B774251F21B8CA1C00DA249C /* SwiftNpy.framework */,
+				B774251D21B8C8F800DA249C /* Cminizip.framework */,
+				B774251B21B8C8F400DA249C /* SwiftZip.framework */,
+				B77424EB21B8C0ED00DA249C /* SwiftNpy.framework */,
 				B73C769621AE2C6200E04F17 /* SigmaSwiftStatistics.framework */,
 				B73C769421AE2B8200E04F17 /* SigmaSwiftStatistics.framework */,
 				B7286C1421AE1E5F00E954D7 /* Pods_Bubo_macos.framework */,
@@ -387,17 +427,22 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B774255921BA037D00DA249C /* FileProps.swift in Sources */,
 				B7E0097F21AC81F200F90D4C /* librosa.swift in Sources */,
+				B774251921B8C79C00DA249C /* sklearn.swift in Sources */,
 				B7FB674621B3307D00A4D6A7 /* Stats.swift in Sources */,
 				B7CC8D1C21B47EBB0008EEDA /* _Log.swift in Sources */,
+				B774251621B8C77700DA249C /* skm.swift in Sources */,
+				B774252221B9DA8100DA249C /* Npy.swift in Sources */,
 				B7A49DDE21B2FB340076B0A2 /* Colors.swift in Sources */,
 				B78BFDED21A61C9F0046AB77 /* Show.swift in Sources */,
 				B7E0099221ACA80300F90D4C /* scipy.swift in Sources */,
+				B774255521B9F54D00DA249C /* features.swift in Sources */,
 				B7E0099021ACA1CE00F90D4C /* Surge.swift in Sources */,
-				B7E0098E21AC90F800F90D4C /* np.swift in Sources */,
+				B7E0098E21AC90F800F90D4C /* numpy.swift in Sources */,
 				B76003BE21A3A3C200E1347A /* Util.swift in Sources */,
 				B7A49D9921B07CF30076B0A2 /* Testing.swift in Sources */,
-				B7E0099421ACAC3C00F90D4C /* Model.swift in Sources */,
+				B7E0099421ACAC3C00F90D4C /* model.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -413,17 +458,22 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B774255A21BA037D00DA249C /* FileProps.swift in Sources */,
 				B7A49D9521AF26A10076B0A2 /* scipy.swift in Sources */,
+				B774251A21B8C79C00DA249C /* sklearn.swift in Sources */,
 				B7FB674721B3307D00A4D6A7 /* Stats.swift in Sources */,
 				B7CC8D1D21B47EBB0008EEDA /* _Log.swift in Sources */,
+				B774251721B8C77700DA249C /* skm.swift in Sources */,
+				B774252321B9DA8100DA249C /* Npy.swift in Sources */,
 				B7A49DDF21B2FB350076B0A2 /* Colors.swift in Sources */,
 				B7A49D9421AF26A10076B0A2 /* librosa.swift in Sources */,
 				B7A49D9621AF26A10076B0A2 /* Surge.swift in Sources */,
-				B7A49D9321AF26A10076B0A2 /* Model.swift in Sources */,
+				B774255621B9F54D00DA249C /* features.swift in Sources */,
+				B7A49D9321AF26A10076B0A2 /* model.swift in Sources */,
 				B7A49D9721AF26A10076B0A2 /* Show.swift in Sources */,
 				B7A49D9121AF263E0076B0A2 /* Util.swift in Sources */,
 				B7A49D9A21B07CF90076B0A2 /* Testing.swift in Sources */,
-				B7A49D9221AF26670076B0A2 /* np.swift in Sources */,
+				B7A49D9221AF26670076B0A2 /* numpy.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -579,6 +629,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/../swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = org.jdanbrown.Bubo;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				SKIP_INSTALL = YES;
@@ -608,6 +659,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
+				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/../swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = org.jdanbrown.Bubo;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				SKIP_INSTALL = YES;
@@ -677,6 +729,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/../swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = "org.jdanbrown.Bubo-macos";
 				PRODUCT_NAME = Bubo;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -708,6 +761,7 @@
 					"@loader_path/Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.11;
+				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/../swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = "org.jdanbrown.Bubo-macos";
 				PRODUCT_NAME = Bubo;
 				PROVISIONING_PROFILE_SPECIFIER = "";

@@ -22,9 +22,8 @@ interface Props {
   histories:  Histories;
   go:         Go;
   // Settings
-  showDebug: boolean;
-  // RecentScreen
-  maxRecents: number;
+  showDebug:  boolean;
+  maxHistory: number;
 }
 
 interface State {
@@ -39,7 +38,6 @@ interface Recent {
 export class RecentScreen extends PureComponent<Props, State> {
 
   static defaultProps = {
-    maxRecents: 1000,
   };
 
   state = {
@@ -55,7 +53,7 @@ export class RecentScreen extends PureComponent<Props, State> {
 
   addRecents = (recents: Array<Recent>) => {
     this.setState((state, props) => ({
-      recents: [...recents, ...state.recents].slice(0, this.props.maxRecents),
+      recents: [...recents, ...state.recents].slice(0, this.props.maxHistory), // Most recent first (reverse of history.entries)
     }));
   }
 
@@ -67,12 +65,12 @@ export class RecentScreen extends PureComponent<Props, State> {
     //  - Listen for location changes (future)
     //  - Capture existing history (past)
     //  - TODO How to avoid races?
-    this.props.histories.search.listen((location, action) => {
-      this.addLocations([location]);
-    });
     this.addLocations(this.props.histories.search.entries
       .slice().reverse() // Reverse without mutating
     );
+    this.props.histories.search.listen((location, action) => {
+      this.addLocations([location]);
+    });
 
   }
 

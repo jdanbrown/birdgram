@@ -40,6 +40,15 @@ public func throw_<X>(_ e: Error) throws -> X {
   throw e
 }
 
+public func TODO<X>(file: StaticString = #file, line: UInt = #line) -> X {
+  preconditionFailure("TODO", file: file, line: line)
+}
+
+// For debugging
+public func puts        <X>(_ x: X) -> X { return tap(x) { x in print("puts", x) } }
+public func debug_print <X>(_ x: X) -> X { return tap(x) { x in print("PRINT", x) } }
+public func tap         <X>(_ x: X, _ f: (X) -> Void) -> X { f(x); return x }
+
 public func checkStatus(_ status: OSStatus) throws -> Void {
   if (status != 0) {
     throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
@@ -83,6 +92,9 @@ public func documentsDirectory() -> String {
   // https://stackoverflow.com/questions/24055146/how-to-find-nsdocumentdirectory-in-swift
   return NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
 }
+
+// Common type for react-native js/ios serdes
+public typealias Props = Dictionary<String, Any>
 
 extension Float {
 
@@ -156,6 +168,11 @@ extension Collection {
   //   return xs.map(f).joined()
   // }
 
+  public func only() throws -> Element {
+    if count != 1 { throw AppError("only: Expected 1 element, have \(count) elements") }
+    return first!
+  }
+
 }
 
 extension String {
@@ -181,6 +198,16 @@ extension String {
     a = a.clamped(startIndex, endIndex)
     b = b.clamped(a,          endIndex)
     return String(self[a..<b])
+  }
+
+  public func dropPrefix(_ s: String) -> String {
+    precondition(hasPrefix(s), "dropPrefix: string[\(self)] doesn't have prefix[\(s)]")
+    return String(self.dropFirst(s.count))
+  }
+
+  public func dropSuffix(_ s: String) -> String {
+    precondition(hasSuffix(s), "dropSuffix: string[\(self)] doesn't have suffix[\(s)]")
+    return String(self.dropLast(s.count))
   }
 
 }
@@ -269,14 +296,15 @@ public func timed<X>(_ f: () throws -> X) rethrows -> (x: X, time: Double) {
   return (x: x, time: timer.time())
 }
 
-public func printTime<X>(_ format: String = "[%.3fs]", _ f: () throws -> X) rethrows {
+@discardableResult
+public func printTime<X>(_ label: String? = nil, format: String = "[%.3fs]", _ f: () throws -> X) rethrows -> X {
   let (x: x, time: time) = try timed(f)
-  print(String(format: format, time))
-  // return x // Don't return (uncommon case), else caller has to silence unused result warnings (common case)
+  print(String(format: format + (label != nil ? " \(label as Any)" : ""), time))
+  return x
 }
 
-public func timeit<X>(_ n: Int = 3, _ format: String = "[%.3fs]", _ f: () throws -> X) rethrows {
+public func timeit<X>(_ n: Int = 3, _ label: String? = nil, format: String = "[%.3fs]", _ f: () throws -> X) rethrows {
   for _ in 0..<n {
-    try printTime(format, f)
+    try printTime(label, format: format, f)
   }
 }

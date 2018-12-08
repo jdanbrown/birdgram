@@ -75,7 +75,7 @@ do {
   // mat("spect", S)
   // mat("S    ", Matrix(_S))
   // mat("Δ    ", S - Matrix(_S))
-  // mat("log Δ", (S - Matrix(_S)).vect { log10($0) })
+  // mat("log Δ", (S - Matrix(_S)).vect { np.log10($0) })
 
   testAlmostEqual("scipy.signal.spectrogram", S, Matrix(_S))
 

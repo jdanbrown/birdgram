@@ -14,7 +14,7 @@ const {RNSpectro} = NativeModules;
 
 const _emitter = new NativeEventEmitter(RNSpectro);
 
-export interface SpectroStats {
+export interface NativeSpectroStats {
   nPathsSent: number;
 }
 
@@ -24,20 +24,20 @@ export interface ImageFile {
   height: number;
 }
 
-export const Spectro = {
+export const NativeSpectro = {
 
   // XXX Debug
   debugPrintNative: (msg: string): void => RNSpectro.debugPrintNative(msg),
 
   // constantsToExport
-  sample_rate: RNSpectro.sample_rate as number,
-  f_bins:      RNSpectro.f_bins      as number,
+  //  - e.g. `foo: RNSpectro.foo as number,`
 
   _emitter,
 
   create: async (
     opts: {
       outputPath: string;
+      f_bins: number;
       sampleRate?: number;
       bitsPerChannel?: number;
       channelsPerFrame?: number;
@@ -48,9 +48,9 @@ export const Spectro = {
     opts,
   ),
 
-  start: async (): Promise<void>          => RNSpectro.start(),
-  stop:  async (): Promise<null | string> => RNSpectro.stop(),
-  stats: async (): Promise<SpectroStats>  => RNSpectro.stats(),
+  start: async (): Promise<void>               => RNSpectro.start(),
+  stop:  async (): Promise<null | string>      => RNSpectro.stop(),
+  stats: async (): Promise<NativeSpectroStats> => RNSpectro.stats(),
 
   onAudioChunk:      (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('audioChunk', f),
   onSpectroFilePath: (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('spectroFilePath', f),
@@ -59,6 +59,7 @@ export const Spectro = {
     audioPath: string,
     spectroPathBase: string,
     opts: {
+      f_bins: number,
       denoise?: boolean,
     },
   ): Promise<null | ImageFile> => RNSpectro.renderAudioPathToSpectroPath(
@@ -67,6 +68,7 @@ export const Spectro = {
     opts,
   ),
 
+  // TODO Move out of NativeSpectro
   chunkImageFile: async (
     path: string,
     chunkWidth: number

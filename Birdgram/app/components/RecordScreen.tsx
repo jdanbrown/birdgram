@@ -27,9 +27,10 @@ const {fs, base64} = RNFB;
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
 import * as Colors from '../colors';
-import { SourceId } from '../datatypes';
+import { ModelsSearch, SourceId } from '../datatypes';
 import { Log, puts, rich } from '../log';
-import { ImageFile, Spectro, SpectroStats } from '../native/Spectro';
+import { NativeSearch } from '../native/Search';
+import { ImageFile, NativeSpectro, NativeSpectroStats } from '../native/Spectro';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
@@ -43,7 +44,7 @@ import {
 
 const log = new Log('RecordScreen');
 
-global.Spectro = Spectro; // XXX Debug
+global.NativeSpectro = NativeSpectro; // XXX Debug
 
 // XXX Unused
 // // Util: wrap `new Jimp` in a promise
@@ -60,15 +61,16 @@ global.concatSamples = concatSamples; // XXX Debug
 
 export interface Props {
   // App globals
+  modelsSearch: ModelsSearch;
   go: Go;
   // Settings
   settings: SettingsWrites;
   showDebug: boolean;
   // RecordScreen
+  f_bins: number;
   refreshRate: number;
   doneSpectroChunkWidth: number;
   spectroImageLimit: number;
-  spectroHeight: number;
   sampleRate: number;
   channels: number;
   bitsPerSample: number;
@@ -119,8 +121,8 @@ export class RecordScreen extends Component<Props, State> {
 
   // Many of these are hardcoded to match Bubo/Models.swift:Features (which is in turn hardcoded to match py Features config)
   static defaultProps: Partial<Props> = {
-    spectroHeight: Spectro.f_bins,
-    sampleRate:    Spectro.sample_rate,
+    f_bins:        80, // NOTE Recording shows higher res spectros (f_bins=80) than model actually uses (f_bins=40)
+    sampleRate:    22050,
     channels:      1,
     bitsPerSample: 16,
   };
@@ -129,7 +131,7 @@ export class RecordScreen extends Component<Props, State> {
     showMoreDebug: false,
     recordingState: RecordingState.Stopped,
     // TODO Expose controls like SearchScreen [think through RecordScreen.state vs. Settings vs. SearchScreen.state]
-    spectroScale: Spectro.f_bins / 80,
+    spectroScale: this.props.f_bins / 80,
     follow: true,
     denoised: true,
     spectroImages: [],
@@ -148,19 +150,19 @@ export class RecordScreen extends Component<Props, State> {
   // Refs
   _scrollViewRef: RefObject<ScrollView> = React.createRef();
 
-  // Throttle update/render if Spectro has produced more spectros than we have consumed
-  //  - Measure render vs. spectro lag using Spectro.stats (which is async)
+  // Throttle update/render if NativeSpectro has produced more spectros than we have consumed
+  //  - Measure render vs. spectro lag using NativeSpectro.stats (which is async)
   //  - Store as internal state i/o react state to avoid unnecessary updates (~2x)
-  _nativeStats: null | SpectroStats = null
+  _nativeStats: null | NativeSpectroStats = null
   get lag(): null | number {
     return !this._nativeStats ? null : this._nativeStats.nPathsSent - this.state.nSpectroImages;
   }
   updateNativeStats = () => {
     // We're updating internal state, so prevent caller from trying to block on our completion
     (async () => {
-      // Condition on Recording to avoid spurious failures before Spectro.create()
+      // Condition on Recording to avoid spurious failures before NativeSpectro.create()
       if (this.state.recordingState === RecordingState.Recording) {
-        this._nativeStats = await tryElseAsync<null | SpectroStats>(null, Spectro.stats);
+        this._nativeStats = await tryElseAsync<null | NativeSpectroStats>(null, NativeSpectro.stats);
       }
     })();
   }
@@ -179,7 +181,7 @@ export class RecordScreen extends Component<Props, State> {
       log.info('componentDidMount: Permissions.request: microphone', {status});
     });
 
-    this._listeners.push(Spectro.onSpectroFilePath(this.onSpectroFilePath));
+    this._listeners.push(NativeSpectro.onSpectroFilePath(this.onSpectroFilePath));
 
   }
 
@@ -191,7 +193,7 @@ export class RecordScreen extends Component<Props, State> {
 
   shouldComponentUpdate = (nextProps: Props, nextState: State): boolean => {
 
-    // Throttle update/render if Spectro has produced more spectros than we have consumed
+    // Throttle update/render if NativeSpectro has produced more spectros than we have consumed
     //  - Not a foolproof approach to keeping the UI responsive, but it seems to be a good first step
     //  - Condition on recordingState to avoid races where we get stuck without being able to update on stopRecording
     if (this.state.recordingState === RecordingState.Recording) {
@@ -324,7 +326,7 @@ export class RecordScreen extends Component<Props, State> {
           </this.DebugText>
           <this.DebugText>
             spectro: {}
-            {this.state.nSpectroWidth} w × {this.props.spectroHeight} h ({this.state.spectroImages.length} images)
+            {this.state.nSpectroWidth} w × {this.props.f_bins} h ({this.state.spectroImages.length} images)
           </this.DebugText>
           {this.state.showMoreDebug && (
             <this.DebugText>
@@ -377,15 +379,16 @@ export class RecordScreen extends Component<Props, State> {
         });
         this._renderRate.reset();
 
-        await Spectro.create({
+        await NativeSpectro.create({
           outputPath: await this.freshPath('wav'),
+          f_bins: this.props.f_bins,
           sampleRate: this.props.sampleRate,
           bitsPerChannel: this.props.bitsPerSample,
           channelsPerFrame: this.props.channels,
           refreshRate: this.props.refreshRate, // NOTE Only updates on stop/record
           // bufferSize: 2048, // HACK Manually tuned for (22050hz,1ch,16bit)
         });
-        await Spectro.start();
+        await NativeSpectro.start();
 
       }
     } catch (e) {
@@ -404,7 +407,7 @@ export class RecordScreen extends Component<Props, State> {
           recordingState: RecordingState.Saving,
         });
         this._nativeStats = null; // Else shouldComponentUpdate gets stuck with lag>0
-        const audioPath = await Spectro.stop();
+        const audioPath = await NativeSpectro.stop();
 
         log.info('stopRecording: Got', {audioPath});
         var doneRecording: null | DoneRecording;
@@ -415,12 +418,15 @@ export class RecordScreen extends Component<Props, State> {
           // Render audioPath -> spectros
           const spectros: Map<Denoise, DoneRecordingSpectro> = new Map(await Promise.all([true, false].map(async denoise => {
             const spectroPathBase = await ensureParentDir(`${audioPath}.spectros/denoise=${denoise}.png`);
-            const single = await Spectro.renderAudioPathToSpectroPath(audioPath, spectroPathBase, {denoise});
+            const single = await NativeSpectro.renderAudioPathToSpectroPath(audioPath, spectroPathBase, {
+              f_bins: this.props.f_bins,
+              denoise,
+            });
             var spectros: null | DoneRecordingSpectro;
             if (!single) {
               spectros = null;
             } else {
-              const chunked = await Spectro.chunkImageFile(single.path, this.props.doneSpectroChunkWidth);
+              const chunked = await NativeSpectro.chunkImageFile(single.path, this.props.doneSpectroChunkWidth);
               spectros = {single, chunked};
             }
             return [denoise, spectros] as [Denoise, DoneRecordingSpectro];
@@ -429,6 +435,11 @@ export class RecordScreen extends Component<Props, State> {
             audioPath,
             spectros,
           };
+
+          // TODO(model_predict)
+          //  - NOTE Model uses its own f_bins (40), regardless of the this.props.f_bins (80) we use to draw while recording
+          const preds = NativeSearch.preds(audioPath);
+          // TODO(model_predict) Handle preds=null when audioPath has no samples (throws on hard error, which is ok to not catch here)
 
         }
 
@@ -708,6 +719,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 const styles = StyleSheet.create({
   bottomControls: {
     flexDirection: 'row',
+    height: 48, // Approx tab bar height (see TabRoutes.TabBarStyle)
   },
   bottomControlsButton: {
     ...Styles.center,

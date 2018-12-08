@@ -2,7 +2,7 @@
 import 'react-native-console-time-polyfill';
 import { sprintf } from 'sprintf-js';
 
-import { __F_IF_DEV__, global, json, match, pretty } from './utils';
+import { __F_IF_DEV__, global, json, match, pretty, Timer } from './utils';
 
 // Config
 const defaultLevel: LevelSetting = 'debug';
@@ -92,6 +92,25 @@ export class Log {
   // Non-level methods
   time:    typeof console.time    = __F_IF_DEV__(console.time    .bind(console));
   timeEnd: typeof console.timeEnd = __F_IF_DEV__(console.timeEnd .bind(console));
+
+  // Non-level methods
+  //  - timed/timedAsync as a nicer alternative to time/timeEnd
+  timed = <X>(msg: string, f: () => X): X => {
+    const timer = new Timer();
+    try {
+      return f();
+    } finally {
+      this.debug(sprintf(`timed: [%.3fs] %s`, timer.time(), msg)); // HACK 'timed:' to place nicely with name prefix
+    }
+  };
+  timedAsync = async <X>(msg: string, f: () => Promise<X>): Promise<X> => {
+    const timer = new Timer();
+    try {
+      return await f();
+    } finally {
+      this.debug(sprintf(`timed: [%.3fs] %s`, timer.time(), msg)); // HACK 'timed:' to place nicely with name prefix
+    }
+  };
 
   // Alias, to allow log.rich() i/o extra top-level import
   rich = rich;

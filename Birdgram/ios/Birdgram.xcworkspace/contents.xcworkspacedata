@@ -5,6 +5,9 @@
       location = "group:Pods/Pods.xcodeproj">
    </FileRef>
    <FileRef
+      location = "group:swift-npy/SwiftNpy.xcodeproj">
+   </FileRef>
+   <FileRef
       location = "group:Surge/Surge.xcodeproj">
    </FileRef>
    <FileRef

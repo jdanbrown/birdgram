@@ -146,7 +146,7 @@ class Features(DataclassConfig):
         )
 
     @requires_nonempty_rows
-    @short_circuit(lambda self, recs: recs.get('patches'))
+    @short_circuit(lambda self, recs, **kwargs: recs.get('patches'))
     def patches(self, recs: RecordingDF) -> Column['np.ndarray[(f*p,t)]']:
         """.patches (f*p,t) <- .spectro (f,t)"""
         log.debug(**{
@@ -206,7 +206,7 @@ class Features(DataclassConfig):
         }))
         return spectros
 
-    @short_circuit(lambda self, rec: rec.get('patches'))
+    @short_circuit(lambda self, rec, **kwargs: rec.get('patches'))
     # TODO Re-enable @cache after birdclef
     # @cache(version=0, tags='rec', key=lambda self, rec: (rec.id, self.patch_config, self.spectro_config, self.deps))
     def _patches(self, rec: Row) -> 'np.ndarray[(f*p, t)]':
@@ -543,7 +543,7 @@ class Projection(DataclassConfig):
     # Cache to speed up the dev loop in e.g. compare_classifiers_xc
     #   - Low cost to reset the cache since _feat cache hits are fast (~10s for ~13k recs)
     @requires_nonempty_rows
-    @short_circuit(lambda self, recs: recs.get('feat'))
+    @short_circuit(lambda self, recs, **kwargs: recs.get('feat'))
     @cache(version=0, tags='recs', key=lambda self, recs: (recs.id, self.agg_config, self.skm_config, self.deps))
     def feat(self, recs: RecordingDF) -> Column['np.ndarray[(k*a,)]']:
         """feat (k*a,) <- .agg (k,a)"""
@@ -560,7 +560,7 @@ class Projection(DataclassConfig):
         return feat
 
     @requires_nonempty_rows
-    @short_circuit(lambda self, recs: recs.get('agg'))
+    @short_circuit(lambda self, recs, **kwargs: recs.get('agg'))
     def agg(self, recs: RecordingDF) -> Column['np.ndarray[(k,a)]']:
         """agg (k,a) <- .proj (k,t)"""
         # Performance (600 peterson recs):
@@ -576,7 +576,7 @@ class Projection(DataclassConfig):
         return agg
 
     @requires_nonempty_rows
-    @short_circuit(lambda self, recs: recs.get('proj'))
+    @short_circuit(lambda self, recs, **kwargs: recs.get('proj'))
     def proj(self, recs: RecordingDF) -> Column['np.ndarray[(k,t)]']:
         """proj (k,t) <- .patch (f*p,t)"""
         # Performance (100 peterson recs):
@@ -593,7 +593,7 @@ class Projection(DataclassConfig):
 
     # TODO Pull in np.float32 from recs.recs_featurize_feat (slow cache bust)
     #   - And bump all downstream @cache(version): _feat, feat, ...?
-    @short_circuit(lambda self, rec: rec.get('feat'))
+    @short_circuit(lambda self, rec, **kwargs: rec.get('feat'))
     @cache(version=0, tags='rec', key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
     def _feat(self, rec: Row) -> 'np.ndarray[(k*a,)]':
         """feat (k*a,) <- .agg (k,a)"""
@@ -606,7 +606,7 @@ class Projection(DataclassConfig):
         ])
         return feat
 
-    @short_circuit(lambda self, rec: rec.get('agg'))
+    @short_circuit(lambda self, rec, **kwargs: rec.get('agg'))
     @cache(version=0, tags='rec', key=lambda self, rec: (rec.id, self.agg_config, self.skm_config, self.deps))
     def _agg(self, rec: Row) -> Mapping['a', 'np.ndarray[(k,)]']:
         """agg (k,a) <- .proj (k,t)"""
@@ -628,7 +628,7 @@ class Projection(DataclassConfig):
             for agg_fun in self.agg_config.agg_funs
         }
 
-    @short_circuit(lambda self, rec: rec.get('proj'))
+    @short_circuit(lambda self, rec, **kwargs: rec.get('proj'))
     # TODO Re-enable @cache after birdclef
     # @cache(version=0, tags='rec', key=lambda self, rec: (rec.id, self.skm_config, self.deps))
     def _proj(self, rec: Row) -> 'np.ndarray[(k,t)]':

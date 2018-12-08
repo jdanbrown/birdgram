@@ -38,7 +38,7 @@ public func matrixToImageFile(
     range: range,
     colors: colors,
     bottomUp: bottomUp,
-    timer: Timer(), debugTimes: &debugTimes // XXX Debug (For Features.spectro)
+    timer: Timer(), debugTimes: &debugTimes // XXX Debug (For Features._spectro)
   )
 }
 
@@ -48,7 +48,7 @@ public func matrixToImageFile(
   range: Interval<Float>,
   colors: Colormap,
   bottomUp: Bool? = nil,
-  timer: Bubo.Timer, debugTimes: inout Array<(String, Double)> // XXX Debug (for Features.spectro)
+  timer: Bubo.Timer, debugTimes: inout Array<(String, Double)> // XXX Debug (for Features._spectro)
 ) throws -> ImageFile {
   precondition(!X.isEmpty, "matrixToImageFile: X must be nonempty (for path[\(path)])")
 

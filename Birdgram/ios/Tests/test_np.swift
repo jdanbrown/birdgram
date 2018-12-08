@@ -111,7 +111,7 @@ do {
   // sig("abs_rfft", np.fft.abs_rfft(xs))
   // sig("fs      ", fs)
   // sig("Δ       ", np.fft.abs_rfft(xs) .- fs)
-  // sig("log Δ   ", log10(np.fft.abs_rfft(xs) .- fs))
+  // sig("log Δ   ", np.log10(np.fft.abs_rfft(xs) .- fs))
 
   testAlmostEqual("np.fft.abs_rfft", fs, np.fft.abs_rfft(xs), tol: 1e-6)
 

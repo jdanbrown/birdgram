@@ -1,9 +1,10 @@
+// scipy: A very small subset of functionality ported from python
+//  - Based on https://github.com/scipy/scipy/blob/v1.1.0/scipy/signal/spectral.py#L563
+//  - Based on https://github.com/tensorflow/magenta-js/blob/53a6cdd/music/src/transcription/audio_utils.ts
+
 import Foundation
 import Surge
 
-// Functions ported from python scipy
-//  - Based on https://github.com/scipy/scipy/blob/v1.1.0/scipy/signal/spectral.py#L563
-//  - Based on https://github.com/tensorflow/magenta-js/blob/53a6cdd/music/src/transcription/audio_utils.ts
 public enum scipy {
 
   public enum signal {
@@ -70,12 +71,12 @@ public enum scipy {
       // _Log.debug(String(format: "[time] scipy.signal.spectrogram: S_cols: %d", Int(1000 * timer.lap()))) // XXX Perf
 
       // Join S_cols into S matrix (freq x time)
-      //  - transpose(Matrix(...)) for vectorized vDSP_mtrans, i/o trying to zip cols->rows in swift
-      let S = transpose(Matrix(
+      //  - .T for vectorized vDSP_mtrans, i/o trying to zip cols->rows in swift
+      let S = Matrix(
         rows:     t,
         columns:  f,
         gridRows: S_cols
-      ))
+      ).T
       // _Log.debug(String(format: "[time] scipy.signal.spectrogram: S: %d", Int(1000 * timer.lap()))) // XXX Perf
 
       // TODO Compute freq/time labels (not yet needed for mobile)
@@ -107,6 +108,13 @@ public enum scipy {
         }
       }
     }
+
+  }
+
+  public enum special {
+
+    public static func logit(_ p: [Float]) -> [Float] { return np.log(p ./ (1 - p)) }
+    public static func expit(_ x: [Float]) -> [Float] { return 1 / (1 + np.exp(-x)) }
 
   }
 

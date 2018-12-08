@@ -4,11 +4,10 @@
 //  - ios/Birdgram/Spectro.swift - add swift RNSpectro.f() calling Spectro.f()
 //  - ios/Birdgram/Spectro.swift - add swift Spectro.f()
 
-import os
+import os // For os_log
 import Foundation
 
 import Bubo // Before Bubo_Pods imports
-import AudioKit
 import Promises
 import Surge
 
@@ -28,122 +27,109 @@ import Surge
 //  - @objc for functions with args(/ only if they return a promise?) requires `_ foo` on first arg
 //    - https://stackoverflow.com/a/39840952/397334
 
-typealias Props = Dictionary<String, Any>
-
 @objc(RNSpectro)
-class RNSpectro: RCTEventEmitter {
+class RNSpectro: RCTEventEmitter, RNProxy {
 
+  // XXX(model_predict)
   //
-  // Boilerplate
+  // //
+  // // Boilerplate
+  // //
   //
-
-  // XXX Debug
-  @objc func debugPrintNative(_ msg: String) {
-    os_log("%@", msg) // (print() doesn't show up in device logs, even though it somehow shows up in xcode logs)
-  }
-
-  var proxy: Proxy?
-
-  // TODO Simplify
-  func withPromiseNoProxy<X>(
-    _ resolve: @escaping RCTPromiseResolveBlock,
-    _ reject: @escaping RCTPromiseRejectBlock,
-    _ name: String,
-    _ f: @escaping () throws -> X
-  ) -> Void {
-    withPromiseNoProxyAsync(resolve, reject, name) { () -> Promise<X> in
-      return Promise { () -> X in
-        return try f()
-      }
-    }
-  }
-
-  // TODO Simplify
-  func withPromiseNoProxyAsync<X>(
-    _ resolve: @escaping RCTPromiseResolveBlock,
-    _ reject: @escaping RCTPromiseRejectBlock,
-    _ name: String,
-    _ f: () -> Promise<X>
-  ) -> Void {
-    f().then { x in
-      resolve(x)
-    }.catch { error in
-      let method = "\(type(of: self)).\(name)"
-      let stack = Thread.callStackSymbols // TODO How to get stack from error i/o current frame? (which is doubly useless in async)
-      reject(
-        "\(method)",
-        "method[\(method)] error[\(error)] stack[\n\(stack.joined(separator: "\n"))\n]",
-        error
-      )
-    }
-  }
-
-  // TODO Simplify
-  func withPromise<X>(
-    _ resolve: @escaping RCTPromiseResolveBlock,
-    _ reject: @escaping RCTPromiseRejectBlock,
-    _ name: String,
-    _ f: @escaping (Proxy) throws -> X
-  ) -> Void {
-    withPromiseAsync(resolve, reject, name) { (_proxy: Proxy) -> Promise<X> in
-      return Promise { () -> X in
-        return try f(_proxy)
-      }
-    }
-  }
-
-  // TODO Simplify
-  func withPromiseAsync<X>(
-    _ resolve: @escaping RCTPromiseResolveBlock,
-    _ reject: @escaping RCTPromiseRejectBlock,
-    _ name: String,
-    _ f: (Proxy) -> Promise<X>
-  ) -> Void {
-    if let _proxy = proxy {
-      f(_proxy).then { x in
-        resolve(x)
-      }.catch { error in
-        let method = "\(type(of: self)).\(name)"
-        let stack = Thread.callStackSymbols // TODO How to get stack from error i/o current frame? (which is doubly useless in async)
-        reject(
-          "\(method)",
-          "method[\(method)] error[\(error)] stack[\n\(stack.joined(separator: "\n"))\n]",
-          error
-        )
-      }
-    } else {
-      let error = AppError("proxy=nil")
-      let method = "\(type(of: self)).\(name)"
-      let stack = Thread.callStackSymbols // TODO How to get stack from error i/o current frame? (which is doubly useless in async)
-      reject(
-        "\(method)",
-        "method[\(method)] error[\(error)] stack[\n\(stack.joined(separator: "\n"))\n]",
-        error
-      )
-    }
-  }
-
-  // Static constants exported to js once at init time (e.g. later changes will be ignored)
-  //  - https://facebook.github.io/react-native/docs/native-modules-ios#exporting-constants
-  @objc override func constantsToExport() -> Dictionary<AnyHashable, Any> {
-    return Proxy.constantsToExport()
-  }
-
-  @objc open override func supportedEvents() -> [String] {
-    return Proxy.supportedEvents()
-  }
-
-  func getProp<X>(_ props: Props, _ key: String) throws -> X? {
-    guard let x = props[key] else { return nil }
-    guard let y = x as? X else { throw AppError("Failed to convert \(key)[\(x)] to type \(X.self)") }
-    return y
-  }
-
+  // var proxy: Proxy?
   //
-  // Non-boilerplate
+  // // TODO Simplify
+  // func withPromiseNoProxy<X>(
+  //   _ resolve: @escaping RCTPromiseResolveBlock,
+  //   _ reject: @escaping RCTPromiseRejectBlock,
+  //   _ name: String,
+  //   _ f: @escaping () throws -> X
+  // ) -> Void {
+  //   withPromiseNoProxyAsync(resolve, reject, name) { () -> Promise<X> in
+  //     return Promise { () -> X in
+  //       return try f()
+  //     }
+  //   }
+  // }
   //
+  // // TODO Simplify
+  // func withPromiseNoProxyAsync<X>(
+  //   _ resolve: @escaping RCTPromiseResolveBlock,
+  //   _ reject: @escaping RCTPromiseRejectBlock,
+  //   _ name: String,
+  //   _ f: () -> Promise<X>
+  // ) -> Void {
+  //   f().then { x in
+  //     resolve(x)
+  //   }.catch { error in
+  //     let method = "\(type(of: self)).\(name)"
+  //     let stack = Thread.callStackSymbols // TODO How to get stack from error i/o current frame? (which is doubly useless in async)
+  //     reject(
+  //       "\(method)",
+  //       "method[\(method)] error[\(error)] stack[\n\(stack.joined(separator: "\n"))\n]",
+  //       error
+  //     )
+  //   }
+  // }
+  //
+  // // TODO Simplify
+  // func withPromise<X>(
+  //   _ resolve: @escaping RCTPromiseResolveBlock,
+  //   _ reject: @escaping RCTPromiseRejectBlock,
+  //   _ name: String,
+  //   _ f: @escaping (Proxy) throws -> X
+  // ) -> Void {
+  //   withPromiseAsync(resolve, reject, name) { (_proxy: Proxy) -> Promise<X> in
+  //     return Promise { () -> X in
+  //       return try f(_proxy)
+  //     }
+  //   }
+  // }
+  //
+  // // TODO Simplify
+  // func withPromiseAsync<X>(
+  //   _ resolve: @escaping RCTPromiseResolveBlock,
+  //   _ reject: @escaping RCTPromiseRejectBlock,
+  //   _ name: String,
+  //   _ f: (Proxy) -> Promise<X>
+  // ) -> Void {
+  //   if let _proxy = proxy {
+  //     f(_proxy).then { x in
+  //       resolve(x)
+  //     }.catch { error in
+  //       let method = "\(type(of: self)).\(name)"
+  //       let stack = Thread.callStackSymbols // TODO How to get stack from error i/o current frame? (which is doubly useless in async)
+  //       reject(
+  //         "\(method)",
+  //         "method[\(method)] error[\(error)] stack[\n\(stack.joined(separator: "\n"))\n]",
+  //         error
+  //       )
+  //     }
+  //   } else {
+  //     let error = AppError("proxy=nil")
+  //     let method = "\(type(of: self)).\(name)"
+  //     let stack = Thread.callStackSymbols // TODO How to get stack from error i/o current frame? (which is doubly useless in async)
+  //     reject(
+  //       "\(method)",
+  //       "method[\(method)] error[\(error)] stack[\n\(stack.joined(separator: "\n"))\n]",
+  //       error
+  //     )
+  //   }
+  // }
+  //
+  // func getPropOptional<X>(_ props: Props, _ key: String) throws -> X? {
+  //   guard let any: Any = props[key] else { return nil }
+  //   guard let x:   X   = any as? X  else { throw AppError("Failed to convert \(key)[\(any)] to type \(X.self)") }
+  //   return x
+  // }
+  //
+  // func getPropRequired<X>(_ props: Props, _ key: String) throws -> X {
+  //   guard let x: X = try getPropOptional(props, key) else { throw AppError("\(key) is required") }
+  //   return x
+  // }
 
   typealias Proxy = Spectro
+  var proxy: Proxy?
 
   // requiresMainQueueSetup / methodQueue / dispatch_async
   //  - https://stackoverflow.com/a/51014267/397334
@@ -153,6 +139,24 @@ class RNSpectro: RCTEventEmitter {
     return false
   }
 
+  // Static constants exported to js once at init time (e.g. later changes will be ignored)
+  //  - https://facebook.github.io/react-native/docs/native-modules-ios#exporting-constants
+  @objc override func constantsToExport() -> Dictionary<AnyHashable, Any> {
+    return [:]
+  }
+
+  @objc open override func supportedEvents() -> [String] {
+    return [
+      "audioChunk",
+      "spectroFilePath",
+    ]
+  }
+
+  // XXX Debug
+  @objc func debugPrintNative(_ msg: String) {
+    os_log("%@", msg) // (print() doesn't show up in device logs, even though it somehow shows up in xcode logs)
+  }
+
   @objc func create(
     _ opts: Props,
     resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
@@ -160,17 +164,18 @@ class RNSpectro: RCTEventEmitter {
     withPromiseNoProxy(resolve, reject, "create") {
       self.proxy = try Spectro.create(
         emitter:          self,
-        outputPath:       self.getProp(opts, "outputPath") ?? throw_(AppError("outputPath is required")),
+        outputPath:       self.getPropRequired(opts, "outputPath"),
+        f_bins:           self.getPropRequired(opts, "f_bins"),
         // TODO Clean up unused params
-        refreshRate:      self.getProp(opts, "refreshRate"),
-        bufferSize:       self.getProp(opts, "bufferSize"),
-        sampleRate:       self.getProp(opts, "sampleRate"),
-        channels:         self.getProp(opts, "channels"),
-        bytesPerPacket:   self.getProp(opts, "bytesPerPacket"),
-        framesPerPacket:  self.getProp(opts, "framesPerPacket"),
-        bytesPerFrame:    self.getProp(opts, "bytesPerFrame"),
-        channelsPerFrame: self.getProp(opts, "channelsPerFrame"),
-        bitsPerChannel:   self.getProp(opts, "bitsPerChannel")
+        refreshRate:      self.getPropOptional(opts, "refreshRate"),
+        bufferSize:       self.getPropOptional(opts, "bufferSize"),
+        sampleRate:       self.getPropOptional(opts, "sampleRate"),
+        channels:         self.getPropOptional(opts, "channels"),
+        bytesPerPacket:   self.getPropOptional(opts, "bytesPerPacket"),
+        framesPerPacket:  self.getPropOptional(opts, "framesPerPacket"),
+        bytesPerFrame:    self.getPropOptional(opts, "bytesPerFrame"),
+        channelsPerFrame: self.getPropOptional(opts, "channelsPerFrame"),
+        bitsPerChannel:   self.getPropOptional(opts, "bitsPerChannel")
       )
     }
   }
@@ -203,7 +208,7 @@ class RNSpectro: RCTEventEmitter {
       guard let imageFile = try _proxy.renderAudioPathToSpectroPath(
         audioPath,
         spectroPath,
-        denoise: self.getProp(opts, "denoise")
+        denoise: self.getPropRequired(opts, "denoise")
       ) else {
         return nil
       }
@@ -241,25 +246,12 @@ class RNSpectro: RCTEventEmitter {
 //  - https://github.com/rochars/wavefile
 //    - e.g. a-law:  https://github.com/rochars/wavefile/blob/846f66c/dist/wavefile.js#L2456
 //    - e.g. mu-law: https://github.com/rochars/wavefile/blob/846f66c/dist/wavefile.js#L2490
-class Spectro {
-
-  static func supportedEvents() -> [String] {
-    return [
-      "audioChunk",
-      "spectroFilePath",
-    ]
-  }
-
-  static func constantsToExport() -> Dictionary<AnyHashable, Any> {
-    return [
-      "sample_rate": Features.sample_rate,
-      "f_bins":      Features.f_bins,
-    ]
-  }
+public class Spectro {
 
   static func create(
     emitter:          RCTEventEmitter,
     outputPath:       String,
+    f_bins:           Int,
     // TODO Clean up unused params
     refreshRate:      UInt32?,
     bufferSize:       UInt32?,
@@ -292,9 +284,10 @@ class Spectro {
         ? kLinearPCMFormatFlagIsPacked
         : (kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked)
     )
-    return Spectro(
+    return try Spectro(
       emitter:    emitter,
       outputPath: outputPath,
+      f_bins:     f_bins,
       bufferSize: _bufferSize,
       format:     AudioStreamBasicDescription(
         // TODO Clean up unused params
@@ -317,9 +310,15 @@ class Spectro {
     )
   }
 
+  // Deps
+  let searchBirdgram:   SearchBirdgram
+  var featuresBirdgram: FeaturesBirdgram { get { return searchBirdgram.featuresBirdgram } }
+  var features:         Features         { get { return featuresBirdgram.features } }
+
   // Params
   let emitter:    RCTEventEmitter
   let outputPath: String
+  let f_bins:     Int
   let bufferSize: UInt32
   let numBuffers: Int
   var format:     AudioStreamBasicDescription
@@ -337,21 +336,32 @@ class Spectro {
   init(
     emitter:    RCTEventEmitter,
     outputPath: String,
+    f_bins:     Int,
     bufferSize: UInt32,
     numBuffers: Int = 3, // ≥3 on iphone? [https://books.google.com/books?id=jiwEcrb_H0EC&pg=PA160]
     format:     AudioStreamBasicDescription
-  ) {
+  ) throws {
     Log.info(String(format: "Spectro.init: %@", [
       "outputPath": outputPath,
+      "f_bins":     f_bins,
       "bufferSize": bufferSize,
       "numBuffers": numBuffers,
-      "format": format,
+      "format":     format,
     ]))
+
+    // TODO(refactor_native_deps) Refactor so that all native singletons are created together at App init, so deps can be passed in
+    //  - Search is currently created at App init
+    //  - Spectro is currently re-created on each startRecording(), and needs Search as a dep
+    guard let searchBirdgram = SearchBirdgram.singleton else { throw AppError("Spectro.init: SearchBirdgram.singleton is nil") }
+    self.searchBirdgram = searchBirdgram
+
     self.emitter    = emitter
     self.outputPath = outputPath
+    self.f_bins     = f_bins
     self.bufferSize = bufferSize
     self.numBuffers = numBuffers
     self.format     = format
+
   }
 
   deinit {
@@ -373,9 +383,10 @@ class Spectro {
   func start() throws -> Void {
     Log.info(String(format: "Spectro.start: %@", pretty([
       "outputPath": outputPath,
+      "f_bins":     f_bins,
       "numBuffers": numBuffers,
-      "queue": queue as Any,
-      "buffers": buffers,
+      "queue":      queue as Any,
+      "buffers":    buffers,
     ])))
 
     // Noop if already recording
@@ -552,8 +563,8 @@ class Spectro {
         // Pad audio chunks to ≥nperseg with past audio, else gaps in streaming spectro stft
         //  - [Lots of pencil and paper...]
         //  - TODO Write tests for this gnar (tested manually)
-        let nperseg      = Features.nperseg
-        let hop_length   = Features.hop_length
+        let nperseg      = features.nperseg
+        let hop_length   = features.hop_length
         let _nPreSamples = samplesBuffer.count
         samplesBuffer    = samplesBuffer + samples
         if samplesBuffer.count < nperseg {
@@ -577,9 +588,10 @@ class Spectro {
 
           // S: spectro(samples)
           //  - (fs/ts are mocked as [] since we don't use them yet)
-          let (_, _, S) = Features.spectro(
+          let (_, _, S) = features._spectro(
             samplesReady,
             sample_rate: Int(format.mSampleRate),
+            f_bins: f_bins,
             // Denoise doesn't make sense for streaming chunks in isolation:
             //  - Median filtering only makes sense when Δt is long enough for variation, which small chunks don't have
             //  - RMS norm would dampen variance for loud chunks and expand variance for quiet chunks, which is undesirable
@@ -652,45 +664,34 @@ class Spectro {
     ]
   }
 
+  // Uses Spectro.f_bins (e.g. 80), not features.f_bins (e.g. 40)
   func renderAudioPathToSpectroPath(
     _ audioPath: String,
     _ spectroPathBase: String,
-    denoise: Bool? = nil
+    denoise: Bool
   ) throws -> ImageFile? {
     Log.info(String(format: "Spectro.renderAudioPathToSpectroPath: %@", [
       "audioPath": audioPath,
       "spectroPathBase": spectroPathBase,
-      "denoise": denoise as Any,
+      "denoise": denoise,
     ]))
 
     // TODO Expose as params (to js via opts)
     let colors = Colors.magma_r
 
     // Read samples from file
-    let file = try AKAudioFile(forReading: URL(fileURLWithPath: audioPath))
-    guard let floatChannelData = file.floatChannelData else {
-      throw AppError("Null floatChannelData in file[\(file.url)]")
-    }
-    let Samples = Matrix(floatChannelData)
-    // Log.debug("Spectro.renderAudioPathToSpectroPath: Samples.shape[\(Samples.shape)]") // XXX Debug
-    let samples: [Float] = (Samples.shape.0 == 1
-      ? Samples.grid                        // 1ch -> 1ch
-      : transpose(Samples).map { mean($0) } // 2ch -> 1ch [NOTE Slow-ish: record produces 1ch, but plotting xc recs will produce 2ch]
-    )
+    let (samples, sampleRate) = try featuresBirdgram.samplesFromAudioPath(audioPath)
     if samples.count == 0 {
-      Log.info("Spectro.renderAudioPathToSpectroPath: No samples in file[\(file.url)]")
+      Log.info("Spectro.renderAudioPathToSpectroPath: No samples in audioPath[\(audioPath)]")
       return nil
     }
 
     // S: stft(samples)
-    if file.processingFormat.sampleRate != 22050 {
-      // Throw i/o crashing (via precondition in Features.spectro)
-      throw AppError("sampleRate[\(file.processingFormat.sampleRate)] must be 22050 for Features.spectro, in file[\(file.url)]")
-    }
-    let (_, _, S) = Features.spectro(
+    let (_, _, S) = features._spectro(
       samples,
-      sample_rate: Int(file.processingFormat.sampleRate),
-      denoise: denoise ?? true
+      sample_rate: sampleRate,
+      f_bins:      f_bins, // Allow nonstandard for RecordScreen, e.g. 80 i/o 40
+      denoise:     denoise // Allow nonstandard for RecordScreen, e.g. false i/o true
     )
 
     // Spectro -> image file

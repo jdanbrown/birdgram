@@ -1839,6 +1839,7 @@ const styles = StyleSheet.create({
   },
   bottomControls: {
     flexDirection: 'row',
+    height: 48, // Approx tab bar height (see TabRoutes.TabBarStyle)
     alignItems: 'center',
     paddingVertical: 5,
     backgroundColor: iOSColors.midGray,

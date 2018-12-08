@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import pickle
+import secrets
 import time
 from typing import *
 
@@ -204,7 +205,8 @@ def df_cache_hybrid(
         # Output df should be the same as the df we computed and returned on cache miss
         #   - TODO Tests (see notebooks/api_dev_search_recs_hybrid)
 
-    # HACK Write mobile payload, if requested [TODO Factor this out into a separate function]
+    # HACK Write mobile payload, if requested
+    #   - TODO Factor this out into a separate function/module
     if write_mobile_payload:
         with log_time_context('Mobile: Write payload'):
 
@@ -361,20 +363,91 @@ def df_cache_hybrid(
 
             # Write file: server-config.json
             #   - TODO Trim down (see ServerConfig in app/datatypes.ts for first cut at contract with mobile)
-            json_dump_path(indent=2,
-                path=mobile_server_config_path,
-                obj=config,
-            )
+            with log_time_context(f'Mobile: Write {rel(mobile_server_config_path)}',
+                lambda: naturalsize_path(mobile_server_config_path),
+            ):
+                json_dump_path(indent=2,
+                    path=mobile_server_config_path,
+                    obj=config,
+                )
 
             # Write file: models/search.json
-            #   - HACK Grab sg.search
-            from api.server_globals import sg
-            json_dump_path(indent=2,
-                path=mobile_models_search_path,
-                obj=dict(
-                    classes_=list(sg.search.classes_),
-                ),
-            )
+            #   - HACK Get search from sg.search
+            #   - HACK Tight coupling: structure follows Birdgram/ios/Bubo/Bubo/py/model.swift:Search and its callees
+            #   - HACK HACK HACK Make it go, leave lots of gross code here to clean up later
+            with log_time_context(f'Mobile: Write {rel(mobile_models_search_path)}',
+                lambda: naturalsize_path(mobile_models_search_path),
+            ):
+                from api.server_globals import sg
+                search    = sg.search
+                # path      = mobile_models_search_path  # WARNING Don't rebind path, else things above break (ugh)
+                base_path = os.path.dirname(mobile_models_search_path)
+                def _get   (k, x=None, search=search): return eval(f'search.{k}') if x is None else x
+                def scalar (k, x=None, npy=False): return _npy(k,x) if npy else _get(k, x)
+                def array  (k, x=None, npy=True):  return _npy(k,x) if npy else _get(k, x).tolist()
+                def matrix (k, x=None, npy=True):  return _npy(k,x) if npy else _get(k, x).tolist()
+                def _npy   (k, x=None):
+                    path = str(Path(base_path) / k) + '.npy'
+                    with log_time_context(f'Mobile: Write {rel(path)}', lambda: naturalsize_path(path)):
+                        np.save(path, _get(k, x))
+                    return '@file:%s' % Path(path).relative_to(base_path)
+                json_dump_path(indent=2, path=mobile_models_search_path,
+                    # sp14.model.Search
+                    obj = dict(
+                        # sp14.model.Projection
+                        projection = dict(
+                            # sp14.model.Features
+                            features = dict(
+                                sample_rate  = scalar('projection.features.sample_rate'),
+                                f_bins       = scalar('projection.features.f_bins'),
+                                hop_length   = scalar('projection.features.hop_length'),
+                                frame_length = scalar('projection.features.frame_length'),
+                                frame_window = scalar('projection.features.frame_window'),
+                                patch_length = scalar('projection.features.patch_length'),
+                            ),
+                            agg_funs = scalar('projection.agg_funs'),
+                            skm_     = dict(
+                                # sp14.model.skm.SKM
+                                normalize   = scalar('projection.skm_.normalize'),
+                                standardize = scalar('projection.skm_.standardize'),
+                                pca_whiten  = scalar('projection.skm_.pca_whiten'),
+                                do_pca      = scalar('projection.skm_.do_pca'),
+                                D           = matrix('projection.skm_.D'),
+                                pca         = dict(
+                                    # sk.decomposition.PCA
+                                    whiten              = scalar('projection.skm_.pca.whiten'),
+                                    mean_               = array ('projection.skm_.pca.mean_'),
+                                    components_         = matrix('projection.skm_.pca.components_'),
+                                    explained_variance_ = array ('projection.skm_.pca.explained_variance_'),
+                                ),
+                            ),
+                        ),
+                        classes_    = array('classes_', npy=False),  # Array<String> not supported in SwiftNpy
+                        classifier_ = dict(
+
+                            # # sk.multiclass.OneVsRestClassifier
+                            # #   - Produces many small files that create a bottleneck at mobile startup (~750ms)
+                            # estimators_ = [
+                            #     dict(
+                            #         # sk.linear_model.LogisticRegression
+                            #         coef_      = matrix(f'classifier_.estimators_[{i}].coef_',      x.coef_,      npy=True),
+                            #         intercept_ = array (f'classifier_.estimators_[{i}].intercept_', x.intercept_, npy=True),
+                            #     )
+                            #     for i, x in enumerate(search.classifier_.estimators_)
+                            # ],
+                            # multilabel_ = scalar('classifier_.multilabel_'),
+
+                            # OvRLogReg
+                            #   - Avoid many-small-files bottleneck at mobile startup
+                            #   - Speedup: ~600ms -> ~320ms (SearchBirdgram.init)
+                            _n_estimators  = scalar('classifier_._n_estimators',  len(search.classifier_.estimators_)),
+                            _coef_arr      = matrix('classifier_._coef_arr',      np.array([one(e.coef_)      for e in search.classifier_.estimators_])),
+                            _intercept_arr = array ('classifier_._intercept_arr', np.array([one(e.intercept_) for e in search.classifier_.estimators_])),
+                            multilabel_    = scalar('classifier_.multilabel_'),
+
+                        ),
+                    ),
+                )
 
     # Debug: display/plot file sizes, if requested
     file_sizes_df = (

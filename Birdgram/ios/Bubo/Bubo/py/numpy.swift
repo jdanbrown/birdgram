@@ -1,8 +1,38 @@
+// numpy: A very small subset of functionality ported from python
+
 import Foundation
 import Surge
+import SwiftNpy
 
-// Functions ported from python numpy
-public enum np {
+public typealias np = numpy // Idiomatic shorthand
+public enum numpy {
+
+  // Like np.load (for .npy/.npz)
+  //  - https://github.com/qoncept/swift-npy
+  //  - TODO How to deal with numeric types more generically?
+  public static func load(_ path: String) throws -> [Int]          { return try Npy(path: path).array1() }
+  public static func load(_ path: String) throws -> [Float]        { return try Npy(path: path).array1() }
+  public static func load(_ path: String) throws -> [Double]       { return try Npy(path: path).array1() }
+  // public static func load(_ path: String) throws -> [[Int]]        { return try Npy(path: path).array2() } // TODO Unimplemented
+  public static func load(_ path: String) throws -> [[Float]]      { return try Npy(path: path).array2() }
+  public static func load(_ path: String) throws -> [[Double]]     { return try Npy(path: path).array2() }
+  // public static func load(_ path: String) throws -> Matrix<Int> // No Matrix<Int>
+  public static func load(_ path: String) throws -> Matrix<Float>  { return try Npy(path: path).matrix() }
+  public static func load(_ path: String) throws -> Matrix<Double> { return try Npy(path: path).matrix() }
+  public static func load(_ path: String) throws -> Npz            { return try Npz(path: path) }
+
+  // NOTE Array's are structs and thus pass-by-value, so `var x = y` suffices to copy
+  //  - https://developer.apple.com/swift/blog/?id=10
+  //  - https://stackoverflow.com/a/24251066/397334 -- note the COW comment
+  // public static func copy(_ X: [Float]) -> [Float]
+
+  public static func copy(_ X: Matrix<Float>) -> Matrix<Float> {
+    return Matrix(
+      rows:    X.rows,
+      columns: X.columns,
+      grid:    X.grid // This copies b/c arrays are pass-by-value
+    )
+  }
 
   public static func zeros(_ shape: Int) -> [Float] {
     return Array(repeating: 0, count: shape)
@@ -19,6 +49,28 @@ public enum np {
   public static func linspace(_ start: Float, _ stop: Float, _ num: Int) -> [Float] {
     return Array(stride(from: start, through: stop, by: (stop - start) / Float(num - 1)))
   }
+
+  // Pin down all the log/exp functions to match np.log/np.exp so we don't have to question "does this log() mean natural log?"
+  public static func log   (_ xs: Float)    -> Float    { return Foundation.log(xs) }
+  public static func log10 (_ xs: Float)    -> Float    { return Foundation.log10(xs) }
+  public static func log2  (_ xs: Float)    -> Float    { return Foundation.log2(xs) }
+  public static func log   (_ xs: Double)   -> Double   { return Foundation.log(xs) }
+  public static func log10 (_ xs: Double)   -> Double   { return Foundation.log10(xs) }
+  public static func log2  (_ xs: Double)   -> Double   { return Foundation.log2(xs) }
+  public static func log   (_ xs: [Float])  -> [Float]  { return Surge.log(xs) }
+  public static func log10 (_ xs: [Float])  -> [Float]  { return Surge.log10(xs) }
+  public static func log2  (_ xs: [Float])  -> [Float]  { return Surge.log2(xs) }
+  public static func log   (_ xs: [Double]) -> [Double] { return Surge.log(xs) }
+  public static func log10 (_ xs: [Double]) -> [Double] { return Surge.log10(xs) }
+  public static func log2  (_ xs: [Double]) -> [Double] { return Surge.log2(xs) }
+  public static func exp   (_ xs: Float)    -> Float    { return Foundation.exp(xs) }
+  public static func exp2  (_ xs: Float)    -> Float    { return Foundation.exp2(xs) }
+  public static func exp   (_ xs: Double)   -> Double   { return Foundation.exp(xs) }
+  public static func exp2  (_ xs: Double)   -> Double   { return Foundation.exp2(xs) }
+  public static func exp   (_ xs: [Float])  -> [Float]  { return Surge.exp(xs) }
+  public static func exp2  (_ xs: [Float])  -> [Float]  { return Surge.exp2(xs) }
+  public static func exp   (_ xs: [Double]) -> [Double] { return Surge.exp(xs) }
+  public static func exp2  (_ xs: [Double]) -> [Double] { return Surge.exp2(xs) }
 
   public static func diff(_ xs: [Float]) -> [Float] {
     return Array(xs.slice(from: 1)) .- Array(xs.slice(to: -1))
@@ -96,6 +148,10 @@ public enum np {
     return zs
   }
 
+  public static func broadcast_to(_ x: Float, _ n: Int) -> [Float] {
+    return Array(repeating: x, count: n)
+  }
+
   public static func broadcast_to(row: [Float], _ shape: (Int, Int)) -> Matrix<Float> {
     let (rows, columns) = shape
     precondition(row.count == columns)
@@ -109,7 +165,7 @@ public enum np {
   public static func broadcast_to(column: [Float], _ shape: (Int, Int)) -> Matrix<Float> {
     let (rows, columns) = shape
     precondition(column.count == rows)
-    return transpose(broadcast_to(row: column, (columns, rows)))
+    return broadcast_to(row: column, (columns, rows)).T
   }
 
   // In the spirit of np.testing.assert_almost_equal(xs, np.zeros(len(xs)))
@@ -215,7 +271,7 @@ public enum np {
 
     // Based on:
     //  - https://developer.apple.com/documentation/accelerate/vdsp/discrete_fourier_transforms/signal_extraction_from_noise
-    //  - TODO Untested!
+    //  - TODO Untested! Unused!
     public static func dct(_ xs: [Float], _ type: vDSP_DCT_Type) -> [Float] {
 
       // Setup DCT

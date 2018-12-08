@@ -23,7 +23,7 @@ import * as Colors from './colors';
 import { config } from './config';
 import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
 import { Log, rich } from './log';
-import { Spectro } from './native/Spectro';
+import { NativeSearch } from './native/Search';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
 import {
   createDefaultHistories, Go, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
@@ -34,7 +34,8 @@ import { querySql } from './sql';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
 import {
-  deepEqual, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
+  assert, deepEqual, dirname, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState,
+  Style, Timer, yaml,
 } from './utils';
 
 const log = new Log('App');
@@ -135,46 +136,94 @@ export default class App extends PureComponent<Props, State> {
 
   componentDidMount = async () => {
     log.info('componentDidMount');
+    await log.timedAsync('componentDidMount [total]', async () => {
 
-    // Load/create histories
-    //  - Save histories on change
-    const histories = await loadHistories() || createDefaultHistories();
-    Object.values(histories).forEach(history => {
-      history.listen(() => saveHistories(histories));
+      // Load/create histories
+      const histories = (
+        await log.timedAsync(`Load histories`, async () => {
+          const histories = await loadHistories() || createDefaultHistories();
+          Object.values(histories).forEach(history => {
+            // On history change
+            history.listen(() => {
+
+              // Trim history.entries (else we're stuck with the default unbounded growth)
+              //  - HACK MemoryHistory.setState isn't exposed, so we have to mutate the props manually
+              const maxHistory = this.state.settings && this.state.settings.maxHistory;
+              if (maxHistory && maxHistory > 0) {
+                const {entries} = history;
+                const trimmed   = entries.slice(-maxHistory); // Most recent last
+                const diff      = entries.length - trimmed.length
+                history.entries = trimmed;
+                history.length  = history.length - diff;
+                history.index   = Math.max(0, history.index - diff);
+                assert(history.length >= 0 && history.index >= 0);
+              }
+
+              // Save all histories (on any history change)
+              saveHistories(histories);
+
+            });
+          });
+          return histories;
+        })
+      );
+
+      // Load settings (async) on app startup
+      const settings = (
+        await log.timedAsync(`Load Settings`, async () => {
+          return await Settings.load(
+            settings => this.setState({settings}), // Callback for when Settings updates
+          );
+        })
+      );
+
+      // A prop to pass to children components that won't change when Settings props change
+      //  - We pass Settings props separately, for more fine-grained control over when to trigger updates
+      //  - this.state.settings will change on each prop update, but this.state.settingsWrites won't
+      const settingsWrites: SettingsWrites = new SettingsProxy(() => {
+        return this.state.settings!
+      });
+
+      // Load serverConfig (async) on app startup
+      const serverConfigPath = `${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`;
+      const serverConfig = (
+        await log.timedAsync(`Load serverConfig ${json({serverConfigPath})}`, async () => {
+          return await readJsonFile<ServerConfig>(serverConfigPath);
+        })
+      );
+
+      // Load modelsSearch (async) on app startup
+      const modelsSearchPath = `${fs.dirs.MainBundleDir}/${Models.search.path}`;
+      const modelsSearch: ModelsSearch = (
+        await log.timedAsync(`Load modelsSearch ${json({modelsSearchPath})}`, async () => ({
+          ...(await readJsonFile<Omit<ModelsSearch, '_path'>>(modelsSearchPath)),
+          _path: modelsSearchPath,
+        }))
+      );
+
+      // Load native models (async) on app startup
+      //  - TODO(refactor_native_deps) Refactor so that all native singletons are created together at App init, so deps can be passed in
+      //    - Search is currently created at App init [here]
+      //    - Spectro is currently re-created on each startRecording(), and needs Search as a dep
+      await log.timedAsync(`Load NativeSearch`, async () => {
+        await NativeSearch.create(modelsSearch);
+      });
+
+      const appContext = {
+      };
+
+      // TODO Show loading screen until loads complete
+      this.setState({
+        loading: false,
+        histories,
+        serverConfig,
+        modelsSearch,
+        settings,
+        settingsWrites,
+        appContext,
+      });
+
     });
-
-    // Load serverConfig (async) on app startup
-    const serverConfig = await readJsonFile<ServerConfig>(`${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`);
-
-    // Load modelsSearch (async) on app startup
-    const modelsSearch = await readJsonFile<ModelsSearch>(`${fs.dirs.MainBundleDir}/${Models.search.path}`);
-
-    // Load settings (async) on app startup
-    const settings = await Settings.load(
-      settings => this.setState({settings}), // Callback for when Settings updates
-    );
-
-    // A prop to pass to children components that won't change when Settings props change
-    //  - We pass Settings props separately, for more fine-grained control over when to trigger updates
-    //  - this.state.settings will change on each prop update, but this.state.settingsWrites won't
-    const settingsWrites: SettingsWrites = new SettingsProxy(() => {
-      return this.state.settings!
-    });
-
-    const appContext = {
-    };
-
-    // TODO Show loading screen until loads complete
-    this.setState({
-      loading: false,
-      histories,
-      serverConfig,
-      modelsSearch,
-      settings,
-      settingsWrites,
-      appContext,
-    });
-
   }
 
   componentDidUpdate = (prevProps: Props, prevState: State) => {
@@ -247,6 +296,7 @@ export default class App extends PureComponent<Props, State> {
                           render: props => (
                             <RecordScreen {...props}
                               // App globals
+                              modelsSearch            = {this.state.modelsSearch!}
                               go                      = {this.go}
                               // Settings
                               settings                = {this.state.settingsWrites!}
@@ -285,9 +335,10 @@ export default class App extends PureComponent<Props, State> {
                           render: props => (
                             <RecentScreen {...props}
                               // App globals
-                              go        = {this.go}
+                              go         = {this.go}
                               // Settings
-                              showDebug = {this.state.settings!.showDebug}
+                              showDebug  = {this.state.settings!.showDebug}
+                              maxHistory = {this.state.settings!.maxHistory}
                             />
                           ),
                         }, {
@@ -301,10 +352,11 @@ export default class App extends PureComponent<Props, State> {
                           label: 'Settings', iconName: 'settings',
                           render: props => (
                             <SettingsScreen {...props}
-                              // Settings
                               settings                = {this.state.settingsWrites!}
+                              // Global
                               showDebug               = {this.state.settings!.showDebug}
                               allowUploads            = {this.state.settings!.allowUploads}
+                              maxHistory              = {this.state.settings!.maxHistory}
                               // RecordScreen
                               refreshRate             = {this.state.settings!.refreshRate}
                               doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}

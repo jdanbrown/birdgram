@@ -1,8 +1,10 @@
+// librosa: A very small subset of functionality ported from python
+//  - https://github.com/librosa/librosa
+//  - 0.6.1
+
 import Foundation
 import Surge
 
-// Functions ported from python librosa (0.6.1)
-//  - https://github.com/librosa/librosa
 public enum librosa {
 
   public enum filters {
@@ -141,7 +143,7 @@ public enum librosa {
     precondition(amin > 0)
     let magnitude = S
     let ref_value = abs(ref)
-    var log_spec  = 10.0 * magnitude.vect { log10(np.maximum($0, amin)) }
+    var log_spec  = 10.0 * magnitude.vect { np.log10(np.maximum($0, amin)) }
     log_spec      = log_spec.vect { $0 - 10.0 * log10(max(amin, ref_value)) }
     if let _top_db = top_db {
       precondition(_top_db >= 0)

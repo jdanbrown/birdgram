@@ -10,6 +10,12 @@ import _ from 'lodash';
 // @ts-ignore
 export const global: any = window.global || {};
 
+export function assert(value: any, msg?: string) {
+  if (!value) {
+    throw new Error(`Assertion failed: ${msg}`);
+  }
+}
+
 // Useful for pattern matching in an expression context
 //  - Example usage: into(<complex-expression>, x => ...)
 export function into<X, Y>(x: X, f: (x: X) => Y): Y {

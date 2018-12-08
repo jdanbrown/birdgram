@@ -42,7 +42,7 @@ for path in [
 
   // Inspect samples
   let Samples = Matrix(floatChannelData)
-  let samples = transpose(Samples).map { mean($0) } // Convert to 1ch
+  let samples = Samples.T.map { mean($0) } // Convert to 1ch
   let quantiles = Stats.quantiles(samples, bins: 5)
   print(String(format: "%@", [
     "Samples.shape: \(Samples.shape)",

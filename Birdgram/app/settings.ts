@@ -14,6 +14,7 @@ export interface Props {
   // NOTE Keep attrs in sync (1/5)
   readonly showDebug: boolean;
   readonly allowUploads: boolean;
+  readonly maxHistory: number;
   // For RecordScreen
   readonly refreshRate: number;
   readonly doneSpectroChunkWidth: number
@@ -33,10 +34,11 @@ export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
   showDebug: false,
   allowUploads: true,
+  maxHistory: 100, // 0 for unlimited
   // For RecordScreen
   refreshRate: 8,
   doneSpectroChunkWidth: 25, // (ios dims: https://tinyurl.com/y8xsdvnk)
-  spectroImageLimit: 0, // (0: disable)
+  spectroImageLimit: 0, // 0 for unlimited
   // For SearchScreen
   showMetadataLeft: false,
   showMetadataBelow: false,
@@ -53,6 +55,7 @@ export const TYPES: {[key: string]: string} = {
   // NOTE Keep attrs in sync (3/5)
   showDebug: 'boolean',
   allowUploads: 'boolean',
+  maxHistory: 'number',
   // For RecordScreen
   refreshRate: 'number',
   doneSpectroChunkWidth: 'number',
@@ -73,6 +76,7 @@ export const KEYS = [
   //  - Keys in the order expected by the constructor
   'showDebug',
   'allowUploads',
+  'maxHistory',
   // For RecordScreen
   'refreshRate',
   'doneSpectroChunkWidth',
@@ -123,6 +127,7 @@ export class Settings implements SettingsWrites, Props {
     // NOTE Keep attrs in sync (4/5)
     public readonly showDebug: boolean,
     public readonly allowUploads: boolean,
+    public readonly maxHistory: number,
     // For RecordScreen
     public readonly refreshRate: number,
     public readonly doneSpectroChunkWidth: number,

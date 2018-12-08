@@ -1,6 +1,8 @@
 #!/bin/bash -eu
 # vi: ft=sh
 
+dir="`dirname "$0"`/.."
+
 # Parse args
 if [ $# -gt 1 ]; then
   xcode_build_dir="$1"; shift
@@ -12,6 +14,9 @@ fi
 cmd=(
   swift
   -F"$xcode_build_dir"/{,Yams-macOS,SwiftyJSON-macOS} # HACK Hardcoded framework deps (inspect the build dir to find more)
+  # HACK Fix `import SwiftNpy` -> "missing required module Cminimap"
+  # - (See notes in README)
+  -Xcc -fmodule-map-file="$dir"/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap
   "$@"
 )
 exec "${cmd[@]}"

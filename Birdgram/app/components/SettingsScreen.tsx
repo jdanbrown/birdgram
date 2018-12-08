@@ -24,6 +24,7 @@ type Props = {
   settings: SettingsWrites;
   showDebug: boolean;
   allowUploads: boolean;
+  maxHistory: number;
   // RecordScreen
   refreshRate: number;
   doneSpectroChunkWidth: number
@@ -109,6 +110,20 @@ export class SettingsScreen extends PureComponent<Props, State> {
 
             {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
             <SettingsList.Item
+              id='maxHistory (0 for unlimited)'
+              title='maxHistory (0 for unlimited)'
+              isEditable={true}
+              hasNavArrow={false}
+              value={(this.props.maxHistory || '').toString()}
+              onTextChange={async str => {
+                const x = parseInt(str);
+                const maxHistory = _.isNaN(x) ? DEFAULTS.maxHistory : x;
+                await this.props.settings.set('maxHistory', maxHistory);
+              }}
+            />
+
+            {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
+            <SettingsList.Item
               id='Recording spectro refresh rate (/sec)'
               title='Recording spectro refresh rate (/sec)'
               isEditable={true}
@@ -137,8 +152,8 @@ export class SettingsScreen extends PureComponent<Props, State> {
 
             {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
             <SettingsList.Item
-              id='spectroImageLimit (0 to disable)'
-              title='spectroImageLimit (0 to disable)'
+              id='spectroImageLimit (0 for unlimited)'
+              title='spectroImageLimit (0 for unlimited)'
               isEditable={true}
               hasNavArrow={false}
               value={(this.props.spectroImageLimit || '').toString()}

@@ -53,6 +53,15 @@
 		B76003CD21A3A7E200E1347A /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003CB21A3A7E200E1347A /* Log.swift */; };
 		B771632D21A7AB0100BBF1DD /* search_recs in Resources */ = {isa = PBXBuildFile; fileRef = B771632C21A7AB0100BBF1DD /* search_recs */; };
 		B771632F21AA032000BBF1DD /* Pods_Birdgram.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 84DD8563EA53EA75065B87DD /* Pods_Birdgram.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B774255C21BA177D00DA249C /* Search.m in Sources */ = {isa = PBXBuildFile; fileRef = B774255B21BA177D00DA249C /* Search.m */; };
+		B774255E21BA17D400DA249C /* Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774255D21BA17D400DA249C /* Search.swift */; };
+		B774256021BA1A0100DA249C /* RNProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774255F21BA1A0100DA249C /* RNProxy.swift */; };
+		B774256221BA2D2300DA249C /* SwiftNpy.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B774256121BA2D2300DA249C /* SwiftNpy.framework */; };
+		B774256321BA2D2300DA249C /* SwiftNpy.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B774256121BA2D2300DA249C /* SwiftNpy.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B774256521BA2D6D00DA249C /* Cminizip.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B774256421BA2D6D00DA249C /* Cminizip.framework */; };
+		B774256621BA2D6D00DA249C /* Cminizip.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B774256421BA2D6D00DA249C /* Cminizip.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B774256821BA2D6E00DA249C /* SwiftZip.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B774256721BA2D6D00DA249C /* SwiftZip.framework */; };
+		B774256921BA2D6E00DA249C /* SwiftZip.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B774256721BA2D6D00DA249C /* SwiftZip.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B7A49DDC21B20CDA0076B0A2 /* ImageHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = B7A49DDA21B20CDA0076B0A2 /* ImageHelper.m */; };
 		B7A49DE121B318120076B0A2 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A49DE021B318120076B0A2 /* Image.swift */; };
 		B7B1EB0321AAEC5C003EE032 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0221AAEC5C003EE032 /* Surge.framework */; };
@@ -419,8 +428,11 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				B774256921BA2D6E00DA249C /* SwiftZip.framework in Embed Frameworks */,
+				B774256621BA2D6D00DA249C /* Cminizip.framework in Embed Frameworks */,
 				B7B1EB0421AAEC5C003EE032 /* Surge.framework in Embed Frameworks */,
 				B771632F21AA032000BBF1DD /* Pods_Birdgram.framework in Embed Frameworks */,
+				B774256321BA2D2300DA249C /* SwiftNpy.framework in Embed Frameworks */,
 				B72CC80C21A34706009D8690 /* Bubo.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
@@ -489,6 +501,12 @@
 		B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RCTSwiftLog.h; path = Birdgram/RCTSwiftLog.h; sourceTree = "<group>"; };
 		B76003CB21A3A7E200E1347A /* Log.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Log.swift; path = Birdgram/Log.swift; sourceTree = "<group>"; };
 		B771632C21A7AB0100BBF1DD /* search_recs */ = {isa = PBXFileReference; lastKnownFileType = folder; name = search_recs; path = "../../data/cache/payloads/search_recs-version[8],limit[100],audio_s[10],countries_k[na],com_names_k[ca],num_recs[None]-fb42447/mobile-version[1]/search_recs"; sourceTree = "<group>"; };
+		B774255B21BA177D00DA249C /* Search.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Search.m; path = Birdgram/Search.m; sourceTree = "<group>"; };
+		B774255D21BA17D400DA249C /* Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Search.swift; path = Birdgram/Search.swift; sourceTree = "<group>"; };
+		B774255F21BA1A0100DA249C /* RNProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNProxy.swift; path = Birdgram/RNProxy.swift; sourceTree = "<group>"; };
+		B774256121BA2D2300DA249C /* SwiftNpy.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = SwiftNpy.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B774256421BA2D6D00DA249C /* Cminizip.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Cminizip.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B774256721BA2D6D00DA249C /* SwiftZip.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = SwiftZip.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7A49DDA21B20CDA0076B0A2 /* ImageHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = ImageHelper.m; path = Birdgram/ImageHelper.m; sourceTree = "<group>"; };
 		B7A49DDB21B20CDA0076B0A2 /* ImageHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ImageHelper.h; path = Birdgram/ImageHelper.h; sourceTree = "<group>"; };
 		B7A49DE021B318120076B0A2 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Image.swift; path = Birdgram/Image.swift; sourceTree = "<group>"; };
@@ -522,6 +540,9 @@
 				B72CC80B21A34706009D8690 /* Bubo.framework in Frameworks */,
 				7A245EFCCB59431FB0ADAD55 /* Pods_Birdgram.framework in Frameworks */,
 				B7B1EB0321AAEC5C003EE032 /* Surge.framework in Frameworks */,
+				B774256221BA2D2300DA249C /* SwiftNpy.framework in Frameworks */,
+				B774256821BA2D6E00DA249C /* SwiftZip.framework in Frameworks */,
+				B774256521BA2D6D00DA249C /* Cminizip.framework in Frameworks */,
 				ADBDB9381DFEBF1600ED6528 /* libRCTBlob.a in Frameworks */,
 				11D1A2F320CAFA9E000508D9 /* libRCTAnimation.a in Frameworks */,
 				146834051AC3E58100842450 /* libReact.a in Frameworks */,
@@ -642,9 +663,12 @@
 				B70DB6D921A1F45100968F4D /* Birdgram-Bridging-Header.h */,
 				B72CC81221A34DBC009D8690 /* Spectro.m */,
 				B72CC80E21A349FA009D8690 /* Spectro.swift */,
+				B774255B21BA177D00DA249C /* Search.m */,
+				B774255D21BA17D400DA249C /* Search.swift */,
 				B7A49DE021B318120076B0A2 /* Image.swift */,
 				B7A49DDB21B20CDA0076B0A2 /* ImageHelper.h */,
 				B7A49DDA21B20CDA0076B0A2 /* ImageHelper.m */,
+				B774255F21BA1A0100DA249C /* RNProxy.swift */,
 				B76003CB21A3A7E200E1347A /* Log.swift */,
 				B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */,
 				B76003C921A3A7E200E1347A /* RCTSwiftLog.m */,
@@ -777,6 +801,9 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				B774256721BA2D6D00DA249C /* SwiftZip.framework */,
+				B774256421BA2D6D00DA249C /* Cminizip.framework */,
+				B774256121BA2D2300DA249C /* SwiftNpy.framework */,
 				B7B1EB0221AAEC5C003EE032 /* Surge.framework */,
 				13B07FAE1A68108700A75B9A /* Birdgram */,
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
@@ -1528,12 +1555,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B774255C21BA177D00DA249C /* Search.m in Sources */,
 				B76003CC21A3A7E200E1347A /* RCTSwiftLog.m in Sources */,
 				B7A49DE121B318120076B0A2 /* Image.swift in Sources */,
 				B72CC81321A34DBC009D8690 /* Spectro.m in Sources */,
+				B774256021BA1A0100DA249C /* RNProxy.swift in Sources */,
 				13B07FBC1A68108700A75B9A /* AppDelegate.m in Sources */,
 				13B07FC11A68108700A75B9A /* main.m in Sources */,
 				B7A49DDC21B20CDA0076B0A2 /* ImageHelper.m in Sources */,
+				B774255E21BA17D400DA249C /* Search.swift in Sources */,
 				B76003CD21A3A7E200E1347A /* Log.swift in Sources */,
 				B72CC80F21A349FA009D8690 /* Spectro.swift in Sources */,
 			);
@@ -1672,6 +1702,7 @@
 					"-ObjC",
 					"-lc++",
 				);
+				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
 				PRODUCT_NAME = Birdgram;
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
@@ -1710,6 +1741,7 @@
 					"-ObjC",
 					"-lc++",
 				);
+				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
 				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
 				PRODUCT_NAME = Birdgram;
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";

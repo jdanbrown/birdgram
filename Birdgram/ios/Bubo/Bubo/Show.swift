@@ -127,4 +127,14 @@ public enum Yaml {
     )
   }
 
+  public static func loads<X>(_ s: String) throws -> X {
+    guard let v = try Yams.load(yaml: s) else { throw AppError("Failed to Yams.load: \(s)") }
+    guard let x = v as? X                else { throw AppError("Failed to cast to type \(X.self): \(v)") }
+    return x
+  }
+
+  public static func loadFromPath<X>(_ path: String, encoding: String.Encoding = .utf8) throws -> X {
+    return try loads(String(contentsOfFile: path, encoding: encoding))
+  }
+
 }

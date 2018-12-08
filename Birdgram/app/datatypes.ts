@@ -170,7 +170,12 @@ export const Models = {
   },
 };
 
-export interface ModelsSearch {
+// See Bubo/FileProps.swift for behaviors that we haven't yet ported back to js
+export interface FileProps {
+  _path: string;
+}
+
+export interface ModelsSearch extends FileProps {
   classes_: Array<string>;
 }
 
