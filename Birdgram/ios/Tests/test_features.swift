@@ -21,11 +21,11 @@ func mat(_ name: String, _ X: Matrix<Float>) {
 test("SpectroLike.norm_rms") { name, data in
   let X = Matrix(data["X"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
   let Y = Matrix(data["Y"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
-  testAlmostEqual(name, SpectroLike.norm_rms(X), Y, tol: 1e-6)
+  testAlmostEqual(name, SpectroLike.norm_rms(X), Y)
 }
 
 test("SpectroLike.clip_below_median_per_freq") { name, data in
   let X = Matrix(data["X"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
   let Y = Matrix(data["Y"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
-  testAlmostEqual("SpectroLike.clip_below_median_per_freq", SpectroLike.clip_below_median_per_freq(X), Y, tol: 1e-7)
+  testAlmostEqual("SpectroLike.clip_below_median_per_freq", SpectroLike.clip_below_median_per_freq(X), Y)
 }

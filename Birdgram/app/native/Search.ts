@@ -18,9 +18,9 @@ export const NativeSearch = {
     modelsSearch,
   ),
 
-  preds: async (
+  f_preds: async (
     audioPath: string,
-  ): Promise<null | Array<number>> => RNSearch.preds(
+  ): Promise<null | Array<number>> => RNSearch.f_preds(
     audioPath,
   ),
 

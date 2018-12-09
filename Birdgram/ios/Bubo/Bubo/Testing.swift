@@ -16,9 +16,12 @@ public func test(
   _ name: String,
   _ body: (_ name: String, _ data: JSON) throws -> Void
 ) { // Don't `rethrows` so callers don't have to `try`
+  let timer = Timer()
   var data: JSON?
   do {
     data = try Json.loadFromPath(iosTestsDataDir / name + ".json")
+    let time = timer.time()
+    if time > 0.5 { print(String(format: "SLOW  Reading data file took %.3fs: %@", time, name)) }
   } catch {
     print(red("Data file not found: \(name)"))
     return
@@ -55,12 +58,16 @@ public func testTrue(_ name: String, _ test: Bool) {
 }
 
 public func testEqual<X>(
-  _ name: String,
+  _ _name: String,
   _ x: X,
   _ y: X,
+  tol: Tol? = nil, // For print() only (used by callers for comparison, only reported here)
   with: (X, X) -> Bool,
-  show: (X) -> Any = { x in x }
+  show: (X) -> Any = { x in x },
+  showAfter: (() -> Any)? = nil
 ) {
+  var name = _name
+  if let tol = tol { name = "[\(tol)] \(name)" }
   var countEqual = true
   if let xs = x as? Array<Any>, let ys = y as? Array<Any> { // TODO How to downcast to more general Collection i/o Array?
     countEqual = xs.count == ys.count
@@ -74,6 +81,9 @@ public func testEqual<X>(
     print(red("Failed: \(name)"))
     print(red("  x: \(show(x))"))
     print(red("  y: \(show(y))"))
+    if let showAfter = showAfter {
+      print(red("\(showAfter())"))
+    }
   }
 }
 
@@ -101,10 +111,12 @@ public func testAlmostEqual(
   _ name: String,
   _ x: Float,
   _ y: Float,
-  tol: Float = 1e-7
+  tol: Tol? = nil,
+  equal_nan: Bool = true
 ) {
   testEqual(name, x, y,
-    with: { x, y in np.almost_equal([x], [y], tol: tol) }
+    tol:  tol,
+    with: { x, y in np.almost_equal([x], [y], tol: tol, equal_nan: equal_nan) }
   )
 }
 
@@ -112,18 +124,21 @@ public func testAlmostEqual(
   _ name: String,
   _ xs: [Float],
   _ ys: [Float],
-  tol: Float = 1e-7,
+  tol: Tol? = nil,
+  equal_nan: Bool = true,
   // For show(), not for comparison
   prec: Int = 3,
-  showLimit: Int? = nil
+  limit: Int? = 7
 ) {
   testEqual(name, xs, ys,
-    with: { xs, ys in np.almost_equal(xs, ys, tol: tol) },
+    tol:  tol,
+    with: { xs, ys in np.almost_equal(xs, ys, tol: tol, equal_nan: equal_nan) },
     show: { xs in
       var _xs = xs
-      if let showLimit = showLimit { _xs = _xs.slice(to: showLimit) }
+      if let limit = limit { _xs = _xs.slice(to: limit) }
       return "\(xs.count): \(show(_xs, prec: prec))"
     }
+    // TODO showAfter (like Matrix)
   )
 }
 
@@ -131,19 +146,34 @@ public func testAlmostEqual(
   _ name: String,
   _ X: Matrix<Float>,
   _ Y: Matrix<Float>,
-  tol: Float = 1e-7,
+  tol: Tol? = nil,
+  equal_nan: Bool = true,
   // For show(), not for comparison
   prec: Int = 3,
-  showLimit: (Int?, Int?) = (nil, nil)
+  limit: (Int?, Int?)? = (10, 7)
 ) {
   testEqual(name, X, Y,
-    with: { X, Y in X.shape == Y.shape && np.almost_equal(X.grid, Y.grid, tol: tol) },
+    tol:  tol,
+    with: { X, Y in X.shape == Y.shape && np.almost_equal(X.grid, Y.grid, tol: tol, equal_nan: equal_nan) },
     show: { X in
-      var _X = X
-      let (rows, columns) = showLimit
-      if let rows    = rows    { _X = _X[rows:    0..<rows] }
-      if let columns = columns { _X = _X[columns: 0..<columns] }
-      return "\(X.shape)\n\(show(_X, prec: prec))"
+      return [
+        "\(X.shape)",
+        "\(show(X, prec: prec, limit: limit))",
+      ].joined(separator: "\n")
+    },
+    showAfter: {
+      let A  = abs(X - Y)
+      let Aq = Stats.quantiles(A.grid, bins: 4)
+      let R  = elem_op(X, Y) { x, y in abs(x - y) / max(abs(x), abs(y)) }
+      let Rq = Stats.quantiles(R.grid, bins: 4)
+      return [
+        "  abs(x-y):",
+        "  quantiles: \(show(Aq, prec: 10))",
+        "\(show(A, prec: prec, limit: limit))",
+        "  abs(x-y)/max(abs(x),abs(y)):",
+        "  quantiles: \(show(Rq, prec: 10))",
+        "\(show(R, prec: prec, limit: limit))",
+      ].joined(separator: "\n")
     }
   )
 }

@@ -36,8 +36,7 @@ do {
   // mat("Δ    ", M - Matrix(_M))
   // mat("log Δ", (M - Matrix(_M)).vect { np.log10($0) })
 
-  // QUESTION How does tol work well here when it's really bad (1e-2) in mel_frequencies?
-  testAlmostEqual("librosa.filters.mel", M, Matrix(_M), tol: 1e-8)
+  testAlmostEqual("librosa.filters.mel", M, Matrix(_M))
 
 }
 
@@ -74,8 +73,7 @@ do {
   let fmax   = params["fmax"].floatValue
   let f      = params["f"].arrayValue.map { $0.floatValue }
 
-  // FIXME Important to fix tol=1e-2? librosa.filters.mel somehow works at tol=1e-8...
-  testAlmostEqual("librosa.mel_frequencies", librosa.mel_frequencies(n_mels, fmin, fmax), f, tol: 1e-2) // WARNING tol
+  testAlmostEqual("librosa.mel_frequencies", librosa.mel_frequencies(n_mels, fmin, fmax), f)
 
 }
 
@@ -109,7 +107,7 @@ do {
   let x = params["x"].arrayValue.map { $0.floatValue }
   let y = params["y"].arrayValue.map { $0.floatValue }
 
-  testAlmostEqual("librosa.mel_to_hz", librosa.mel_to_hz(x), y, tol: 1e-5) // WARNING tol
+  testAlmostEqual("librosa.mel_to_hz", librosa.mel_to_hz(x), y)
 
 }
 
@@ -126,6 +124,6 @@ do {
   let X = Matrix(params["X"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
   let Y = Matrix(params["Y"].arrayValue.map { $0.arrayValue.map { $0.floatValue } })
 
-  testAlmostEqual("librosa.power_to_db", librosa.power_to_db(X), Y, tol: 1e-6)
+  testAlmostEqual("librosa.power_to_db", librosa.power_to_db(X), Y)
 
 }

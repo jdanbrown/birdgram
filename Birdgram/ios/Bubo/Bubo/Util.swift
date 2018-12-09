@@ -168,8 +168,8 @@ extension Collection {
   //   return xs.map(f).joined()
   // }
 
-  public func only() throws -> Element {
-    if count != 1 { throw AppError("only: Expected 1 element, have \(count) elements") }
+  public func only() -> Element {
+    if count != 1 { preconditionFailure("only: Expected 1 element, have \(count) elements") }
     return first!
   }
 

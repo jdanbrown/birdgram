@@ -113,13 +113,12 @@ public enum sklearn {
         self.intercept_ = intercept_
       }
 
-      // TODO(model_predict): Test
       public func predict_proba(_ X: Matrix<Float>) -> Matrix<Float> {
         let (n, _)   = X.shape
-        let scores   = X * coef_ + np.broadcast_to(intercept_, n)
+        let scores   = X * coef_ .+ np.broadcast_to(intercept_, n)
         let probs    = scipy.special.expit(scores)  // (n,) probs for our one class (positive class)
-        let probsAll = Matrix([1 - probs, probs]).T // (2,n) probs for "all" classes (2 classes: negative + positive)
-        precondition(probsAll.shape == (n, 2))
+        let probsAll = Matrix([1 - probs, probs]).T // (n,2) probs for "all" classes (2 classes: negative + positive)
+        precondition(probsAll.shape == (n, 2), "probsAll.shape[\(probsAll.shape)] == (n[\(n)], 2)")
         return probsAll
       }
 
@@ -151,22 +150,32 @@ public enum sklearn {
         self.multilabel_ = multilabel_
       }
 
-      // TODO(model_predict):
       public func predict_proba(_ X: Matrix<Float>) -> Matrix<Float> {
-        return TODO() // XXX
+        let (n, _) = X.shape
 
-        // TODO(model_predict): Sketch from sklearn/multiclass.py
-        // // Y[i,j] = P[sample i is class j]
-        // Y = np.array([
-        //   e.predict_proba(X)[:, 1]
-        //   for e in self.estimators_
-        // ]).T
-        // precondition(estimators_.count > 1, "Unimplemented: OneVsRestClassifier.estimators_.count == 1") // Else more logic
-        // if !multilabel_ {
-        //   Y /= np.sum(Y, axis=1)[:, np.newaxis] // Normalize probs to 1
-        // }
-        // return Y
+        // Y[i,j] = Prob[sample i is class j]
+        var Y = Matrix(estimators_.map { estimator -> [Float] in
+          let Y = estimator.predict_proba(X)
+          // Take (n,) positive class column from (n,2) matrix [negative class, positive class]
+          precondition(Y.shape == (n, 2), "Y.shape[\(Y.shape)] == (n[\(n)], 2)")
+          return Y[column: 1]
+        }).T
 
+        // If only one estimator, then we still want to return probabilities for two classes (negative, positive)
+        //  - TODO Untested
+        if estimators_.count == 1 {
+          precondition(Y.shape == (n, 1), "Y.shape[\(Y.shape)] == (n[\(n)], 1)")
+          let y = Y.grid
+          Y = Matrix(columns: [1 - y, y])
+        }
+
+        // Normalize probs per sample to 1, unless multi-label
+        if !multilabel_ {
+          let rowProbs = np.sum(Y, axis: 1) // Rows are samples (columns are classes)
+          Y = Y ./ np.broadcast_to(column: rowProbs, Y.shape)
+        }
+
+        return Y
       }
 
     }

@@ -27,6 +27,16 @@ testEqual("np.zeros", np.zeros(3), [0,0,0])
 testEqual("np.linspace", np.linspace(0, 1, 5), [0, 0.25, 0.5, 0.75, 1])
 
 //
+// np.sum
+//
+
+do {
+  let X = np.random.rand(3, 5)
+  testEqual("np.sum(axis: 0)", np.sum(X, axis: 0).count, X.columns)
+  testEqual("np.sum(axis: 1)", np.sum(X, axis: 1).count, X.rows)
+}
+
+//
 // np.diff
 //
 
@@ -113,7 +123,7 @@ do {
   // sig("Δ       ", np.fft.abs_rfft(xs) .- fs)
   // sig("log Δ   ", np.log10(np.fft.abs_rfft(xs) .- fs))
 
-  testAlmostEqual("np.fft.abs_rfft", fs, np.fft.abs_rfft(xs), tol: 1e-6)
+  testAlmostEqual("np.fft.abs_rfft", fs, np.fft.abs_rfft(xs))
 
 }
 

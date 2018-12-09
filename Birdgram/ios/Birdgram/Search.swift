@@ -38,12 +38,12 @@ class RNSearch: RCTEventEmitter, RNProxy {
     }
   }
 
-  @objc func preds(
+  @objc func f_preds(
     _ audioPath: String,
     resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
-    withPromise(resolve, reject, "preds") { _proxy -> Array<Float>? in
-      return try _proxy.preds(
+    withPromise(resolve, reject, "f_preds") { _proxy -> Array<Float>? in
+      return try _proxy.f_preds(
         audioPath
       )
     }
@@ -55,7 +55,7 @@ class RNSearch: RCTEventEmitter, RNProxy {
 //  - This blocks testing (since we can bin/test Bubo but not Birdgram, b/c macos vs. ios)
 //  - https://stackoverflow.com/questions/1320988/saving-cgimageref-to-a-png-file
 //  - https://stackoverflow.com/questions/43846885/swift-3-cgimage-to-png
-//  - In the meantime, do audio->spectro here and spectro->preds in Bubo Features
+//  - In the meantime, do audio->spectro here and spectro->f_preds in Bubo Features
 
 public class SearchBirdgram: Loadable {
 
@@ -79,22 +79,22 @@ public class SearchBirdgram: Loadable {
     self.featuresBirdgram = FeaturesBirdgram(features: search.features)
   }
 
-  // preds from from audio w/ denoise, to match api.recs.recs_featurize_slice_audio
+  // f_preds from from audio w/ denoise, to match api.recs.recs_featurize_slice_audio
   //  - Like sqlite search_recs.f_preds_* (from py sg.search_recs, sg.feat_info, api.recs.get_feat_info)
-  public func preds(
+  public func f_preds(
     _ audioPath: String
   ) throws -> Array<Float>? {
 
     // Read samples <- audioPath
     let (samples, sampleRate) = try featuresBirdgram.samplesFromAudioPath(audioPath)
     if samples.count == 0 {
-      Log.info("SearchBirdgram.preds: No samples in audioPath[\(audioPath)]")
+      Log.info("SearchBirdgram.f_preds: No samples in audioPath[\(audioPath)]")
       return nil
     }
 
     // Featurize + predict
-    //  - (preds <- feat <- agg <- proj <- patches <- spectro <- samples)
-    return search.preds(samples: samples, sample_rate: sampleRate)
+    //  - (f_preds <- feat <- agg <- proj <- patches <- spectro <- samples)
+    return search.f_preds(samples, sample_rate: sampleRate)
 
   }
 

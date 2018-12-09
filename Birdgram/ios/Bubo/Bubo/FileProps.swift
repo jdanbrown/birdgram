@@ -23,6 +23,7 @@ public struct FileProps {
   }
 
   // From file (e.g. Tests/test_model.swift)
+  //  - NOTE If Yaml.loadFromPath is ever a bottleneck, Json.loadFromPath appears to be way faster (~25x)
   public init(path: String) throws {
     let timer = Timer()
     let props = try Yaml.loadFromPath(path) as Props // (Yaml i/o Json because too much unhelpful complexity to convert JSON->Props)

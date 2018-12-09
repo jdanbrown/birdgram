@@ -58,20 +58,22 @@ public func pp     (_ xs: ArraySlice<UInt8>) { print(pretty(xs)) }
 public func show   (_ xs: ArraySlice<UInt8>) -> String { return "[\(xs.map { x in String(format: "%d", x) }.joined(separator: " "))]" }
 public func pretty (_ xs: ArraySlice<UInt8>) -> String { return "[\n\(xs.map { x in String(format: "%d", x) }.joined(separator: "\n  "))\n]" }
 
-// Matrix<Float>
-public func p      (_ X: Matrix<Float>) { print(show(X)) }
-public func pp     (_ X: Matrix<Float>) { print(pretty(X)) }
-public func show   (_ X: Matrix<Float>, prec: Int = 3) -> String { return pretty(X, prec: prec) }
-public func pretty (_ X: Matrix<Float>, prec: Int = 3) -> String {
-  return X.map { row in show(row, prec: prec) }.joined(separator: "\n")
-}
-
 // [[Float]]
 public func p      (_ X: [[Float]]) { print(show(X)) }
 public func pp     (_ X: [[Float]]) { print(pretty(X)) }
 public func show   (_ X: [[Float]], prec: Int = 3) -> String { return pretty(X, prec: prec) }
 public func pretty (_ X: [[Float]], prec: Int = 3) -> String {
   return X.map { row in show(row, prec: prec) }.joined(separator: "\n")
+}
+
+// Matrix<Float>
+public func p      (_ X: Matrix<Float>, prec: Int = 3, limit: (Int?, Int?)? = nil) { print(show  (X, prec: prec, limit: limit)) }
+public func pp     (_ X: Matrix<Float>, prec: Int = 3, limit: (Int?, Int?)? = nil) { print(pretty(X, prec: prec, limit: limit)) }
+public func show   (_ X: Matrix<Float>, prec: Int = 3, limit: (Int?, Int?)? = nil) -> String { return pretty(X, prec: prec, limit: limit) }
+public func pretty (_ X: Matrix<Float>, prec: Int = 3, limit: (Int?, Int?)? = nil) -> String {
+  var _X = X
+  if let (rows, columns) = limit { _X = _X.slice(rows: (from: 0, to: rows), columns: (from: 0, to: columns)) }
+  return _X.map { row in show(row, prec: prec) }.joined(separator: "\n")
 }
 
 // TODO Re-home

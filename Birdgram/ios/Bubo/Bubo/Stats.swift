@@ -10,7 +10,7 @@ public enum Stats {
     if xs.isEmpty {
       return [] // HACK Better than crashing (e.g. for the common case of logging stats and moving on)
     } else {
-      return toFloats(np.linspace(0, 1, bins).map { q in
+      return toFloats(np.linspace(0, 1, bins + 1).map { q in
         method(toDoubles(xs), Double(q))!
       })
     }

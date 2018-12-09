@@ -5,7 +5,7 @@ import Foundation
 import SigmaSwiftStatistics
 import Surge
 
-public typealias Preds   = [Float]                  // n_sp
+public typealias F_Preds = [Float]                  // n_sp
 public typealias Feat    = [Float]                  // k*a
 public typealias Agg     = Dictionary<String, Feat> // a -> (k,)
 public typealias Proj    = Matrix<Float>            // (k,t)
@@ -42,37 +42,46 @@ public class Search: Loadable {
     self.classifier_ = classifier_
   }
 
-  // preds from from audio samples w/ denoise, to match api.recs.recs_featurize_slice_audio
-  public func preds(samples: [Float], sample_rate: Int) -> Preds {
+  // Like py search_recs.f_preds / sqlite search_recs.f_preds_*
+  //  - Full featurize+predict pipeline from audio samples
+  //  - denoise=true to match api.recs.recs_featurize_slice_audio
+  //  - Like sqlite search_recs.f_preds_* (from py sg.search_recs, sg.feat_info, api.recs.get_feat_info)
+  //  - py species_proba is what's used to populate sqlite search_recs.f_preds_* (via sg.search_recs, api.recs.get_feat_info)
+  public func f_preds(_ samples: [Float], sample_rate: Int) -> F_Preds {
+
+    // Debug: perf
+    let timer = Timer()
+    var debugTimes: Array<(String, Double)> = [] // (Array of tuples b/c Dictionary is ordered by key i/o insertion)
+    func debugTimed<X>(_ k: String, _ f: () -> X) -> X { let x = f(); debugTimes.append((k, timer.lap())); return x }
 
     // Featurize
-    let spectro = features._spectro(samples, sample_rate: sample_rate)
-    let patches = features._patches(spectro)
-    let proj    = projection._proj(patches)
-    let agg     = projection._agg(proj)
-    let feat    = projection._feat(agg)
-
+    let spectro = debugTimed("spectro") { features._spectro(samples, sample_rate: sample_rate) }
+    let patches = debugTimed("patches") { features._patches(spectro) }
+    let proj    = debugTimed("proj")    { projection._proj(patches) }
+    let agg     = debugTimed("agg")     { projection._agg(proj) }
+    let feat    = debugTimed("feat")    { projection._feat(agg) }
     // Predict
-    let preds = species_proba_one(feat)
+    let f_preds = debugTimed("f_preds") { species_proba([feat]).only() }
 
-    return preds
+    // Debug: perf
+    debugTimes.append(("total", sum(debugTimes.map { $0.1 })))
+    _Log.debug(String(format: "Spectro.f_preds: debugTimes: %@",
+      debugTimes.map { (k, v) in "\(k)=\(Int(v * 1000))" }.joined(separator: ", ")
+    ))
 
+    return f_preds
   }
 
-  // Like py Search.species_proba, except predicts species probs for one feat (array->array) i/o many (matrix->matrix)
-  public func species_proba_one(_ feat: Feat) -> Preds {
-    let predss = species_proba([feat]) as [Preds]
-    precondition(predss.count == 1)
-    return predss[0]
+  public func species_proba(_ feats: [Feat]) -> [F_Preds] {
+    let X        = Matrix(feats)         // Rows: samples, columns: features
+    let y        = species_proba(X)
+    let f_predss = y.map { F_Preds($0) } // Rows: samples, columns: class probs
+    precondition(f_predss.count == feats.count, "f_predss.count[\(f_predss.count)] == feats.count[\(feats.count)]")
+    return f_predss
   }
 
-  // Like py Search.species_proba, except the types are arrays of arrays i/o matrices
-  public func species_proba(_ feats: [Feat]) -> [Preds] {
-    let X      = Matrix(feats)                // Row major (rows: samples, columns: features)
-    let y      = classifier_.predict_proba(X) // Rows: samples, columns: class probs
-    let predss = y.map { Array($0) } as [Preds]
-    precondition(predss.count == feats.count)
-    return predss
+  public func species_proba(_ feats: Matrix<Float>) -> Matrix<Float> {
+    return classifier_.predict_proba(feats) // Rows: samples, columns: class probs
   }
 
 }

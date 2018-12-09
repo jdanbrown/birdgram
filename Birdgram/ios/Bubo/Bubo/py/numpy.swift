@@ -4,6 +4,8 @@ import Foundation
 import Surge
 import SwiftNpy
 
+public typealias Tol = np.Tol // Shorthand
+
 public typealias np = numpy // Idiomatic shorthand
 public enum numpy {
 
@@ -71,6 +73,10 @@ public enum numpy {
   public static func exp2  (_ xs: [Float])  -> [Float]  { return Surge.exp2(xs) }
   public static func exp   (_ xs: [Double]) -> [Double] { return Surge.exp(xs) }
   public static func exp2  (_ xs: [Double]) -> [Double] { return Surge.exp2(xs) }
+
+  public static func sum(_ X: Matrix<Float>, axis: Int = 0) -> [Float] {
+    return (axis == 0 ? X.T : X).map { Surge.sum($0) }
+  }
 
   public static func diff(_ xs: [Float]) -> [Float] {
     return Array(xs.slice(from: 1)) .- Array(xs.slice(to: -1))
@@ -169,13 +175,35 @@ public enum numpy {
   }
 
   // In the spirit of np.testing.assert_almost_equal(xs, np.zeros(len(xs)))
-  public static func almost_zero(_ xs: [Float], tol: Float = 1e-7) -> Bool {
+  public static func almost_zero(_ xs: [Float], tol: Tol? = nil) -> Bool {
     return almost_equal(xs, zeros(xs.count), tol: tol)
   }
 
   // In the spirit of np.testing.assert_almost_equal(xs, ys)
-  public static func almost_equal(_ xs: [Float], _ ys: [Float], tol: Float = 1e-7) -> Bool {
-    return (xs .- ys).allSatisfy { abs($0) < tol }
+  public static func almost_equal(_ xs: [Float], _ ys: [Float], tol: Tol? = nil, equal_nan: Bool = false) -> Bool {
+    return zip(xs, ys).allSatisfy { (x, y) in almost_equal(x, y, tol: tol, equal_nan: equal_nan) }
+  }
+
+  // An amalgamation of two approaches:
+  //  - https://docs.python.org/dev/library/math.html#math.isclose
+  //  - https://docs.scipy.org/doc/numpy/reference/generated/numpy.isclose.html
+  public static func almost_equal(_ x: Float, _ y: Float, tol _tol: Tol? = nil, equal_nan: Bool = false) -> Bool {
+    let tol = _tol ?? Tol()
+    if equal_nan && x.isNaN && y.isNaN { return true }
+    return abs(x - y) <= max(tol.abs, tol.rel * max(abs(x), abs(y)))
+  }
+
+  // For almost_equal (and friends)
+  public struct Tol {
+    public let rel: Float
+    public let abs: Float
+    public init(
+      rel: Float? = nil,
+      abs: Float? = nil
+    ) {
+      self.rel = rel ?? 1e-5
+      self.abs = abs ?? 1e-8
+    }
   }
 
   public enum random {

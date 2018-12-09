@@ -12,7 +12,7 @@ RCT_EXTERN_METHOD(
 );
 
 RCT_EXTERN_METHOD(
-  preds:(NSString *)audioPath
+  f_preds:(NSString *)audioPath
   resolve:(RCTPromiseResolveBlock)resolve
   reject:(RCTPromiseRejectBlock)reject
 );

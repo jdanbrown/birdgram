@@ -438,8 +438,8 @@ export class RecordScreen extends Component<Props, State> {
 
           // TODO(model_predict)
           //  - NOTE Model uses its own f_bins (40), regardless of the this.props.f_bins (80) we use to draw while recording
-          const preds = NativeSearch.preds(audioPath);
-          // TODO(model_predict) Handle preds=null when audioPath has no samples (throws on hard error, which is ok to not catch here)
+          const f_preds = NativeSearch.f_preds(audioPath);
+          // TODO(model_predict) Handle f_preds=null when audioPath has no samples (throws on hard error, which is ok to not catch here)
 
         }
 

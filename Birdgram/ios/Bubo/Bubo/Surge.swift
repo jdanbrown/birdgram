@@ -1,6 +1,32 @@
 import Foundation
 import Surge
 
+extension Matrix where Scalar == Float {
+
+  // Like Array.slice(from:to:)
+  //  - Ignores out-of-range indexes i/o fatal-ing
+  public func slice(rows: (from: Int?, to: Int?)?, columns: (from: Int?, to: Int?)?) -> Matrix {
+    var X = self
+    if let (from, to) = rows    { X = Matrix(Array(X)   .slice(from: from, to: to)) }
+    if let (from, to) = columns { X = Matrix(Array(X.T) .slice(from: from, to: to)).T }
+    return X
+  }
+
+}
+
+extension Matrix where Scalar == Double {
+
+  // Like Array.slice(from:to:)
+  //  - Ignores out-of-range indexes i/o fatal-ing
+  public func slice(rows: (from: Int?, to: Int?)?, columns: (from: Int?, to: Int?)?) -> Matrix {
+    var X = self
+    if let (from, to) = rows    { X = Matrix(Array(X)   .slice(from: from, to: to)) }
+    if let (from, to) = columns { X = Matrix(Array(X.T) .slice(from: from, to: to)).T }
+    return X
+  }
+
+}
+
 // HACK How to do these more idiomatically / generically?
 public func toInts    (_ xs: [Double])       -> [Int]          { return xs.map  { Int($0) } }
 public func toFloats  (_ xs: [Double])       -> [Float]        { return xs.map  { Float($0) } }
@@ -37,19 +63,26 @@ public func - (x: Float, ys: [Float]) -> [Float] { return Array<Float>(repeating
 public func * (x: Float, ys: [Float]) -> [Float] { return Array<Float>(repeating: x, count: numericCast(ys.count)) .* ys }
 public func / (x: Float, ys: [Float]) -> [Float] { return Array<Float>(repeating: x, count: numericCast(ys.count)) ./ ys }
 
-// Elem-wise operations for Matrix, like for Array
-public func .+ (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op(X, Y, .+) }
-public func .- (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op(X, Y, .-) }
-public func .* (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op(X, Y, .*) }
-public func ./ (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op(X, Y, ./) }
+// Elem-wise unary operations for Matrix, like for Array
+public func abs(_ X: Matrix<Float>) -> Matrix<Float> { return X.vect { abs($0) } }
 
-public func elem_op(_ X: Matrix<Float>, _ Y: Matrix<Float>, _ f: ([Float], [Float]) -> [Float]) -> Matrix<Float> {
+// Elem-wise binary operations for Matrix, like for Array
+public func .+ (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, .+) }
+public func .- (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, .-) }
+public func .* (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, .*) }
+public func ./ (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, ./) }
+
+public func elem_op_vect(_ X: Matrix<Float>, _ Y: Matrix<Float>, _ f: ([Float], [Float]) -> [Float]) -> Matrix<Float> {
   precondition(X.shape == Y.shape, "Shapes must match: X[\(X.shape)] != Y[\(Y.shape)]")
   return Matrix(
     rows:    X.rows,
     columns: X.columns,
     grid:    f(X.grid, Y.grid)
   )
+}
+
+public func elem_op(_ X: Matrix<Float>, _ Y: Matrix<Float>, _ f: (Float, Float) -> Float) -> Matrix<Float> {
+  return elem_op_vect(X, Y) { xs, ys in zip(xs, ys).map { x, y in f(x, y) } }
 }
 
 //
@@ -90,6 +123,7 @@ public func elem_op(_ X: Matrix<Float>, _ Y: Matrix<Float>, _ f: ([Float], [Floa
 // abs
 //
 
+// abs([Complex]) -> [Real]
 public func abs(_ reals: inout [Float], _ imags: inout [Float]) -> [Float] {
   precondition(reals.count == imags.count) // DSPSplitComplex() doesn't enforce this
   let n  = reals.count
