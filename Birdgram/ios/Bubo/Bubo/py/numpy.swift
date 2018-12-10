@@ -52,27 +52,33 @@ public enum numpy {
     return Array(stride(from: start, through: stop, by: (stop - start) / Float(num - 1)))
   }
 
-  // Pin down all the log/exp functions to match np.log/np.exp so we don't have to question "does this log() mean natural log?"
-  public static func log   (_ xs: Float)    -> Float    { return Foundation.log(xs) }
-  public static func log10 (_ xs: Float)    -> Float    { return Foundation.log10(xs) }
-  public static func log2  (_ xs: Float)    -> Float    { return Foundation.log2(xs) }
-  public static func log   (_ xs: Double)   -> Double   { return Foundation.log(xs) }
-  public static func log10 (_ xs: Double)   -> Double   { return Foundation.log10(xs) }
-  public static func log2  (_ xs: Double)   -> Double   { return Foundation.log2(xs) }
-  public static func log   (_ xs: [Float])  -> [Float]  { return Surge.log(xs) }
-  public static func log10 (_ xs: [Float])  -> [Float]  { return Surge.log10(xs) }
-  public static func log2  (_ xs: [Float])  -> [Float]  { return Surge.log2(xs) }
-  public static func log   (_ xs: [Double]) -> [Double] { return Surge.log(xs) }
-  public static func log10 (_ xs: [Double]) -> [Double] { return Surge.log10(xs) }
-  public static func log2  (_ xs: [Double]) -> [Double] { return Surge.log2(xs) }
-  public static func exp   (_ xs: Float)    -> Float    { return Foundation.exp(xs) }
-  public static func exp2  (_ xs: Float)    -> Float    { return Foundation.exp2(xs) }
-  public static func exp   (_ xs: Double)   -> Double   { return Foundation.exp(xs) }
-  public static func exp2  (_ xs: Double)   -> Double   { return Foundation.exp2(xs) }
-  public static func exp   (_ xs: [Float])  -> [Float]  { return Surge.exp(xs) }
-  public static func exp2  (_ xs: [Float])  -> [Float]  { return Surge.exp2(xs) }
-  public static func exp   (_ xs: [Double]) -> [Double] { return Surge.exp(xs) }
-  public static func exp2  (_ xs: [Double]) -> [Double] { return Surge.exp2(xs) }
+  // Pin down a bunch of functions we expect to be called np.foo (e.g. "is log() the natural log? I know np.log would be...")
+  //  - Float
+  public static func log   (_ x: Float)    -> Float    { return Foundation.log(x) }
+  public static func log10 (_ x: Float)    -> Float    { return Foundation.log10(x) }
+  public static func log2  (_ x: Float)    -> Float    { return Foundation.log2(x) }
+  public static func exp   (_ x: Float)    -> Float    { return Foundation.exp(x) }
+  public static func exp2  (_ x: Float)    -> Float    { return Foundation.exp2(x) }
+  public static func abs   (_ x: Float)    -> Float    { return Swift.abs(x) }
+  public static func log   (_ x: [Float])  -> [Float]  { return Surge.log(x) }
+  public static func log10 (_ x: [Float])  -> [Float]  { return Surge.log10(x) }
+  public static func log2  (_ x: [Float])  -> [Float]  { return Surge.log2(x) }
+  public static func exp   (_ x: [Float])  -> [Float]  { return Surge.exp(x) }
+  public static func exp2  (_ x: [Float])  -> [Float]  { return Surge.exp2(x) }
+  public static func abs   (_ x: [Float])  -> [Float]  { return Surge.abs(x) }
+  //  - Double
+  public static func log   (_ x: Double)   -> Double   { return Foundation.log(x) }
+  public static func log10 (_ x: Double)   -> Double   { return Foundation.log10(x) }
+  public static func log2  (_ x: Double)   -> Double   { return Foundation.log2(x) }
+  public static func exp   (_ x: Double)   -> Double   { return Foundation.exp(x) }
+  public static func exp2  (_ x: Double)   -> Double   { return Foundation.exp2(x) }
+  public static func abs   (_ x: Double)   -> Double   { return Swift.abs(x) }
+  public static func log   (_ x: [Double]) -> [Double] { return Surge.log(x) }
+  public static func log10 (_ x: [Double]) -> [Double] { return Surge.log10(x) }
+  public static func log2  (_ x: [Double]) -> [Double] { return Surge.log2(x) }
+  public static func exp   (_ x: [Double]) -> [Double] { return Surge.exp(x) }
+  public static func exp2  (_ x: [Double]) -> [Double] { return Surge.exp2(x) }
+  public static func abs   (_ x: [Double]) -> [Double] { return Surge.abs(x) }
 
   public static func sum(_ X: Matrix<Float>, axis: Int = 0) -> [Float] {
     return (axis == 0 ? X.T : X).map { Surge.sum($0) }

@@ -111,7 +111,7 @@ public func testAlmostEqual(
   _ name: String,
   _ x: Float,
   _ y: Float,
-  tol: Tol? = nil,
+  tol: Tol = Tol(),
   equal_nan: Bool = true
 ) {
   testEqual(name, x, y,
@@ -124,7 +124,7 @@ public func testAlmostEqual(
   _ name: String,
   _ xs: [Float],
   _ ys: [Float],
-  tol: Tol? = nil,
+  tol: Tol = Tol(),
   equal_nan: Bool = true,
   // For show(), not for comparison
   prec: Int = 3,
@@ -146,7 +146,7 @@ public func testAlmostEqual(
   _ name: String,
   _ X: Matrix<Float>,
   _ Y: Matrix<Float>,
-  tol: Tol? = nil,
+  tol: Tol = Tol(),
   equal_nan: Bool = true,
   // For show(), not for comparison
   prec: Int = 3,
@@ -162,9 +162,9 @@ public func testAlmostEqual(
       ].joined(separator: "\n")
     },
     showAfter: {
-      let A  = abs(X - Y)
+      let A  = np.abs(X - Y)
       let Aq = Stats.quantiles(A.grid, bins: 4)
-      let R  = elem_op(X, Y) { x, y in abs(x - y) / max(abs(x), abs(y)) }
+      let R  = np.abs(X .- Y) ./ np.maximum(np.abs(X), np.abs(Y))
       let Rq = Stats.quantiles(R.grid, bins: 4)
       return [
         "  abs(x-y):",

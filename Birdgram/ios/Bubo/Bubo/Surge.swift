@@ -64,13 +64,19 @@ public func * (x: Float, ys: [Float]) -> [Float] { return Array<Float>(repeating
 public func / (x: Float, ys: [Float]) -> [Float] { return Array<Float>(repeating: x, count: numericCast(ys.count)) ./ ys }
 
 // Elem-wise unary operations for Matrix, like for Array
-public func abs(_ X: Matrix<Float>) -> Matrix<Float> { return X.vect { abs($0) } }
+extension numpy {
+  public static func abs(_ X: Matrix<Float>) -> Matrix<Float> { return X.vect { abs($0) } }
+}
 
 // Elem-wise binary operations for Matrix, like for Array
 public func .+ (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, .+) }
 public func .- (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, .-) }
 public func .* (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, .*) }
 public func ./ (X: Matrix<Float>, Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, ./) }
+extension numpy {
+  public static func minimum (_ X: Matrix<Float>, _ Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, np.minimum) }
+  public static func maximum (_ X: Matrix<Float>, _ Y: Matrix<Float>) -> Matrix<Float> { return elem_op_vect(X, Y, np.maximum) }
+}
 
 public func elem_op_vect(_ X: Matrix<Float>, _ Y: Matrix<Float>, _ f: ([Float], [Float]) -> [Float]) -> Matrix<Float> {
   precondition(X.shape == Y.shape, "Shapes must match: X[\(X.shape)] != Y[\(Y.shape)]")
