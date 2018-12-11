@@ -48,9 +48,9 @@ test("Search.f_preds: search_recs.sample(10) start=0 end=10: Compute audio->f_pr
 //   let _f_predss   = data["f_predss"].arrayValue.map { $0.arrayValue.map { $0.floatValue } }
 //   let f_predss    = audios.map { audio in search.f_preds(audio, sample_rate: sample_rate) }
 //   let limit       = (5, nil) as (Int?, Int?)
-//   // FIXME(model_predict): These don't always pass! Current random_state requires rel:0.999, abs:0.05
-//   testAlmostEqual(name, Matrix(f_predss).T, Matrix(_f_predss).T, tol: Tol(rel: 0.80), prec: 4, limit: limit) // FIXME(model_predict)
-//   testAlmostEqual(name, Matrix(f_predss).T, Matrix(_f_predss).T, tol: Tol(abs: 0.02), prec: 4, limit: limit) // FIXME(model_predict)
+//   // FIXME These don't always pass! Current random_state requires rel:0.999, abs:0.05
+//   testAlmostEqual(name, Matrix(f_predss).T, Matrix(_f_predss).T, tol: Tol(rel: 0.80), prec: 4, limit: limit) // FIXME
+//   testAlmostEqual(name, Matrix(f_predss).T, Matrix(_f_predss).T, tol: Tol(abs: 0.02), prec: 4, limit: limit) // FIXME
 //   testAlmostEqual(name, Matrix(f_predss).T, Matrix(_f_predss).T, tol: Tol(),          prec: 4, limit: limit) // XXX Shows diffs
 // }
 

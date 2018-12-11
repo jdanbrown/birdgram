@@ -37,10 +37,11 @@ import { CCIcon, LicenseTypeIcons } from './Misc';
 import { TabBarStyle } from './TabRoutes';
 import { config } from '../config';
 import {
-  ModelsSearch, matchSearchPathParams, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
-  searchPathParamsFromPath, SearchRecs, ServerConfig, showSourceId, SourceId,
+  ModelsSearch, matchSearchPathParams, matchSourceId, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
+  searchPathParamsFromPath, SearchRecs, ServerConfig, showSourceId, SourceId, UserRec,
 } from '../datatypes';
 import { Log, puts, rich, tap } from '../log';
+import { NativeSearch } from '../native/Search';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
@@ -614,15 +615,55 @@ export class SearchScreen extends PureComponent<Props, State> {
     }
   }
 
+  // TODO(model_predict): Test
   loadRec = async (sourceId: SourceId): Promise<Rec> => {
     log.info('loadRec', {sourceId});
-    return await querySql<Rec>(this.db!, sqlf`
-      select *
-      from search_recs
-      where source_id = ${sourceId}
-    `)(async results => {
-      const [rec] = results.rows.raw();
-      return rec;
+    return await matchSourceId(sourceId, {
+      xc: async ({xc_id}) => {
+        return await querySql<Rec>(this.db!, sqlf`
+          select *
+          from search_recs
+          where source_id = ${sourceId}
+        `)(async results => {
+          const [rec] = results.rows.raw();
+          return rec; // TODO XCRec
+        });
+      },
+      user: async ({name, clip}) => {
+        // Predict f_preds from audio
+        //  - Audio not spectro: model uses its own f_bins=40, separate from this.props.f_bins=80 that we use to draw while recording
+        log.debug('loadRec: f_preds', {sourceId, name, clip}); // XXX(model_predict): Debug
+        const f_preds = await log.timedAsync('loadRec: f_preds', async () => {
+          return await NativeSearch.f_preds(UserRec.audioPath(name));
+        });
+        if (f_preds === null) {
+          throw `loadRec: Unexpected null f_preds (audio < nperseg), for sourceId[${sourceId}]`;
+        } else {
+          let userRec: UserRec = {
+            // TODO(model_predict): Passthru spectro dims for way downstream <Image> dims
+            source_id: sourceId,
+            f_preds,
+            // Mock the xc fields
+            //  - TODO Clean up junk fields after splitting subtypes XCRec, UserRec <: Rec
+            xc_id:               -1,
+            species:             'unknown',
+            species_taxon_order: '_UNK',
+            species_com_name:    'unknown',
+            species_sci_name:    'unknown',
+            recs_for_sp:         -1,
+            quality:             'no score',
+            month_day:           '',
+            place:               '',
+            place_only:          '',
+            state:               '',
+            state_only:          '',
+            recordist:           '',
+            license_type:        '',
+            remarks:             '',
+          };
+          return userRec
+        }
+      },
     });
   }
 
@@ -654,7 +695,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       //  - (Observable via log counts in the console: if num alloc > num release, then we're racing)
       this.soundsCache.set(rec.source_id, Sound.newAsync(
         Rec.audioPath(rec),
-        Sound.MAIN_BUNDLE,
+        Sound.MAIN_BUNDLE, // TODO(model_predict): Why implicitly rel to MAIN_BUNDLE?
       ));
       soundAsync = this.soundsCache.get(rec.source_id);
     }

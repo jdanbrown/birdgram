@@ -71,11 +71,23 @@ export function matchUndefined<X, Y>(x: undefined | X, cases: {x: (x: X) => Y, u
   )
 }
 
-export function matchNil<X, Y>(x: undefined | null | X, cases: {x: (x: X) => Y, nil: (x: {nil: undefined | null}) => Y}): Y {
+export function matchNil<X, Y>(x: undefined | null | X, cases: {x: (x: X) => Y, nil: (nil: undefined | null) => Y}): Y {
   return (_.isNil(x)
-    ? cases.nil({nil: x})
+    ? cases.nil(x)
     : cases.x(x)
   )
+}
+
+export function mapNull<X, Y>(x: null | X, f: (x: X) => Y): null | Y {
+  return matchNull(x, {null: () => null, x: x => f(x)});
+}
+
+export function mapUndefined<X, Y>(x: undefined | X, f: (x: X) => Y): undefined | Y {
+  return matchUndefined(x, {undefined: () => undefined, x: x => f(x)});
+}
+
+export function mapNil<X, Y>(x: undefined | null | X, f: (x: X) => Y): undefined | null | Y {
+  return matchNil(x, {nil: nil => nil, x: x => f(x)});
 }
 
 export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
@@ -363,6 +375,30 @@ export type Clamp<X> = {
 //  - https://github.com/LittoCats/react-native-path/blob/master/index.js#L127-L129
 export function dirname(path: string): string {
   return path.split(/\//g).slice(0, -1).join('/');
+}
+export function basename(path: string): string {
+  return path.split(/\//g).slice(-1)[0]!;
+}
+
+//
+// URL
+//
+
+import urlParse from 'url-parse';
+
+export function parseUrl(url: string): {
+  protocol: string,
+  host:     string,
+  port:     string, // TODO number
+  pathname: string,
+  query:    {[key: string]: any},
+  hash:     string,
+} {
+  return urlParse(
+    url,
+    // @ts-ignore (Bad d.ts)
+    true,
+  );
 }
 
 //

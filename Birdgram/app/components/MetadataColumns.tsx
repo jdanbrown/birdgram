@@ -4,15 +4,15 @@ import { Text, TextStyle } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { CCIcon, Hyperlink } from './Misc';
-import { matchSourceId, Rec, showSourceId } from '../datatypes';
+import { matchRec, Rec, showSourceId } from '../datatypes';
 
 const _columns = {
 
   id: (rec: Rec) => (
     <MetadataText>
-      <Hyperlink url={matchSourceId(rec.source_id, {
-        xc:   () => Rec.xcUrl(rec),
-        user: () => null,
+      <Hyperlink url={matchRec(rec, {
+        xc:   rec => Rec.xcUrl(rec),
+        user: rec => null,
       })}>
         {showSourceId(rec.source_id)}
       </Hyperlink>
@@ -21,7 +21,7 @@ const _columns = {
 
   species: (rec: Rec) => (
     <MetadataText>
-      <Hyperlink url={Rec.speciesUrl(rec)}>
+      <Hyperlink url={rec.species === 'unknown' ? null : Rec.speciesUrl(rec)}>
         {rec.species_com_name} <Text style={{fontStyle: 'italic'}}>({rec.species_sci_name})</Text>
       </Hyperlink>
     </MetadataText>
@@ -29,7 +29,7 @@ const _columns = {
 
   com_name: (rec: Rec) => (
     <MetadataText>
-      <Hyperlink url={Rec.speciesUrl(rec)}>
+      <Hyperlink url={rec.species === 'unknown' ? null : Rec.speciesUrl(rec)}>
         {rec.species_com_name}
       </Hyperlink>
     </MetadataText>
@@ -37,7 +37,7 @@ const _columns = {
 
   sci_name: (rec: Rec) => (
     <MetadataText>
-      <Hyperlink url={Rec.speciesUrl(rec)}>
+      <Hyperlink url={rec.species === 'unknown' ? null : Rec.speciesUrl(rec)}>
         {rec.species_sci_name}
       </Hyperlink>
     </MetadataText>

@@ -56,6 +56,7 @@
     "sqlstring-sqlite": "^0.1.1",
     "string-hash": "^1.1.3",
     "tslib": "^1.9.3",
+    "url-parse": "^1.4.4",
     "wavefile": "^8.4.4",
     "zeros": "^1.0.0"
   },
@@ -81,6 +82,7 @@
     "@types/recompose": "^0.27.0",
     "@types/sprintf-js": "^1.1.1",
     "@types/string-hash": "^1.1.1",
+    "@types/url-parse": "^1.4.1",
     "animated.macro": "^0.0.5",
     "app-icon": "^0.6.3",
     "babel-jest": "23.6.0",

@@ -27,8 +27,8 @@ const {fs, base64} = RNFB;
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
 import * as Colors from '../colors';
-import { ModelsSearch, SourceId } from '../datatypes';
-import { Log, puts, rich } from '../log';
+import { F_Preds, ModelsSearch, SourceId } from '../datatypes';
+import { debug_print, Log, puts, rich } from '../log';
 import { NativeSearch } from '../native/Search';
 import { ImageFile, NativeSpectro, NativeSpectroStats } from '../native/Spectro';
 import { Go } from '../router';
@@ -37,9 +37,9 @@ import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
-  chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean, ExpWeightedRate, finallyAsync, global, into, json, match,
-  matchNil, matchNull, matchUndefined, pretty, round, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml,
-  yamlPretty,
+  basename, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean, ExpWeightedRate, finallyAsync, global, into, json,
+  match, matchNil, matchNull, matchUndefined, pretty, round, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync,
+  yaml, yamlPretty,
 } from '../utils';
 
 const log = new Log('RecordScreen');
@@ -93,9 +93,11 @@ interface State {
 
 interface DoneRecording {
   audioPath: string;
-  spectros: Map<Denoise, null | DoneRecordingSpectro>;
+  spectros: DoneRecordingSpectros;
+  sourceId: string;
 }
 
+type DoneRecordingSpectros = Map<Denoise, DoneRecordingSpectro>;
 type Denoise = boolean;
 interface DoneRecordingSpectro {
   single: ImageFile;
@@ -337,6 +339,7 @@ export class RecordScreen extends Component<Props, State> {
 
         {/* Controls bar */}
         <ControlsBar
+          go={this.props.go}
           showDebug={this.props.showDebug}
           showMoreDebug={this.state.showMoreDebug}
           recordingState={this.state.recordingState}
@@ -409,38 +412,48 @@ export class RecordScreen extends Component<Props, State> {
         this._nativeStats = null; // Else shouldComponentUpdate gets stuck with lag>0
         const audioPath = await NativeSpectro.stop();
 
+        // Save to doneRecording
+        //  - doneRecording=null if audioPath is null [When does this happen? Not on no audio samples]
         log.info('stopRecording: Got', {audioPath});
         var doneRecording: null | DoneRecording;
         if (audioPath === null) {
+          log.info('stopRecording: Noop: No audioPath');
           doneRecording = null;
         } else {
 
           // Render audioPath -> spectros
-          const spectros: Map<Denoise, DoneRecordingSpectro> = new Map(await Promise.all([true, false].map(async denoise => {
-            const spectroPathBase = await ensureParentDir(`${audioPath}.spectros/denoise=${denoise}.png`);
-            const single = await NativeSpectro.renderAudioPathToSpectroPath(audioPath, spectroPathBase, {
-              f_bins: this.props.f_bins,
-              denoise,
-            });
-            var spectros: null | DoneRecordingSpectro;
-            if (!single) {
-              spectros = null;
-            } else {
-              const chunked = await NativeSpectro.chunkImageFile(single.path, this.props.doneSpectroChunkWidth);
-              spectros = {single, chunked};
-            }
-            return [denoise, spectros] as [Denoise, DoneRecordingSpectro];
-          })));
-          doneRecording = {
-            audioPath,
-            spectros,
-          };
+          //  - doneRecording=null if any value is null (audio samples < nperseg)
+          var _spectros: DoneRecordingSpectros = await log.timedAsync('stopRecording: spectros', async () => new Map(
+            await Promise.all([true, false].map(async denoise => {
+              const spectroPathBase = await ensureParentDir(`${audioPath}.spectros/denoise=${denoise}.png`);
+              const single = await NativeSpectro.renderAudioPathToSpectroPath(audioPath, spectroPathBase, {
+                f_bins: this.props.f_bins,
+                denoise,
+              });
+              var spectros: null | DoneRecordingSpectro;
+              if (!single) {
+                spectros = null;
+              } else {
+                const chunked = await NativeSpectro.chunkImageFile(single.path, this.props.doneSpectroChunkWidth);
+                spectros = {single, chunked};
+              }
+              return [denoise, spectros] as [Denoise, DoneRecordingSpectro];
+            })),
+          ));
+          const spectros: null | DoneRecordingSpectros = _.values(_spectros).some(x => x === null) ? null : _spectros;
+          if (spectros === null) {
+            log.info('stopRecording: Noop: No spectro (samples < nperseg)');
+            doneRecording = null;
+          } else {
 
-          // TODO(model_predict)
-          //  - NOTE Model uses its own f_bins (40), regardless of the this.props.f_bins (80) we use to draw while recording
-          const f_preds = NativeSearch.f_preds(audioPath);
-          // TODO(model_predict) Handle f_preds=null when audioPath has no samples (throws on hard error, which is ok to not catch here)
+            // Save doneRecording
+            doneRecording = {
+              audioPath,
+              spectros,
+              sourceId: SourceId('user', basename(audioPath)),
+            };
 
+          }
         }
 
         // Reset state (2/2)
@@ -471,7 +484,7 @@ export class RecordScreen extends Component<Props, State> {
 
       }
     } catch (e) {
-      log.error('stopRecording', e);
+      log.error('stopRecording', {e});
     }
   }
 
@@ -513,8 +526,12 @@ export class RecordScreen extends Component<Props, State> {
   freshPath = async (ext: string, dir: string = fs.dirs.DocumentDir): Promise<string> => {
     // WARNING Avoid ':' in ios paths [they map to dir separator, I think?]
     const subdir = 'user-recs-v0';
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); // (Avoid ':' chars for osx)
-    return ensureParentDir(`${dir}/${subdir}/${timestamp}-${chance.hash({length: 8})}.${ext}`);
+    const timestamp = (new Date().toISOString()
+      .slice(0, 19)          // Drop millis/tz (for human)
+      .replace(/[:.]/g, '-') // Avoid ':' chars (for ios)
+    );
+    const hash = chance.hash({length: 8}); // Long enough to be unique across users
+    return ensureParentDir(`${dir}/${subdir}/${timestamp}-${hash}.${ext}`);
   }
 
   // Debug components
@@ -620,6 +637,7 @@ export class SpectroImageComp extends PureComponent<SpectroImageCompProps, Spect
 
 // Split out control buttons as component else excessive updates cause render bottleneck
 export interface ControlsBarProps {
+  go:             Props["go"];
   showDebug:      Props["showDebug"];
   showMoreDebug:  State["showMoreDebug"];
   recordingState: State["recordingState"];
@@ -686,6 +704,19 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
             }]}/>
           </RectButton>
         )}
+
+        {/* Search */}
+        <RectButton style={styles.bottomControlsButton} onPress={() => {
+          if (this.props.doneRecording) {
+            this.props.go('search', `/rec/${this.props.doneRecording.sourceId}`);
+          }
+        }}>
+          <Feather style={[styles.bottomControlsButtonIcon, {
+            ...(this.props.doneRecording ? {} : {color: iOSColors.gray}),
+          }]}
+            name='search'
+          />
+        </RectButton>
 
         {/* Record/stop */}
         {match(this.props.recordingState,

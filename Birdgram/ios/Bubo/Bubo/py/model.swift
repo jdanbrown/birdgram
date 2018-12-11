@@ -47,15 +47,20 @@ public class Search: Loadable {
   //  - denoise=true to match api.recs.recs_featurize_slice_audio
   //  - Like sqlite search_recs.f_preds_* (from py sg.search_recs, sg.feat_info, api.recs.get_feat_info)
   //  - py species_proba is what's used to populate sqlite search_recs.f_preds_* (via sg.search_recs, api.recs.get_feat_info)
-  public func f_preds(_ samples: [Float], sample_rate: Int) -> F_Preds {
+  public func f_preds(_ samples: [Float], sample_rate: Int) -> F_Preds? {
 
     // Debug: perf
     let timer = Timer()
     var debugTimes: Array<(String, Double)> = [] // (Array of tuples b/c Dictionary is ordered by key i/o insertion)
     func debugTimed<X>(_ k: String, _ f: () -> X) -> X { let x = f(); debugTimes.append((k, timer.lap())); return x }
 
-    // Featurize
+    // Featurize: audio -> spectro
     let spectro = debugTimed("spectro") { features._spectro(samples, sample_rate: sample_rate) }
+    if spectro.S.isEmpty {
+      _Log.info("Search.f_preds: Empty spectro: samples[\(samples.count)] -> S[\(spectro.S.shape)] (e.g. <nperseg)")
+      return nil
+    }
+    // Featurize: spectro -> feat
     let patches = debugTimed("patches") { features._patches(spectro) }
     let proj    = debugTimed("proj")    { projection._proj(patches) }
     let agg     = debugTimed("agg")     { projection._agg(proj) }

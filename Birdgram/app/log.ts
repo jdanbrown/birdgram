@@ -137,15 +137,17 @@ export function puts<X>(x: X, ...args: any[]): X {
 export const print = log.info.bind(log);
 export const pp    = (...xs: any[]) => log.info('', ...xs.map(pretty));
 
-// HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
-global.log   = log;
-global.tap   = tap;
-global.puts  = puts;
-global.print = print;
-global.pp    = pp;
-
 // Greppable + tsc-unhappy shorthand for trace debugging [copy of puts, but different printed string]
-global.debugPrint = <X>(x: X, ...args: any[]): X => {
-  log.debug('debugPrint', x, ...args);
+//  - Naming: debug_print i/o debugPrint so we can grep across py/js/swift
+export function debug_print<X>(x: X, ...args: any[]): X {
+  log.debug('PRINT', x, ...args);
   return x;
 };
+
+// HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
+global.log         = log;
+global.tap         = tap;
+global.puts        = puts;
+global.print       = print;
+global.pp          = pp;
+global.debug_print = debug_print;

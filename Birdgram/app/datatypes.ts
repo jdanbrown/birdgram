@@ -1,6 +1,54 @@
 import _ from 'lodash';
+import RNFB from 'rn-fetch-blob';
+const fs = RNFB.fs;
+
+import { debug_print } from './log';
 import { Places } from './places';
-import { match, Omit } from './utils';
+import { match, matchUndefined, Omit, parseUrl } from './utils';
+
+//
+// SourceId
+//
+
+export type SourceId = string;
+export type Clip     = {start_s: number, end_s: number};
+
+export function SourceId(
+  type: 'xc' | 'user',
+  name: string,
+  opts: {
+    clip?: Clip,
+  } = {},
+): SourceId {
+  const query = matchUndefined(opts.clip, {
+    undefined: ()                 => '',
+    x:         ({start_s, end_s}) => `?[${start_s},${end_s}]`,
+  });
+  return `${type}:${name}${query}`
+}
+
+export function matchSourceId<X>(sourceId: SourceId, cases: {
+  xc:   (x: {clip?: Clip, xc_id: number}) => X,
+  user: (x: {clip?: Clip, name: string})  => X,
+}): X {
+  const {protocol, pathname, query} = parseUrl(sourceId);
+  const type = protocol.split(':')[0];
+  const clip = !query.clip ? undefined : JSON.parse(query.clip);
+  return match(type,
+    ['xc',   () => cases.xc   ({clip, xc_id: parseInt(pathname)})],
+    ['user', () => cases.user ({clip, name: pathname})],
+  );
+}
+
+// Human-friendly display for a sourceId, e.g.
+//  - 'xc:123456' -> 'XC123456'
+//  - 'user:<timestamp>-<hash>.wav?clip=[0,15]' -> [TODO More human friendly]
+export function showSourceId(sourceId: SourceId): string {
+  return matchSourceId(sourceId, {
+    xc:   ({xc_id, clip}) => `XC${xc_id}`   + (!clip ? '' : `(${clip.start_s}-${clip.end_s})`),
+    user: ({name,  clip}) => `user:${name}` + (!clip ? '' : `(${clip.start_s}-${clip.end_s})`),
+  });
+}
 
 //
 // Rec
@@ -37,25 +85,34 @@ export interface Rec {
 
 }
 
-export type SourceId = string;
-export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
-
-export function matchSourceId<X>(sourceId: SourceId, cases: {
-  xc:   (x: {xc_id: number}) => X,
-  user: (x: any)             => X, // TODO(user_source_id)
-}): X {
-  const [dataset, rest] = sourceId.split(':');
-  return match(dataset,
-    ['xc',   () => cases.xc({xc_id: parseInt(rest)})],
-    ['user', () => cases.user({})], // TODO(user_source_id)
-  );
+// TODO Make separate subtypes XCRec, UserRec <: Rec
+export interface XCRec extends Rec {
+  // kind: 'xc', // TODO
 }
 
-// e.g. 'xc:123456' -> 'XC123456'
-export function showSourceId(sourceId: SourceId): string {
-  return matchSourceId(sourceId, {
-    xc:   ({xc_id}) => `XC${xc_id}`,
-    user: ({})      => sourceId, // TODO(user_source_id)
+export interface UserRec extends Rec {
+  // kind: 'user', // TODO
+  f_preds: Array<number>;
+}
+
+export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
+export type F_Preds = Array<number>;
+
+export function matchRec<X>(rec: Rec, cases: {
+  xc:   (rec: XCRec,   sourceId: {xc_id: number}) => X,
+  user: (rec: UserRec, sourceId: {name: string})  => X,
+}): X {
+  // HACK Switch on .source_id until we refactor all Rec constructors to include .kind
+  return matchSourceId(rec.source_id, {
+    xc:   ({xc_id}) => cases.xc   (rec as XCRec,   {xc_id}),
+    user: ({name})  => cases.user (rec as UserRec, {name}),
+  });
+}
+
+export function rec_f_preds(rec: Rec): Rec_f_preds {
+  return matchRec(rec, {
+    xc:   rec => rec as unknown as Rec_f_preds,                               // Expose .f_preds_* from sqlite
+    user: rec => _.fromPairs(rec.f_preds.map((p, i) => [`f_preds_${i}`, p])), // Materialize {f_preds_*:p} from .f_preds
   });
 }
 
@@ -63,14 +120,18 @@ export interface Rec_f_preds {
   [key: string]: number;
 }
 
-export function rec_f_preds(rec: Rec): Rec_f_preds {
-  return rec as unknown as Rec_f_preds;
-}
-
 export const Rec = {
 
-  spectroPath: (rec: Rec): string => SearchRecs.assetPath('spectro', rec.species, rec.xc_id, 'png'),
-  audioPath:   (rec: Rec): string => SearchRecs.assetPath('audio',   rec.species, rec.xc_id, 'mp4'),
+  // TODO(model_predict): Test
+  spectroPath: (rec: Rec): string => matchRec(rec, {
+    xc:   rec             => SearchRecs.assetPath('spectro', rec.species, rec.xc_id, 'png'),
+    user: (rec, sourceId) => UserRec.spectroPath(sourceId.name),
+  }),
+
+  audioPath: (rec: Rec): string => matchRec(rec, {
+    xc:   rec             => SearchRecs.assetPath('audio', rec.species, rec.xc_id, 'mp4'),
+    user: (rec, sourceId) => UserRec.audioPath(sourceId.name),
+  }),
 
   hasCoords: (rec: Rec): boolean => {
     return !_.isNil(rec.lat) && !_.isNil(rec.lng);
@@ -109,6 +170,18 @@ export const Rec = {
       const {zoom} = opts;
       return `https://www.google.com/maps/place/${lat},${lng}/@${lat},${lng},${zoom}z`;
     }
+  },
+
+};
+
+export const UserRec = {
+
+  audioPath: (name: string): string => {
+    return `${fs.dirs.DocumentDir}/user-recs-v0/${name}`;
+  },
+
+  spectroPath: (name: string): string => {
+    return `${fs.dirs.DocumentDir}/user-recs-v0/${name}.spectros/denoise=true.png`;
   },
 
 };
@@ -186,6 +259,7 @@ export const SearchRecs = {
   // TODO Test asset paths on android (see notes in README)
   dbPath: 'search_recs/search_recs.sqlite3',
 
+  // TODO(model_predict): Why implicitly relative to fs.dirs.MainBundleDir?
   // TODO After verifying that asset dirs are preserved on android, simplify the basenames back to `${xc_id}.${format}`
   assetPath: (kind: string, species: string, xc_id: number, format: string): string => (
     `search_recs/${kind}/${species}/${kind}-${species}-${xc_id}.${format}`

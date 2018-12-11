@@ -96,6 +96,7 @@ timed('wavefile',           () => global.WaveFile        = require('wavefile/dis
 timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));                   // 0ms
 // timed('sj.getPixels',    () => global.sj.getPixels    = require('get-pixels'));              // 10ms // XXX Doesn't work in RN
 // timed('sj.savePixels',   () => global.sj.savePixels   = require('save-pixels'));             // 30ms // XXX Doesn't work in RN
+timed('url-parse',          () => global.urlParse        = require('url-parse'));               // ?
 global.fs = global.RNFB.fs;
 
 interface Props {}

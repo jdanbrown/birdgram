@@ -79,11 +79,12 @@ public class SearchBirdgram: Loadable {
     self.featuresBirdgram = FeaturesBirdgram(features: search.features)
   }
 
-  // f_preds from from audio w/ denoise, to match api.recs.recs_featurize_slice_audio
+  // f_preds from audio w/ denoise, to match api.recs.recs_featurize_slice_audio
   //  - Like sqlite search_recs.f_preds_* (from py sg.search_recs, sg.feat_info, api.recs.get_feat_info)
   public func f_preds(
     _ audioPath: String
   ) throws -> Array<Float>? {
+    let timer = Timer()
 
     // Read samples <- audioPath
     let (samples, sampleRate) = try featuresBirdgram.samplesFromAudioPath(audioPath)
@@ -94,8 +95,10 @@ public class SearchBirdgram: Loadable {
 
     // Featurize + predict
     //  - (f_preds <- feat <- agg <- proj <- patches <- spectro <- samples)
-    return search.f_preds(samples, sample_rate: sampleRate)
+    let f_preds = search.f_preds(samples, sample_rate: sampleRate)
 
+    Log.info(String(format: "SearchBirdgram.f_preds: time[%.3f], audioPath[%@]", timer.time(), audioPath))
+    return f_preds
   }
 
 }
