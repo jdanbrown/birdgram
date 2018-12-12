@@ -122,7 +122,6 @@ export interface Rec_f_preds {
 
 export const Rec = {
 
-  // TODO(model_predict): Test
   spectroPath: (rec: Rec): string => matchRec(rec, {
     xc:   rec             => SearchRecs.assetPath('spectro', rec.species, rec.xc_id, 'png'),
     user: (rec, sourceId) => UserRec.spectroPath(sourceId.name),
@@ -259,7 +258,7 @@ export const SearchRecs = {
   // TODO Test asset paths on android (see notes in README)
   dbPath: 'search_recs/search_recs.sqlite3',
 
-  // TODO(model_predict): Why implicitly relative to fs.dirs.MainBundleDir?
+  // TODO(asset_main_bundle): Why implicitly relative to fs.dirs.MainBundleDir?
   // TODO After verifying that asset dirs are preserved on android, simplify the basenames back to `${xc_id}.${format}`
   assetPath: (kind: string, species: string, xc_id: number, format: string): string => (
     `search_recs/${kind}/${species}/${kind}-${species}-${xc_id}.${format}`

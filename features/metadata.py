@@ -77,7 +77,21 @@ class ebird:
     #   - TODO Unify api with __getitem__
     #   - TODO Clean up along with xc.com_names_to_species
     def com_names_to_species(self, com_names: Iterable[str], check=True) -> Iterable[str]:
+        manual_renames = {
+            # Any com_name (e.g. a newer ebird taxo than self.df) -> com_name in self.df
+            "Canada Jay": "Gray Jay",  # https://www.allaboutbirds.org/guide/Canada_Jay/
+            "Cinnamon-rumped Seedeater": "White-collared Seedeater",  # https://ebird.org/camerica/news/taxonomy-update-central-america-2018
+            "Morelet's Seedeater": "White-collared Seedeater",  # https://en.wikipedia.org/wiki/White-collared_seedeater
+            "Mexican Duck": "Mallard",  # https://en.wikipedia.org/wiki/Mexican_duck
+            "Leach's/Townsend's Storm-Petrel (dark-rumped)": "Leach's Storm-Petrel",  # https://en.wikipedia.org/wiki/Leach%27s_storm_petrel
+            "Leach's/Townsend's Storm-Petrel (white-rumped)": "Leach's Storm-Petrel",  # https://en.wikipedia.org/wiki/Leach%27s_storm_petrel
+            "Chiriqui Foliage-gleaner": "Buff-throated Foliage-gleaner",  # https://ebird.org/camerica/news/taxonomy-update-central-america-2018
+            "Middle American Screech-Owl": "Vermiculated Screech-Owl",  # https://ebird.org/camerica/news/taxonomy-update-central-america-2018
+            "Mistletoe Tyrannulet": "Paltry Tyrannulet",  # https://ebird.org/camerica/news/taxonomy-update-central-america-2018
+            "Scarlet-rumped Tanager": "Passerini's Tanager",  # https://ebird.org/camerica/news/taxonomy-update-central-america-2018
+        }
         com_names = set(com_names)
+        com_names = {manual_renames.get(x, x) for x in com_names}
         res = self.df[['com_name', 'shorthand']][lambda df: df.com_name.isin(com_names)]
         unmatched = list(set(com_names) - set(res.com_name))
         if check and unmatched:

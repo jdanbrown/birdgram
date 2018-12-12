@@ -13,7 +13,7 @@ export default class Sound extends _Sound {
     return new Promise((resolve, reject) => {
       const sound: Sound = new Sound(
         filename,
-        filename[0] === '/' ? '' : basePath || '', // HACK(model_predict): Allow abs paths i/o implicitly rel to Sound.MAIN_BUNDLE
+        filename[0] === '/' ? '' : basePath || '', // HACK(asset_main_bundle): Allow abs paths i/o implicitly rel to Sound.MAIN_BUNDLE
         error => error ? reject(error) : resolve(sound),
       );
     });

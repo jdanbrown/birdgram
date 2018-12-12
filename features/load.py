@@ -334,6 +334,8 @@ class Load(DataclassConfig):
                 pass
 
             # Give an informative warning
+            #   - FIXME ^C causes lots of empty outputs to be cached b/c it makes ffmpeg fail as if it had a junk input file
+            #       - HACK To clean up manually: https://gist.github.com/jdanbrown/11f082549c9cb6858b64977e88e7fde9
             log_msg = (
                 f'Dropping restricted xc recording ({download_restricted_msg!r})' if download_restricted else
                 f'Dropping disabled xc recording ({download_disabled_msg!r})' if download_disabled else

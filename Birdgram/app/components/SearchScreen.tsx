@@ -615,7 +615,6 @@ export class SearchScreen extends PureComponent<Props, State> {
     }
   }
 
-  // TODO(model_predict): Test
   loadRec = async (sourceId: SourceId): Promise<Rec> => {
     log.info('loadRec', {sourceId});
     return await matchSourceId(sourceId, {
@@ -632,7 +631,6 @@ export class SearchScreen extends PureComponent<Props, State> {
       user: async ({name, clip}) => {
         // Predict f_preds from audio
         //  - Audio not spectro: model uses its own f_bins=40, separate from this.props.f_bins=80 that we use to draw while recording
-        log.debug('loadRec: f_preds', {sourceId, name, clip}); // XXX(model_predict): Debug
         const f_preds = await log.timedAsync('loadRec: f_preds', async () => {
           return await NativeSearch.f_preds(UserRec.audioPath(name));
         });
@@ -640,7 +638,6 @@ export class SearchScreen extends PureComponent<Props, State> {
           throw `loadRec: Unexpected null f_preds (audio < nperseg), for sourceId[${sourceId}]`;
         } else {
           let userRec: UserRec = {
-            // TODO(model_predict): Passthru spectro dims for way downstream <Image> dims
             source_id: sourceId,
             f_preds,
             // Mock the xc fields
@@ -695,7 +692,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       //  - (Observable via log counts in the console: if num alloc > num release, then we're racing)
       this.soundsCache.set(rec.source_id, Sound.newAsync(
         Rec.audioPath(rec),
-        Sound.MAIN_BUNDLE, // TODO(model_predict): Why implicitly rel to MAIN_BUNDLE?
+        Sound.MAIN_BUNDLE, // TODO(asset_main_bundle): Why implicitly rel to MAIN_BUNDLE?
       ));
       soundAsync = this.soundsCache.get(rec.source_id);
     }
@@ -1065,19 +1062,13 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   BottomControls = (props: {}) => (
     <View style={styles.bottomControls}>
-      {/* Help */}
-      <this.BottomControlsButton
-        help='Help'
-        iconProps={{name: 'help-circle'}}
-        onPress={() => {}}
-      />
       {/* Filters */}
       <this.BottomControlsButton
         help='Filters'
         iconProps={{name: 'filter'}}
         onPress={() => this.setState({showFilters: true})}
       />
-      {/* Toggle sort: species probs / rec dist / manual list */}
+      {/* Toggle sort: species probs / rec dist */}
       <this.BottomControlsButton
         help='Sort'
         iconProps={{name: 'chevrons-down'}}
@@ -1089,22 +1080,12 @@ export class SearchScreen extends PureComponent<Props, State> {
             <this.ActionModal title='Sort' actions={[
               // this.state.queryRec ? [ // TODO queryRec
               {
-                label: 'Sort by species, then by recs',
+                label: 'Species match, then similar recs',
                 iconName: 'chevrons-down',
                 buttonColor: iOSColors.orange,
                 onPress: () => {},
               }, {
-                label: 'Sort by recs only',
-                iconName: 'chevrons-down',
-                buttonColor: iOSColors.orange,
-                onPress: () => {},
-              }, {
-                label: 'Sort recs by similarity',
-                iconName: 'chevrons-down',
-                buttonColor: iOSColors.orange,
-                onPress: () => {},
-              }, {
-                label: 'Order manually',
+                label: 'Similar recs only (ignoring species match)',
                 iconName: 'chevrons-down',
                 buttonColor: iOSColors.orange,
                 onPress: () => {},
@@ -1125,21 +1106,6 @@ export class SearchScreen extends PureComponent<Props, State> {
         // iconProps={{name: 'refresh-ccw'}}
         iconProps={{name: 'shuffle'}}
         onPress={() => this.props.history.push(this.randomPath())}
-      />
-      {/* Toggle editing [moving] controls for rec/species */}
-      <this.BottomControlsButton
-        // HACK Reduced from "editing" to just "moving"
-        // - XXX this button after we figure out how the moving UI should work
-        // help='Edit'
-        help='Move'
-        active={this.props.editing}
-        // iconProps={{name: 'sliders'}}
-        iconProps={{name: 'move'}}
-        // iconProps={{name: 'edit'}}
-        // iconProps={{name: 'edit-2'}}
-        // iconProps={{name: 'edit-3'}}
-        // iconProps={{name: 'layout', style: Styles.flipBoth}}
-        onPress={() => this.props.settings.toggle('editing')}
       />
       {/* Toggle metadata: left */}
       <this.BottomControlsButton

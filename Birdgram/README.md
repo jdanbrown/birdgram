@@ -24,13 +24,13 @@ $ react-native run-ios
 Run tsc
 ```sh
 $ yarn run tsc
-$ yarn run tsc --watch
+$ yarn run tsc -w
 ```
 
 Run tests
 ```sh
-$ yarn test
-$ yarn test --watch
+$ yarn jest
+$ yarn jest --watch
 ```
 
 # Device logs

@@ -950,8 +950,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
                 'ovr': sk.multiclass.OneVsRestClassifier(
                     estimator=classifier,
                     # n_jobs=-1,  # Use all cores (default: 1) [TODO Should this and rf n_jobs both be -1 together?]
-                    n_jobs=72,  # TODO HACK Make l2 mem safe for sp[331] on n1-highmem-96
-                    # n_jobs=45,  # TODO HACK Make l1 mem safe for sp[331] on n1-highmem-96
+                    # n_jobs=72,  # HACK Make l2 mem safe for sp[331] on n1-highmem-96
+                    # n_jobs=45,  # HACK Make l1 mem safe for sp[331] on n1-highmem-96
+                    n_jobs=36,  # HACK(train_us): Make l2 mem safe for sp[743] on n1-highmem-96
                 ),
             }[multiclass]
 

@@ -8,9 +8,16 @@ def json_dumps_safe(*args, **kwargs) -> str:
     """
     json.dumps with a decoder that's safe for our common datatypes (e.g. np scalars)
     """
+    try:
+        import sklearn as sk
+        BaseEstimator = sk.base.BaseEstimator
+    except:
+        BaseEstimator = None
     return json.dumps(*args, **kwargs, default=lambda x: (
         # Unwrap np scalar dtypes (e.g. np.int64 -> int) [https://stackoverflow.com/a/16189952/397334]
         np.asscalar(x) if isinstance(x, np.generic) else
+        # HACK Avoid "circular reference detected" errors with sk estimators that contain other estimators (e.g. OneVsRestClassifier)
+        x.get_params() if isinstance(x, BaseEstimator) else
         # Else return as is
         x
     ))

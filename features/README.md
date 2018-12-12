@@ -24,3 +24,13 @@ $ pip install -e .../joblib
 $ conda env update -f environment.yml
 $ pip install -U -r requirements.txt # Run manually to workaround https://github.com/pypa/pip/issues/2837
 ```
+
+# Run
+
+```sh
+# Run dev api locally
+$ bin/api-run-dev
+
+# Run prod api remotely (example)
+$ bin/gcloud-run --reuse=bubo-0 --disk-mode=rw --preemptible --machine-type=n1-standard-4 --container-pull --container-push 'time bin/api-cache-warm && bin/api-run-prod'
+```

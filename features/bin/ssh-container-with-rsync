@@ -1,0 +1,12 @@
+#!/bin/bash -eu
+
+bin="`dirname "$0"`"
+bin="`"$bin"/normpath "$bin"`"
+
+# TODO Allow more opts (e.g. --project, --zone)
+# - Workaround: Set default project and zone in `gcloud config` (= ~/.config/gcloud/configurations/)
+host="$1"; shift
+container="$host" # TODO Add --container for when this isn't the same as $host
+
+"$bin"/rsync-code-to-container "$container"
+exec "$bin"/ssh-container "$container" "$@"

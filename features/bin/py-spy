@@ -1,0 +1,10 @@
+#!/bin/bash -eux
+
+# HACK sudo for osx
+if [ "`uname`" = 'Darwin' ]; then
+  cmd=(sudo "`which py-spy`")  # Full path for sudo
+else
+  cmd=(py-spy)
+fi
+
+exec "${cmd[@]}" "$@"

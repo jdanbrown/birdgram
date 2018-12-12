@@ -48,7 +48,7 @@ export function querySql<Row>(
   // Default opts
   opts = {...opts,
     logTruncate: opts.logTruncate !== undefined ? opts.logTruncate : 500, // Preserve null
-    logQueryPlan: _.defaultTo(opts.logQueryPlan, true),
+    logQueryPlan: _.defaultTo(opts.logQueryPlan, false),
   };
 
   // Log query plan (if requested)

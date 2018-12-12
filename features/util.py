@@ -55,6 +55,7 @@ import inspect
 import io
 import re
 import os
+from pathlib import Path
 import pickle
 import random
 import shlex
@@ -119,7 +120,8 @@ def touch_file(path):
 
 
 def mkdir_p(path):
-    os.system('mkdir -p %s' % shlex.quote(str(path)))
+    # os.system('mkdir -p %s' % shlex.quote(str(path)))  # XXX Bottleneck in Projection.feat: mkdir_p time was ~5x _fft_helper time
+    Path(path).mkdir(parents=True, exist_ok=True)
     return path
 
 

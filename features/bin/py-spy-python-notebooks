@@ -1,0 +1,6 @@
+#!/bin/bash -eux
+
+bin="`dirname "$0"`"
+bin="`"$bin"/normpath "$bin"`"
+
+exec "$bin"/py-spy --pid "`pgrep -nf 'python notebooks/'`" "$@"

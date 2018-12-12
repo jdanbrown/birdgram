@@ -93,20 +93,15 @@ export class SettingsScreen extends PureComponent<Props, State> {
 
             <SettingsList.Header headerStyle={{marginTop: 15}} />
 
-            <SettingsList.Item
+            {/* TODO After we do background uploads */}
+            {/* <SettingsList.Item
               id='Allow uploads'
               title='Allow uploads'
               hasNavArrow={false}
               hasSwitch={true}
               switchState={this.props.allowUploads}
               switchOnValueChange={async x => await this.props.settings.set('allowUploads', x)}
-            />
-
-            <SettingsList.Item
-              id='Test modal'
-              title='Test modal'
-              onPress={() => this.setState({showModal: true})}
-            />
+            /> */}
 
             {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
             <SettingsList.Item
