@@ -13,6 +13,7 @@ import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
 import { DeepLinking } from './components/DeepLinking';
+import { HelpScreen } from './components/HelpScreen';
 import { RecentScreen } from './components/RecentScreen';
 import { RecordScreen } from './components/RecordScreen';
 import { SavedScreen } from './components/SavedScreen';
@@ -288,7 +289,7 @@ export default class App extends PureComponent<Props, State> {
                   {/* - NOTE Avoid history.location [https://reacttraining.com/react-router/native/api/history/history-is-mutable] */}
                   <HistoryConsumer children={({location: locationTabs, history: historyTabs}) => (
                     <TabRoutes
-                      defaultPath='/search'
+                      defaultPath='/help'
                       histories={this.state.histories!}
                       routes={[
                         {
@@ -365,6 +366,15 @@ export default class App extends PureComponent<Props, State> {
                               // SearchScreen
                               playingProgressEnable   = {this.state.settings!.playingProgressEnable}
                               playingProgressInterval = {this.state.settings!.playingProgressInterval}
+                            />
+                          ),
+                        }, {
+                          key: 'help', route: {path: '/help'},
+                          label: 'Help', iconName: 'help-circle',
+                          render: props => (
+                            <HelpScreen {...props}
+                              // App globals
+                              go = {this.go}
                             />
                           ),
                         },

@@ -60,7 +60,17 @@ export interface TabHistories {
   recent:   MemoryHistory;
   saved:    MemoryHistory;
   settings: MemoryHistory;
+  help:     MemoryHistory;
 }
+
+export const tabHistoriesKeys = [
+  'record',
+  'search',
+  'recent',
+  'saved',
+  'settings',
+  'help',
+];
 
 export interface Histories extends TabHistories {
   tabs: MemoryHistory;
@@ -83,19 +93,28 @@ export async function saveHistories(histories: Histories): Promise<void> {
 export async function loadHistories(): Promise<null | Histories> {
   // FIXME Types: distinguish hydrated Histories vs. unhydrated Record<HistoryName, HistoryNonFunctionProps>
   const x = await Settings._getItemFromJson(prefixKey('histories')) as null | Histories;
-  const histories = !x ? null : (
+  var histories: null | Histories = null;
+  if (x) {
     // Rehydrate via createMemoryHistory()
-    _.mapValues(x, ({
-      entries, index,
-      // location, action, length, // Ignored
-    }) => createMemoryHistory({
-      initialIndex: index,
-      initialEntries: entries as unknown as string[], // HACK Work around bunk type (string i/o Location)
-      // keyLength: ...           // Use default [maybe dangerous if we ever decide to vary keyLength]
-      // getUserConfirmation: ... // Use default
-    })) as unknown as Histories // HACK Work around bunk type (Dictionary<X> instead of Record<K,V>)
-  );
-  // log.debug('loadHistories', rich(histories));
+    histories = (
+      _.mapValues(x, ({
+        entries, index,
+        // location, action, length, // Ignored
+      }) => createMemoryHistory({
+        initialIndex: index,
+        initialEntries: entries as unknown as string[], // HACK Work around bunk type (string i/o Location)
+        // keyLength: ...           // Use default [maybe dangerous if we ever decide to vary keyLength]
+        // getUserConfirmation: ... // Use default
+      })) as unknown as Histories // HACK Work around bunk type (Dictionary<X> instead of Record<K,V>)
+    )
+    // Add a fresh createMemoryHistory() for any missing keys (e.g. we added a new tab)
+    tabHistoriesKeys.forEach(k => {
+      if (!(k in histories!)) {
+        (histories! as unknown as {[key: string]: MemoryHistory})[k] = createMemoryHistory(); // HACK Types
+      }
+    });
+  }
+  log.debug('loadHistories', rich(histories));
   return histories;
 }
 
@@ -107,6 +126,7 @@ export function createDefaultHistories(): Histories {
     recent:   createMemoryHistory(),
     saved:    createMemoryHistory(),
     settings: createMemoryHistory(),
+    help:     createMemoryHistory(),
   };
 }
 
