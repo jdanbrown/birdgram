@@ -44,8 +44,6 @@ import {
 
 const log = new Log('RecordScreen');
 
-global.NativeSpectro = NativeSpectro; // XXX Debug
-
 // XXX Unused
 // // Util: wrap `new Jimp` in a promise
 // const JimpAsync = (...args: Array<any>): Promise<Jimp> => new Promise((resolve, reject) => {

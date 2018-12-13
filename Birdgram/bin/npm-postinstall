@@ -1,0 +1,13 @@
+#!/bin/bash -eu
+#
+# HACK
+# - Workaround: https://github.com/DefinitelyTyped/DefinitelyTyped/issues/16825
+# - Based on:   https://github.com/DefinitelyTyped/DefinitelyTyped/issues/16825#issuecomment-381388821
+
+# Cross-platform `sed -i`
+# - https://stackoverflow.com/a/38595160s
+_sed_i () { sed --version >/dev/null 2>&1 && sed -i -- "$@" || sed -i '' "$@"; }
+
+# Comment out a couple vars in node/index.d.ts that react-native/index.d.ts redefines
+_sed_i 's#^declare var require:#//\0#g' node_modules/\@types/node/index.d.ts
+_sed_i 's#^declare var console:#//\0#g' node_modules/\@types/node/index.d.ts

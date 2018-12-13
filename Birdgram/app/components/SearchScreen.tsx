@@ -37,7 +37,7 @@ import { CCIcon, LicenseTypeIcons } from './Misc';
 import { TabBarStyle } from './TabRoutes';
 import { config } from '../config';
 import {
-  ModelsSearch, matchSearchPathParams, matchSourceId, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
+  ModelsSearch, matchSearchPathParams, matchSourceId, Place, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
   searchPathParamsFromPath, SearchRecs, ServerConfig, showSourceId, SourceId, UserRec,
 } from '../datatypes';
 import { Log, puts, rich, tap } from '../log';
@@ -49,8 +49,8 @@ import { queryPlanFromRows, queryPlanPretty, querySql, SQL, sqlf } from '../sql'
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from '../styles';
 import {
-  all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, noawait,
-  objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, Timer, yaml, yamlPretty, zipSame,
+  all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, matchNull,
+  noawait, objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, Timer, yaml, yamlPretty, zipSame,
 } from '../utils';
 
 const log = new Log('SearchScreen');
@@ -102,6 +102,8 @@ interface Props {
   playingProgressEnable:   boolean;
   playingProgressInterval: number;
   spectroScale:            number;
+  place:                   null | Place;
+  places:                  Array<Place>;
   // SearchScreen
   spectroBase:             Dim<number>;
   spectroScaleClamp:       Clamp<number>;
@@ -111,7 +113,6 @@ interface State {
   scrollViewKey: string;
   scrollViewState: ScrollViewState;
   showGenericModal: null | (() => Element);
-  showFilters: boolean;
   showHelp: boolean;
   totalRecs?: number;
   f_preds_cols?: Array<string>;
@@ -154,7 +155,6 @@ export class SearchScreen extends PureComponent<Props, State> {
     scrollViewKey: '',
     scrollViewState: this._scrollViewState,
     showGenericModal: null,
-    showFilters: false,
     showHelp: false,
     filterQuality: ['A', 'B'],
     filterLimit: 30, // TODO How big vs. fast? (-> Settings with sane default)
@@ -435,6 +435,13 @@ export class SearchScreen extends PureComponent<Props, State> {
         });
       };
 
+      // Global filters
+      const qualityFilter = sqlf`and quality in (${this.state.filterQuality})`;
+      const placeFilter   = matchNull(this.props.place, {
+        null: ()    => '',
+        x:    place => sqlf`and species in (${place.species})`,
+      });
+
       await matchQuery(this.query, {
 
         none: async () => {
@@ -454,7 +461,8 @@ export class SearchScreen extends PureComponent<Props, State> {
                 cast(taxon_order as real) as taxon_order_num
               from search_recs
               where true
-                and quality in (${this.state.filterQuality})
+                ${SQL.raw(placeFilter)}
+                ${SQL.raw(qualityFilter)}
               order by
                 random()
               limit ${this.state.filterLimit}
@@ -479,7 +487,8 @@ export class SearchScreen extends PureComponent<Props, State> {
               from search_recs
               where true
                 and species in (${species.split(',').map(x => _.trim(x).toUpperCase())})
-                and quality in (${this.state.filterQuality})
+                ${SQL.raw(placeFilter)} -- No results if selected species is outside of placeFilter
+                ${SQL.raw(qualityFilter)}
               order by
                 source_id desc
               limit ${this.state.filterLimit}
@@ -573,7 +582,8 @@ export class SearchScreen extends PureComponent<Props, State> {
                 left join (select * from search_recs where source_id = ${sourceId}) Q on true -- Only 1 row in Q
               where true
                 and S.species = ${species}
-                and S.quality in (${this.state.filterQuality})
+                ${SQL.raw(placeFilter)} -- Empty subquery for species outside of placeFilter
+                ${SQL.raw(qualityFilter)}
                 and S.source_id != ${sourceId} -- Exclude query_rec from results
               order by
                 d_pc asc
@@ -849,38 +859,61 @@ export class SearchScreen extends PureComponent<Props, State> {
     );
   }
 
-  Filters = () => (
-    <KeyboardDismissingView style={{width: '100%', height: '100%'}}>
-      <View style={[
-        styles.filtersModal,
-        {marginBottom: TabBarStyle.portraitHeight},
-      ]}>
-        <TextInput
-          style={styles.queryInput}
-          value={this.state.filterQueryText}
-          onChangeText={x => this.setState({filterQueryText: x})}
-          onSubmitEditing={() => this.state.filterQueryText && (
-            this.props.history.push(`/species/${encodeURIComponent(this.state.filterQueryText)}`)
-          )}
-          autoCorrect={false}
-          autoCapitalize='characters'
-          enablesReturnKeyAutomatically={true}
-          placeholder={this.queryDesc}
-          returnKeyType='search'
-        />
-        <Text>Filters</Text>
-        <Text>- quality</Text>
-        <Text>- month</Text>
-        <Text>- species likelihood [bucketed ebird priors]</Text>
-        <Text>- rec text search [conflate fields]</Text>
-        <RectButton onPress={() => this.setState({showFilters: false})}>
-          <View style={{padding: 10, backgroundColor: iOSColors.blue}}>
-            <Text>Done</Text>
-          </View>
-        </RectButton>
-      </View>
-    </KeyboardDismissingView>
-  );
+  FiltersModal = () => {
+    const Separator = () => (
+      <View style={{height: 5}}/>
+    );
+    return (
+      <this.GenericModal>
+        <this.GenericModalTitle title='Filters' />
+
+        <Separator/>
+        <View>
+          <Text
+            style={{
+              ...material.body1Object,
+            }}
+          >
+            Place: {matchNull(this.props.place, {
+              null: () => 'none',
+              x: ({name, props}) => `${name} (${yaml(props).slice(1, -1)})`,
+            })}
+          </Text>
+        <View>
+
+        <Separator/>
+        <View style={{flexDirection: 'row'}}>
+          <Text>
+            Species: {}
+          </Text>
+          <TextInput
+            style={{
+              ...material.body1Object,
+              width: 200,
+              borderWidth: 1, borderColor: 'gray',
+            }}
+            value={this.state.filterQueryText}
+            onChangeText={x => this.setState({filterQueryText: x})}
+            onSubmitEditing={() => this.state.filterQueryText && (
+              this.props.history.push(`/species/${encodeURIComponent(this.state.filterQueryText)}`)
+            )}
+            autoCorrect={false}
+            autoCapitalize='characters'
+            enablesReturnKeyAutomatically={true}
+            placeholder={this.queryDesc}
+            returnKeyType='search'
+          />
+        </View>
+
+        <Separator/>
+        </View>
+          <Text>[TODO quality]</Text>
+          <Text>[TODO text search]</Text>
+        </View>
+
+      </this.GenericModal>
+    );
+  }
 
   showRecActionModal = (rec: Rec) => {
     this.setState({
@@ -1066,7 +1099,9 @@ export class SearchScreen extends PureComponent<Props, State> {
       <this.BottomControlsButton
         help='Filters'
         iconProps={{name: 'filter'}}
-        onPress={() => this.setState({showFilters: true})}
+        onPress={() => this.setState({
+          showGenericModal: () => this.FiltersModal()
+        })}
       />
       {/* Toggle sort: species probs / rec dist */}
       <this.BottomControlsButton
@@ -1316,7 +1351,10 @@ export class SearchScreen extends PureComponent<Props, State> {
         backgroundColor: iOSColors.white,
         padding: 15,
       }}>
-        {props.children}
+        {/* TODO When keyboard shown and tap is outside of modal, don't dismiss modal along with keyboard */}
+        <KeyboardDismissingView>
+          {props.children}
+        </KeyboardDismissingView>
       </View>
     </BaseButton>
   );
@@ -1440,12 +1478,6 @@ export class SearchScreen extends PureComponent<Props, State> {
         animationType='none' // 'none' | 'slide' | 'fade'
         transparent={true}
         children={this.state.showGenericModal && this.state.showGenericModal()}
-      />
-      <Modal
-        visible={this.state.showFilters}
-        animationType='none' // 'none' | 'slide' | 'fade'
-        transparent={true}
-        children={this.Filters()}
       />
       {/* (Unused, kept for reference)
       <ActionSheetBasic
@@ -1860,10 +1892,6 @@ const styles = StyleSheet.create({
   },
   bottomControlsButtonHelp: {
     ...material.captionObject,
-  },
-  queryInput: {
-    borderWidth: 1, borderColor: 'gray',
-    ...material.display1Object,
   },
   summaryText: {
     ...material.captionObject,

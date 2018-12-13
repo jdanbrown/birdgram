@@ -1,3 +1,4 @@
+import cheerio from 'cheerio-without-node-native';
 import _ from 'lodash';
 import { createMemoryHistory, Location, MemoryHistory } from 'history';
 import React, { Component, ComponentType, PureComponent, ReactNode, RefObject } from 'React';
@@ -14,6 +15,7 @@ const fs = RNFB.fs;
 
 import { DeepLinking } from './components/DeepLinking';
 import { HelpScreen } from './components/HelpScreen';
+import { PlacesScreen } from './components/PlacesScreen';
 import { RecentScreen } from './components/RecentScreen';
 import { RecordScreen } from './components/RecordScreen';
 import { SavedScreen } from './components/SavedScreen';
@@ -22,9 +24,12 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { TabRoutes, TabLink } from './components/TabRoutes';
 import * as Colors from './colors';
 import { config } from './config';
-import { Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
+import { MetadataSpecies, Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
+import { Ebird } from './ebird';
 import { Log, rich } from './log';
+import { NativeHttp } from './native/Http';
 import { NativeSearch } from './native/Search';
+import { NativeSpectro } from './native/Spectro';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
 import {
   createDefaultHistories, Go, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
@@ -56,9 +61,11 @@ const log = new Log('App');
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
 global.Animated = Animated;
 global.AsyncStorage = AsyncStorage;
+global.cheerio = cheerio;
 global.Colors = Colors;
 global.deepEqual = deepEqual;
 global.Dimensions = Dimensions;
+global.Ebird = Ebird;
 global.Linking = Linking;
 global.Platform = Platform;
 global.iOSColors = iOSColors;
@@ -66,6 +73,9 @@ global.matchPath = matchPath;
 global.material = material;
 global.materialColors = materialColors;
 global.NativeModules = NativeModules;
+global.NativeHttp = NativeHttp;
+global.NativeSearch = NativeSearch;
+global.NativeSpectro = NativeSpectro;
 global.querySql = querySql;
 global.shallowDiff = shallowDiff;
 global.Settings = Settings;
@@ -109,6 +119,8 @@ interface State {
   // Loaded async (e.g. from storage)
   histories?: Histories;
   serverConfig?: ServerConfig;
+  metadataSpecies?: MetadataSpecies;
+  ebird?: Ebird;
   modelsSearch?: ModelsSearch;
   settings?: Settings;
   settingsWrites?: SettingsWrites;
@@ -194,6 +206,17 @@ export default class App extends PureComponent<Props, State> {
         })
       );
 
+      // Load metadataSpecies (async) on app startup
+      const metadataSpeciesPath = `${fs.dirs.MainBundleDir}/${SearchRecs.metadataSpeciesPath}`;
+      const metadataSpecies = (
+        await log.timedAsync(`Load metadataSpecies ${json({metadataSpeciesPath})}`, async () => {
+          return await readJsonFile<MetadataSpecies>(metadataSpeciesPath);
+        })
+      );
+
+      // Load ebird (not much to it, just needs metadataSpecies)
+      const ebird = new Ebird(metadataSpecies);
+
       // Load modelsSearch (async) on app startup
       const modelsSearchPath = `${fs.dirs.MainBundleDir}/${Models.search.path}`;
       const modelsSearch: ModelsSearch = (
@@ -219,6 +242,8 @@ export default class App extends PureComponent<Props, State> {
         loading: false,
         histories,
         serverConfig,
+        metadataSpecies,
+        ebird,
         modelsSearch,
         settings,
         settingsWrites,
@@ -329,6 +354,8 @@ export default class App extends PureComponent<Props, State> {
                               playingProgressEnable   = {this.state.settings!.playingProgressEnable}
                               playingProgressInterval = {this.state.settings!.playingProgressInterval}
                               spectroScale            = {this.state.settings!.spectroScale}
+                              place                   = {this.state.settings!.place}
+                              places                  = {this.state.settings!.places}
                             />
                           ),
                         }, {
@@ -350,10 +377,27 @@ export default class App extends PureComponent<Props, State> {
                             <SavedScreen {...props} />
                           ),
                         }, {
+                          key: 'places', route: {path: '/places'},
+                          label: 'Places', iconName: 'map-pin',
+                          render: props => (
+                            <PlacesScreen {...props}
+                              // App globals
+                              go                      = {this.go}
+                              metadataSpecies         = {this.state.metadataSpecies!}
+                              ebird                   = {this.state.ebird!}
+                              // Settings
+                              settings                = {this.state.settingsWrites!}
+                              showDebug               = {this.state.settings!.showDebug}
+                              place                   = {this.state.settings!.place}
+                              places                  = {this.state.settings!.places}
+                            />
+                          ),
+                        }, {
                           key: 'settings', route: {path: '/settings'},
                           label: 'Settings', iconName: 'settings',
                           render: props => (
                             <SettingsScreen {...props}
+                              // Settings
                               settings                = {this.state.settingsWrites!}
                               // Global
                               showDebug               = {this.state.settings!.showDebug}

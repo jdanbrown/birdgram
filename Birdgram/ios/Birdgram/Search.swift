@@ -1,4 +1,4 @@
-// (See Birdgram/Search.swift)
+// (See Birdgram/Spectro.swift)
 
 import Foundation
 

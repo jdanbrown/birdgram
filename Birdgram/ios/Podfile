@@ -20,6 +20,7 @@ use_frameworks!
 workspace 'Birdgram.xcworkspace'
 
 def bubo_pods
+  pod 'Alamofire', '~> 4.8.0'
   pod 'AudioKit', '~> 4.5'
   # pod 'Surge', '~> 2.2.0' # XXX Vendored [why?]
   pod 'SigmaSwiftStatistics', '~> 8.0'

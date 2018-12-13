@@ -59,6 +59,7 @@ export interface TabHistories {
   search:   MemoryHistory;
   recent:   MemoryHistory;
   saved:    MemoryHistory;
+  places:   MemoryHistory;
   settings: MemoryHistory;
   help:     MemoryHistory;
 }
@@ -68,6 +69,7 @@ export const tabHistoriesKeys = [
   'search',
   'recent',
   'saved',
+  'places',
   'settings',
   'help',
 ];
@@ -125,6 +127,7 @@ export function createDefaultHistories(): Histories {
     search:   createMemoryHistory(),
     recent:   createMemoryHistory(),
     saved:    createMemoryHistory(),
+    places:   createMemoryHistory(),
     settings: createMemoryHistory(),
     help:     createMemoryHistory(),
   };

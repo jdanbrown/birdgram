@@ -4,6 +4,8 @@ import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from './components/MetadataColumns';
+import { HARDCODED_PLACES } from './data/places';
+import { Place } from './datatypes';
 import { Log, puts, rich } from './log';
 import { json, objectKeysTyped, yaml } from './utils';
 
@@ -29,6 +31,9 @@ export interface Props {
   readonly playingProgressEnable: boolean;
   readonly playingProgressInterval: number;
   readonly spectroScale: number;
+  readonly place: null | Place;
+  // For PlacesScreen
+  readonly places: Array<Place>;
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
@@ -50,26 +55,32 @@ export const DEFAULTS: Props = {
   // playingProgressInterval: 16, // ~frame rate (60fps), but kills rndebugger in dev
   playingProgressInterval: 250,   // Usable in dev
   spectroScale: 2,
+  place: null,
+  // For PlacesScreen
+  places: HARDCODED_PLACES,
 };
-export const TYPES: {[key: string]: string} = {
+export const TYPES: {[key: string]: Array<string>} = {
   // NOTE Keep attrs in sync (3/5)
-  showDebug: 'boolean',
-  allowUploads: 'boolean',
-  maxHistory: 'number',
+  showDebug: ['boolean'],
+  allowUploads: ['boolean'],
+  maxHistory: ['number'],
   // For RecordScreen
-  refreshRate: 'number',
-  doneSpectroChunkWidth: 'number',
-  spectroImageLimit: 'number',
+  refreshRate: ['number'],
+  doneSpectroChunkWidth: ['number'],
+  spectroImageLimit: ['number'],
   // For SearchScreen
-  showMetadataLeft: 'boolean',
-  showMetadataBelow: 'boolean',
-  metadataColumnsLeft: 'object',
-  metadataColumnsBelow: 'object',
-  editing: 'boolean',
-  seekOnPlay: 'boolean',
-  playingProgressEnable: 'boolean',
-  playingProgressInterval: 'number',
-  spectroScale: 'number',
+  showMetadataLeft: ['boolean'],
+  showMetadataBelow: ['boolean'],
+  metadataColumnsLeft: ['object'],
+  metadataColumnsBelow: ['object'],
+  editing: ['boolean'],
+  seekOnPlay: ['boolean'],
+  playingProgressEnable: ['boolean'],
+  playingProgressInterval: ['number'],
+  spectroScale: ['number'],
+  place: ['object', 'object'], // null | Place, and typeof null -> 'object'
+  // For PlacesScreen
+  places: ['object'],
 };
 export const KEYS = [
   // NOTE Keep attrs in sync (4/5)
@@ -91,6 +102,9 @@ export const KEYS = [
   'playingProgressEnable',
   'playingProgressInterval',
   'spectroScale',
+  'place',
+  // For PlacesScreen
+  'places',
 ];
 
 export interface SettingsWrites {
@@ -142,6 +156,9 @@ export class Settings implements SettingsWrites, Props {
     public readonly playingProgressEnable: boolean,
     public readonly playingProgressInterval: number,
     public readonly spectroScale: number,
+    public readonly place: null | Place,
+    // For PlacesScreen
+    public readonly places: Array<Place>,
   ) {}
 
   withProps(props: object): Settings {
@@ -250,7 +267,7 @@ export class Settings implements SettingsWrites, Props {
   };
 
   static keyHasType(key: string, type: string) {
-    return TYPES[key] === type;
+    return TYPES[key].includes(type);
   }
 
   static assertKeyHasType(key: string, type: string) {

@@ -2,9 +2,43 @@ import _ from 'lodash';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
+import { BarchartProps } from './ebird';
 import { debug_print } from './log';
 import { Places } from './places';
 import { match, matchUndefined, Omit, parseUrl } from './utils';
+
+//
+// Species
+//
+
+export type Species     = string; // = SpeciesMetadata.shorthand
+export type SpeciesCode = string; // = SpeciesMetadata.species_code
+
+export interface SpeciesMetadata {
+  sci_name:       string;
+  com_name:       string;
+  species_code:   SpeciesCode;
+  taxon_order:    string; // NOTE Should sort as number, not string (e.g. sql `cast(taxon_order as real)` in SearchScreen)
+  taxon_id:       string;
+  com_name_codes: string;
+  sci_name_codes: string;
+  banding_codes:  string;
+  shorthand:      Species;
+  longhand:       string;
+  species_group:  string;
+  family:         string;
+  order:          string;
+};
+
+//
+// Places (= lists of species)
+//
+
+export interface Place {
+  name:    string;
+  props:   BarchartProps;
+  species: Array<Species>;
+}
 
 //
 // SourceId
@@ -233,7 +267,7 @@ export function searchPathParamsFromPath(path: string): SearchPathParams {
 }
 
 //
-// Misc.
+// App globals
 //
 
 export const Models = {
@@ -253,10 +287,9 @@ export interface ModelsSearch extends FileProps {
 
 export const SearchRecs = {
 
-  serverConfigPath: 'search_recs/server-config.json',
-
-  // TODO Test asset paths on android (see notes in README)
-  dbPath: 'search_recs/search_recs.sqlite3',
+  serverConfigPath:    'search_recs/server-config.json',
+  metadataSpeciesPath: 'search_recs/metadata/species.json',
+  dbPath:              'search_recs/search_recs.sqlite3', // TODO Test asset paths on android (see notes in README)
 
   // TODO(asset_main_bundle): Why implicitly relative to fs.dirs.MainBundleDir?
   // TODO After verifying that asset dirs are preserved on android, simplify the basenames back to `${xc_id}.${format}`
@@ -302,3 +335,5 @@ export interface ServerConfig {
     },
   };
 };
+
+export type MetadataSpecies = Array<SpeciesMetadata>;

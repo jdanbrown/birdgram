@@ -1,4 +1,4 @@
-// (See Birdgram/Search.m)
+// (See Birdgram/Spectro.m)
 
 #import <React/RCTBridgeModule.h>
 #import <React/RCTEventEmitter.h>
