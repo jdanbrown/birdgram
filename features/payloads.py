@@ -231,6 +231,8 @@ def df_cache_hybrid(
                 mobile_files_dir(kind) / species / f"{kind}-{species}-{xc_id}.{format}"
             )
             mobile_server_config_path = mobile_dir / 'server-config.json'
+            mobile_metadata_dir = ensure_dir(mobile_dir / 'metadata')
+            mobile_metadata_species_path = mobile_metadata_dir / 'species.json'
             mobile_models_dir = ensure_dir(mobile_dir / 'models')
             mobile_models_search_path = mobile_models_dir / 'search.json'
 
@@ -369,6 +371,22 @@ def df_cache_hybrid(
                 json_dump_path(indent=2,
                     path=mobile_server_config_path,
                     obj=config,
+                )
+
+            # Write file: metadata/species.json
+            with log_time_context(f'Mobile: Write {rel(mobile_metadata_species_path)}',
+                lambda: naturalsize_path(mobile_metadata_species_path),
+            ):
+                metadata_species = (
+                    metadata.species.df
+                    .pipe(df_cat_to_str)  # Required for .fillna(''), and we don't need cats to dump to json
+                    .fillna('')           # Get rid of any NaN's, which we disallow below
+                    .to_dict(orient='records')
+                )
+                json_dump_path(indent=2,
+                    path=mobile_metadata_species_path,
+                    allow_nan=False,  # NaN's aren't safe for react-native JSON.parse
+                    obj=metadata_species,
                 )
 
             # Write file: models/search.json

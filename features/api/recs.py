@@ -657,9 +657,19 @@ def get_search_recs(
 
 def _compute_search_recs() -> pd.DataFrame:
     log.info(**{'len(sg.xc_meta)': len(sg.xc_meta), **sg_load.config.xc_meta})
-    return (sg.xc_meta
+    df = (sg.xc_meta
         # Limit (for faster dev)
         [:config.api.recs.search_recs.params.get('limit')]
+    )
+    # FIXME FIXME Uncached slices are never computed. This config flags forces them to recompute before recs_featurize_pre_rank
+    if config.api.recs.search_recs.params.FIXME_slow_force_warm_cache:
+        df.pipe(recs_featurize_metdata_audio_slice,
+            start_s=0,
+            audio_s=config.api.recs.search_recs.params.audio_s,
+            load_sliced=load_for_audio_persist(),
+            load_full=sg.load,
+        )
+    return (df
         # Featurize (audio meta + .feat)
         .pipe(recs_featurize_pre_rank)
     )
@@ -691,14 +701,16 @@ def recs_featurize_pre_rank(
                     start_s=0,
                     audio_s=config.api.recs.search_recs.params.audio_s,
                     load_sliced=load_sliced,
-                    load_full=None,
-                    # HACK Drop uncached audios to avoid big slow O(n) "Falling back"
-                    #   - Good: correctly drops audios whose input file is invalid, and thus doesn't produce a sliced cache/audio/ file
-                    #   - Bad: incorrectly drops any valid audios that haven't been _manually_ cached warmed
-                    #   - TODO How to better propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
-                    drop_uncached_slice=True,
-                    # Don't load .audio for pre-rank recs (only for final n_recs recs, below)
-                    no_audio=True,
+
+                    # FIXME FIXME This prevents audio slices from ever being cached in the first place
+                    #   - Workaround: config.api.recs.search_recs.params.FIXME_slow_force_warm_cache (in _compute_search_recs)
+                    #   - drop_uncached_slice: HACK Drop uncached audios to avoid big slow O(n) "Falling back"
+                    #       - Good: correctly drops audios whose input file is invalid, so doesn't produce a sliced cache/audio/ file
+                    #       - Bad: incorrectly drops any valid audios that haven't been _manually_ cached warmed
+                    #       - TODO How to better propagate invalid audios (e.g. empty cache file) so we can handle this more robustly
+                    #   - no_audio: Don't load .audio for pre-rank recs (only for final n_recs recs, below)
+                    load_full=None, drop_uncached_slice=True, no_audio=True,
+
                 )
                 .pipe(recs_featurize_recs_for_sp)
                 .pipe(recs_featurize_feat)
@@ -800,7 +812,12 @@ def recs_featurize_metdata_audio_slice(
 
         if drop_uncached_slice:
             # Drop and warn
-            log.warn('Dropping id with no cached slice (maybe b/c invalid input audio)', id=id, sliced_ids=sliced_ids)
+            #   - FIXME FIXME Uncached slices are never computed; enable config FIXME_slow_force_warm_cache to workaround
+            log.warn(
+                'Dropping id with no cached slice (maybe b/c invalid input audio)' +
+                ' [if you see a lot of these, you might need FIXME_slow_force_warm_cache]',
+                id=id, sliced_ids=sliced_ids,
+            )
             return None
         else:
             # Give the caller a representative id (that we know doesn't exist) and let them deal with it

@@ -53,20 +53,39 @@ config = AttrDict(
 
     server_globals=dict(
         sg_load=dict(
+
+            # # US-CA
+            # search=dict(
+            #     experiment_id='comp-l1-l2-na-ca',
+            #     cv_str='split_i=0,train=34875,test=331,classes=331',
+            #     search_params_str='n_species=331,n_recs=1.0',
+            #     classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
+            #     random_state=0,
+            #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
+            # ),
+            # xc_meta=dict(
+            #     # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
+            #     countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
+            #     # countries_k='na', com_names_k='dan5', num_recs=None,  # XXX Faster dev
+            #     # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
+            # ),
+
+            # CR
             search=dict(
-                experiment_id='comp-l1-l2-na-ca',
-                cv_str='split_i=0,train=34875,test=331,classes=331',
-                search_params_str='n_species=331,n_recs=1.0',
+                experiment_id='train-am-cr-v0-am-cr_ebird',
+                cv_str='split_i=0,train=34450,test=759,classes=758',
+                search_params_str='n_species=759,n_recs=1.0',
                 classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
                 random_state=0,
                 fix_missing_skm_projection_id='peterson-v0-26bae1c',
             ),
             xc_meta=dict(
-                # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
-                countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
-                # countries_k='na', com_names_k='dan5', num_recs=None,  # XXX Faster dev
-                # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
+                countries_k='am', com_names_k='cr_ebird', num_recs=None,
             ),
+
+            # US
+            #   - TODO(train_us)
+
         )
     ),
 
@@ -83,9 +102,12 @@ config = AttrDict(
                 # refresh=True,  # Uncomment to refresh cache (force miss)
                 params=dict(
                     # Global params for precomputed search_recs
-                    version=8,   # Manually bump to invalidate cache
-                    limit=100,  # XXX Faster dev (declared here for cache invalidation)
                     audio_s=10,  # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
+                    version=8,   # Manually bump to invalidate cache
+                    # limit=100,  # XXX Faster dev (declared here for cache invalidation)
+                    # FIXME FIXME Uncached slices are never computed. Enable this to workaround
+                    #   - If you're iterating on mobile payload and not search_recs, leaving this enabled doesn't slow anything down
+                    FIXME_slow_force_warm_cache=True,
                 ),
                 cache=dict(
                     # Manually specify what config values invalidate the search_recs cache (ugh...)

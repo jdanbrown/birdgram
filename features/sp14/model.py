@@ -527,11 +527,12 @@ class Projection(DataclassConfig):
         with dask_opts(**{
             **dict(
                 # FIXME Threading causes hangs during heavy (xc 13k) cache hits, going with processes to work around
-                # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)  # Fastest for cache hits, by a lot
-                # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs)  # FIXME Hangs during heavy (xc 13k) cache hits
+                # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs) # Fastest for cache hits, by a lot
+                # override_scheduler='threads',      # 15.1s (16 cpu, 100 xc recs) # FIXME Hangs during heavy (xc 13k) cache hits
                 # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO Commented while debugging learning_curve
                 # override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO thread -> proc after encountering hangs again
-                override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs)  # FIXME proc -> sync after reeaallly slow proc event
+                # override_scheduler='synchronous',  # 21.8s (16 cpu, 100 xc recs) # FIXME proc -> sync after reeaallly slow proc event
+                override_scheduler='processes',    # 8.4s (16 cpu, 100 xc recs)  # TODO sync -> proc for ~10x faster (for train US/CR)
             ),
             **kwargs,
         }):
@@ -952,7 +953,11 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
                     # n_jobs=-1,  # Use all cores (default: 1) [TODO Should this and rf n_jobs both be -1 together?]
                     # n_jobs=72,  # HACK Make l2 mem safe for sp[331] on n1-highmem-96
                     # n_jobs=45,  # HACK Make l1 mem safe for sp[331] on n1-highmem-96
-                    n_jobs=36,  # HACK(train_us): Make l2 mem safe for sp[743] on n1-highmem-96
+                    # n_jobs=36,
+                    # n_jobs=27,
+                    # n_jobs=18,
+                    # n_jobs=72,
+                    n_jobs=54, # HACK Make l2 mem safe for sp[743] on n1-standard-32 [huge ram, lots of headroom]
                 ),
             }[multiclass]
 

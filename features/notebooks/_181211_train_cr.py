@@ -2,35 +2,56 @@ from notebooks import *
 print_sys_info()
 
 
-def train(*args, **kwargs): _train(*args, {**kwargs, **dict(
-    n_jobs=1,  # See "Use n_jobs=1" below
-)})
-def load_for_eval(*args, **kwargs): _train(*args, {**kwargs, **dict(
+def train_final   (**kwargs): return train_cv(**{**dict(
+    logreg_Cs=[
+        .001,
+    ],
+    n_species_n_recs=[(1.0, 1.0)],
+    test_size='n_species',
+), **kwargs})
+def train_cv      (**kwargs): return _train_cv(**{**dict(
+    # NOTE For feat, tune override_scheduler in Projection.transform
+    # NOTE For mem safety, tune n_jobs in Search._make_classifier -> OneVsRestClassifier
+    logreg_Cs=[  # Order fast to slow
+        # .0001,
+        # .0003,
+        # .001,
+        # .003,
+        # .03,
+        # .01,
+    ],
+    n_jobs=1,  # As per "Use n_jobs=1" below
+), **kwargs})
+def load_for_eval (**kwargs): return _train_cv(**{**dict(
+    logreg_Cs=[  # Order fast to slow
+        .0001,
+        .0003,
+        .001,
+        .003,
+        .01,
+        .03,
+        .1,
+        .3,
+        1,
+    ],
     n_jobs=1,  # Way faster for 100% loads
     skip_compute_if_missing=True,  # Partial report: load only the models that are done training
-)})
-def _train(
+), **kwargs})
+def _train_cv(
+    logreg_Cs,
     n_jobs,
+    n_species_n_recs=[
+        (0.014, 1.00),  # sp[ 11], recs[1.0]
+        (0.25,  1.00),  # sp[189], recs[1.0]
+        (1.00,  1.00),  # sp[754], recs[1.0]
+    ],
     skip_compute_if_missing=False,
+    test_size=.2,
 ):
 
     ##
-    # Load models
-    load = Load()
-    projection = Projection.load('peterson-v0-26bae1c', features=Features(load=load))
-
-    ##
-    # Experiment ID
+    # Params
     experiment_id_prefix = 'train-am-cr-v0'
-
-    ##
-    # Select recs
-    #   1. countries: Filter recs to these countries
-    #   2. species: Filter recs to these species
-    #   3. recs_at_least: Filter species to those with at least this many recs
-    #   4. num_species: Sample this many of the species
-    #   5. num_recs: Sample this many recs per species
-    inf = np.inf
     countries_k, com_names_k = 'am', 'cr_ebird'  # 9.4k/400k -> 4.0k/204k -> 754/35k
     # countries_k, com_names_k = 'na', 'us_ebird'  # 9.4k/400k -> 1.1k/ 60k -> 762/53k
     # countries_k, com_names_k = 'na', 'us'        # 9.4k/400k -> 1.1k/ 60k -> 774/53k
@@ -38,6 +59,10 @@ def _train(
     # countries_k, com_names_k = 'na', 'ca'        # 9.4k/400k -> 1.1k/ 60k -> 334/35k
     # countries_k, com_names_k = 'na', 'dan170'    # 9.4k/400k -> 1.1k/ 60k -> 170/3.4k
     # countries_k, com_names_k = 'na', 'dan4'      # 9.4k/400k -> 1.1k/ 60k ->   4/2.2k
+
+    ##
+    # Subset for faster dev
+    inf = np.inf
     recs_at_least, num_species, num_recs =   0, inf, inf
     # recs_at_least, num_species, num_recs = 100, 100, 100  # CA[334/35k -> 127/25k -> 100/21k -> 100/10k   -> 100/10k]
     # recs_at_least, num_species, num_recs =  50, 100, 100  # CA[334/35k -> 224/32k -> 100/16k -> 100/ 9.0k -> 100/ 9.0k]
@@ -54,6 +79,19 @@ def _train(
     # recs_at_least, num_species, num_recs =  20, 50,   20  # Faster dev
     # recs_at_least, num_species, num_recs =  20, 50,   10  # Faster dev
     # recs_at_least, num_species, num_recs =  10, 10,   10  # Faster dev
+
+    ##
+    # Load models
+    load = Load()
+    projection = Projection.load('peterson-v0-26bae1c', features=Features(load=load))
+
+    ##
+    # Select recs
+    #   1. countries: Filter recs to these countries
+    #   2. species: Filter recs to these species
+    #   3. recs_at_least: Filter species to those with at least this many recs
+    #   4. num_species: Sample this many of the species
+    #   5. num_recs: Sample this many recs per species
     get_recs_stats = lambda df: dict(sp=df.species.nunique(), recs=len(df))
     puts_stats = lambda desc: partial(tap, f=lambda df: print('%-15s %12s (sp/recs)' % (desc, '%(sp)s/%(recs)s' % get_recs_stats(df))))
     xcs = (xc.metadata
@@ -99,14 +137,12 @@ def _train(
         ('xc', f'{data_dir}/xc/data/{row.species}/{row.id}/audio.mp3')
         for row in df_rows(xcs)
     ]
-    joblib.dump(xcs_paths, '/tmp/xcs_paths')  # In case you want to run load.recs in a terminal (it's long and verbose)
     display(
         f"{len(xcs_paths)}/{len(xcs)}",
         # xcs_paths[:2],
     )
 
-    ## {once: false, time: 1.793s}
-    # TODO Restore once:true after debug [but think carefully how once:true interacts with the once:false params above]
+    ##
     recs = load.recs(paths=xcs_paths)
     display(
         df_summary(recs).T,
@@ -201,13 +237,7 @@ def _train(
         for (n_species, n_recs) in [
             # Subset for learning curves
             #   - Biggest first, to fail fast
-
-            # na-us: sp[743], recs[52668]
-            #   - TODO(train_us)
-            (0.014, 1.00),  # sp[ 10], recs[1.0]
-            (0.25,  1.00),  # sp[186], recs[1.0]
-            (1.00,  1.00),  # sp[743], recs[1.0]
-
+            *n_species_n_recs,
         ]
         for logreg_cls, logreg_solver in [
             # ('logreg_ovr', 'liblinear'),  # 1 core
@@ -222,16 +252,7 @@ def _train(
         )
         for logreg_C in [
             # 1/reg_strength: C=inf is no regularization, smaller C is more regularization (default: 1)
-            #   - TODO(train_us): Tune
-            .0001,
-            # .0003,
-            .001,
-            # .003,
-            .01,
-            # .03,
-            .1,
-            # .3,
-            1,
+            *logreg_Cs,
         ]
         for logreg_tol in one([tols for solvers, tols in [
             # Default: 1e-4
@@ -306,7 +327,12 @@ def _train(
             # n_splits=10,
             # n_splits=20,  # Known good [>51m uncached, >25g disk cache]
             # n_splits=100,  # [?m runtime, ?g disk cache]
-            test_size=.2,
+            # Set test_size, e.g. for train_cv vs. train_final
+            #   - HACK test_size must be ≥n_classes, so interpret 'n_species' for train_final
+            test_size=(
+                test_size if test_size != 'n_species' else
+                (_recs_stats['sp'] + .1) / _recs_stats['recs']  # (+.1 to avoid underflow)
+            ),
             random_state=0,
         ),
         return_train_score=True,
@@ -354,3 +380,5 @@ def _train(
         # stack.enter_context(log.context(level='debug'))
         X, y = Search.Xy(recs)
         cv.fit(X, y)
+
+    return locals()

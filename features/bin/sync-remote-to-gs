@@ -8,8 +8,9 @@ data_dir="/mnt/disks/disk-bubo-data"
 gs_data_dir='gs://bubo-data/v0/data'
 
 # WARNING Careful with -d (delete) -- it'd be easy to make a typo that wipes out all of our cloud data...
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/ebird/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/ebird/
 time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/artifacts/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/sp14/model/feat/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/sp14/model/_feat/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/22050hz-1ch-16bit/xc
+time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/sp14/model/feat\(version=0\)/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/load/_metadata\(version=9\)/  # XXX Many small files, faster to recompute locally
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/sp14/model/_feat\(version=0\)/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/22050hz-1ch-16bit/xc

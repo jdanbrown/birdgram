@@ -11,6 +11,14 @@ warnings.filterwarnings('ignore', category=FutureWarning, message=(
 ))
 import pandas.core.categorical  # If this emits a warning then our filter has bitrotted
 
+# Suppress unhelpful warning
+import matplotlib as mpl
+if hasattr(mpl, 'MatplotlibDeprecationWarning'):
+    warnings.filterwarnings('ignore', category=mpl.MatplotlibDeprecationWarning, message=(
+        re.escape("The Bunch class was deprecated")
+    ))
+    # from plotnine import coord_cartesian; coord_cartesian()  # TODO coord_cartesian() in a normal notebook warns; why doesn't this?
+
 # Supress unhelpful warning
 #   - Have to force-disable warnings from sklearn, which obnoxiously force-enables them
 #   - https://stackoverflow.com/a/33616192/397334

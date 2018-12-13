@@ -156,6 +156,11 @@ def metadata_from_dataset(id: str, dataset: str) -> AttrDict:
     return AttrDict(
         # TODO De-dupe these with Load.METADATA
         species=species.shorthand,
+        # TODO Add species_code (e.g. for ebird.barchartSpecies)
+        #   - Requires rebuilding Load._metadata caches, which takes ~overnight (for CR/US)
+        #       - (See notebooks/qa_search_recs_add_species_code for steps)
+        #   - Workaround: manually map species_code -> species (shorthand) before using
+        # species_code=species.species_code,
         species_longhand=species.longhand,
         species_com_name=species.com_name,
         species_sci_name=species.sci_name,
