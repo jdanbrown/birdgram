@@ -81,8 +81,9 @@ gunicorn==19.9.0
 # sql
 sqlalchemy==1.2.11
 
-# pydub
-pydub==0.22.0
-# TODO Switch back to MaxStrange repo after https://github.com/MaxStrange/AudioSegment/pull/2
-# git+https://github.com/MaxStrange/AudioSegment.git@86a1214#egg=AudioSegment
-git+https://github.com/jdanbrown/AudioSegment.git@c8dc862#egg=AudioSegment
+# HACK(train_us): Vendored to patch fork() bottlenecks
+# # pydub
+# pydub==0.22.0
+# # TODO Switch back to MaxStrange repo after https://github.com/MaxStrange/AudioSegment/pull/2
+# # git+https://github.com/MaxStrange/AudioSegment.git@86a1214#egg=AudioSegment
+# git+https://github.com/jdanbrown/AudioSegment.git@c8dc862#egg=AudioSegment
