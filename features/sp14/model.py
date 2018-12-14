@@ -957,7 +957,9 @@ class Search(DataclassEstimator, sk.base.ClassifierMixin):
                     # n_jobs=27,
                     # n_jobs=18,
                     # n_jobs=72,
-                    n_jobs=54, # HACK Make l2 mem safe for sp[743] on n1-standard-32 [huge ram, lots of headroom]
+                    # n_jobs=54, # XXX oom'd: sp[743] on n1-standard-32 [32 core, 120gb ram]
+                    # n_jobs=32, # HACK (Untested) mem safe (l2) for sp[846] on n1-standard-32 [32 core, 120gb ram]
+                    n_jobs=96, # HACK (Tested) mem safe (l2) for sp[846] on n1-standard-96 [96 core, 360gb ram]
                 ),
             }[multiclass]
 

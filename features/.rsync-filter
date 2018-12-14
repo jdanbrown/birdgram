@@ -1,6 +1,9 @@
 # Per-dir file read by `rsync -F`
 
 # bubo
+# - Sync .py.ipynb, which are for running (but watch out for huge saved outputs)
+# - Don't sync .ipynb, since they're fair game to have huge outputs
++ *.py.ipynb
 - *.ipynb
 
 # python

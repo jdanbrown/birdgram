@@ -66,7 +66,7 @@ class Load(DataclassConfig):
             'codec',
         ]})
 
-    @cache(version=6, tags='recs', key=lambda self, datasets=None, paths=None, *args, **kwargs: (
+    @cache(version=8, tags='recs', key=lambda self, datasets=None, paths=None, *args, **kwargs: (
         {k: DATASETS[k] for k in (datasets or [])},
         paths or self.recs_paths(datasets=datasets),
         args,
@@ -90,14 +90,17 @@ class Load(DataclassConfig):
         )
         if drop_invalid:
             # Filter out invalid audios
-            drop_ix = recs.samples_n == 0  # samples_n is 0 if input is either empty or couldn't be read
+            drop_ix = (
+                (recs.samples_n == 0) |  # samples_n is 0 if input is either empty or couldn't be read
+                (recs.samples_mb > 100)  # Don't bite off huge recs (e.g. ~1.4gb!), else bad things
+            )
             dropped = recs[drop_ix]
             if dropped.size:
                 recs = recs[~drop_ix]
                 if log_dropped:
                     log.warn(f'Dropping {len(dropped)} invalid audios:')
-                    for _id in dropped.id:
-                        print(f'  {_id}')
+                    for row in df_rows(dropped):
+                        print_err('  %(id)s (samples_mb[%(samples_mb).0f])' % row)
         return (recs
             .sort_values('species')
             .pipe(RecordingDF)

@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from datetime import datetime
+from functools import partial
 import inspect
 import json
 import logging
@@ -11,7 +12,7 @@ from typing import *
 
 import crayons
 from potoo import debug_print
-from potoo.util import context_onexit, generator_to
+from potoo.util import context_onexit, format_duration, generator_to, timer_start
 import structlog
 import oyaml as yaml  # Drop-in replacement that preserves dict ordering (for BuboRenderer)
 
@@ -278,14 +279,26 @@ def _map_progress_log_time_each(
     n: int = None,
 ) -> Iterable['X']:
     """log_time around each element in loop"""
-    desc_i = lambda i: (
-        None                if desc is None and n is None else
-        f'({i+1}/{n})'      if desc is None else
-        f'{desc} ({i+1}/?)' if n is None else
-        f'{desc} ({i+1}/{n})'
-    )
+    def desc_i(i):
+        return (
+            None                  if desc is None and n is None else
+            f'({i+1}/{n})'        if desc is None else
+            f'{desc} ({i+1}/?)'   if n is None else
+            f'{desc} ({i+1}/{n})'
+        )
+    if n is None:
+        report = None
+    else:
+        timer = timer_start()
+        def report(i):
+            t = timer.time()
+            t_tot = t / (i + 1) * n
+            t_rem = t_tot - t
+            format = lambda t: format_duration(int(t))
+            return '-%s/%s' % (format(t_rem), format(t_tot))
     ys = []  # HACK HACK Instead of @generator_to, so we can find the caller's frame (see above)
+    log.info(desc_i(-1))  # Log '(0/n)' at the beginning
     for i, x in enumerate(xs):
-        with log_time_context(desc=desc_i(i)):
+        with log_time_context(desc=desc_i(i), report=report and partial(report, i)):
             ys.append(f(x))
     return ys

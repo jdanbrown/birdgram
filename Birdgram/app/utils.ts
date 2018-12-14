@@ -199,6 +199,8 @@ global.str   = (x: any) => x.toString(); // e.g. for nj.array, which have a not 
 // json
 //
 
+import jsonStableStringify from 'json-stable-stringify';
+
 // Nonstandard shorthands (apologies for breaking norms, but these are too useful and too verbose by default)
 export const json   = JSON.stringify;
 export const pretty = (x: any) => JSON.stringify(x, null, 2);
@@ -400,6 +402,9 @@ export function parseUrl(url: string): {
     true,
   );
 }
+
+// A parsed query string
+export type QueryString = {[key: string]: string};
 
 //
 // fs (via rn-fetch-blob)

@@ -4,8 +4,6 @@ print_sys_info()
 
 def train_final   (**kwargs): return train_cv(**{**dict(
     logreg_Cs=[
-        # TODO(train_us): Run train_final
-        #   - TODO(train_us): Run Thu (~1-2h): losing preempt instances too fast, and don't want to leave a non-preemt running overnight
         .001,
     ],
     n_species_n_recs=[(1.0, 1.0)],

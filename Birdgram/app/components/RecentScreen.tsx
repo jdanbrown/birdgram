@@ -5,7 +5,7 @@ import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-h
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import { matchSearchPathParams, searchPathParamsFromPath, showSourceId } from '../datatypes';
+import { matchSearchPathParams, searchPathParamsFromLocation, showSourceId } from '../datatypes';
 import { Log, rich } from '../log';
 import { Go, Histories } from '../router';
 import { Settings } from '../settings';
@@ -138,11 +138,11 @@ export class RecentScreen extends PureComponent<Props, State> {
                   borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
                 }}>
                   <Text style={material.body1}>
-                    {matchSearchPathParams(searchPathParamsFromPath(recent.location.pathname), {
-                      none:    ()           => 'Home (/)',
-                      random:  ({seed})     => `Random (${seed})`,
-                      species: ({species})  => `Species: ${species}`,
-                      rec:     ({sourceId}) => `Rec: ${showSourceId(sourceId)}`,
+                    {matchSearchPathParams(searchPathParamsFromLocation(recent.location), {
+                      none:    ()                    => 'Home (/)',
+                      random:  ({filters, seed})     => `Random (${seed})`,
+                      species: ({filters, species})  => `Species: ${species}`,
+                      rec:     ({filters, sourceId}) => `Rec: ${showSourceId(sourceId)}`,
                     })}
                   </Text>
                   <Text style={material.caption}>

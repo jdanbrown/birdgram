@@ -271,11 +271,14 @@ export default class App extends PureComponent<Props, State> {
       }}>
 
         {/* For onLayout -> orientation */}
-        <View onLayout={this.onLayout}>
+        <View style={{flex: 1}} onLayout={this.onLayout}>
 
           {/* Show loading spinner */}
           {this.state.loading ? (
-            <View style={styles.loadingView}>
+            <View style={{
+              flex: 1,
+              justifyContent: 'center',
+            }}>
               <ActivityIndicator size='large' />
             </View>
           ) : (
@@ -482,9 +485,5 @@ const styles = StyleSheet.create({
   fill: {
     width: '100%',
     height: '100%',
-  },
-  loadingView: {
-    flex: 1,
-    justifyContent: 'center',
   },
 });

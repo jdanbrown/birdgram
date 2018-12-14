@@ -1,0 +1,7 @@
+#!/bin/bash -eu
+
+bin="`dirname "$0"`"
+
+ipynb="$1"; shift
+
+python "$@" <("$bin"/ipynb2py-actual-py "$ipynb")

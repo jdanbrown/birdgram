@@ -1,0 +1,87 @@
+#!/usr/bin/env python
+#
+# HACK Like ~/bin/ipynb2py, except it produces runnable .py (the former was designed for git diffs)
+#   - WARNING Not well tested
+
+try:
+
+    import json
+    import re
+    import sys
+    import yaml
+
+    # Utils
+    def print_err(*args, **kwargs):
+        print(*args, **kwargs, file=sys.stderr)
+
+    # Parse args
+    args = sys.argv[1:]
+    if len(args) == 0:
+        ipynb_path = '-'
+    elif len(args) == 1 and args[0] not in ['-h', '--help']:
+        [ipynb_path] = args
+    else:
+        print(_usage)
+        sys.exit(1)
+
+    # Read the input .ipynb json, if we can
+    if ipynb_path == '-':
+        ipynb_json = sys.stdin.read()
+    else:
+        with open(ipynb_path) as f:
+            ipynb_json = f.read()
+    ipynb = json.loads(ipynb_json)
+
+    # Validate .ipynb nbformat version
+    #   - http://nbformat.readthedocs.io/en/latest/changelog.html
+    assert (4, 0) <= (ipynb['nbformat'], ipynb['nbformat_minor']) < (5, 0)
+
+    first_cell = True
+    for cell in ipynb['cells']:
+        if not first_cell:
+            print()
+            first_cell = False
+
+        # Get cell source, which might be a str or List[str]
+        source = cell['source']
+        if isinstance(source, list):
+            source = ''.join(source)
+
+        # Construct heading based on cell type
+        #   - Mark cell_type with "fake magics" %%md/%%raw/%%unknown for the downstream editor/human to interpret
+        if cell['cell_type'] == 'markdown':
+            heading = '%%md'
+        elif cell['cell_type'] == 'code':
+            if re.match(r'^\s*%%', source):
+                heading = None  # Let '%%...' in source be the heading
+            else:
+                heading = '%%'
+        elif cell['cell_type'] == 'raw':
+            heading = '%%raw'
+        else:
+            heading = '%%unknown'
+
+        if cell['cell_type'] != 'code':
+            print_err('[Skipping non-code cell]\n%s\n%s' % (heading, source))
+            print_err()
+        elif cell['metadata'].get('skip'):
+            print_err('[Skipping code cell marked {skip: true}]\n%s\n%s' % (heading, source))
+            print_err()
+        else:
+            # Emit '##' headings i/o '%%' headings, for .py
+            heading = re.sub('^%%', '##', heading)
+            # Print the cell
+            if heading:
+                print(heading)
+            if source:
+                print(source)
+            print()
+
+# Suppress/avoid various unix-unfriendly errors
+except KeyboardInterrupt:  # ^C
+    pass
+except BrokenPipeError:  # stdin close
+    pass
+finally:
+    # Prevent BrokenPipeError on stdout close
+    sys.stdout.close()

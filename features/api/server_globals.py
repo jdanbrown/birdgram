@@ -88,10 +88,10 @@ class _sg_load(DataclassUtil):
         x.load = x.features.load
         return dict(x)
 
-    @cache(version=4, tags='sg', key=lambda self: self,
+    @cache(version=4, tags='sg', key=lambda self, **kwargs: (self, kwargs),
         norefresh=True,  # Very slow and rarely worth refreshing [TODO Push this norefresh down closer to the root slowness]
     )
-    def load_xc_meta(self) -> dict:
+    def load_xc_meta(self, **kwargs) -> dict:
         log.info()
         x = AttrDict()
         x.xc_meta, _recs_stats = load_xc_meta(
@@ -101,6 +101,7 @@ class _sg_load(DataclassUtil):
             num_species=None,
             num_recs=self.config.xc_meta.num_recs,
             drop_recs_lt_2=False,
+            **kwargs,
         )
         return dict(x)
 

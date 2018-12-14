@@ -38,7 +38,7 @@ import { TabBarStyle } from './TabRoutes';
 import { config } from '../config';
 import {
   ModelsSearch, matchSearchPathParams, matchSourceId, Place, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
-  searchPathParamsFromPath, SearchRecs, ServerConfig, showSourceId, SourceId, UserRec,
+  searchPathParamsFromLocation, SearchRecs, ServerConfig, showSourceId, SourceId, UserRec,
 } from '../datatypes';
 import { Log, puts, rich, tap } from '../log';
 import { NativeSearch } from '../native/Search';
@@ -50,7 +50,8 @@ import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from '../styles';
 import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, matchNull,
-  noawait, objectKeysTyped, Omit, Point, pretty, round, shallowDiffPropsState, Style, Timer, yaml, yamlPretty, zipSame,
+  noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round, shallowDiffPropsState, Style, Timer, yaml,
+  yamlPretty, zipSame,
 } from '../utils';
 
 const log = new Log('SearchScreen');
@@ -63,12 +64,11 @@ interface ScrollViewState {
   // (More fields available in NativeScrollEvent)
 }
 
-// QUESTION Should Query + SearchPathParams be separate? 1-1 so far...
 type Query = QueryNone | QueryRandom | QuerySpecies | QueryRec;
 type QueryNone    = {kind: 'none'}; // e.g. so we can show nothing on redirect from '/'
-type QueryRandom  = {kind: 'random',  seed: number};
-type QuerySpecies = {kind: 'species', species: string};
-type QueryRec     = {kind: 'rec',     sourceId: SourceId};
+type QueryRandom  = {kind: 'random',  filters: Filters, seed: number};
+type QuerySpecies = {kind: 'species', filters: Filters, species: string};
+type QueryRec     = {kind: 'rec',     filters: Filters, sourceId: SourceId};
 function matchQuery<X>(query: Query, cases: {
   none:    (query: QueryNone)    => X,
   random:  (query: QueryRandom)  => X,
@@ -82,6 +82,29 @@ function matchQuery<X>(query: Query, cases: {
     case 'rec':     return cases.rec(query);
   }
 }
+
+export interface Filters {
+  quality?: Array<Quality>;
+  placeId?: string;
+  text?:    string; // TODO(text_filter)
+}
+
+export const Filters = {
+
+  fromQueryString: (q: QueryString): Filters => ({
+    // HACK Typing
+    quality: _.get(q, 'quality', '').split(',').filter(x => (Quality.values as Array<string>).includes(x)) as Array<Quality>,
+    placeId: _.get(q, 'placeId'),
+    text:    _.get(q, 'text'),
+  }),
+
+  toQueryString: (x: Filters): QueryString => _.pickBy({
+    quality: (x.quality || []).join(','),
+    placeId: x.placeId,
+    text:    x.text,
+  }, (v, k) => v !== undefined) as {[key: string]: string} // HACK Typing
+
+};
 
 interface Props {
   // App globals
@@ -167,8 +190,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   // Getters for prevProps
   _pathParams = (props?: Props): SearchPathParams => {
-    const {pathname} = (props || this.props).location;
-    return searchPathParamsFromPath(pathname);
+    return searchPathParamsFromLocation((props || this.props).location);
   }
 
   // Getters for props
@@ -378,20 +400,20 @@ export class SearchScreen extends PureComponent<Props, State> {
   get query(): Query { return this._query(); }
   _query = (props?: Props): Query => {
     return matchSearchPathParams<Query>(this._pathParams(props), {
-      none:    ()           => ({kind: 'species', species: ''}),
-      random:  ({seed})     => ({kind: 'random', seed}),
-      species: ({species})  => ({kind: 'species', species}),
-      rec:     ({sourceId}) => ({kind: 'rec', sourceId}),
+      none:    ()                    => ({kind: 'species', filters: {}, species: ''}),
+      random:  ({filters, seed})     => ({kind: 'random',  filters, seed}),
+      species: ({filters, species})  => ({kind: 'species', filters, species}),
+      rec:     ({filters, sourceId}) => ({kind: 'rec',     filters, sourceId}),
     });
     // We ignore state.filterQueryText b/c TextInput.onSubmitEditing -> history.push -> navParams.species
   };
 
   get queryDesc(): string {
     return matchQuery(this.query, {
-      none:    ()           => 'none',
-      random:  ({seed})     => `random/${seed}`,
-      species: ({species})  => species,
-      rec:     ({sourceId}) => showSourceId(sourceId),
+      none:    ()                    => 'none',
+      random:  ({filters, seed})     => `random/${seed}`,
+      species: ({filters, species})  => species,
+      rec:     ({filters, sourceId}) => showSourceId(sourceId),
     });
   }
 
@@ -405,10 +427,10 @@ export class SearchScreen extends PureComponent<Props, State> {
       !deepEqual(this.query, this.state.recsQueryInProgress) &&
       // Noop if this.query isn't valid
       matchQuery(this.query, {
-        none:    ()           => true,
-        random:  ({seed})     => true,
-        species: ({species})  => species  !== '',
-        rec:     ({sourceId}) => sourceId !== '',
+        none:    ()                    => true,
+        random:  ({filters, seed})     => true,
+        species: ({filters, species})  => species  !== '',
+        rec:     ({filters, sourceId}) => sourceId !== '',
       })
     ) {
       log.info('loadRecsFromQuery', () => pretty({query: this.query}));
@@ -451,7 +473,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
         // TODO Weight species uniformly (e.g. select random species, then select random recs)
         // TODO Get deterministic results from seed [how? sqlite doesn't support random(seed) or hash()]
-        random: async ({seed}) => {
+        random: async ({filters, seed}) => {
           log.info(`loadRecsFromQuery: Querying random recs`, {seed});
           await querySql<Rec>(this.db!, sqlf`
             select *
@@ -476,7 +498,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           });
         },
 
-        species: async ({species}) => {
+        species: async ({filters, species}) => {
           log.info('loadRecsFromQuery: Querying recs for species', {species});
           await querySql<Rec>(this.db!, sqlf`
             select *
@@ -502,7 +524,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           });
         },
 
-        rec: async ({sourceId}) => {
+        rec: async ({filters, sourceId}) => {
           log.info('loadRecsFromQuery: Loading recs for query_rec', {sourceId});
 
           // Compute top n_per_sp recs per species by d_pc (cosine_distance)

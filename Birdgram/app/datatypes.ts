@@ -1,11 +1,13 @@
+import jsonStableStringify from 'json-stable-stringify';
 import _ from 'lodash';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
+import { Filters } from './components/SearchScreen';
 import { BarchartProps } from './ebird';
 import { debug_print } from './log';
 import { Places } from './places';
-import { match, matchUndefined, Omit, parseUrl } from './utils';
+import { match, matchNull, matchUndefined, Omit, parseUrl } from './utils';
 
 //
 // Species
@@ -39,6 +41,18 @@ export interface Place {
   props:   BarchartProps;
   species: Array<Species>;
 }
+
+export const Place = {
+
+  id: ({props}: Place): string => {
+    return jsonStableStringify(props); // A bit verbose in our locations, but simple and sound
+  },
+
+  find: (id: string, places: Array<Place>): Place | undefined => {
+    return _.find(places, place => id === Place.id(place))
+  },
+
+};
 
 //
 // SourceId
@@ -132,6 +146,10 @@ export interface UserRec extends Rec {
 export type Quality = 'A' | 'B' | 'C' | 'D' | 'E' | 'no score';
 export type F_Preds = Array<number>;
 
+export const Quality = {
+  values: ['A', 'B', 'C', 'D', 'E', 'no score'] as Array<Quality>,
+};
+
 export function matchRec<X>(rec: Rec, cases: {
   xc:   (rec: XCRec,   sourceId: {xc_id: number}) => X,
   user: (rec: UserRec, sourceId: {name: string})  => X,
@@ -223,19 +241,23 @@ export const UserRec = {
 // SearchPathParams
 //
 
+import { Location } from 'history';
 import { matchPath } from 'react-router-native';
+import queryString from 'query-string';
 
 import { log, rich } from './log';
+import { pretty } from './utils';
 
+// QUESTION Unify with Query? 1-1 so far
 export type SearchPathParams =
   | SearchPathParamsNone
   | SearchPathParamsRandom
   | SearchPathParamsSpecies
   | SearchPathParamsRec;
 export type SearchPathParamsNone    = { kind: 'none' };
-export type SearchPathParamsRandom  = { kind: 'random', seed: number };
-export type SearchPathParamsSpecies = { kind: 'species', species: string };
-export type SearchPathParamsRec     = { kind: 'rec', sourceId: SourceId };
+export type SearchPathParamsRandom  = { kind: 'random',  filters: Filters, seed: number };
+export type SearchPathParamsSpecies = { kind: 'species', filters: Filters, species: string };
+export type SearchPathParamsRec     = { kind: 'rec',     filters: Filters, sourceId: SourceId };
 
 export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cases: {
   none:    (searchPathParams: SearchPathParamsNone)    => X,
@@ -251,18 +273,21 @@ export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cas
   }
 }
 
-export function searchPathParamsFromPath(path: string): SearchPathParams {
+export function searchPathParamsFromLocation(location: Location): SearchPathParams {
   const tryParseInt = (_default: number, s: string): number => { try { return parseInt(s); } catch { return _default; } };
+  const {pathname: path, search} = location;
+  const queries = queryString.parse(search);
+  debug_print('searchPathParamsFromLocation', {location, queries});
   let match;
   match = matchPath<{}>(path, {path: '/', exact: true});
   if (match) return {kind: 'none'};
   match = matchPath<{seed: string}>(path, {path: '/random/:seed'});
-  if (match) return {kind: 'random', seed: tryParseInt(0, decodeURIComponent(match.params.seed))};
+  if (match) return {kind: 'random',  filters: {}, seed: tryParseInt(0, decodeURIComponent(match.params.seed))};
   match = matchPath<{species: string}>(path, {path: '/species/:species'});
-  if (match) return {kind: 'species', species: decodeURIComponent(match.params.species)};
+  if (match) return {kind: 'species', filters: {}, species: decodeURIComponent(match.params.species)};
   match = matchPath<{sourceId: SourceId}>(path, {path: '/rec/:sourceId*'});
-  if (match) return {kind: 'rec', sourceId: decodeURIComponent(match.params.sourceId)};
-  log.warn(`searchPathParamsFromPath: Unexpected path[${path}], returning {kind: none}`);
+  if (match) return {kind: 'rec',     filters: {}, sourceId: decodeURIComponent(match.params.sourceId)};
+  log.warn(`searchPathParamsFromLocation: Unknown location[${location}], returning {kind: none}`);
   return {kind: 'none'};
 }
 

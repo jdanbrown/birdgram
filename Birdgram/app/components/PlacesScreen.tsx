@@ -7,7 +7,7 @@ import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import {
-  matchSearchPathParams, MetadataSpecies, Place, searchPathParamsFromPath, showSourceId, Species,
+  matchSearchPathParams, MetadataSpecies, Place, showSourceId, Species,
 } from '../datatypes';
 import { Ebird } from '../ebird';
 import { Log, rich } from '../log';

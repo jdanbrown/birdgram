@@ -4,6 +4,8 @@ print_sys_info()
 
 def train_final   (**kwargs): return train_cv(**{**dict(
     logreg_Cs=[
+        # HACK Blindly went with .001 after the 759/35k (v0) -> 846/69k (v1) fix
+        #   - Console output, for reference: https://gist.github.com/jdanbrown/3d58db5d716ad5ce364fc0e49fb19835
         .001,
     ],
     n_species_n_recs=[(1.0, 1.0)],
@@ -51,7 +53,7 @@ def _train_cv(
 
     ##
     # Params
-    experiment_id_prefix = 'train-am-cr-v0'
+    experiment_id_prefix = 'train-am-cr-v1'
     countries_k, com_names_k = 'am', 'cr_ebird'  # 9.4k/400k -> 4.0k/204k -> 754/35k
     # countries_k, com_names_k = 'na', 'us_ebird'  # 9.4k/400k -> 1.1k/ 60k -> 762/53k
     # countries_k, com_names_k = 'na', 'us'        # 9.4k/400k -> 1.1k/ 60k -> 774/53k

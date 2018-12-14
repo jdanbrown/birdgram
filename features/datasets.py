@@ -442,10 +442,16 @@ class _xc(DataclassUtil):
             ret['com_name'] = None
             ret['sci_name'] = None
         else:
-            (page_id, com_name, sci_name) = parse.parse('XC{} {} ({})', title).fixed
-            page_id = int(page_id)
-            ret['com_name'] = com_name
-            ret['sci_name'] = sci_name
+            parsed_title = parse.parse('XC{} {} ({})', title)
+            if not parsed_title:
+                page_id = None
+                ret['com_name'] = None
+                ret['sci_name'] = None
+            else:
+                (page_id, com_name, sci_name) = parsed_title.fixed
+                page_id = int(page_id)
+                ret['com_name'] = com_name
+                ret['sci_name'] = sci_name
 
         if page_id != path_id:
             log.warn(f"Skipping malformed page.html[{relpath}]: page_id[{page_id}] != path_id[{path_id}]")
@@ -771,6 +777,7 @@ def load_xc_meta(
     num_species: int,
     num_recs: int,
     drop_recs_lt_2=True,
+    fail_on_low_download_frac=False,
 ) -> DF:
     log.debug('Filtering xc.metadata...',
         countries_k=countries_k,
@@ -786,7 +793,28 @@ def load_xc_meta(
     #   4. num_species: Sample this many of the species
     #   5. num_recs: Sample this many recs per species
     get_recs_stats = lambda df: dict(sp=df.species.nunique(), recs=len(df))
-    puts_stats = lambda desc: partial(tap, f=lambda df: print('%-15s %12s (sp/recs)' % (desc, '%(sp)s/%(recs)s' % get_recs_stats(df))))
+    _puts_stats = {}
+    def puts_stats(desc):
+        def f(df):
+            # Warn/fail if too few recs are downloaded (easy way to waste a bunch of training time!)
+            _puts_stats[desc] = get_recs_stats(df)
+            print_f = print
+            extra = ''
+            if desc == '(downloaded)':
+                threshold_frac = .95
+                download_frac = _puts_stats['(downloaded)']['recs'] / _puts_stats['species']['recs']
+                if download_frac < threshold_frac:
+                    extra = '%.2f%% < %.0f%%' % (100 * download_frac, 100 * threshold_frac)
+                    print_f = print_err  # HACK print_err i/o log.warn so it highlights red in a notebook
+                else:
+                    extra = '%.2f%%' % (100 * download_frac)
+            print_f('%-15s %12s (sp/recs)' % (desc, '%(sp)s/%(recs)s' % _puts_stats[desc]), f' {extra}' if extra else '')
+            if desc == '(downloaded)':
+                if download_frac < threshold_frac:
+                    if fail_on_low_download_frac:
+                        raise Exception('download_frac[%.2f] too low (< threshold_frac[%.2f])' % (download_frac, threshold_frac))
+            return df
+        return f
     xc_meta = (xc.metadata
         .pipe(puts_stats('all'))
         # 1. countries: Filter recs to these countries

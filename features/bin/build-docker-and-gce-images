@@ -103,6 +103,7 @@ if [[ "$reuse" == '' ]]; then
     --boot-disk-size="$boot_disk_size" \
     --boot-disk-type="$boot_disk_type" \
     --disk='' \
+    --address='' \
     --vm-init='' \
     --no-container \
     true

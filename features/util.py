@@ -67,6 +67,7 @@ from pathlib import Path
 import pickle
 import random
 import shlex
+import sys
 import textwrap
 from typing import *
 from typing.io import *
@@ -77,6 +78,10 @@ import structlog
 log = structlog.get_logger(__name__)
 
 X = TypeVar('X')
+
+
+def print_err(*args, **kwargs):
+    print(*args, **kwargs, file=sys.stderr)
 
 
 def can_iter(x: any) -> bool:

@@ -70,11 +70,25 @@ config = AttrDict(
             #     # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
             # ),
 
+            # # US
+            # search=dict(
+            #     experiment_id='train-na-us-v0-na-us',
+            #     cv_str='split_i=0,train=51883,test=743,classes=739',
+            #     search_params_str='n_species=743,n_recs=1.0',
+            #     classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
+            #     random_state=0,
+            #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
+            # ),
+            # xc_meta=dict(
+            #     countries_k='na', com_names_k='us', num_recs=None,
+            #     # countries_k='am', com_names_k='us', num_recs=None, # TODO All Americas i/o just US/CA/MX? Only +16%: 53k->63k recs
+            # ),
+
             # CR
             search=dict(
-                experiment_id='train-am-cr-v0-am-cr_ebird',
-                cv_str='split_i=0,train=34450,test=759,classes=758',
-                search_params_str='n_species=759,n_recs=1.0',
+                experiment_id='train-am-cr-v1-am-cr_ebird',
+                cv_str='split_i=0,train=68438,test=847,classes=846',
+                search_params_str='n_species=847,n_recs=1.0',
                 classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
                 random_state=0,
                 fix_missing_skm_projection_id='peterson-v0-26bae1c',
@@ -83,15 +97,12 @@ config = AttrDict(
                 countries_k='am', com_names_k='cr_ebird', num_recs=None,
             ),
 
-            # US
-            #   - TODO(train_us)
-
         )
     ),
 
     payloads=dict(
         mobile=dict(
-            version=1,  # Separate from search_recs version so we aren't forced to recompute search_recs when we iterate on mobile
+            version=2,  # Separate from search_recs version so we aren't forced to recompute search_recs when we iterate on mobile
         ),
     ),
 
@@ -99,16 +110,26 @@ config = AttrDict(
         recs=dict(
 
             search_recs=dict(
-                # refresh=True,  # Uncomment to refresh cache (force miss)
+
+                # Semantically relevant params (i.e. affects the output, not the process)
                 params=dict(
                     # Global params for precomputed search_recs
+                    # limit=100,  # XXX Faster dev (declared here for cache invalidation)
                     audio_s=10,  # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
                     version=8,   # Manually bump to invalidate cache
-                    # limit=100,  # XXX Faster dev (declared here for cache invalidation)
-                    # FIXME FIXME Uncached slices are never computed. Enable this to workaround
-                    #   - If you're iterating on mobile payload and not search_recs, leaving this enabled doesn't slow anything down
-                    FIXME_slow_force_warm_cache=True,
                 ),
+
+                # Uncomment to refresh cache (force miss)
+                #   - Can also pass to get_search_recs
+                # refresh=True,
+
+                # Batch the pipeline for (1) mem safety and (2) resumability
+                # batch_size=1000,  # Mem unsafe: oom'd on n1-highcpu-16 (14g) at progress 27/36
+                batch_size=500,     # Mem safe on n1-standard-8 (30g)
+                # batch_size=250,   # Mem safe on n1-highcpu-16 (14g)
+                # batch_size=25,    # XXX Faster dev
+
+                # Cache key
                 cache=dict(
                     # Manually specify what config values invalidate the search_recs cache (ugh...)
                     key=dict(
@@ -125,6 +146,7 @@ config = AttrDict(
                         ],
                     ),
                 ),
+
             ),
 
             # Tuned in notebooks/spectro_img_encode
@@ -137,9 +159,35 @@ config = AttrDict(
             ),
 
             progress_kwargs=override_progress_kwargs or dict(
+                # TODO(train_us): Fingers crossed that batching solves all our problems here...
                 use='dask', scheduler='threads',  # Faster (primarily useful for remote, for now)
                 # use='sync',  # XXX Dev
                 # use=None,  # XXX Dev (disable par and silence progress bars to more easily see reads/writes)
+
+                # XXX(train_us): Add batching so we should be able to trash all this
+                # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
+                # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # Too quiet
+                # XXX Saturates disk read, but repeatedly hung my gce instance after O(10m)! :(
+                #   - Replaced the gce disk, and now I'm seeing proc hangs :/
+                #   - threads/cpu*2 also saturates disk read [probably just a bunch of cache hits?]
+                #   - threads also saturates disk read [probably just a bunch of cache hits?]
+                # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,  # XXX Hangs
+                # use='dask', scheduler='threads', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,  # XXX Hangs
+                # use='dask', scheduler='threads',  # XXX Hangs
+                # use='dask', scheduler='synchronous',  # TODO(train_us)
+
+                # XXX(train_us): Add batching so we should be able to trash all this
+                # TODO(train_us): Make this fucking thing go (search_recs -> US -> audio)
+                # use='dask', scheduler='threads',  # XXX Hangs: ~125mb/s disk read
+                # use='sync',  # TODO(train_us): ~1h eta, ~25-50m/s disk read, ~15 it/s (all cache hits)
+                # use='dask', scheduler='processes',  # TODO(train_us): ~25m eta, 125mb/s disk read [sometimes dips to 0...]
+                # TODO(train_us): Try bigger machine, to repro things working fine yesterday
+                # TODO(train_us): Else try batching, to persist incremental progress [don't have enough time!]
+                # use='dask', scheduler='threads',  # TODO(train_us): Retrying with <100mb fix [FUCK STUPID FUCK]
+                #   - TODO Python proc hung once (py-spy showed mostly empty), trying again...
+                #   - TODO Python proc hung again (py-spy showed mostly empty), switching to 'sync'...
+                # use='sync',  # ~1h eta, ~25-50m/s disk read, ~15 it/s (all cache hits)
+
             ),
 
         ),
@@ -178,12 +226,13 @@ config = AttrDict(
         #   - TODO Revisiting with ~87k xc recs...
         metadata_progress_kwargs=override_progress_kwargs or dict(
             # [Local]
-            use='dask', scheduler='threads',    # Optimal for 600 peterson recs on laptop
+            # use='dask', scheduler='threads',    # Optimal for 600 peterson recs on laptop
             # [Remote]
             # Perf comparison:                             machine     cpu   disk_r     disk_w  disk_io_r  disk_io_w
             # use='dask', scheduler='threads',    # n1-standard-16   5-20%   1-5m/s  10-120m/s      10-50     50-500
             # use='dask', scheduler='processes',  # n1-standard-16  10-50%  5-20m/s    ~100m/s     50-200    300-600
-            # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),
+            # use='dask', scheduler='threads',    # Optimal for cache hits
+            use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # Usable for cache hits (~4m for 53k)
         ),
 
         # Performance (measured with .audio on 600 peterson recs):
@@ -195,9 +244,11 @@ config = AttrDict(
         #               1    0.060    0.060    0.845    0.845 <string>:1(<module>)
         #           61176    0.018    0.000    0.039    0.000 {built-in method builtins.isinstance}
         #             600    0.015    0.000    0.015    0.000 {built-in method io.open}
+        #
+        # NOTE search_recs 'audio' (api.recs.recs_featurize_audio) uses api.recs.progress_kwargs, not this one!
         audio_progress_kwargs=override_progress_kwargs or dict(
             # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
-            # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # FIXME Too quiet...
+            # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # Too quiet
             use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,
         ),
 
