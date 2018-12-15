@@ -273,6 +273,7 @@ export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cas
   }
 }
 
+// TODO(add_filters_to_location)
 export function searchPathParamsFromLocation(location: Location): SearchPathParams {
   const tryParseInt = (_default: number, s: string): number => { try { return parseInt(s); } catch { return _default; } };
   const {pathname: path, search} = location;

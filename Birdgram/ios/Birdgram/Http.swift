@@ -49,11 +49,18 @@ class RNHttp: RCTEventEmitter, RNProxy {
 public func httpFetch(
   _ url: String
 ) -> Promise<String> {
+  Log.debug(String(format: "httpFetch.request: %@", [
+    "url": url,
+  ]))
   return Promise { fulfill, reject -> Void in
     (Alamofire
       .request(url)
       .validate() // Map 4xx/5xx to .failure i/o .success
       .responseString { rep in
+        Log.info(String(format: "httpFetch.response: %@", [
+          "url": url,
+          "status": rep.response?.statusCode as Any,
+        ]))
         switch rep.result {
           case .success:            fulfill(rep)
           case .failure(let error): reject(error)

@@ -83,6 +83,7 @@ function matchQuery<X>(query: Query, cases: {
   }
 }
 
+// TODO(add_filters_to_location)
 export interface Filters {
   quality?: Array<Quality>;
   placeId?: string;
@@ -432,6 +433,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         species: ({filters, species})  => species  !== '',
         rec:     ({filters, sourceId}) => sourceId !== '',
       })
+      // TODO(refresh_on_place_change)
     ) {
       log.info('loadRecsFromQuery', () => pretty({query: this.query}));
 
@@ -458,10 +460,13 @@ export class SearchScreen extends PureComponent<Props, State> {
       };
 
       // Global filters
-      const qualityFilter = sqlf`and quality in (${this.state.filterQuality})`;
-      const placeFilter   = matchNull(this.props.place, {
+      //  - TODO(add_filters_to_location)
+      const qualityFilter = (table: string) => (
+        sqlf`and ${SQL.raw(table)}.quality in (${this.state.filterQuality})`
+      );
+      const placeFilter   = (table: string) => matchNull(this.props.place, {
         null: ()    => '',
-        x:    place => sqlf`and species in (${place.species})`,
+        x:    place => sqlf`and ${SQL.raw(table)}.species in (${place.species})`,
       });
 
       await matchQuery(this.query, {
@@ -481,10 +486,10 @@ export class SearchScreen extends PureComponent<Props, State> {
               select
                 *,
                 cast(taxon_order as real) as taxon_order_num
-              from search_recs
+              from search_recs S
               where true
-                ${SQL.raw(placeFilter)}
-                ${SQL.raw(qualityFilter)}
+                ${SQL.raw(placeFilter('S'))}
+                ${SQL.raw(qualityFilter('S'))}
               order by
                 random()
               limit ${this.state.filterLimit}
@@ -506,11 +511,11 @@ export class SearchScreen extends PureComponent<Props, State> {
               select
                 *,
                 cast(taxon_order as real) as taxon_order_num
-              from search_recs
+              from search_recs S
               where true
                 and species in (${species.split(',').map(x => _.trim(x).toUpperCase())})
-                ${SQL.raw(placeFilter)} -- No results if selected species is outside of placeFilter
-                ${SQL.raw(qualityFilter)}
+                ${SQL.raw(placeFilter('S'))} -- No results if selected species is outside of placeFilter
+                ${SQL.raw(qualityFilter('S'))}
               order by
                 source_id desc
               limit ${this.state.filterLimit}
@@ -604,8 +609,8 @@ export class SearchScreen extends PureComponent<Props, State> {
                 left join (select * from search_recs where source_id = ${sourceId}) Q on true -- Only 1 row in Q
               where true
                 and S.species = ${species}
-                ${SQL.raw(placeFilter)} -- Empty subquery for species outside of placeFilter
-                ${SQL.raw(qualityFilter)}
+                ${SQL.raw(placeFilter('S'))} -- Empty subquery for species outside of placeFilter
+                ${SQL.raw(qualityFilter('S'))}
                 and S.source_id != ${sourceId} -- Exclude query_rec from results
               order by
                 d_pc asc
