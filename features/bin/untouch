@@ -1,0 +1,8 @@
+#!/bin/bash
+#
+# Remove empty files safely
+
+for f in "$@"
+do
+  [ -s "$f" ] || rm -fv "$f"
+done

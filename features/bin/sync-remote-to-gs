@@ -7,10 +7,33 @@ code_dir="`"$bin"/normpath "$bin"/..`"
 data_dir="/mnt/disks/disk-bubo-data"
 gs_data_dir='gs://bubo-data/v0/data'
 
+# # Mobile payload for CR
+# # - HACK FIXME(train_us): gsutil doesn't support [] chars (UGH)
+# # - search_recs-audio_s[10],version[8],com_names_k[cr_ebird],countries_k[am],num_recs[100]-1deedc2
+# # - search_recs-audio_s-10,version-8,com_names_k-cr_ebird,countries_k-am,num_recs-100-1deedc2
+# mkdir -p "$data_dir"/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-cr_ebird,countries_k-am,num_recs-100-1deedc2/
+# [ -e "$data_dir"/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-cr_ebird,countries_k-am,num_recs-100-1deedc2/mobile-version-2/ ] || \
+#   mv -v \
+#     "$data_dir"/cache/payloads/'search_recs-audio_s[10],version[8],com_names_k[cr_ebird],countries_k[am],num_recs[100]-1deedc2/mobile-version[2]'/ \
+#     "$data_dir"/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-cr_ebird,countries_k-am,num_recs-100-1deedc2/mobile-version-2/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-cr_ebird,countries_k-am,num_recs-100-1deedc2/mobile-version-2/
+
+# # Mobile payload for US
+# # - HACK FIXME(train_us): gsutil doesn't support [] chars (UGH)
+# # - search_recs-audio_s[10],version[8],com_names_k[us],countries_k[na],num_recs[200]-4a07700
+# # - search_recs-audio_s-10,version-8,com_names_k-us,countries_k-na,num_recs-200-4a07700
+# mkdir -p "$data_dir"/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-us,countries_k-na,num_recs-200-4a07700/
+# [ -e "$data_dir"/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-us,countries_k-na,num_recs-200-4a07700/mobile-version-2/ ] || \
+#   mv -v \
+#     "$data_dir"/cache/payloads/'search_recs-audio_s[10],version[8],com_names_k[us],countries_k[na],num_recs[200]-4a07700/mobile-version[2]'/ \
+#     "$data_dir"/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-us,countries_k-na,num_recs-200-4a07700/mobile-version-2/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-us,countries_k-na,num_recs-200-4a07700/mobile-version-2/
+
 # WARNING Careful with -d (delete) -- it'd be easy to make a typo that wipes out all of our cloud data...
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/payloads/
 # time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/ebird/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/artifacts/
-time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/sp14/model/feat\(version=0\)/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/artifacts/
+# time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/sp14/model/feat\(version=0\)/
 # time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/load/_metadata\(version=9\)/  # XXX Many small files, faster to recompute locally
 # time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/joblib/sp14/model/_feat\(version=0\)/
 # time gsutil -m rsync -r "$@" {"$data_dir","$gs_data_dir"}/cache/22050hz-1ch-16bit/xc

@@ -51,7 +51,7 @@ export const DEFAULTS: Props = {
   metadataColumnsBelow: objectKeysTyped(MetadataColumnsBelow) as Array<MetadataColumnBelow>,
   editing: false,
   seekOnPlay: false,
-  playingProgressEnable: true,
+  playingProgressEnable: false, // FIXME High cpu
   // playingProgressInterval: 16, // ~frame rate (60fps), but kills rndebugger in dev
   playingProgressInterval: 250,   // Usable in dev
   spectroScale: 2,

@@ -3,11 +3,13 @@ from __future__ import division
 from math import log, ceil, floor
 import os
 import re
+import subprocess
 from subprocess import Popen, PIPE
 import sys
 from tempfile import TemporaryFile
 from warnings import warn
 import json
+import functools
 
 try:
     import audioop
@@ -145,6 +147,7 @@ def make_chunks(audio_segment, chunk_length):
             for i in range(int(number_of_chunks))]
 
 
+@functools.lru_cache() # PERF(from_file): Cache to eliminate bottleneck
 def which(program):
     """
     Mimics behavior of UNIX which command.
@@ -223,7 +226,7 @@ def fsdecode(filename):
 def mediainfo_json(filepath):
     """Return json dictionary with media info(codec, duration, size, bitrate...) from filepath
     """
-    prober = get_prober_name()  # PERF(train_us): 1.28s
+    prober = get_prober_name()
     command_args = [
         "-v", "info",
         "-show_format",
@@ -241,10 +244,22 @@ def mediainfo_json(filepath):
         stdin_data = file.read()
 
     command = [prober, '-of', 'json'] + command_args
-    res = Popen(command, stdin=stdin_parameter, stdout=PIPE, stderr=PIPE)  # PERF(train_us): 1.97s
-    output, stderr = res.communicate(input=stdin_data)  # PERF(train_us): .741s
+
+    # TODO(train_us): Old
+    res = Popen(command, stdin=stdin_parameter, stdout=PIPE, stderr=PIPE)  # PERF(train_us): 1.68s
+    output, stderr = res.communicate(input=stdin_data)  # PERF(train_us): .791s
     output = output.decode("utf-8", 'ignore')
     stderr = stderr.decode("utf-8", 'ignore')
+
+    # # TODO(train_us): New
+    # p = _popen(
+    #     command,
+    #     stdin_data=stdin_data,
+    #     stdout=subprocess.PIPE,
+    #     stderr=subprocess.PIPE,
+    # )
+    # output = p.stdout.decode("utf-8", 'ignore')
+    # stderr = p.stderr.decode("utf-8", 'ignore')
 
     info = json.loads(output)
 
@@ -344,3 +359,52 @@ def mediainfo(filepath):
                 info[key] = value
 
     return info
+
+
+#
+# _popen [TODO Explain]
+#   - XXX(train_us): Trying different approach (splitting up batches to avoid large ram -- see api/recs.py)
+#
+
+
+from dataclasses import dataclass
+import io
+from pathlib import Path
+import subprocess
+from typing import *
+
+@dataclass
+class PopenResult:
+    returncode: int
+    stdout: Optional[Union[bytes, str]]
+    stderr: Optional[Union[bytes, str]]
+
+def _popen(
+    cmd: str,
+    stdin_data: Optional[Union[bytes, str]],
+    stdout: Optional['subprocess.PIPE'],
+    stderr: Optional['subprocess.PIPE'],
+) -> PopenResult:
+
+    assert stdin_data is None or isinstance(stdin_data, (bytes, str)), f'stdin_data must be None or bytes/str, got {type(stdin_data)}'
+    assert stdout in [None, subprocess.PIPE], f"Invalid stdout[{stdout}]"
+    assert stderr in [None, subprocess.PIPE], f"Invalid stderr[{stderr}]"
+
+    p = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL if stdin_data is None else subprocess.PIPE,
+        stdout=stdout,
+        stderr=stderr,
+    )
+    p_stdout, p_stderr = p.communicate(stdin_data)
+
+    # system doesn't use subprocess.Popen, does use a shell
+    # popen does use subprocess.Popen, does use a shell
+    # TODO(train_us): try subprocess.Popen without PIPE
+    # TODO(train_us): try system (with files)
+
+    return PopenResult(
+        returncode=p.returncode,
+        stdout=p_stdout,
+        stderr=p_stderr,
+    )

@@ -658,40 +658,90 @@ def get_search_recs(
 
 def _compute_search_recs() -> pd.DataFrame:
     log.info(**{'len(sg.xc_meta)': len(sg.xc_meta), **sg_load.config.xc_meta})
-    def f(df):
+
+    # XXX Old, slow b/c fork() is slow with large ram and bogged down job runtime
+    # def f(recs):
+    #     # HACK Force-compute uncached slices, to avoid the drop_uncached_slice tangle we've created in recs_featurize_pre_rank
+    #     #   - Cache so we can resume failed pipelines, because this is really slow
+    #     #   - [Also apparently very error prone, given my day-long fight with US/CR on 2018-12-14]
+    #     if not config.api.recs.search_recs.get('drop_uncached_audio_slices', False):
+    #         recs_cache_audio_slices(recs)
+    #     return (recs
+    #         # Featurize (audio meta + .feat)
+    #         .pipe(recs_featurize_pre_rank)
+    #     )
+
+    @cache(version=1, key=lambda recs: (
+        sorted(recs.id.unique()),
+        # Implicit deps
+        config.api.recs.search_recs.params.audio_s,
+        config.audio.audio_persist.audio_kwargs,  # (via load_for_audio_persist)
+    ))
+    def recs_cache_audio_slices(recs: pd.DataFrame):
+        recs.pipe(recs_featurize_metdata_audio_slice,
+            start_s=0,
+            audio_s=config.api.recs.search_recs.params.audio_s,
+            load_sliced=load_for_audio_persist(),
+            load_full=sg.load,
+        )
+        return pd.DataFrame([])  # Must return DF for pd.concat (below)
+
+    random_state   = 10  # XXX(train_us): Debug
+    subset_batches = (int(os.environ['SUBSET']) - 1, 16)  # XXX(train_us): Manual par procs
+    debug_print(_lines=True, subset_batches=subset_batches)  # XXX(train_us): Manual par procs
+
+    # Batch for mem safety + resumability
+    #   - NOTE Do all of recs_cache_audio_slices before any recs_featurize_pre_rank to avoid growing process mem which
+    #     slows down fork() in subprocess.Popen (in pydub calls to ffmpeg), which bogs down batch runtime #
+    #     (1m->2m->5m->5m->...) and makes the job completion time steadily balloon
+    #       - fork() is slow with large mem
+    #           - https://stackoverflow.com/questions/2731531/faster-forking-of-large-processes-on-linux
+    #           - https://blog.famzah.net/2009/11/20/fork-gets-slower-as-parent-process-use-more-memory/
+    #           - https://blog.famzah.net/2009/11/20/a-much-faster-popen-and-system-implementation-for-linux/
+    #       - python posix_spawn() added and removed
+    #           - https://bugs.python.org/issue31814
+    #           - https://bugs.python.org/issue20104
+    #       - Another issue on python fork() [but relevant?]
+    #           - https://bugs.python.org/issue11314
+    #           - http://essays.ajs.com/2011/02/python-subprocess-vs-ospopen-overhead.html
+    return (sg.xc_meta
+        # Limit (for faster dev)
+        [:config.api.recs.search_recs.params.get('limit')]
+
+        # XXX Old, slow b/c fork() is slow with large ram and bogged down job runtime
+        # .pipe(df_batched, f,
+        #     batch_size=config.api.recs.search_recs.batch_size,
+        #     desc='_compute_search_recs.recs_cache_audio_slices',
+        #     shuffle_batches=dict(random_state=random_state),  # XXX(train_us): Debug
+        # )
 
         # HACK Force-compute uncached slices, to avoid the drop_uncached_slice tangle we've created in recs_featurize_pre_rank
         #   - Cache so we can resume failed pipelines, because this is really slow
         #   - [Also apparently very error prone, given my day-long fight with US/CR on 2018-12-14]
-        if not config.api.recs.search_recs.get('drop_uncached_audio_slices', False):
-            @cache(version=1, key=lambda recs: (
-                sorted(recs.id.unique()),
-                # Implicit deps
-                config.api.recs.search_recs.params.audio_s,
-                config.audio.audio_persist.audio_kwargs,  # (via load_for_audio_persist)
+        #   - [Useful cmd to clean up ^C: `bin/ssh-container bubo-0 find data/cache/audio/xc/data/ -empty -type f -print -delete`]
+        .pipe(lambda df: df if config.api.recs.search_recs.get('drop_uncached_audio_slices', False) else (df
+            .pipe(tap, lambda df: df.pipe(df_batched, recs_cache_audio_slices,
+                batch_size=config.api.recs.search_recs.batch_size,
+                desc='_compute_search_recs.recs_cache_audio_slices',
+                shuffle_batches=dict(random_state=random_state),  # XXX(train_us): Debug
+                # progress_kwargs=dict(
+                #     # TODO(train_us): Try...
+                #     # use='dask', scheduler='processes', get_kwargs=dict(num_workers=2),  # Slow [why does sg.init() never noop?]
+                #     # use='dask', scheduler='processes', get_kwargs=dict(num_workers=20), # Equally slow as 2
+                #     # use='dask', scheduler='threads',  # Spent a lot of time (and ram) forking before starting work (32 cores)
+                #     # use='dask', scheduler='threads', get_kwargs=dict(num_workers=4),  # XXX Same fork() rate as baseline :(
+                # ),
+                # subset_batches=subset_batches  # XXX-XXX(train_us): Manual par procs [TODO(train_us): Disable and use 1 proc to proceed]
             ))
-            def recs_cache_audio_slices(recs: pd.DataFrame):
-                df.pipe(recs_featurize_metdata_audio_slice,
-                    start_s=0,
-                    audio_s=config.api.recs.search_recs.params.audio_s,
-                    load_sliced=load_for_audio_persist(),
-                    load_full=sg.load,
-                )
-            recs_cache_audio_slices(df)
+        ))
 
-        return (df
-            # Featurize (audio meta + .feat)
-            .pipe(recs_featurize_pre_rank)
-        )
-
-    return (sg.xc_meta
-        # Limit (for faster dev)
-        [:config.api.recs.search_recs.params.get('limit')]
-        # Batch for mem safety + resumability
-        .pipe(df_batched, f,
+        # Featurize (audio meta + .feat)
+        .pipe(df_batched, recs_featurize_pre_rank,
             batch_size=config.api.recs.search_recs.batch_size,
-            desc='_compute_search_recs',
+            desc='_compute_search_recs.recs_featurize_pre_rank',
+            shuffle_batches=dict(random_state=random_state),  # XXX(train_us): Debug
         )
+
     )
 
 
@@ -701,20 +751,28 @@ def df_batched(
     df: pd.DataFrame,
     f: Callable[[pd.DataFrame], pd.DataFrame],
     batch_size: int,
-    shuffle=False,
-    random_state=None,
+    shuffle: Optional['np_sample_kwargs'] = None,
+    shuffle_batches: Optional['np_sample_kwargs'] = None,
     desc='batches',
     progress_kwargs=dict(
         use='log_time_each',  # Avoids interfering with nested progress bars (and has eta)
     ),
+    subset_batches=None,  # XXX(train_us): Manual par procs
 ):
     if not df.index.is_unique:
         raise ValueError('df.index must be unique')  # Else .loc[ix] won't partition
     ixs = list(df.index)
     if shuffle:
-        ixs = np_sample(ixs, frac=1, replace=False, random_state=random_state)
+        ixs = np_sample(ixs, frac=1, replace=False, **shuffle)
     ix_batches = list(chunked(ixs, batch_size))
-    return (
+    if shuffle_batches:
+        ix_batches = np_sample(ix_batches, frac=1, replace=False, **shuffle_batches)
+
+    # XXX(train_us): Manual par procs
+    if subset_batches:
+        ix_batches = ix_batches[subset_batches[0]::subset_batches[1]]
+
+    ret = (
         pd.concat(
             sort=True,  # (Silence "non-concatenation axis" warning -- not sure what we want, or if it matters...)
             objs=map_progress(desc=desc, **progress_kwargs,
@@ -724,6 +782,13 @@ def df_batched(
         )
         .reset_index(drop=True)  # Reset to RangeIndex after concat
     )
+
+    # XXX(train_us): Manual par procs
+    #   - Prevent progressing past recs_cache_audio_slices b/c it's unsafe with multiple procs
+    if subset_batches:
+        STOP  # Batch done
+
+    return ret
 
 
 def recs_featurize_pre_rank(
@@ -980,7 +1045,8 @@ def recs_featurize_spectro_bytes(
                     #   - No repro: use='dask', scheduler='synchronous'
                     #   - HACK Going with use='sync' to work around...
                     # **config.api.recs.progress_kwargs,  # threads >> sync, procs
-                    use='sync',
+                    # use='sync', # Minor bottleneck in full CR/US payloads, switched back to threads (saw no hangs)
+                    **config.api.recs.progress_kwargs,
                 ),
             )
         )

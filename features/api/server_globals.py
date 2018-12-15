@@ -28,6 +28,10 @@ log = structlog.get_logger(__name__)
 class _sg:
 
     def init(self, app, reload=False, **kwargs):
+
+        # Save init() args so we can rehydrate on pickle (see __getstate__/__setstate__)
+        self._kwargs = dict(app=app, reload=reload, **kwargs)
+
         if not hasattr(self, '_init_done') or reload:
             log.info()
             sg_load.load(self, **kwargs)
@@ -44,9 +48,9 @@ class _sg:
     #       - I've deferred this just because I recall the sg/sg_load singleton dance being tricky and subtle wrt. flask
     #         app initialization, and I don't remember the pitfalls that I was dancing around at the time. Buyer beware.
     def __getstate__(self):
-        return {}
+        return self._kwargs
     def __setstate__(self, state):
-        self.init()
+        self.init(**state)
 
 
 # WARNING @singleton breaks cloudpickle in a very strange way because it "rebinds" the class name:
@@ -69,7 +73,12 @@ class _sg_load(DataclassUtil):
             self.load_feat_info,    # Implicit deps: feat_info   -> sg.search
             self.load_search_recs,  # Implicit deps: search_recs -> sg.xc_meta, sg.feat_info(->sg.search)
         ]:
-            if f in skip:
+
+            # HACK Map funcs to names, to avoid false negatives on linux (but not osx)
+            #   - TODO Push upstream to callers and kill this hack
+            skip = [getattr(f, '__name__', f) for f in skip]
+
+            if f.__name__ in skip:
                 log.warn('%s [skipped]' % f.__name__)
             else:
                 log.debug('%s...' % f.__name__)

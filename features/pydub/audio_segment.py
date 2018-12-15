@@ -8,7 +8,7 @@ import wave
 import sys
 import struct
 from .logging_utils import log_conversion, log_subprocess_output
-from .utils import mediainfo_json, fsdecode
+from .utils import mediainfo_json, fsdecode, _popen
 import base64
 from collections import namedtuple
 
@@ -655,7 +655,7 @@ class AudioSegment(object):
             stdin_parameter = subprocess.PIPE
             stdin_data = file.read()
 
-        info = mediainfo_json(orig_file)  # PERF(train_us): 4.01s
+        info = mediainfo_json(orig_file)  # PERF(train_us): 2.49s
         if info:
             audio_streams = [x for x in info['streams']
                              if x['codec_type'] == 'audio']
@@ -682,12 +682,23 @@ class AudioSegment(object):
 
         log_conversion(conversion_command)
 
+        # TODO(train_us): Old
         p = subprocess.Popen(conversion_command, stdin=stdin_parameter,
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # PERF(train_us): 2.05s
-        p_out, p_err = p.communicate(input=stdin_data)  # PERF(train_us): 7.56s
-
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # PERF(train_us): 1.78s
+        p_out, p_err = p.communicate(input=stdin_data)  # PERF(train_us): 6.35s
         if p.returncode != 0 or len(p_out) == 0:
             raise CouldntDecodeError("Decoding failed. ffmpeg returned error code: {0}\n\nOutput from ffmpeg/avlib:\n\n{1}".format(p.returncode, p_err))
+
+        # # TODO(train_us): New
+        # p = _popen(
+        #     conversion_command,
+        #     stdin_data=stdin_data,
+        #     stdout=subprocess.PIPE,
+        #     stderr=subprocess.PIPE,
+        # )
+        # p_out, p_err = p.stdout, p.stderr
+        # if p.returncode != 0 or len(p_out) == 0:
+        #     raise CouldntDecodeError("Decoding failed. ffmpeg returned error code: {0}\n\nOutput from ffmpeg/avlib:\n\n{1}".format(p.returncode, p_err))
 
         p_out = bytearray(p_out)
         fix_wav_headers(p_out)
@@ -761,7 +772,7 @@ class AudioSegment(object):
         """
         id3v2_allowed_versions = ['3', '4']
 
-        out_f = _fd_or_path_or_tempfile(out_f, 'wb+')
+        out_f = _fd_or_path_or_tempfile(out_f, 'wb+')  # PERF(train_us): .421s
         out_f.seek(0)
 
         if format == "raw":
@@ -773,7 +784,7 @@ class AudioSegment(object):
         if format == "wav":
             data = out_f
         else:
-            data = NamedTemporaryFile(mode="wb", delete=False)
+            data = NamedTemporaryFile(mode="wb", delete=False)  # PERF(train_us): .316s
 
         wave_data = wave.open(data, 'wb')
         wave_data.setnchannels(self.channels)
@@ -782,14 +793,14 @@ class AudioSegment(object):
         # For some reason packing the wave header struct with
         # a float in python 2 doesn't throw an exception
         wave_data.setnframes(int(self.frame_count()))
-        wave_data.writeframesraw(self._data)
+        wave_data.writeframesraw(self._data)  # PERF(train_us): .625s
         wave_data.close()
 
         # for wav files, we're done (wav data is written directly to out_f)
         if format == 'wav':
             return out_f
 
-        output = NamedTemporaryFile(mode="w+b", delete=False)
+        output = NamedTemporaryFile(mode="w+b", delete=False)  # PERF(train_us): .531s
 
         # build converter command to export
         conversion_command = [
@@ -847,24 +858,34 @@ class AudioSegment(object):
         log_conversion(conversion_command)
 
         # read stdin / write stdout
-        with open(os.devnull, 'rb') as devnull:
-            p = subprocess.Popen(conversion_command, stdin=devnull, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p_out, p_err = p.communicate()
 
+        # TODO(train_us): Old
+        with open(os.devnull, 'rb') as devnull:  # PERF(train_us): .163s
+            p = subprocess.Popen(conversion_command, stdin=devnull, stdout=subprocess.PIPE, stderr=subprocess.PIPE)  # PERF(train_us): 1.26s
+        p_out, p_err = p.communicate()  # PERF(train_us): .405s
         log_subprocess_output(p_out)
         log_subprocess_output(p_err)
-
         if p.returncode != 0:
             raise CouldntEncodeError("Encoding failed. ffmpeg/avlib returned error code: {0}\n\nCommand:{1}\n\nOutput from ffmpeg/avlib:\n\n{2}".format(p.returncode, conversion_command, p_err))
 
+        # # TODO(train_us): New
+        # p = _popen(
+        #     conversion_command,
+        #     stdin_data=None,
+        #     stdout=None,
+        #     stderr=None,
+        # )
+        # if p.returncode != 0:
+        #     raise CouldntEncodeError("Encoding failed. ffmpeg/avlib returned error code: {0}\n\nCommand:{1}\n\n".format(p.returncode, conversion_command))
+
         output.seek(0)
-        out_f.write(output.read())
+        out_f.write(output.read())  # PERF(train_us): .698s
 
         data.close()
         output.close()
 
-        os.unlink(data.name)
-        os.unlink(output.name)
+        os.unlink(data.name)  # PERF(train_us): .212s
+        os.unlink(output.name)  # PERF(train_us): .268s
 
         out_f.seek(0)
         return out_f

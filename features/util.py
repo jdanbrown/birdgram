@@ -1382,7 +1382,7 @@ def audio_from_file(path: str, format: str = None, parameters: Iterable[str] = N
     ]
 
     try:
-        seg = pydub.AudioSegment.from_file(path, format=format, parameters=parameters, **kwargs)
+        seg = pydub.AudioSegment.from_file(path, format=format, parameters=parameters, **kwargs)  # PERF(train_us): 11.10s
     except Exception as e:
 
         # Parse ffmpeg error msgs out of pydub error msgs, else you're stuck with one big line of b'ffmpeg...\n...'

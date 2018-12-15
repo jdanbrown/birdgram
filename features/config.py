@@ -8,8 +8,7 @@ role = os.environ.get('BUBO_ROLE')
 override_progress_kwargs = dict(
     # use=None,    # XXX Debug: no par, no progress bars
     # use='log_time_all',  # XXX Debug: no par, log start/done instead of progress bars
-    # use='sync',  # XXX Debug: no par, yes progress bars
-    # use='dask', scheduler='threads',  # XXX Debug par
+    # use='sync',  # XXX Debug: no par, yes progress bars # use='dask', scheduler='threads',  # XXX Debug par
     # use='dask', scheduler='synchronous',  # XXX Debug par
 )
 
@@ -54,21 +53,21 @@ config = AttrDict(
     server_globals=dict(
         sg_load=dict(
 
-            # # US-CA
-            # search=dict(
-            #     experiment_id='comp-l1-l2-na-ca',
-            #     cv_str='split_i=0,train=34875,test=331,classes=331',
-            #     search_params_str='n_species=331,n_recs=1.0',
-            #     classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
-            #     random_state=0,
-            #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
-            # ),
-            # xc_meta=dict(
-            #     # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
-            #     countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
-            #     # countries_k='na', com_names_k='dan5', num_recs=None,  # XXX Faster dev
-            #     # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
-            # ),
+            # US-CA
+            search=dict(
+                experiment_id='comp-l1-l2-na-ca',
+                cv_str='split_i=0,train=34875,test=331,classes=331',
+                search_params_str='n_species=331,n_recs=1.0',
+                classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
+                random_state=0,
+                fix_missing_skm_projection_id='peterson-v0-26bae1c',
+            ),
+            xc_meta=dict(
+                # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
+                countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
+                # countries_k='na', com_names_k='dan5', num_recs=None,  # XXX Faster dev
+                # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
+            ),
 
             # # US
             # search=dict(
@@ -80,22 +79,26 @@ config = AttrDict(
             #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
             # ),
             # xc_meta=dict(
-            #     countries_k='na', com_names_k='us', num_recs=None,
-            #     # countries_k='am', com_names_k='us', num_recs=None, # TODO All Americas i/o just US/CA/MX? Only +16%: 53k->63k recs
+            #     # countries_k='am', com_names_k='us', num_recs=None,  # TODO All Americas i/o just US/CA/MX? Only +16%: 53k->63k recs
+            #     # countries_k='na', com_names_k='us', num_recs=None,  # 52705 recs [TODO How big?]
+            #     countries_k='na', com_names_k='us', num_recs=200,     # 47367 recs [chosen based on ballpark match ~2.92gb CR payload]
             # ),
 
-            # CR
-            search=dict(
-                experiment_id='train-am-cr-v1-am-cr_ebird',
-                cv_str='split_i=0,train=68438,test=847,classes=846',
-                search_params_str='n_species=847,n_recs=1.0',
-                classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
-                random_state=0,
-                fix_missing_skm_projection_id='peterson-v0-26bae1c',
-            ),
-            xc_meta=dict(
-                countries_k='am', com_names_k='cr_ebird', num_recs=None,
-            ),
+            # # CR
+            # search=dict(
+            #     experiment_id='train-am-cr-v1-am-cr_ebird',
+            #     cv_str='split_i=0,train=68438,test=847,classes=846',
+            #     search_params_str='n_species=847,n_recs=1.0',
+            #     classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
+            #     random_state=0,
+            #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
+            # ),
+            # xc_meta=dict(
+            #     # countries_k='am', com_names_k='cr_ebird', num_recs=None,  # ~4.26 gb mobile payload (69285 recs) [XXX Too big]
+            #     # countries_k='am', com_names_k='cr_ebird', num_recs=150,   # ~3.46 gb mobile payload
+            #     countries_k='am', com_names_k='cr_ebird', num_recs=100,     # ~2.92 gb mobile payload (47558 recs, 3.27gb as per iPhone Storage)
+            #     # countries_k='am', com_names_k='cr_ebird', num_recs=75,    # ~2.51 gb mobile payload
+            # ),
 
         )
     ),
@@ -114,7 +117,7 @@ config = AttrDict(
                 # Semantically relevant params (i.e. affects the output, not the process)
                 params=dict(
                     # Global params for precomputed search_recs
-                    # limit=100,  # XXX Faster dev (declared here for cache invalidation)
+                    limit=100,  # XXX Faster dev (declared here for cache invalidation)
                     audio_s=10,  # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
                     version=8,   # Manually bump to invalidate cache
                 ),
@@ -125,9 +128,9 @@ config = AttrDict(
 
                 # Batch the pipeline for (1) mem safety and (2) resumability
                 # batch_size=1000,  # Mem unsafe: oom'd on n1-highcpu-16 (14g) at progress 27/36
-                batch_size=500,     # Mem safe on n1-standard-8 (30g)
                 # batch_size=250,   # Mem safe on n1-highcpu-16 (14g)
-                # batch_size=25,    # XXX Faster dev
+                batch_size=500,     # Mem safe on n1-standard-8 (30g)
+                # batch_size=50,    # XXX Faster dev
 
                 # Cache key
                 cache=dict(
@@ -159,35 +162,9 @@ config = AttrDict(
             ),
 
             progress_kwargs=override_progress_kwargs or dict(
-                # TODO(train_us): Fingers crossed that batching solves all our problems here...
                 use='dask', scheduler='threads',  # Faster (primarily useful for remote, for now)
                 # use='sync',  # XXX Dev
                 # use=None,  # XXX Dev (disable par and silence progress bars to more easily see reads/writes)
-
-                # XXX(train_us): Add batching so we should be able to trash all this
-                # use='dask', scheduler='threads',  # Optimal for cache hits (disk read), but not cache misses (ffmpeg)
-                # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2),  # Too quiet
-                # XXX Saturates disk read, but repeatedly hung my gce instance after O(10m)! :(
-                #   - Replaced the gce disk, and now I'm seeing proc hangs :/
-                #   - threads/cpu*2 also saturates disk read [probably just a bunch of cache hits?]
-                #   - threads also saturates disk read [probably just a bunch of cache hits?]
-                # use='dask', scheduler='processes', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,  # XXX Hangs
-                # use='dask', scheduler='threads', get_kwargs=dict(num_workers=os.cpu_count() * 2), partition_size=10,  # XXX Hangs
-                # use='dask', scheduler='threads',  # XXX Hangs
-                # use='dask', scheduler='synchronous',  # TODO(train_us)
-
-                # XXX(train_us): Add batching so we should be able to trash all this
-                # TODO(train_us): Make this fucking thing go (search_recs -> US -> audio)
-                # use='dask', scheduler='threads',  # XXX Hangs: ~125mb/s disk read
-                # use='sync',  # TODO(train_us): ~1h eta, ~25-50m/s disk read, ~15 it/s (all cache hits)
-                # use='dask', scheduler='processes',  # TODO(train_us): ~25m eta, 125mb/s disk read [sometimes dips to 0...]
-                # TODO(train_us): Try bigger machine, to repro things working fine yesterday
-                # TODO(train_us): Else try batching, to persist incremental progress [don't have enough time!]
-                # use='dask', scheduler='threads',  # TODO(train_us): Retrying with <100mb fix [FUCK STUPID FUCK]
-                #   - TODO Python proc hung once (py-spy showed mostly empty), trying again...
-                #   - TODO Python proc hung again (py-spy showed mostly empty), switching to 'sync'...
-                # use='sync',  # ~1h eta, ~25-50m/s disk read, ~15 it/s (all cache hits)
-
             ),
 
         ),

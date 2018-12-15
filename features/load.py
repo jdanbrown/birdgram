@@ -350,7 +350,7 @@ class Load(DataclassConfig):
                 dataset=rec.get('dataset'),
                 id=rec.get('id'),
                 exists=rec_abs_path.exists(),
-                filesize_b=filesize_b,
+                filesize_b=filesize_b,  # TODO Make more prominent in the log.warn line. Very easy to overlook with big ffmpeg_msg.
             ))
 
             # "Drop" invalid audio files by replacing them with a 0s audio, so we can detect and filter out downstream
@@ -488,7 +488,7 @@ class Load(DataclassConfig):
                     ensure_parent_dir(audio_abs_path(audio_replace(audio, name=id))),
                     format=self.format,
                     bitrate=self.bitrate,
-                    codec=self.codec,
+                    codec=self.codec,  # PERF(train_us): 5.12s
                 )
                 f.close()  # Don't leak fd's
 
