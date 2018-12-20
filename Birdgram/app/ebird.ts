@@ -2,7 +2,7 @@ import cheerio from 'cheerio-without-node-native';
 import _ from 'lodash';
 import queryString from 'query-string';
 
-import { MetadataSpecies, Species, SpeciesCode } from './datatypes';
+import { MetadataSpecies, Species, SpeciesCode, SpeciesMetadata } from './datatypes';
 import { Log, rich } from './log';
 import { NativeHttp } from './native/Http';
 import {
@@ -22,6 +22,7 @@ export interface BarchartProps {
 export class Ebird {
 
   speciesFromSpeciesCode: Map<SpeciesCode, Species>;
+  speciesMetadataFromSpecies: Map<Species, SpeciesMetadata>;
 
   constructor(
     public metadataSpecies: MetadataSpecies,
@@ -30,6 +31,7 @@ export class Ebird {
     //  - XXX after we add species_code to datasets.metadata_from_dataset, which requires rebuilding the load._metadata
     //    cache, which takes ~overnight (see metadata_from_dataset)
     this.speciesFromSpeciesCode = new Map(metadataSpecies.map<[SpeciesCode, Species]>(x => [x.species_code, x.shorthand]));
+    this.speciesMetadataFromSpecies = new Map(metadataSpecies.map<[Species, SpeciesMetadata]>(x => [x.shorthand, x]));
   }
 
   barchartSpecies = async (props: BarchartProps): Promise<Array<Species>> => {

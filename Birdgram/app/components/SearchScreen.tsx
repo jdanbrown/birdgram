@@ -38,8 +38,9 @@ import { TabBarStyle } from './TabRoutes';
 import { config } from '../config';
 import {
   ModelsSearch, matchSearchPathParams, matchSourceId, Place, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
-  searchPathParamsFromLocation, SearchRecs, ServerConfig, showSourceId, SourceId, UserRec,
+  searchPathParamsFromLocation, SearchRecs, ServerConfig, showSourceId, SourceId, SpeciesMetadata, UserRec,
 } from '../datatypes';
+import { Ebird } from '../ebird';
 import { Log, puts, rich, tap } from '../log';
 import { NativeSearch } from '../native/Search';
 import { Go } from '../router';
@@ -50,8 +51,8 @@ import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from '../styles';
 import {
   all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, matchNull,
-  noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round, shallowDiffPropsState, Style, Timer, yaml,
-  yamlPretty, zipSame,
+  matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round, shallowDiffPropsState, Style,
+  Timer, yaml, yamlPretty, zipSame,
 } from '../utils';
 
 const log = new Log('SearchScreen');
@@ -114,6 +115,7 @@ interface Props {
   location:                Location;
   history:                 MemoryHistory;
   go:                      Go;
+  ebird:                   Ebird;
   // Settings
   settings:                SettingsWrites;
   showDebug:               boolean;
@@ -772,6 +774,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         };
 
         // Stop any recs that are currently playing
+        //  - TODO(stop_button): Extract a stopRecPlaying(), which looks like a bit complicated and error prone
         if (playing) {
           const {rec, sound} = playing;
           global.sound = sound; // XXX Debug
@@ -786,8 +789,12 @@ export class SearchScreen extends PureComponent<Props, State> {
         }
 
         // If touched rec was the currently playing rec, then we're done (it's stopped)
+        //  - Unless seekOnPlay [TODO(stop_button)]
         // Else, play the (new) touched rec
-        if (!this.recIsPlaying(rec.source_id, playing)) {
+        if (
+          !this.recIsPlaying(rec.source_id, playing)
+          // || this.props.seekOnPlay // TODO(stop_button)
+        ) {
           const sound = await soundAsync;
           global.sound = sound; // XXX Debug
 
@@ -886,6 +893,57 @@ export class SearchScreen extends PureComponent<Props, State> {
     );
   }
 
+  BrowseModal = () => {
+    return (
+      <this.GenericModal>
+        {/* TODO(browse_species): Add title with place name */}
+        <FlatList <SpeciesMetadata>
+          style={{
+            flex: 1,
+            height: '100%',
+            width: 300, // HACK(browse_species): ~95%
+          }}
+          data={_.sortBy(
+            matchNull(this.props.place, {
+              null: () => [],
+              x: ({species}) => _.flatMap(species, x => (
+                matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(x), {
+                  undefined: () => [],
+                  x:         x  => [x],
+                })
+              )),
+            }),
+            x => parseFloat(x.taxon_order),
+          )}
+          keyExtractor={x => x.shorthand}
+          renderItem={({item: speciesMetadata, index}) => (
+            <RectButton
+              style={{
+                width: '100%',
+                paddingVertical: 3,
+              }}
+              onPress={() => {
+                this.setState({
+                  showGenericModal: null, // Dismiss modal
+                });
+                // Show species
+                this.props.go('search', `/species/${speciesMetadata.shorthand}`);
+              }}
+            >
+              {/* TODO(browse_species): Better formatting */}
+              <Text style={[material.captionObject, {color: 'black'}]}>
+                {speciesMetadata.com_name}
+              </Text>
+              <Text style={[material.captionObject, {fontSize: 8}]}>
+                {speciesMetadata.species_group}
+              </Text>
+            </RectButton>
+          )}
+        />
+      </this.GenericModal>
+    );
+  }
+
   FiltersModal = () => {
     const Separator = () => (
       <View style={{height: 5}}/>
@@ -966,82 +1024,116 @@ export class SearchScreen extends PureComponent<Props, State> {
     return (
       <this.GenericModal>
 
-        <this.GenericModalTitle title='Rec actions' />
+        <this.GenericModalTitle
+          title={`${rec.species}/${showSourceId(rec.source_id)}`}
+        />
+
+        {/* Spectro */}
+        <Animated.Image
+          style={{
+            // ...this.spectroDim, // XXX Bad(info_modal)
+            height: this.spectroDim.height,
+            width: '100%',
+          }}
+          foo
+          resizeMode='stretch' // TODO(info_modal) Wrap to show whole spectro i/o stretching
+          source={{uri: Rec.spectroPath(rec)}}
+        />
 
         <Separator/>
-        {this.ActionModalButtons({actions: [
-          {
-            ...defaults,
-            label: 'More species',
-            iconName: 'plus-circle',
-            buttonColor: iOSColors.purple,
-            onPress: () => {},
-          }, {
-            ...defaults,
-            label: 'Fewer species',
-            iconName: 'minus-circle',
-            buttonColor: iOSColors.purple,
-            onPress: () => {},
-          }, {
-            ...defaults,
-            label: 'More recs per species',
-            iconName: 'plus-circle',
-            buttonColor: iOSColors.purple,
-            onPress: () => {},
-          }, {
-            ...defaults,
-            label: 'Fewer recs per species',
-            iconName: 'minus-circle',
-            buttonColor: iOSColors.purple,
-            onPress: () => {},
-          }, {
-            ...defaults,
-            label: 'Add a species manually',
-            iconName: 'plus-circle',
-            buttonColor: iOSColors.purple,
-            onPress: () => {},
-          },
-        ]})}
+        <View style={{flexDirection: 'row'}}>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: `${rec.species}`,
+              iconName: 'search',
+              buttonColor: iOSColors.blue,
+              onPress: () => this.props.history.push(`/species/${encodeURIComponent(rec.species)}`),
+            }, {
+              ...defaults,
+              label: `${showSourceId(rec.source_id)}`,
+              iconName: 'search',
+              buttonColor: iOSColors.blue,
+              onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.source_id)}`),
+            },
+          ]})}
+        </View>
 
         <Separator/>
-        {this.ActionModalButtons({actions: [
-          {
-            ...defaults,
-            label: `Hide results (${rec.species})`,
-            iconName: 'x',
-            buttonColor: iOSColors.red,
-            onPress: () => this.setState((state: State, props: Props) => ({
-              excludeSpecies: [...state.excludeSpecies, rec.species],
-            })),
-          }, {
-            ...defaults,
-            label: `Hide results (${showSourceId(rec.source_id)})`,
-            iconName: 'x',
-            buttonColor: iOSColors.red,
-            onPress: () => this.setState((state: State, props: Props) => ({
-              excludeRecIds: [...state.excludeRecIds, rec.source_id],
-            })),
-          }
-        ]})}
+        <View style={{flexDirection: 'row'}}>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: `${rec.species}`,
+              iconName: 'x',
+              buttonColor: iOSColors.red,
+              onPress: () => this.setState((state: State, props: Props) => ({
+                excludeSpecies: [...state.excludeSpecies, rec.species],
+              })),
+            }, {
+              ...defaults,
+              label: `${showSourceId(rec.source_id)}`,
+              iconName: 'x',
+              buttonColor: iOSColors.red,
+              onPress: () => this.setState((state: State, props: Props) => ({
+                excludeRecIds: [...state.excludeRecIds, rec.source_id],
+              })),
+            }
+          ]})}
+        </View>
 
+        {/* TODO(more_results) Put these in the footer of the ScrollView */}
+        {/* <Separator/>
+        <View style={{flexDirection: 'row'}}>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: 'More species',
+              iconName: 'plus-circle',
+              buttonColor: iOSColors.purple,
+              onPress: () => {},
+            }, {
+              ...defaults,
+              label: 'Fewer species',
+              iconName: 'minus-circle',
+              buttonColor: iOSColors.purple,
+              onPress: () => {},
+            },
+          ]})}
+        </View>
         <Separator/>
-        {this.ActionModalButtons({actions: [
-          {
-            ...defaults,
-            label: `Search (${rec.species})`,
-            iconName: 'search',
-            buttonColor: iOSColors.blue,
-            onPress: () => this.props.history.push(`/species/${encodeURIComponent(rec.species)}`),
-          }, {
-            ...defaults,
-            label: `Search (${showSourceId(rec.source_id)})`,
-            iconName: 'search',
-            buttonColor: iOSColors.blue,
-            onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.source_id)}`),
-          },
-        ]})}
+        <View style={{flexDirection: 'row'}}>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: 'More recs per species',
+              iconName: 'plus-circle',
+              buttonColor: iOSColors.purple,
+              onPress: () => {},
+            }, {
+              ...defaults,
+              label: 'Fewer recs per species',
+              iconName: 'minus-circle',
+              buttonColor: iOSColors.purple,
+              onPress: () => {},
+            },
+          ]})}
+        </View>
+        <Separator/>
+        <View style={{flexDirection: 'row'}}>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: 'Add a species manually',
+              iconName: 'plus-circle',
+              buttonColor: iOSColors.purple,
+              onPress: () => {},
+            },
+          ]})}
+        </View> */}
 
-        <Separator/>
+        {/* TODO(saved_lists) */}
+        {/* <Separator/>
         {this.ActionModalButtons({actions: [
           {
             ...defaults,
@@ -1068,9 +1160,10 @@ export class SearchScreen extends PureComponent<Props, State> {
             buttonColor: iOSColors.orange,
             onPress: () => {},
           },
-        ]})}
+        ]})} */}
 
-        <Separator/>
+        {/* TODO(share_results) */}
+        {/* <Separator/>
         {this.ActionModalButtons({actions: [
           {
             ...defaults,
@@ -1079,7 +1172,31 @@ export class SearchScreen extends PureComponent<Props, State> {
             buttonColor: iOSColors.green,
             onPress: () => {},
           },
-        ]})}
+        ]})} */}
+
+        <Separator/>
+        <View style={{
+          // width: Dimensions.get('window').width, // Fit within the left-most screen width of ScrollView content
+          flexDirection: 'column',
+          // // borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iOSColors.black, // TODO Make full width
+          // marginTop: 3,
+          // // marginBottom: 3,
+        }}>
+          {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
+          {objectKeysTyped(MetadataColumnsBelow).map(c => this.props.metadataColumnsBelow.includes(c) && (
+            <MetadataText
+              key={c}
+              style={{
+                marginBottom: 3,
+              }}
+            >
+              <Text style={{
+                ...material.captionObject,
+                fontWeight: 'bold',
+              }}>{c}:</Text> {MetadataColumnsBelow[c](rec)}
+            </MetadataText>
+          ))}
+        </View>
 
       </this.GenericModal>
     );
@@ -1122,6 +1239,14 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   BottomControls = (props: {}) => (
     <View style={styles.bottomControls}>
+      {/* Browse */}
+      <this.BottomControlsButton
+        help='Browse'
+        iconProps={{name: 'list'}}
+        onPress={() => this.setState({
+          showGenericModal: () => this.BrowseModal()
+        })}
+      />
       {/* Filters */}
       <this.BottomControlsButton
         help='Filters'
@@ -1445,6 +1570,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       <RectButton
         key={i}
         style={{
+          // flex:             1, // Makes everything big
           flexDirection:    'row',
           alignItems:       'center',
           padding:          10,
@@ -1465,7 +1591,8 @@ export class SearchScreen extends PureComponent<Props, State> {
         {iconName && (
           <Feather
             style={{
-              ...material.headlineObject,
+              // ...material.headlineObject,
+              ...material.buttonObject,
               marginRight: 5,
               color: _.defaultTo(textColor, iOSColors.white),
             }}
@@ -1474,7 +1601,8 @@ export class SearchScreen extends PureComponent<Props, State> {
         )}
         <Text
           style={{
-            ...material.buttonObject,
+            // ...material.buttonObject,
+            ...material.body2Object,
             color: _.defaultTo(textColor, iOSColors.white),
           }}
           children={label}

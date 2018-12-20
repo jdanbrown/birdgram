@@ -345,6 +345,7 @@ export default class App extends PureComponent<Props, State> {
                               serverConfig            = {this.state.serverConfig!}
                               modelsSearch            = {this.state.modelsSearch!}
                               go                      = {this.go}
+                              ebird                   = {this.state.ebird!}
                               // Settings
                               settings                = {this.state.settingsWrites!}
                               showDebug               = {this.state.settings!.showDebug}
