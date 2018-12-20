@@ -38,7 +38,7 @@ import { TabBarStyle } from './TabRoutes';
 import { config } from '../config';
 import {
   ModelsSearch, matchSearchPathParams, matchSourceId, Place, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
-  searchPathParamsFromLocation, SearchRecs, ServerConfig, showSourceId, SourceId, SpeciesMetadata, UserRec,
+  searchPathParamsFromLocation, SearchRecs, ServerConfig, showSourceId, SourceId, Species, SpeciesMetadata, UserRec,
 } from '../datatypes';
 import { Ebird } from '../ebird';
 import { Log, puts, rich, tap } from '../log';
@@ -562,6 +562,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           }
 
           // Read sp_p's (species probs) from query_rec.f_preds_*
+          //  - Filter by place.species (else too few results downstream after filtering in sql)
           const sp_ps: Map<string, number> = new Map(zipSame(
             this.props.modelsSearch.classes_,
             f_preds_cols.map(c => rec_f_preds(query_rec)[c]),
@@ -582,15 +583,21 @@ export class SearchScreen extends PureComponent<Props, State> {
           `;
 
           // Rank species by slp (slp asc b/c sgn(slp) ~ -sgn(sp_p))
+          const includeSpecies: (species: Species) => boolean = matchNull(this.props.place, {
+            null: ()    => (species: Species) => true, // No place selected -> include all species
+            x:    place => _.bind(Set.prototype.has, new Set(place.species)),
+          });
           const topSlps: Array<{species: string, slp: number}> = (
             _(Array.from(slps.entries()))
             .map(([species, slp]) => ({species, slp}))
+            .filter(({species}) => includeSpecies(species))
             .sortBy(({slp}) => slp)
             .slice(0, limit_top_sp)
             .value()
           );
 
           // Inject sql table: slps -> (species, slp)
+          //  - FIXME sql syntax error if topSlps is empty
           const tableSlp = sqlf`
             select column1 as species, column2 as slp from (values ${SQL.raw(topSlps
               // .slice(0, 2) // XXX Debug: smaller query
@@ -927,7 +934,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                   showGenericModal: null, // Dismiss modal
                 });
                 // Show species
-                this.props.go('search', `/species/${speciesMetadata.shorthand}`);
+                this.props.go('search', {path: `/species/${speciesMetadata.shorthand}`});
               }}
             >
               {/* TODO(browse_species): Better formatting */}
@@ -980,7 +987,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             value={this.state.filterQueryText}
             onChangeText={x => this.setState({filterQueryText: x})}
             onSubmitEditing={() => this.state.filterQueryText && (
-              this.props.history.push(`/species/${encodeURIComponent(this.state.filterQueryText)}`)
+              this.props.go('search', {path: `/species/${encodeURIComponent(this.state.filterQueryText)}`})
             )}
             autoCorrect={false}
             autoCapitalize='characters'
@@ -1048,13 +1055,13 @@ export class SearchScreen extends PureComponent<Props, State> {
               label: `${rec.species}`,
               iconName: 'search',
               buttonColor: iOSColors.blue,
-              onPress: () => this.props.history.push(`/species/${encodeURIComponent(rec.species)}`),
+              onPress: () => this.props.go('search', {path: `/species/${encodeURIComponent(rec.species)}`}),
             }, {
               ...defaults,
               label: `${showSourceId(rec.source_id)}`,
               iconName: 'search',
               buttonColor: iOSColors.blue,
-              onPress: () => this.props.history.push(`/rec/${encodeURIComponent(rec.source_id)}`),
+              onPress: () => this.props.go('search', {path: `/rec/${encodeURIComponent(rec.source_id)}`}),
             },
           ]})}
         </View>
@@ -1285,14 +1292,14 @@ export class SearchScreen extends PureComponent<Props, State> {
       <this.BottomControlsButton
         help='Blank'
         iconProps={{name: 'power'}}
-        onPress={() => this.props.history.push(`/species/_BLANK`)} // HACK No results via non-existent species
+        onPress={() => this.props.go('search', {path: `/species/_BLANK`})} // HACK No results via non-existent species
       />
       {/* Random recs */}
       <this.BottomControlsButton
         help='Random'
         // iconProps={{name: 'refresh-ccw'}}
         iconProps={{name: 'shuffle'}}
-        onPress={() => this.props.history.push(this.randomPath())}
+        onPress={() => this.props.go('search', {path: this.randomPath()})}
       />
       {/* Toggle metadata: left */}
       <this.BottomControlsButton

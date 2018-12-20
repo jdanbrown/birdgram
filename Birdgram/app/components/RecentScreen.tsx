@@ -28,6 +28,7 @@ interface Props {
 
 interface State {
   recents: Array<Recent>;
+  locationIndex: number;
 }
 
 interface Recent {
@@ -42,20 +43,8 @@ export class RecentScreen extends PureComponent<Props, State> {
 
   state = {
     recents: [],
+    locationIndex: this.props.histories.search.length - 1 - this.props.histories.search.index,
   };
-
-  addLocations = (locations: Array<Location>) => {
-    this.addRecents(locations.map(location => ({
-      location,
-      timestamp: new Date(),
-    })));
-  }
-
-  addRecents = (recents: Array<Recent>) => {
-    this.setState((state, props) => ({
-      recents: [...recents, ...state.recents].slice(0, this.props.maxHistory), // Most recent first (reverse of history.entries)
-    }));
-  }
 
   componentDidMount = async () => {
     log.info('componentDidMount');
@@ -69,9 +58,32 @@ export class RecentScreen extends PureComponent<Props, State> {
       .slice().reverse() // Reverse without mutating
     );
     this.props.histories.search.listen((location, action) => {
-      this.addLocations([location]);
+      // Add to history unless POP, which happens on history.go*, which happens from RecentScreen
+      //  - Actions reference
+      //    - PUSH:    history.push
+      //    - REPLACE: history.replace
+      //    - POP:     history.go*
+      if (action !== 'POP') {
+        this.addLocations([location]);
+      }
+      this.setState({
+        locationIndex: this.props.histories.search.length - 1 - this.props.histories.search.index,
+      });
     });
 
+  }
+
+  addLocations = (locations: Array<Location>) => {
+    this.addRecents(locations.map(location => ({
+      location,
+      timestamp: new Date(),
+    })));
+  }
+
+  addRecents = (recents: Array<Recent>) => {
+    this.setState((state, props) => ({
+      recents: [...recents, ...state.recents].slice(0, this.props.maxHistory), // Most recent first (reverse of history.entries)
+    }));
   }
 
   componentWillUnmount = async () => {
@@ -128,7 +140,9 @@ export class RecentScreen extends PureComponent<Props, State> {
             )}
             renderItem={({item: recent, index}) => (
               <RectButton
-                onPress={() => this.props.go('search', recent.location.pathname)}
+                onPress={() => {
+                  this.props.go('search', {index})
+                }}
               >
                 <View style={{
                   flex: 1,
@@ -137,7 +151,13 @@ export class RecentScreen extends PureComponent<Props, State> {
                   padding: 5,
                   borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
                 }}>
-                  <Text style={material.body1}>
+                  <Text style={{
+                    ...material.body1Object,
+                    // Highlight active location
+                    ...(index !== this.state.locationIndex ? {} : {
+                      color: iOSColors.blue,
+                    }),
+                  }}>
                     {matchSearchPathParams(searchPathParamsFromLocation(recent.location), {
                       none:    ()                    => 'Home (/)',
                       random:  ({filters, seed})     => `Random (${seed})`,

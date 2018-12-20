@@ -15,7 +15,8 @@ const log = new Log('router');
 // Utils
 //
 
-export type Go = (tab: TabName, path: string) => void;
+export type Go = (tab: TabName, to: GoTo) => void;
+export type GoTo = {path?: string, index?: number}; // TODO Make this a proper union type
 
 export function HistoryConsumer(props: {
   children: (props: {location: Location, history: MemoryHistory}) => ReactNode,

@@ -32,7 +32,7 @@ import { NativeSearch } from './native/Search';
 import { NativeSpectro } from './native/Spectro';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
 import {
-  createDefaultHistories, Go, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
+  createDefaultHistories, Go, GoTo, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
   saveHistories, TabHistories, TabName,
 } from './router';
 import { Settings, SettingsProxy, SettingsWrites } from './settings';
@@ -308,7 +308,7 @@ export default class App extends PureComponent<Props, State> {
                       const match = matchPath(path, '/:tab/:tabPath*');
                       if (match) {
                         const {tab, tabPath} = match.params as {tab: TabName, tabPath: string};
-                        this.go(tab, '/' + (tabPath || '')); // (Leading '/' for absolute i/o relative)
+                        this.go(tab, {path: '/' + (tabPath || '')}); // (Leading '/' for absolute i/o relative)
                       }
                     }}
                   />
@@ -462,17 +462,19 @@ export default class App extends PureComponent<Props, State> {
     });
   }
 
-  go = (tab: TabName, path: string) => {
-    log.info('go', {tab, path});
-    if (tab) {
+  go = (tab: TabName, to: GoTo) => {
+    log.info('go', {tab, to});
+    if (tab) { // [XXX Why allow falsy TabName?]
       // Show tab
       this.state.histories!.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)
-      if (path) {
-        // Push new location, unless it's the current location
-        const history = this.state.histories![tab];
-        if (path !== history.location.pathname) {
-          history.push(path);
-        }
+      const history = this.state.histories![tab];
+      if (to.path !== undefined) {
+        // Jump to most recent location, then push new location (else we lose items)
+        //  - QUESTION Perf: does jumping twice create an unnecessary render?
+        history.go((history.length - 1) - history.index);
+        history.push(to.path);
+      } else if (to.index !== undefined) {
+        history.go(history.length - 1 - to.index - history.index);
       }
     }
   }

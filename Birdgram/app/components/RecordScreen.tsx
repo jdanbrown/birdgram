@@ -671,52 +671,8 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
     return (
       <View style={styles.bottomControls}>
 
-        {this.props.showDebug && (
-          // Toggle showMoreDebug
-          <RectButton style={styles.bottomControlsButton} onPress={() => {
-            this.props.setStateProxy.setState((state, props) => ({showMoreDebug: !state.showMoreDebug}))
-          }}>
-            <Feather name='terminal' style={[styles.bottomControlsButtonIcon, {
-              color: this.props.showMoreDebug ? iOSColors.blue : iOSColors.black,
-            }]}/>
-          </RectButton>
-        )}
-
-        {!this.props.doneRecording ? (
-          // Toggle follow
-          <RectButton style={styles.bottomControlsButton} onPress={() => {
-            this.props.setStateProxy.setState((state, props) => ({follow: !state.follow}))
-          }}>
-            <Feather name='chevrons-down' style={[styles.bottomControlsButtonIcon, {
-              color: this.props.follow ? iOSColors.blue : iOSColors.black,
-            }]}/>
-          </RectButton>
-        ) : (
-          // Toggle denoised
-          <RectButton style={styles.bottomControlsButton} onPress={() => {
-            this.props.setStateProxy.setState((state, props) => ({denoised: !state.denoised}))
-          }}>
-            {/* 'eye' / 'zap' / 'sun' */}
-            <Feather name='eye' style={[styles.bottomControlsButtonIcon, {
-              color: this.props.denoised ? iOSColors.blue : iOSColors.black,
-            }]}/>
-          </RectButton>
-        )}
-
-        {/* Search */}
-        <RectButton style={styles.bottomControlsButton} onPress={() => {
-          if (this.props.doneRecording) {
-            this.props.go('search', `/rec/${this.props.doneRecording.sourceId}`);
-          }
-        }}>
-          <Feather style={[styles.bottomControlsButtonIcon, {
-            ...(this.props.doneRecording ? {} : {color: iOSColors.gray}),
-          }]}
-            name='search'
-          />
-        </RectButton>
-
         {/* Record/stop */}
+        {/* - On left side for left-handed phone use [TODO Add setting to toggle left/right] */}
         {match(this.props.recordingState,
           [RecordingState.Stopped, () => (
             <RectButton style={styles.bottomControlsButton} onPress={this.props.startRecording}>
@@ -737,6 +693,50 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
               <ActivityIndicator size='small' />
             </RectButton>
           )],
+        )}
+
+        {/* Search */}
+        <RectButton style={styles.bottomControlsButton} onPress={() => {
+          if (this.props.doneRecording) {
+            this.props.go('search', {path: `/rec/${this.props.doneRecording.sourceId}`});
+          }
+        }}>
+          <Feather style={[styles.bottomControlsButtonIcon, {
+            ...(this.props.doneRecording ? {} : {color: iOSColors.gray}),
+          }]}
+            name='search'
+          />
+        </RectButton>
+
+        {this.props.showDebug && (
+          // Toggle showMoreDebug
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
+            this.props.setStateProxy.setState((state, props) => ({showMoreDebug: !state.showMoreDebug}))
+          }}>
+            <Feather name='terminal' style={[styles.bottomControlsButtonIcon, {
+              color: this.props.showMoreDebug ? iOSColors.blue : iOSColors.black,
+            }]}/>
+          </RectButton>
+        )}
+        {!this.props.doneRecording ? (
+          // Toggle follow
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
+            this.props.setStateProxy.setState((state, props) => ({follow: !state.follow}))
+          }}>
+            <Feather name='chevrons-down' style={[styles.bottomControlsButtonIcon, {
+              color: this.props.follow ? iOSColors.blue : iOSColors.black,
+            }]}/>
+          </RectButton>
+        ) : (
+          // Toggle denoised
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
+            this.props.setStateProxy.setState((state, props) => ({denoised: !state.denoised}))
+          }}>
+            {/* 'eye' / 'zap' / 'sun' */}
+            <Feather name='eye' style={[styles.bottomControlsButtonIcon, {
+              color: this.props.denoised ? iOSColors.blue : iOSColors.black,
+            }]}/>
+          </RectButton>
         )}
 
       </View>
