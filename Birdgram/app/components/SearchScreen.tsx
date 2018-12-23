@@ -85,7 +85,7 @@ function matchQuery<X>(query: Query, cases: {
   }
 }
 
-// TODO(add_filters_to_location)
+// TODO(put_all_query_state_in_location)
 export interface Filters {
   quality?: Array<Quality>;
   placeId?: string;
@@ -134,6 +134,9 @@ interface Props {
   // SearchScreen
   spectroBase:             Dim<number>;
   spectroScaleClamp:       Clamp<number>;
+  default_n_recs:          number;
+  default_n_sp:            number;
+  default_n_per_sp:        number;
   searchRecsMaxDurationS:  number;
 }
 
@@ -144,11 +147,14 @@ interface State {
   showHelp: boolean;
   totalRecs?: number;
   f_preds_cols?: Array<string>;
+  refreshQuery: boolean; // TODO(put_all_query_state_in_location)
   // TODO Persist filters with settings
   //  - Top-level fields instead of nested object so we can use state merging when updating them in isolation
   filterQueryText?: string;
   filterQuality: Array<Quality>;
-  filterLimit: number;
+  n_recs: number;   // For non-rec queries
+  n_sp: number;     // For rec queries
+  n_per_sp: number; // For rec queries
   excludeSpecies: Array<string>;
   excludeRecIds: Array<string>;
   recs: 'loading' | Array<Rec>;
@@ -163,8 +169,7 @@ interface State {
     // progressTime?: number,
   };
   playingCurrentTime?: number;
-  // Sync from/to Settings (1/3)
-  _spectroScale: number;
+  _spectroScale: number; // Sync from/to Settings (1/3)
 };
 
 export class SearchScreen extends PureComponent<Props, State> {
@@ -172,6 +177,9 @@ export class SearchScreen extends PureComponent<Props, State> {
   static defaultProps = {
     spectroBase:            {height: 20, width: Dimensions.get('window').width},
     spectroScaleClamp:      {min: 1, max: 8},
+    default_n_recs:         30, // For non-rec queries
+    default_n_sp:           10, // For rec queries
+    default_n_per_sp:       3,  // For rec queries
     searchRecsMaxDurationS: 10.031,  // HACK Query max(search_recs.duration_s) from db on startup
   };
 
@@ -181,17 +189,19 @@ export class SearchScreen extends PureComponent<Props, State> {
   };
 
   state: State = {
-    scrollViewKey: '',
-    scrollViewState: this._scrollViewState,
+    scrollViewKey:    '',
+    scrollViewState:  this._scrollViewState,
     showGenericModal: null,
-    showHelp: false,
-    filterQuality: ['A', 'B'],
-    filterLimit: 30, // TODO How big vs. fast? (-> Settings with sane default)
-    excludeSpecies: [],
-    excludeRecIds: [],
-    recs: 'loading',
-    // Sync from/to Settings (2/3)
-    _spectroScale: this.props.spectroScale,
+    showHelp:         false,
+    refreshQuery:     false,
+    filterQuality:    ['A', 'B'],
+    n_recs:           this.props.default_n_recs,
+    n_sp:             this.props.default_n_sp,
+    n_per_sp:         this.props.default_n_per_sp,
+    excludeSpecies:   [],
+    excludeRecIds:    [],
+    recs:             'loading',
+    _spectroScale:    this.props.spectroScale, // Sync from/to Settings (2/3)
   };
 
   // Getters for prevProps
@@ -344,8 +354,11 @@ export class SearchScreen extends PureComponent<Props, State> {
       log.info('componentDidUpdate: Reset view state');
       this.setState({
         filterQueryText: undefined,
-        excludeSpecies: [],
-        excludeRecIds: [],
+        n_recs:          this.props.default_n_recs,
+        n_sp:            this.props.default_n_sp,
+        n_per_sp:        this.props.default_n_per_sp,
+        excludeSpecies:  [],
+        excludeRecIds:   [],
       });
     }
 
@@ -411,6 +424,20 @@ export class SearchScreen extends PureComponent<Props, State> {
     };
   }
 
+  edit_n_sp = (sign: number) => {
+    this.setState((state, props) => ({
+      n_sp:         state.n_sp + sign * this.props.default_n_sp,
+      refreshQuery: true, // XXX(put_all_query_state_in_location)
+    }));
+  }
+
+  edit_n_per_sp = (sign: number) => {
+    this.setState((state, props) => ({
+      n_per_sp:     state.n_per_sp + sign * 1,
+      refreshQuery: true, // XXX(put_all_query_state_in_location)
+    }));
+  }
+
   get query(): Query { return this._query(); }
   _query = (props?: Props): Query => {
     return matchSearchPathParams<Query>(this._pathParams(props), {
@@ -433,21 +460,29 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   loadRecsFromQuery = async () => {
     if (
-      // Noop if we don't know f_preds_cols yet (assume we'll be called again)
-      this.state.f_preds_cols &&
-      // Noop if this.query is already shown
-      !deepEqual(this.query, this.state.recsQueryShown) &&
-      // Noop if this.query is already in progress
-      !deepEqual(this.query, this.state.recsQueryInProgress) &&
-      // Noop if this.query isn't valid
-      matchQuery(this.query, {
-        none:    ()                    => true,
-        random:  ({filters, seed})     => true,
-        species: ({filters, species})  => species  !== '',
-        rec:     ({filters, sourceId}) => sourceId !== '',
-      })
-      // TODO(refresh_on_place_change)
+      (
+        // Noop if we don't know f_preds_cols yet (assume we'll be called again)
+        !this.state.f_preds_cols ||
+        // Noop if this.query is already shown
+        deepEqual(this.query, this.state.recsQueryShown) ||
+        // Noop if this.query is already in progress
+        deepEqual(this.query, this.state.recsQueryInProgress) ||
+        // Noop if this.query isn't valid
+        matchQuery(this.query, {
+          none:    ()                    => false,
+          random:  ({filters, seed})     => false,
+          species: ({filters, species})  => species  === '',
+          rec:     ({filters, sourceId}) => sourceId === '',
+        })
+      ) && (
+        // But don't noop if filters/limits have changed
+        //  - XXX(put_all_query_state_in_location)
+        !this.state.refreshQuery
+      )
+      // TODO(put_all_query_state_in_location): Refresh on place change
     ) {
+      log.info('loadRecsFromQuery: Skipping');
+    } else {
       log.info('loadRecsFromQuery', () => pretty({query: this.query}));
 
       // Set loading state
@@ -456,6 +491,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       this.setState({
         recs: 'loading',
         recsQueryInProgress: this.query,
+        refreshQuery: false,
       });
       await this.releaseSounds(); // (Safe to do after clearing state.recs, since it uses this.soundsCache)
 
@@ -473,7 +509,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       };
 
       // Global filters
-      //  - TODO(add_filters_to_location)
+      //  - TODO(put_all_query_state_in_location)
       const qualityFilter = (table: string) => (
         sqlf`and ${SQL.raw(table)}.quality in (${this.state.filterQuality})`
       );
@@ -505,7 +541,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 ${SQL.raw(qualityFilter('S'))}
               order by
                 random()
-              limit ${this.state.filterLimit}
+              limit ${this.state.n_recs}
             )
             order by
               taxon_order_num asc,
@@ -531,7 +567,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 ${SQL.raw(qualityFilter('S'))}
               order by
                 source_id desc
-              limit ${this.state.filterLimit}
+              limit ${this.state.n_recs}
             )
             order by
               taxon_order_num asc,
@@ -556,10 +592,10 @@ export class SearchScreen extends PureComponent<Props, State> {
           //      - (... where species=? order by d_pc limit n_per_sp) union all (...) ...
 
           // Params
-          const n_per_sp     = 3; // TODO(nav_rec_id) -> param
-          const n_recs       = this.state.filterLimit;
           const f_preds_cols = this.state.f_preds_cols || [];
-          const limit_top_sp = n_recs / n_per_sp + 1; // Close enough
+          const n_sp         = this.state.n_sp;
+          const n_per_sp     = this.state.n_per_sp;
+          const n_recs       = n_sp * n_per_sp + 1;
 
           // Load query_rec from db
           const query_rec = await this.loadRec(sourceId);
@@ -603,7 +639,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             .map(([species, slp]) => ({species, slp}))
             .filter(({species}) => includeSpecies(species))
             .sortBy(({slp}) => slp)
-            .slice(0, limit_top_sp)
+            .slice(0, n_sp + 1) // FIXME +1 else we get n_sp-1 species -- why?
             .value()
           );
 
@@ -1533,9 +1569,6 @@ export class SearchScreen extends PureComponent<Props, State> {
     </BaseButton>
   );
 
-  dismissGenericModal = () => {
-  }
-
   GenericModalTitle = (props: {
     title: string,
     style?: TextStyle,
@@ -1744,42 +1777,44 @@ export class SearchScreen extends PureComponent<Props, State> {
 
             // TODO Add footer with "Load more" button
             //  - Mimic SectionList.ListFooterComponent [https://facebook.github.io/react-native/docs/sectionlist#listfootercomponent]
-            //  - Approach: add a final item to the recs list
 
-            // Mimic a FlatList
-            children={
+          >
+            {/* Mimic a FlatList */}
 
-              // (Unused, keeping for reference)
-              // _.flatten(this.sectionsForRecs(this.state.recs).map(({
-              //   title,
-              //   data: recs,
-              //   species,
-              //   species_taxon_order,
-              //   species_com_name,
-              //   species_sci_name,
-              //   recs_for_sp,
-              // }, sectionIndex) => [
-              //
-              //   Species header
-              //   this.props.showMetadataBelow && (
-              //     <View
-              //       key={`section-${sectionIndex}-${title}`}
-              //       style={styles.sectionSpecies}
-              //     >
-              //       <Text numberOfLines={1} style={styles.sectionSpeciesText}>
-              //         {species_com_name} (<Text style={{fontStyle: 'italic'}}>{species_sci_name}</Text>)
-              //       </Text>
-              //       {this.props.showDebug && (
-              //         // FIXME Off screen unless zoom=1
-              //         <this.DebugText numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}]}>
-              //           ({recs_for_sp} recs)
-              //         </this.DebugText>
-              //       )}
-              //     </View>
-              //   ),
+            {/*
+            // (Unused, keeping for reference)
+            // _.flatten(this.sectionsForRecs(this.state.recs).map(({
+            //   title,
+            //   data: recs,
+            //   species,
+            //   species_taxon_order,
+            //   species_com_name,
+            //   species_sci_name,
+            //   recs_for_sp,
+            // }, sectionIndex) => [
+            //
+            //   Species header
+            //   this.props.showMetadataBelow && (
+            //     <View
+            //       key={`section-${sectionIndex}-${title}`}
+            //       style={styles.sectionSpecies}
+            //     >
+            //       <Text numberOfLines={1} style={styles.sectionSpeciesText}>
+            //         {species_com_name} (<Text style={{fontStyle: 'italic'}}>{species_sci_name}</Text>)
+            //       </Text>
+            //       {this.props.showDebug && (
+            //         // FIXME Off screen unless zoom=1
+            //         <this.DebugText numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}]}>
+            //           ({recs_for_sp} recs)
+            //         </this.DebugText>
+            //       )}
+            //     </View>
+            //   ),
+            */}
 
-              // Rec rows
-              this.recsOrEmpty.map((rec, recIndex) => [
+            {/* Rec rows */}
+            <View style={{flex: 1}}>
+              {this.recsOrEmpty.map((rec, recIndex) => [
 
                 // Rec row (with editing buttons)
                 <Animated.View
@@ -1948,11 +1983,46 @@ export class SearchScreen extends PureComponent<Props, State> {
 
                 </Animated.View>
 
-              ])
+              ])}
+            </View>
 
-            }
+            {/* Footer */}
+            <View style={{
+              ...Styles.center,
+              width: Dimensions.get('window').width,
+              paddingVertical: 5,
+              flexDirection: 'row',
+            }}>
+              {/* Add more results */}
+              <BorderlessButton style={{marginHorizontal: 5}} onPress={() => this.edit_n_sp(+1)}>
+                <Feather
+                  style={styles.bottomControlsButtonIcon}
+                  name='plus'
+                />
+              </BorderlessButton>
+              <BorderlessButton style={{marginHorizontal: 5}} onPress={() => this.edit_n_sp(-1)}>
+                <Feather
+                  style={styles.bottomControlsButtonIcon}
+                  name='minus'
+                />
+              </BorderlessButton>
+              {/* Add more results per sp */}
+              {/* - TODO Move to per sp (use rec long press) */}
+              <BorderlessButton style={{marginHorizontal: 5}} onPress={() => this.edit_n_per_sp(+1)}>
+                <Feather
+                  style={styles.bottomControlsButtonIcon}
+                  name='plus-circle'
+                />
+              </BorderlessButton>
+              <BorderlessButton style={{marginHorizontal: 5}} onPress={() => this.edit_n_per_sp(-1)}>
+                <Feather
+                  style={styles.bottomControlsButtonIcon}
+                  name='minus-circle'
+                />
+              </BorderlessButton>
+            </View>
 
-          />
+          </ScrollView>
         )}
 
         {/* Debug info */}
