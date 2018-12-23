@@ -39,6 +39,7 @@ import { config } from '../config';
 import {
   ModelsSearch, matchSearchPathParams, matchSourceId, Place, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
   searchPathParamsFromLocation, SearchRecs, ServerConfig, showSourceId, SourceId, Species, SpeciesMetadata, UserRec,
+  XCRec,
 } from '../datatypes';
 import { Ebird } from '../ebird';
 import { Log, puts, rich, tap } from '../log';
@@ -133,6 +134,7 @@ interface Props {
   // SearchScreen
   spectroBase:             Dim<number>;
   spectroScaleClamp:       Clamp<number>;
+  searchRecsMaxDurationS:  number;
 }
 
 interface State {
@@ -168,8 +170,9 @@ interface State {
 export class SearchScreen extends PureComponent<Props, State> {
 
   static defaultProps = {
-    spectroBase:       {height: 20, width: Dimensions.get('window').width},
-    spectroScaleClamp: {min: 1, max: 8},
+    spectroBase:            {height: 20, width: Dimensions.get('window').width},
+    spectroScaleClamp:      {min: 1, max: 8},
+    searchRecsMaxDurationS: 10.031,  // HACK Query max(search_recs.duration_s) from db on startup
   };
 
   // Else we have to do too many setState's, which makes animations jump (e.g. ScrollView momentum)
@@ -202,6 +205,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   // Getters for state
   get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
   get recsOrEmpty(): Array<Rec> { return this.state.recs === 'loading' ? [] : this.state.recs; }
+  get query_rec(): null | Rec { return this.recsOrEmpty[0] || null; }
 
   // Private attrs
   db?: SQLiteDatabase;
@@ -368,10 +372,10 @@ export class SearchScreen extends PureComponent<Props, State> {
     return `/random/${seed}`;
   }
 
-  get spectroDim(): Dim<number> {
+  spectroDim = (duration_s: number): Dim<number> => {
     return {
       height: this.props.spectroBase.height * this.state._spectroScale,
-      width:  this.scrollViewContentWidths.image,
+      width:  this.scrollViewContentWidths.image / this.props.searchRecsMaxDurationS * duration_s,
     };
   }
 
@@ -381,7 +385,14 @@ export class SearchScreen extends PureComponent<Props, State> {
   //  - I also tried using onLayout to automatically get subcomponent widths from the DOM instead of manually
   //    maintaining them all here, but that got gnarly and I bailed (bad onLayout/setState interactions causing infinite
   //    update loops, probably because I'm missing conditions in lifecycle methods like componentDidUpdate)
-  get scrollViewContentWidth() { return _.sum(_.values(this.scrollViewContentWidths)); }
+  get scrollViewContentWidth() {
+    // Grow width to fit query_rec (if longer than search_recs)
+    const recsMaxDurationS = Math.max(
+      this.props.searchRecsMaxDurationS,
+      matchNull(this.query_rec, {null: () => -Infinity, x: x => x.duration_s}),
+    );
+    return _.sum(_.values(this.scrollViewContentWidths)) / this.props.searchRecsMaxDurationS * recsMaxDurationS;
+  }
   get scrollViewContentWidths() {
     const sidewaysText = sidewaysTextWidth;
     const debugInfo    = !(this.props.showDebug && this.props.showMetadataLeft) ? 0 : 80; // Wide enough for 'n_recs: 123'
@@ -665,7 +676,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     log.info('loadRec', {sourceId});
     return await matchSourceId(sourceId, {
       xc: async ({xc_id}) => {
-        return await querySql<Rec>(this.db!, sqlf`
+        return await querySql<XCRec>(this.db!, sqlf`
           select *
           from search_recs
           where source_id = ${sourceId}
@@ -684,7 +695,8 @@ export class SearchScreen extends PureComponent<Props, State> {
           throw `loadRec: Unexpected null f_preds (audio < nperseg), for sourceId[${sourceId}]`;
         } else {
           let userRec: UserRec = {
-            source_id: sourceId,
+            source_id:  sourceId,
+            duration_s: NaN, // TODO(stretch_user_rec)
             f_preds,
             // Mock the xc fields
             //  - TODO Clean up junk fields after splitting subtypes XCRec, UserRec <: Rec
@@ -704,6 +716,9 @@ export class SearchScreen extends PureComponent<Props, State> {
             license_type:        '',
             remarks:             '',
           };
+          // HACK Read duration_s from audio file
+          //  - (Probably simpler for NativeSpectro to return this from .stop)
+          userRec.duration_s = (await this.getOrAllocateSoundAsync(userRec)).getDuration();
           return userRec
         }
       },
@@ -863,21 +878,21 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   spectroTimeFromX = (sound: Sound, x: number, absoluteX: number): number => {
     const {contentOffset} = this._scrollViewState;
-    const {width} = this.spectroDim;
+    const duration_s = sound.getDuration();
+    const {width} = this.spectroDim(duration_s);
     const {audio_s} = this.props.serverConfig.api.recs.search_recs.params;
-    const duration = sound.getDuration();
     const time = x / width * audio_s;
-    // log.debug('spectroTimeFromX', () => pretty({time, x, absoluteX, contentOffset, width, audio_s, duration}));
+    // log.debug('spectroTimeFromX', () => pretty({time, x, absoluteX, contentOffset, width, audio_s, duration_s}));
     return time;
   }
 
   spectroXFromTime = (sound: Sound, time: number): number => {
     const {contentOffset} = this._scrollViewState;
-    const {width} = this.spectroDim;
+    const duration_s = sound.getDuration();
+    const {width} = this.spectroDim(duration_s);
     const {audio_s} = this.props.serverConfig.api.recs.search_recs.params;
-    const duration = sound.getDuration();
     const x = time / audio_s * width;
-    // log.debug('spectroXFromTime', () => pretty({x, time, contentOffset, width, audio_s, duration}));
+    // log.debug('spectroXFromTime', () => pretty({x, time, contentOffset, width, audio_s, duration_s}));
     return x;
   }
 
@@ -1038,8 +1053,8 @@ export class SearchScreen extends PureComponent<Props, State> {
         {/* Spectro */}
         <Animated.Image
           style={{
-            // ...this.spectroDim, // XXX Bad(info_modal)
-            height: this.spectroDim.height,
+            // ...this.spectroDim(rec.duration_s), // XXX Bad(info_modal)
+            height: this.spectroDim(rec.duration_s).height,
             width: '100%',
           }}
           foo
@@ -1775,7 +1790,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                     // backgroundColor: recIndex % 2 == 0 ? iOSColors.white : iOSColors.lightGray,
                     // Compact controls/labels when zoom makes image smaller than controls/labels
                     ...(this.props.showMetadataBelow ? {} : {
-                      height: this.spectroDim.height,
+                      height: this.spectroDim(rec.duration_s).height,
                     }),
                   }}
                 >
@@ -1797,7 +1812,8 @@ export class SearchScreen extends PureComponent<Props, State> {
                         style={{
                           flexDirection: 'row',
                           ...(this.props.showMetadataBelow ? {} : {
-                            height: this.spectroDim.height, // Compact controls/labels when zoom makes image smaller than controls/labels
+                            // Compact controls/labels when zoom makes image smaller than controls/labels
+                            height: this.spectroDim(rec.duration_s).height,
                           }),
                         }}
                       >
@@ -1850,7 +1866,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
                             {/* Image */}
                             <Animated.Image
-                              style={this.spectroDim}
+                              style={this.spectroDim(rec.duration_s)}
                               resizeMode='stretch'
                               source={{uri: Rec.spectroPath(rec)}}
                             />

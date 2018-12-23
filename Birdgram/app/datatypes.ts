@@ -107,6 +107,7 @@ export interface Rec {
   // bubo
   source_id: SourceId; // More appropriate than id for mobile (see python util.rec_to_source_id for details)
   // id: string;       // Hide so that we don't accidentally use it (we'll get type errors)
+  duration_s: number;
 
   // xc
   xc_id: number;
