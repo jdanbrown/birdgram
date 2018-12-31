@@ -7,7 +7,14 @@ import { Filters } from './components/SearchScreen';
 import { BarchartProps } from './ebird';
 import { debug_print } from './log';
 import { Places } from './places';
-import { match, matchNull, matchUndefined, Omit, parseUrl } from './utils';
+import { match, matchNull, matchUndefined, Omit, parseUrl, safePath } from './utils';
+
+import { Location } from 'history';
+import { matchPath } from 'react-router-native';
+import queryString from 'query-string';
+
+import { log, rich } from './log';
+import { pretty } from './utils';
 
 //
 // Species
@@ -86,6 +93,15 @@ export function matchSourceId<X>(sourceId: SourceId, cases: {
     ['xc',   () => cases.xc   ({clip, xc_id: parseInt(pathname)})],
     ['user', () => cases.user ({clip, name: pathname})],
   );
+}
+
+export function matchUserSourceId<X>(sourceId: SourceId,
+  f: (x: {clip?: Clip, name: string}) => X,
+): X {
+  return matchSourceId(sourceId, {
+    xc:   () => { throw `Expected user sourceId, got: ${sourceId}`; },
+    user: x  => f(x),
+  });
 }
 
 // Human-friendly display for a sourceId, e.g.
@@ -176,13 +192,13 @@ export interface Rec_f_preds {
 export const Rec = {
 
   spectroPath: (rec: Rec): string => matchRec(rec, {
-    xc:   rec             => SearchRecs.assetPath('spectro', rec.species, rec.xc_id, 'png'),
-    user: (rec, sourceId) => UserRec.spectroPath(sourceId.name),
+    xc:   rec => SearchRecs.assetPath('spectro', rec.species, rec.xc_id, 'png'),
+    user: rec => UserRec.spectroPath(rec.source_id),
   }),
 
   audioPath: (rec: Rec): string => matchRec(rec, {
-    xc:   rec             => SearchRecs.assetPath('audio', rec.species, rec.xc_id, 'mp4'),
-    user: (rec, sourceId) => UserRec.audioPath(sourceId.name),
+    xc:   rec => SearchRecs.assetPath('audio', rec.species, rec.xc_id, 'mp4'),
+    user: rec => UserRec.audioPath(rec.source_id),
   }),
 
   hasCoords: (rec: Rec): boolean => {
@@ -228,46 +244,80 @@ export const Rec = {
 
 export const UserRec = {
 
-  audioPath: (name: string): string => {
-    return `${fs.dirs.DocumentDir}/user-recs-v0/${name}`;
+  audioPath: (sourceId: string): string => {
+    return matchUserSourceId(sourceId, ({name, clip}) => ( // TODO clip [Handle upstream?]
+      `${fs.dirs.DocumentDir}/user-recs-v0/${name}`
+    ));
   },
 
-  spectroPath: (name: string): string => {
-    return `${fs.dirs.DocumentDir}/user-recs-v0/${name}.spectros/denoise=true.png`;
+  spectroPath: (
+    sourceId: string,
+    denoise: boolean = true, // Like Bubo/py/model.swift:Features.denoise=true
+  ): string => {
+    return matchUserSourceId(sourceId, ({name, clip}) => ( // TODO clip [Handle upstream?]
+      // HACK Duped in EditRecording
+      `${fs.dirs.DocumentDir}/spectros-v0/${safePath(sourceId)}.spectros/denoise=${denoise}.png`
+    ));
   },
 
 };
 
 //
+// RecordPathParams
+//
+
+export type RecordPathParams =
+  | RecordPathParamsRoot
+  | RecordPathParamsEdit;
+export type RecordPathParamsRoot = { kind: 'root' };
+export type RecordPathParamsEdit = { kind: 'edit', sourceId: string };
+
+export function matchRecordPathParams<X>(recordPathParams: RecordPathParams, cases: {
+  root: (recordPathParams: RecordPathParamsRoot) => X,
+  edit: (recordPathParams: RecordPathParamsEdit) => X,
+}): X {
+  switch (recordPathParams.kind) {
+    case 'root': return cases.root(recordPathParams);
+    case 'edit': return cases.edit(recordPathParams);
+  }
+}
+
+export function recordPathParamsFromLocation(location: Location): RecordPathParams {
+  const tryParseInt = (_default: number, s: string): number => { try { return parseInt(s); } catch { return _default; } };
+  const {pathname: path, search} = location;
+  const queries = queryString.parse(search);
+  let match;
+  match = matchPath<{}>(path, {path: '/', exact: true});
+  if (match) return {kind: 'root'};
+  match = matchPath<{sourceId: string}>(path, {path: '/edit/:sourceId'});
+  if (match) return {kind: 'edit', sourceId: decodeURIComponent(match.params.sourceId)};
+  log.warn(`recordPathParamsFromLocation: Unknown location[${location}], returning {kind: root}`);
+  return {kind: 'root'};
+}
+
+//
 // SearchPathParams
 //
 
-import { Location } from 'history';
-import { matchPath } from 'react-router-native';
-import queryString from 'query-string';
-
-import { log, rich } from './log';
-import { pretty } from './utils';
-
 // QUESTION Unify with Query? 1-1 so far
 export type SearchPathParams =
-  | SearchPathParamsNone
+  | SearchPathParamsRoot
   | SearchPathParamsRandom
   | SearchPathParamsSpecies
   | SearchPathParamsRec;
-export type SearchPathParamsNone    = { kind: 'none' };
+export type SearchPathParamsRoot    = { kind: 'root' };
 export type SearchPathParamsRandom  = { kind: 'random',  filters: Filters, seed: number };
 export type SearchPathParamsSpecies = { kind: 'species', filters: Filters, species: string };
 export type SearchPathParamsRec     = { kind: 'rec',     filters: Filters, sourceId: SourceId };
 
 export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cases: {
-  none:    (searchPathParams: SearchPathParamsNone)    => X,
+  root:    (searchPathParams: SearchPathParamsRoot)    => X,
   random:  (searchPathParams: SearchPathParamsRandom)  => X,
   species: (searchPathParams: SearchPathParamsSpecies) => X,
   rec:     (searchPathParams: SearchPathParamsRec)     => X,
 }): X {
   switch (searchPathParams.kind) {
-    case 'none':    return cases.none(searchPathParams);
+    case 'root':    return cases.root(searchPathParams);
     case 'random':  return cases.random(searchPathParams);
     case 'species': return cases.species(searchPathParams);
     case 'rec':     return cases.rec(searchPathParams);
@@ -279,18 +329,18 @@ export function searchPathParamsFromLocation(location: Location): SearchPathPara
   const tryParseInt = (_default: number, s: string): number => { try { return parseInt(s); } catch { return _default; } };
   const {pathname: path, search} = location;
   const queries = queryString.parse(search);
-  debug_print('searchPathParamsFromLocation', {location, queries});
+  // debug_print('searchPathParamsFromLocation', {location, queries}); // XXX Debug
   let match;
   match = matchPath<{}>(path, {path: '/', exact: true});
-  if (match) return {kind: 'none'};
+  if (match) return {kind: 'root'};
   match = matchPath<{seed: string}>(path, {path: '/random/:seed'});
   if (match) return {kind: 'random',  filters: {}, seed: tryParseInt(0, decodeURIComponent(match.params.seed))};
   match = matchPath<{species: string}>(path, {path: '/species/:species'});
   if (match) return {kind: 'species', filters: {}, species: decodeURIComponent(match.params.species)};
   match = matchPath<{sourceId: SourceId}>(path, {path: '/rec/:sourceId*'});
   if (match) return {kind: 'rec',     filters: {}, sourceId: decodeURIComponent(match.params.sourceId)};
-  log.warn(`searchPathParamsFromLocation: Unknown location[${location}], returning {kind: none}`);
-  return {kind: 'none'};
+  log.warn(`searchPathParamsFromLocation: Unknown location[${location}], returning {kind: root}`);
+  return {kind: 'root'};
 }
 
 //
@@ -318,10 +368,9 @@ export const SearchRecs = {
   metadataSpeciesPath: 'search_recs/metadata/species.json',
   dbPath:              'search_recs/search_recs.sqlite3', // TODO Test asset paths on android (see notes in README)
 
-  // TODO(asset_main_bundle): Why implicitly relative to fs.dirs.MainBundleDir?
   // TODO After verifying that asset dirs are preserved on android, simplify the basenames back to `${xc_id}.${format}`
   assetPath: (kind: string, species: string, xc_id: number, format: string): string => (
-    `search_recs/${kind}/${species}/${kind}-${species}-${xc_id}.${format}`
+    `${fs.dirs.MainBundleDir}/search_recs/${kind}/${species}/${kind}-${species}-${xc_id}.${format}`
   ),
 
 };

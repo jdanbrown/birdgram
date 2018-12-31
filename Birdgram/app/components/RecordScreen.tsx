@@ -3,6 +3,7 @@ import concatTypedArray from 'concat-typed-array';
 import { color, RGBColor } from 'd3-color';
 import { interpolateMagma } from 'd3-scale-chromatic';
 // import Jimp from 'jimp'; // XXX Unused
+import { Location } from 'history';
 import Humanize from 'humanize-plus';
 import _ from 'lodash';
 import React, { Component, PureComponent, RefObject } from 'react';
@@ -27,8 +28,11 @@ const {fs, base64} = RNFB;
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
 import * as Colors from '../colors';
-import { F_Preds, ModelsSearch, SourceId } from '../datatypes';
-import { debug_print, Log, puts, rich } from '../log';
+import {
+  F_Preds, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, SourceId,
+} from '../datatypes';
+import { DB } from '../db';
+import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from '../log';
 import { NativeSearch } from '../native/Search';
 import { ImageFile, NativeSpectro, NativeSpectroStats } from '../native/Spectro';
 import { Go } from '../router';
@@ -37,9 +41,9 @@ import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
-  basename, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean, ExpWeightedRate, finallyAsync, global, into, json,
-  match, matchNil, matchNull, matchUndefined, pretty, round, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync,
-  yaml, yamlPretty,
+  basename, catchTry, catchTryAsync, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean, ExpWeightedRate,
+  finallyAsync, global, into, json, match, matchNil, matchNull, matchUndefined, pretty, round, safePath,
+  shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty,
 } from '../utils';
 
 const log = new Log('RecordScreen');
@@ -60,18 +64,20 @@ global.concatSamples = concatSamples; // XXX Debug
 export interface Props {
   // App globals
   modelsSearch: ModelsSearch;
+  location: Location;
   go: Go;
   // Settings
   settings: SettingsWrites;
+  db: DB;
   showDebug: boolean;
   // RecordScreen
   f_bins: number;
-  refreshRate: number;
-  doneSpectroChunkWidth: number;
-  spectroImageLimit: number;
   sampleRate: number;
   channels: number;
   bitsPerSample: number;
+  refreshRate: number;
+  doneSpectroChunkWidth: number;
+  spectroChunkLimit: number;
 }
 
 interface State {
@@ -80,35 +86,31 @@ interface State {
   spectroScale: number;
   follow: boolean;
   denoised: boolean;
-  // In-progress recording
-  spectroImages: Array<SpectroImage>;
-  nSpectroImages: number; // Separate from spectroImages b/c we truncate the latter
+  // Recording (in progress)
+  spectroChunks: Array<SpectroChunk>;
+  nSpectroChunks: number; // Separate from spectroChunks b/c we truncate the latter
   nSamples: number;
   nSpectroWidth: number;
-  // Done recording
-  doneRecording: null | DoneRecording;
+  // Editing (after done recording)
+  editRecording: null | EditRecording;
 }
 
-interface DoneRecording {
-  audioPath: string;
-  spectros: DoneRecordingSpectros;
+interface EditRecording {
   sourceId: string;
+  audioPath: string;
+  spectros: EditRecordingSpectros;
 }
 
-type DoneRecordingSpectros = Map<Denoise, DoneRecordingSpectro>;
+type EditRecordingSpectros = Map<Denoise, EditRecordingSpectro>;
 type Denoise = boolean;
-interface DoneRecordingSpectro {
+interface EditRecordingSpectro {
   single: ImageFile;
   chunked: Array<ImageFile>;
 }
 
-enum RecordingState {
-  Stopped = 'Stopped',
-  Recording = 'Recording',
-  Saving = 'Saving',
-}
+type RecordingState = 'loading' | 'stopped' | 'recording' | 'saving';
 
-interface SpectroImage {
+interface SpectroChunk {
   source: {uri?: string};
   width: number;
   height: number;
@@ -119,26 +121,21 @@ type DebugTimes = Array<{k: string, v: number}>; // Array<{k,v}> because swift D
 
 export class RecordScreen extends Component<Props, State> {
 
-  // Many of these are hardcoded to match Bubo/Models.swift:Features (which is in turn hardcoded to match py Features config)
   static defaultProps: Partial<Props> = {
-    f_bins:        80, // NOTE Recording shows higher res spectros (f_bins=80) than model actually uses (f_bins=40)
-    sampleRate:    22050,
-    channels:      1,
-    bitsPerSample: 16,
   };
 
   state: State = {
     showMoreDebug: false,
-    recordingState: RecordingState.Stopped,
+    recordingState: 'stopped',
     // TODO Expose controls like SearchScreen [think through RecordScreen.state vs. Settings vs. SearchScreen.state]
     spectroScale: this.props.f_bins / 80,
     follow: true,
     denoised: true,
-    spectroImages: [],
-    nSpectroImages: 0,
+    spectroChunks: [],
+    nSpectroChunks: 0,
     nSamples: 0,
     nSpectroWidth: 0,
-    doneRecording: null,
+    editRecording: null,
   };
 
   // Getters for state
@@ -155,13 +152,13 @@ export class RecordScreen extends Component<Props, State> {
   //  - Store as internal state i/o react state to avoid unnecessary updates (~2x)
   _nativeStats: null | NativeSpectroStats = null
   get lag(): null | number {
-    return !this._nativeStats ? null : this._nativeStats.nPathsSent - this.state.nSpectroImages;
+    return !this._nativeStats ? null : this._nativeStats.nPathsSent - this.state.nSpectroChunks;
   }
   updateNativeStats = () => {
     // We're updating internal state, so prevent caller from trying to block on our completion
     (async () => {
       // Condition on Recording to avoid spurious failures before NativeSpectro.create()
-      if (this.state.recordingState === RecordingState.Recording) {
+      if (this.state.recordingState === 'recording') {
         this._nativeStats = await tryElseAsync<null | NativeSpectroStats>(null, NativeSpectro.stats);
       }
     })();
@@ -170,7 +167,7 @@ export class RecordScreen extends Component<Props, State> {
   // Measure rate of render() vs. nominal refreshRate (for showDebug)
   _renderRate = new ExpWeightedRate(.1);
 
-  componentDidMount = () => {
+  componentDidMount = async () => {
     log.info('componentDidMount');
     global.RecordScreen = this; // XXX Debug
 
@@ -181,14 +178,20 @@ export class RecordScreen extends Component<Props, State> {
       log.info('componentDidMount: Permissions.request: microphone', {status});
     });
 
+    // Register listeners
     this._listeners.push(NativeSpectro.onSpectroFilePath(this.onSpectroFilePath));
+
+    // Show this.props.location
+    await this.updateForLocation(null);
 
   }
 
   componentWillUnmount = () => {
     log.info('componentWillUnmount');
-    // Unregisterd callbacks
+
+    // Unregister listeners
     this._listeners.forEach(listener => listener.remove());
+
   }
 
   shouldComponentUpdate = (nextProps: Props, nextState: State): boolean => {
@@ -196,7 +199,7 @@ export class RecordScreen extends Component<Props, State> {
     // Throttle update/render if NativeSpectro has produced more spectros than we have consumed
     //  - Not a foolproof approach to keeping the UI responsive, but it seems to be a good first step
     //  - Condition on recordingState to avoid races where we get stuck without being able to update on stopRecording
-    if (this.state.recordingState === RecordingState.Recording) {
+    if (this.state.recordingState === 'recording') {
       const lag = this.lag; // (Observe once to avoid races)
       if (lag !== null && lag > 0) {
         // log.debug('shouldComponentUpdate', '->false', {lag}); // XXX Debug
@@ -224,6 +227,62 @@ export class RecordScreen extends Component<Props, State> {
       this.scrollToEnd();
     }
 
+    // Show this.props.location
+    await this.updateForLocation(prevProps.location);
+
+  }
+
+  updateForLocation = async (prevLocation: null | Location) => {
+    if (this.props.location !== prevLocation) {
+      if (this.state.recordingState !== 'stopped') {
+
+        // TODO Is it less surprising to the user if we stop the recording or drop the nav change?
+        //  - Simpler to drop the nav change, so that's what we do for now
+        log.info('updateForLocation: Skipping, recording in progress', {
+          location: this.props.location,
+          prevLocation,
+          recordingState: this.state.recordingState,
+        });
+
+      } else {
+
+        log.info('updateForLocation', {location: this.props.location, prevLocation});
+
+        // Reset state
+        //  - TODO Dedupe with startRecording
+        this.setState({
+          recordingState: 'loading',
+          spectroChunks: [],
+          nSpectroChunks: 0,
+          nSamples: 0,
+          nSpectroWidth: 0,
+          editRecording: null,
+        });
+        this._renderRate.reset();
+
+        await matchRecordPathParams(recordPathParamsFromLocation(this.props.location), {
+          root: async () => {
+            // Show blank record screen
+            this.setState({
+              recordingState: 'stopped',
+            });
+          },
+          edit: async ({sourceId}) => {
+            // Show editRecording for sourceId
+            const editRecording = await EditRecording({
+              doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
+              sourceId,
+              audioPath: Rec.audioPath(await this.props.db.loadRec(sourceId)),
+            });
+            this.setState({
+              recordingState: 'stopped',
+              editRecording,
+            });
+          },
+        });
+
+      }
+    }
   }
 
   // TODO Bigger button hitbox: https://stackoverflow.com/questions/50065928/change-button-font-size-on-react-native
@@ -236,69 +295,70 @@ export class RecordScreen extends Component<Props, State> {
         Styles.center,
       ]}>
 
-        {/* Spectro images */}
-        <ScrollView
-          ref={this._scrollViewRef}
-          style={{
+        {/* Loading spinner */}
+        {this.state.recordingState === 'loading' && (
+          <View style={{
             flex: 1,
-            width: '100%',
-          }}
-          contentContainerStyle={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            alignContent: 'flex-start',
-            alignItems: 'flex-start',
-          }}
-          onScrollBeginDrag={() => {
-            log.debug('render: onScrollBeginDrag');
-            this.setState({follow: false});
-          }}
-          onContentSizeChange={(width, height) => {
-            log.debug('render: onContentSizeChange', {width, height});
-            if (this.state.follow) {
-              this.scrollToEnd();
-            }
-          }}
-        >
-          {/* Condition on !doneRecording so that the transition from recording->stop->rendered is gapless */}
-          {!this.state.doneRecording ? (
+            justifyContent: 'center',
+          }}>
+            <ActivityIndicator size='large' />
+          </View>
+        )}
 
-            // Recording in progress: streaming spectro chunks
-            //  - HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing my rndebugger...
-            //    - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
-            //    - https://github.com/DylanVann/react-native-fast-image
-            (this.state.spectroImages.map(({source, width, height, debugTimes}) => (
-              <SpectroImageComp
-                key={source.uri}
-                source={source}
+        {/* Spectro images */}
+        {this.state.recordingState !== 'loading' && (
+          <ScrollView
+            ref={this._scrollViewRef}
+            style={{
+              flex: 1,
+              width: '100%',
+            }}
+            contentContainerStyle={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignContent: 'flex-start',
+              alignItems: 'flex-start',
+            }}
+            onScrollBeginDrag={() => {
+              log.debug('render: onScrollBeginDrag');
+              this.setState({follow: false});
+            }}
+            onContentSizeChange={(width, height) => {
+              log.debug('render: onContentSizeChange', {width, height});
+              if (this.state.follow) {
+                this.scrollToEnd();
+              }
+            }}
+          >
+            {/* Condition on !editRecording so that the transition from recording->stop->rendered is gapless */}
+            {!this.state.editRecording ? (
+
+              // Recording in progress: streaming spectro chunks
+              <WrappedSpectroImages
+                spectros={this.state.spectroChunks}
                 spectroScale={this.state.spectroScale}
-                width={width}
-                height={height}
-                debugTimes={debugTimes}
                 showDebug={this.props.showDebug}
                 showMoreDebug={this.state.showMoreDebug}
               />
-            )))
 
-          ) : (
+            ) : (
 
-            // Done recording: recorded spectro
-            into(this.state.doneRecording.spectros.get(this.state.denoised), spectros => spectros && (
-              spectros.chunked.map(({path, width, height}) => (
-                <SpectroImageComp
-                  key={path}
-                  source={{uri: path}}
+              // Done recording: recorded spectro (chunks computed in stopRecording)
+              into(this.state.editRecording.spectros.get(this.state.denoised), spectros => spectros && (
+                <WrappedSpectroImages
+                  spectros={spectros.chunked.map(({path, ...props}) => ({
+                    source: {uri: path},
+                    ...props,
+                  }))}
                   spectroScale={this.state.spectroScale}
-                  width={width}
-                  height={height}
                   showDebug={this.props.showDebug}
                   showMoreDebug={this.state.showMoreDebug}
                 />
               ))
-            ))
 
-          )}
-        </ScrollView>
+            )}
+          </ScrollView>
+        )}
 
         {/* Debug info */}
         <this.DebugView style={{
@@ -317,7 +377,7 @@ export class RecordScreen extends Component<Props, State> {
             doneSpectroChunkWidth: {this.props.doneSpectroChunkWidth} (screen: {Dimensions.get('window').width})
           </this.DebugText>
           <this.DebugText>
-            spectroImageLimit: {this.props.spectroImageLimit}
+            spectroChunkLimit: {this.props.spectroChunkLimit}
           </this.DebugText>
           <this.DebugText>
             audio: {}
@@ -326,7 +386,7 @@ export class RecordScreen extends Component<Props, State> {
           </this.DebugText>
           <this.DebugText>
             spectro: {}
-            {this.state.nSpectroWidth} w × {this.props.f_bins} h ({this.state.spectroImages.length} images)
+            {this.state.nSpectroWidth} w × {this.props.f_bins} h ({this.state.spectroChunks.length} images)
           </this.DebugText>
           {this.state.showMoreDebug && (
             <this.DebugText>
@@ -343,7 +403,7 @@ export class RecordScreen extends Component<Props, State> {
           recordingState={this.state.recordingState}
           follow={this.state.follow}
           denoised={this.state.denoised}
-          doneRecording={this.state.doneRecording}
+          editRecording={this.state.editRecording}
           // NOTE Pass these as bound methods i/o lambdas else ControlsBar will unnecessarily update on every render (and be slow)
           setStateProxy={this} // Had some 'undefined' trouble with passing this.setState, so passing this instead
           startRecording={this.startRecording}
@@ -359,131 +419,74 @@ export class RecordScreen extends Component<Props, State> {
     this._scrollViewRef.current!.scrollToEnd();
   }
 
-  // Catches and logs errors so callers don't have to (e.g. event handlers)
   startRecording = async () => {
-    try {
-      if (this.state.recordingState === RecordingState.Stopped) {
+    logErrorsAsync('startRecording', async () => { // So we're safe to use as an event handler
+      if (this.state.recordingState === 'stopped') {
         log.info('startRecording', {
           sampleRate: this.props.sampleRate,
           channels: this.props.channels,
           bitsPerSample: this.props.bitsPerSample,
         });
 
-        // Reset recordingState
+        // Reset state
+        //  - TODO Dedupe with updateForLocation
         this.setState({
-          recordingState: RecordingState.Recording,
-          spectroImages: [],
-          nSpectroImages: 0,
+          recordingState: 'recording',
+          spectroChunks: [],
+          nSpectroChunks: 0,
           nSamples: 0,
           nSpectroWidth: 0,
-          doneRecording: null,
+          editRecording: null,
         });
         this._renderRate.reset();
 
-        await NativeSpectro.create({
-          outputPath: await this.freshPath('wav'),
-          f_bins: this.props.f_bins,
-          sampleRate: this.props.sampleRate,
-          bitsPerChannel: this.props.bitsPerSample,
-          channelsPerFrame: this.props.channels,
-          refreshRate: this.props.refreshRate, // NOTE Only updates on stop/record
-          // bufferSize: 2048, // HACK Manually tuned for (22050hz,1ch,16bit)
+        // Start recording
+        await NativeSpectro.start({
+          outputPath:  await this.freshPath('wav'),
+          refreshRate: this.props.refreshRate,
         });
-        await NativeSpectro.start();
 
       }
-    } catch (e) {
-      log.error('startRecording', e);
-    }
+    });
   }
 
-  // Catches and logs errors so callers don't have to (e.g. event handlers)
   stopRecording = async () => {
-    try {
-      if (this.state.recordingState === RecordingState.Recording) {
+    logErrorsAsync('stopRecording', async () => { // So we're safe to use as an event handler
+      if (this.state.recordingState === 'recording') {
         log.info('stopRecording');
 
-        // Reset state (1/2)
+        // State: recording -> saving
         this.setState({
-          recordingState: RecordingState.Saving,
+          recordingState: 'saving',
         });
         this._nativeStats = null; // Else shouldComponentUpdate gets stuck with lag>0
+
+        // Stop recording
         const audioPath = await NativeSpectro.stop();
 
-        // Save to doneRecording
-        //  - doneRecording=null if audioPath is null [When does this happen? Not on no audio samples]
+        // Compute editRecording
+        //  - null if audioPath is null [When does this happen? Not on no audio samples]
         log.info('stopRecording: Got', {audioPath});
-        var doneRecording: null | DoneRecording;
+        var editRecording: null | EditRecording;
         if (audioPath === null) {
           log.info('stopRecording: Noop: No audioPath');
-          doneRecording = null;
+          editRecording = null;
         } else {
-
-          // Render audioPath -> spectros
-          //  - doneRecording=null if any value is null (audio samples < nperseg)
-          var _spectros: DoneRecordingSpectros = await log.timedAsync('stopRecording: spectros', async () => new Map(
-            await Promise.all([true, false].map(async denoise => {
-              const spectroPathBase = await ensureParentDir(`${audioPath}.spectros/denoise=${denoise}.png`);
-              const single = await NativeSpectro.renderAudioPathToSpectroPath(audioPath, spectroPathBase, {
-                f_bins: this.props.f_bins,
-                denoise,
-              });
-              var spectros: null | DoneRecordingSpectro;
-              if (!single) {
-                spectros = null;
-              } else {
-                const chunked = await NativeSpectro.chunkImageFile(single.path, this.props.doneSpectroChunkWidth);
-                spectros = {single, chunked};
-              }
-              return [denoise, spectros] as [Denoise, DoneRecordingSpectro];
-            })),
-          ));
-          const spectros: null | DoneRecordingSpectros = _.values(_spectros).some(x => x === null) ? null : _spectros;
-          if (spectros === null) {
-            log.info('stopRecording: Noop: No spectro (samples < nperseg)');
-            doneRecording = null;
-          } else {
-
-            // Save doneRecording
-            doneRecording = {
-              audioPath,
-              spectros,
-              sourceId: SourceId('user', basename(audioPath)),
-            };
-
-          }
+          editRecording = await EditRecording({
+            doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
+            sourceId: SourceId('user', basename(audioPath)),
+            audioPath,
+          });
         }
 
-        // Reset state (2/2)
+        // State: saving -> stopped
         this.setState({
-          recordingState: RecordingState.Stopped,
-          doneRecording,
+          recordingState: 'stopped',
+          editRecording,
         });
 
-        // TODO Add tap to play for recorded rec
-        // // XXX Debug: Play rec
-        // if (audioPath) {
-        //   const sound = await Sound.newAsync(audioPath);
-        //   log.debug('stopRecording: XXX Playing rec', {duration: sound.getDuration(), filename: sound.getFilename()})
-        //   Sound.setActive(true);
-        //   Sound.setCategory(
-        //     'PlayAndRecord',
-        //     true, // mixWithOthers
-        //   );
-        //   Sound.setMode(
-        //     'Default',
-        //     // 'Measurement', // XXX? like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
-        //   );
-        //   finallyAsync(sound.playAsync(), async () => {
-        //     sound.release();
-        //     Sound.setActive(false);
-        //   });
-        // }
-
       }
-    } catch (e) {
-      log.error('stopRecording', {e});
-    }
+    });
   }
 
   onSpectroFilePath = async ({spectroFilePath, width, height, nSamples, debugTimes}: {
@@ -493,7 +496,7 @@ export class RecordScreen extends Component<Props, State> {
     nSamples: number,
     debugTimes: DebugTimes,
   }) => {
-    if (this.state.recordingState !== RecordingState.Recording) {
+    if (this.state.recordingState !== 'recording') {
       log.info('onSpectroFilePath: Skipping', {recordingState: this.state.recordingState});
     } else {
       log.info('onSpectroFilePath', {
@@ -504,17 +507,17 @@ export class RecordScreen extends Component<Props, State> {
         nSamples,
         debugTimes,
       });
-      const spectroImage: SpectroImage = {
+      const spectroChunk: SpectroChunk = {
         source: !spectroFilePath ? {} : {uri: `file://${spectroFilePath}`},
         width,
         height,
         debugTimes,
       };
       this.setState((state, props) => ({
-        // Truncate spectroImages else the record UX gets very slow after a few minutes
-        //  - Use spectroImageLimit=0 to not truncate
-        spectroImages:  [...state.spectroImages, spectroImage].slice(-this.props.spectroImageLimit),
-        nSpectroImages: state.nSpectroImages + 1, // Separate from spectroImages b/c we truncate the latter
+        // Truncate spectroChunks else the record UX gets very slow after a few minutes
+        //  - Use spectroChunkLimit=0 to not truncate
+        spectroChunks:  [...state.spectroChunks, spectroChunk].slice(-this.props.spectroChunkLimit),
+        nSpectroChunks: state.nSpectroChunks + 1, // Separate from spectroChunks b/c we truncate the latter
         nSamples:       state.nSamples       + nSamples,
         nSpectroWidth:  state.nSpectroWidth  + width,
       }));
@@ -522,11 +525,11 @@ export class RecordScreen extends Component<Props, State> {
   }
 
   freshPath = async (ext: string, dir: string = fs.dirs.DocumentDir): Promise<string> => {
-    // WARNING Avoid ':' in ios paths [they map to dir separator, I think?]
     const subdir = 'user-recs-v0';
-    const timestamp = (new Date().toISOString()
-      .slice(0, 19)          // Drop millis/tz (for human)
-      .replace(/[:.]/g, '-') // Avoid ':' chars (for ios)
+    const timestamp = safePath( // Avoid ':' for ios paths
+      new Date().toISOString()
+      .slice(0, 19)                            // Cosmetic: drop millis/tz
+      .replace(/[-:]/g, '').replace(/T/g, '-') // Cosmetic: 'YYYY-MM-DDThh:mm:ss' -> 'YYYYMMDD-hhmmss'
     );
     const hash = chance.hash({length: 8}); // Long enough to be unique across users
     return ensureParentDir(`${dir}/${subdir}/${timestamp}-${hash}.${ext}`);
@@ -553,21 +556,21 @@ export class RecordScreen extends Component<Props, State> {
 
 }
 
-// Split out spectro image as component else excessive updates cause render bottleneck
-//  - TODO Rename SpectroImage -> ? so we can rename SpectroImageComp -> SpectroImage
-export interface SpectroImageCompProps {
-  source: {uri?: string};
-  spectroScale: number;
-  width: number;
-  height: number;
-  debugTimes?: DebugTimes;
+export interface WrappedSpectroImagesProps {
+  spectros: Array<{
+    source: {uri?: string},
+    width: number,
+    height: number,
+    debugTimes?: DebugTimes,
+  }>;
+  spectroScale: number,
   showDebug: boolean;
   showMoreDebug: boolean;
 }
-export interface SpectroImageCompState {}
-export class SpectroImageComp extends PureComponent<SpectroImageCompProps, SpectroImageCompState> {
+export interface WrappedSpectroImagesState {}
+export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProps, WrappedSpectroImagesState> {
 
-  log = new Log('SpectroImageComp');
+  log = new Log('WrappedSpectroImages');
 
   static defaultProps = {};
   state = {};
@@ -580,7 +583,57 @@ export class SpectroImageComp extends PureComponent<SpectroImageCompProps, Spect
     // this.log.info('componentWillUnmount');
   }
 
-  componentDidUpdate = async (prevProps: SpectroImageCompProps, prevState: SpectroImageCompState) => {
+  componentDidUpdate = async (prevProps: WrappedSpectroImagesProps, prevState: WrappedSpectroImagesState) => {
+    // this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+  }
+
+  render = () => {
+    // this.log.info('render');
+    return (
+      this.props.spectros.map(({source, width, height, debugTimes}) => (
+        <SpectroImage
+          key={source.uri}
+          source={source}
+          spectroScale={this.props.spectroScale}
+          width={width}
+          height={height}
+          debugTimes={debugTimes}
+          showDebug={this.props.showDebug}
+          showMoreDebug={this.props.showMoreDebug}
+        />
+      ))
+    );
+  }
+
+}
+
+// Split out spectro image as component else excessive updates cause render bottleneck
+export interface SpectroImageProps {
+  source: {uri?: string};
+  width: number;
+  height: number;
+  debugTimes?: DebugTimes;
+  spectroScale: number;
+  showDebug: boolean;
+  showMoreDebug: boolean;
+}
+export interface SpectroImageState {}
+export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageState> {
+
+  log = new Log('SpectroImage');
+
+  static defaultProps = {};
+  state = {};
+
+  componentDidMount = async () => {
+    // this.log.info('componentDidMount');
+  }
+
+  componentWillUnmount = async () => {
+    // this.log.info('componentWillUnmount');
+  }
+
+  componentDidUpdate = async (prevProps: SpectroImageProps, prevState: SpectroImageState) => {
     // this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   }
 
@@ -589,6 +642,9 @@ export class SpectroImageComp extends PureComponent<SpectroImageCompProps, Spect
     return (
       <View>
         <FastImage
+          //  - HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing rndebugger
+          //    - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
+          //    - https://github.com/DylanVann/react-native-fast-image
           style={{
             width:  this.props.spectroScale * this.props.width,
             height: this.props.spectroScale * this.props.height,
@@ -641,7 +697,7 @@ export interface ControlsBarProps {
   recordingState: State["recordingState"];
   follow:         State["follow"];
   denoised:       State["denoised"];
-  doneRecording:  State["doneRecording"];
+  editRecording:  State["editRecording"];
   setStateProxy:  RecordScreen;
   startRecording: typeof RecordScreen.prototype.startRecording;
   stopRecording:  typeof RecordScreen.prototype.stopRecording;
@@ -674,21 +730,26 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         {/* Record/stop */}
         {/* - On left side for left-handed phone use [TODO Add setting to toggle left/right] */}
         {match(this.props.recordingState,
-          [RecordingState.Stopped, () => (
+          ['loading', () => (
+            <RectButton style={styles.bottomControlsButton} onPress={() => {}}>
+              <ActivityIndicator size='small' />
+            </RectButton>
+          )],
+          ['stopped', () => (
             <RectButton style={styles.bottomControlsButton} onPress={this.props.startRecording}>
               <FontAwesome5 style={[styles.bottomControlsButtonIcon, {color: Colors.Paired.darkGreen}]}
                 name='circle' solid
               />
             </RectButton>
           )],
-          [RecordingState.Recording, () => (
+          ['recording', () => (
             <RectButton style={styles.bottomControlsButton} onPress={this.props.stopRecording}>
               <FontAwesome5 style={[styles.bottomControlsButtonIcon, {color: Colors.Paired.darkRed}]}
                 name='stop' solid
               />
             </RectButton>
           )],
-          [RecordingState.Saving, () => (
+          ['saving', () => (
             <RectButton style={styles.bottomControlsButton} onPress={() => {}}>
               <ActivityIndicator size='small' />
             </RectButton>
@@ -697,12 +758,12 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
         {/* Search */}
         <RectButton style={styles.bottomControlsButton} onPress={() => {
-          if (this.props.doneRecording) {
-            this.props.go('search', {path: `/rec/${this.props.doneRecording.sourceId}`});
+          if (this.props.editRecording) {
+            this.props.go('search', {path: `/rec/${this.props.editRecording.sourceId}`});
           }
         }}>
           <Feather style={[styles.bottomControlsButtonIcon, {
-            ...(this.props.doneRecording ? {} : {color: iOSColors.gray}),
+            ...(this.props.editRecording ? {} : {color: iOSColors.gray}),
           }]}
             name='search'
           />
@@ -718,7 +779,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
             }]}/>
           </RectButton>
         )}
-        {!this.props.doneRecording ? (
+        {!this.props.editRecording ? (
           // Toggle follow
           <RectButton style={styles.bottomControlsButton} onPress={() => {
             this.props.setStateProxy.setState((state, props) => ({follow: !state.follow}))
@@ -743,6 +804,47 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
     );
   }
 
+}
+
+// TODO -> datatypes (along with types for EditRecording)
+export async function EditRecording(props: {
+  doneSpectroChunkWidth: number,
+  sourceId: string,
+  audioPath: string,
+}): Promise<null | EditRecording> {
+  // Render audioPath -> spectros
+  //  - null if any value is null (audio samples < nperseg)
+  //  - Compute spectros for denoise=true/false (true for preds, false so user can toggle to see pre-denoise)
+  //  - Compute spectros for single/chunked (single for preds, chunked for wrapped display)
+  var _spectros: EditRecordingSpectros = await log.timedAsync('EditRecording: spectros', async () => new Map(
+    await Promise.all([true, false].map(async denoise => {
+      // HACK Duped in UserRec.spectroPath
+      //  - TODO DocumentDir -> CacheDir to avoid bloat
+      //    - [Requires updating all consumers to ensure computed (easy), async (hard)]
+      const spectroPath = `${fs.dirs.DocumentDir}/spectros-v0/${safePath(props.sourceId)}.spectros/denoise=${denoise}.png`;
+      const single = await NativeSpectro.renderAudioPathToSpectroPath(
+        props.audioPath,
+        await ensureParentDir(spectroPath),
+        {denoise},
+      );
+      const spectros = !single ? null : {
+        single,
+        chunked: await NativeSpectro.chunkImageFile(single.path, props.doneSpectroChunkWidth),
+      };
+      return [denoise, spectros] as [Denoise, EditRecordingSpectro];
+    })),
+  ));
+  const spectros: null | EditRecordingSpectros = _.values(_spectros).some(x => x === null) ? null : _spectros;
+  if (spectros === null) {
+    log.info('EditRecording: Noop: No spectro (samples < nperseg)');
+    return null;
+  } else {
+    return {
+      sourceId: props.sourceId,
+      audioPath: props.audioPath,
+      spectros,
+    };
+  }
 }
 
 const styles = StyleSheet.create({

@@ -36,14 +36,18 @@ export function sqlf(strs: TemplateStringsArray, ...args: any[]): string {
   );
 }
 
-export function querySql<Row>(
-  db: SQLiteDatabase,
-  sql: string, // Assumes caller handles formatting (e.g. via sqlf`...`)
-  opts: {
-    logTruncate?: number | null, // null to not truncate
-    logQueryPlan?: boolean,
-  } = {},
-): <X>(onResults: (results: ResultSet<Row>) => Promise<X>) => Promise<X> {
+// querySql
+export type QuerySql = <Row>(
+  sql:   string, // Assumes caller handles formatting (e.g. via sqlf`...`)
+  opts?: QuerySqlOpts,
+) => QuerySqlResults<Row>;
+export interface QuerySqlOpts {
+  logTruncate?:  number | null, // null to not truncate
+  logQueryPlan?: boolean,
+}
+export type QuerySqlResults<Row> = <X>(onResults: (results: ResultSet<Row>) => Promise<X>) => Promise<X>;
+export const querySql = (db: SQLiteDatabase) => <Row>(sql: string, opts?: QuerySqlOpts): QuerySqlResults<Row> => {
+  opts = opts || {}; // Manual default arg (defaults not supported in lambdas)
 
   // Default opts
   opts = {...opts,

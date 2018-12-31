@@ -16,8 +16,6 @@ import {
   // FlatList, ScrollView, Slider, Switch, TextInput, // TODO Needed?
 } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
-import SQLite from 'react-native-sqlite-storage';
-import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { IconProps } from 'react-native-vector-icons/Icon';
 import timer from 'react-native-timer';
@@ -37,23 +35,25 @@ import { CCIcon, LicenseTypeIcons } from './Misc';
 import { TabBarStyle } from './TabRoutes';
 import { config } from '../config';
 import {
-  ModelsSearch, matchSearchPathParams, matchSourceId, Place, Quality, Rec, rec_f_preds, Rec_f_preds, SearchPathParams,
-  searchPathParamsFromLocation, SearchRecs, ServerConfig, showSourceId, SourceId, Species, SpeciesMetadata, UserRec,
-  XCRec,
+  ModelsSearch, matchRec, matchSearchPathParams, matchSourceId, Place, Quality, Rec, rec_f_preds, Rec_f_preds,
+  SearchPathParams, searchPathParamsFromLocation, SearchRecs, ServerConfig, showSourceId, SourceId, Species,
+  SpeciesMetadata, UserRec, XCRec,
 } from '../datatypes';
+import { DB } from '../db';
 import { Ebird } from '../ebird';
 import { Log, puts, rich, tap } from '../log';
 import { NativeSearch } from '../native/Search';
+import { NativeSpectro } from '../native/Spectro';
 import { Go } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
-import { queryPlanFromRows, queryPlanPretty, querySql, SQL, sqlf } from '../sql';
+import { SQL, sqlf } from '../sql';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from '../styles';
 import {
-  all, any, chance, Clamp, deepEqual, Dim, finallyAsync, getOrSet, global, json, mapMapValues, match, matchNull,
-  matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round, shallowDiffPropsState, Style,
-  Timer, yaml, yamlPretty, zipSame,
+  all, any, assert, chance, Clamp, deepEqual, Dim, ensureParentDir, finallyAsync, getOrSet, global, json, mapMapValues,
+  match, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round,
+  shallowDiffPropsState, Style, Timer, yaml, yamlPretty, zipSame,
 } from '../utils';
 
 const log = new Log('SearchScreen');
@@ -119,6 +119,7 @@ interface Props {
   ebird:                   Ebird;
   // Settings
   settings:                SettingsWrites;
+  db:                      DB;
   showDebug:               boolean;
   showMetadataLeft:        boolean;
   showMetadataBelow:       boolean;
@@ -218,7 +219,6 @@ export class SearchScreen extends PureComponent<Props, State> {
   get query_rec(): null | Rec { return this.recsOrEmpty[0] || null; }
 
   // Private attrs
-  db?: SQLiteDatabase;
   soundsCache: Map<SourceId, Promise<Sound> | Sound> = new Map();
 
   // (Unused, kept for reference)
@@ -264,29 +264,16 @@ export class SearchScreen extends PureComponent<Props, State> {
       true,       // mixWithOthers
     );
     Sound.setMode(
-      'Default', // "The default audio session mode"
+      'Default',        // "The default audio session mode"
+      // 'Measurement', // TODO Like https://github.com/jsierles/react-native-audio/blob/master/index.js#L42
     );
 
     // Tell other apps we're using the audio device
     Sound.setActive(true);
 
-    // Open db conn
-    const dbFilename = SearchRecs.dbPath;
-    const dbExists = await fs.exists(`${fs.dirs.MainBundleDir}/${dbFilename}`);
-    if (!dbExists) {
-      log.error(`componentDidMount: DB file not found: ${dbFilename}`);
-    } else {
-      const dbLocation = `~/${dbFilename}`; // Relative to app bundle (copied into the bundle root by react-native-asset)
-      this.db = await SQLite.openDatabase({
-        name: dbFilename,               // Just for SQLite bookkeeping, I think
-        readOnly: true,                 // Else it will copy the (huge!) db file from the app bundle to the documents dir
-        createFromLocation: dbLocation, // Else readOnly will silently not work
-      });
-    }
-
     // Query db size (once)
     log.info('componentDidMount: Querying db size');
-    await querySql<{totalRecs: number}>(this.db!, `
+    await this.props.db.query<{totalRecs: number}>(`
       select count(*) as totalRecs
       from search_recs
     `)(async results => {
@@ -299,7 +286,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
     // Query f_preds_* cols (once)
     log.info('componentDidMount: Querying f_preds_* cols');
-    await querySql<Rec>(this.db!, `
+    await this.props.db.query<Rec>(`
       select *
       from search_recs
       limit 1
@@ -315,6 +302,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     });
 
     // Query recs (from navParams.species)
+    //  - TODO Adopt updateForLocation() pattern (like RecordScreen)
     // log.debug('componentDidMount: loadRecsFromQuery()');
     await this.loadRecsFromQuery();
 
@@ -375,6 +363,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
     // Query recs (from updated navParams.species)
     //  - (Will noop if deepEqual(query, state.recsQueryShown))
+    //  - TODO Adopt updateForLocation() pattern (like RecordScreen)
     // log.debug('componentDidUpdate: loadRecsFromQuery()');
     await this.loadRecsFromQuery();
 
@@ -441,7 +430,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   get query(): Query { return this._query(); }
   _query = (props?: Props): Query => {
     return matchSearchPathParams<Query>(this._pathParams(props), {
-      none:    ()                    => ({kind: 'species', filters: {}, species: ''}),
+      root:    ()                    => ({kind: 'species', filters: {}, species: ''}),
       random:  ({filters, seed})     => ({kind: 'random',  filters, seed}),
       species: ({filters, species})  => ({kind: 'species', filters, species}),
       rec:     ({filters, sourceId}) => ({kind: 'rec',     filters, sourceId}),
@@ -529,7 +518,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         // TODO Get deterministic results from seed [how? sqlite doesn't support random(seed) or hash()]
         random: async ({filters, seed}) => {
           log.info(`loadRecsFromQuery: Querying random recs`, {seed});
-          await querySql<Rec>(this.db!, sqlf`
+          await this.props.db.query<Rec>(sqlf`
             select *
             from (
               select
@@ -554,7 +543,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
         species: async ({filters, species}) => {
           log.info('loadRecsFromQuery: Querying recs for species', {species});
-          await querySql<Rec>(this.db!, sqlf`
+          await this.props.db.query<Rec>(sqlf`
             select *
             from (
               select
@@ -598,14 +587,29 @@ export class SearchScreen extends PureComponent<Props, State> {
           const n_recs       = n_sp * n_per_sp + 1;
 
           // Load query_rec from db
-          const query_rec = await this.loadRec(sourceId);
+          //  - Bail if sourceId not found (e.g. from persisted history)
+          const query_rec = await this.props.db.loadRec(sourceId);
           // log.debug('loadRecsFromQuery: query_rec', rich(query_rec)); // XXX Debug
-
-          // Bail if sourceId not found (e.g. from persisted history)
           if (!query_rec) {
             log.warn(`loadRecsFromQuery: sourceId not found: ${sourceId}`);
             _setRecs({recs: 'loading'});
             return;
+          }
+
+          // Ensure spectro exists
+          //  - e.g. in case this is a user rec from an old code version and user spectros have moved
+          //  - TODO Assert that this never recreates spectros for xc recs
+          const spectroPath = Rec.spectroPath(query_rec);
+          if (!await fs.exists(spectroPath)) {
+            matchRec(query_rec, {
+              xc:   _ => { throw `loadRecsFromQuery: Missing spectro for xc query_rec: ${sourceId}`; },
+              user: _ => log.info(`loadRecsFromQuery: Recreating spectro for user query_rec: ${sourceId}`),
+            });
+            await NativeSpectro.renderAudioPathToSpectroPath(
+              Rec.audioPath(query_rec),
+              await ensureParentDir(spectroPath),
+              {denoise: true}, // Like Bubo/py/model.swift:Features.denoise=true
+            );
           }
 
           // Read sp_p's (species probs) from query_rec.f_preds_*
@@ -690,7 +694,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Run query
           log.info('loadRecsFromQuery: Querying recs for query_rec', {sourceId});
-          await querySql<Rec>(this.db!, sql, {
+          await this.props.db.query<Rec>(sql, {
             // logTruncate: null, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
@@ -706,59 +710,6 @@ export class SearchScreen extends PureComponent<Props, State> {
       });
 
     }
-  }
-
-  loadRec = async (sourceId: SourceId): Promise<Rec> => {
-    log.info('loadRec', {sourceId});
-    return await matchSourceId(sourceId, {
-      xc: async ({xc_id}) => {
-        return await querySql<XCRec>(this.db!, sqlf`
-          select *
-          from search_recs
-          where source_id = ${sourceId}
-        `)(async results => {
-          const [rec] = results.rows.raw();
-          return rec; // TODO XCRec
-        });
-      },
-      user: async ({name, clip}) => {
-        // Predict f_preds from audio
-        //  - Audio not spectro: model uses its own f_bins=40, separate from this.props.f_bins=80 that we use to draw while recording
-        const f_preds = await log.timedAsync('loadRec: f_preds', async () => {
-          return await NativeSearch.f_preds(UserRec.audioPath(name));
-        });
-        if (f_preds === null) {
-          throw `loadRec: Unexpected null f_preds (audio < nperseg), for sourceId[${sourceId}]`;
-        } else {
-          let userRec: UserRec = {
-            source_id:  sourceId,
-            duration_s: NaN, // TODO(stretch_user_rec)
-            f_preds,
-            // Mock the xc fields
-            //  - TODO Clean up junk fields after splitting subtypes XCRec, UserRec <: Rec
-            xc_id:               -1,
-            species:             'unknown',
-            species_taxon_order: '_UNK',
-            species_com_name:    'unknown',
-            species_sci_name:    'unknown',
-            recs_for_sp:         -1,
-            quality:             'no score',
-            month_day:           '',
-            place:               '',
-            place_only:          '',
-            state:               '',
-            state_only:          '',
-            recordist:           '',
-            license_type:        '',
-            remarks:             '',
-          };
-          // HACK Read duration_s from audio file
-          //  - (Probably simpler for NativeSpectro to return this from .stop)
-          userRec.duration_s = (await this.getOrAllocateSoundAsync(userRec)).getDuration();
-          return userRec
-        }
-      },
-    });
   }
 
   releaseSounds = async () => {
@@ -787,10 +738,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       // Allocate + cache sound resource
       //  - Cache the promise so that get+set is atomic, else we race and allocate multiple sounds per rec.source_id
       //  - (Observable via log counts in the console: if num alloc > num release, then we're racing)
-      this.soundsCache.set(rec.source_id, Sound.newAsync(
-        Rec.audioPath(rec),
-        Sound.MAIN_BUNDLE, // TODO(asset_main_bundle): Why implicitly rel to MAIN_BUNDLE?
-      ));
+      this.soundsCache.set(rec.source_id, Sound.newAsync(Rec.audioPath(rec)));
       soundAsync = this.soundsCache.get(rec.source_id);
     }
     return await soundAsync!;
@@ -1136,6 +1084,19 @@ export class SearchScreen extends PureComponent<Props, State> {
               onPress: () => this.setState((state: State, props: Props) => ({
                 excludeRecIds: [...state.excludeRecIds, rec.source_id],
               })),
+            }
+          ]})}
+        </View>
+
+        <Separator/>
+        <View style={{flexDirection: 'row'}}>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: 'Edit',
+              iconName: 'edit',
+              buttonColor: iOSColors.green,
+              onPress: () => this.props.go('record', {path: `/edit/${rec.source_id}`}),
             }
           ]})}
         </View>

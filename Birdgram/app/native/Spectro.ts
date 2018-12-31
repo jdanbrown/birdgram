@@ -36,7 +36,6 @@ export const NativeSpectro = {
 
   create: async (
     opts: {
-      outputPath: string;
       f_bins: number;
       sampleRate?: number;
       bitsPerChannel?: number;
@@ -48,8 +47,17 @@ export const NativeSpectro = {
     opts,
   ),
 
-  start: async (): Promise<void>               => RNSpectro.start(),
-  stop:  async (): Promise<null | string>      => RNSpectro.stop(),
+  start: async (
+    opts: {
+      outputPath: string,
+      refreshRate: number,
+    },
+  ): Promise<void> => RNSpectro.start(
+    opts,
+  ),
+
+  stop: async (): Promise<null | string> => RNSpectro.stop(),
+
   stats: async (): Promise<NativeSpectroStats> => RNSpectro.stats(),
 
   onAudioChunk:      (f: (...args: any[]) => any): EmitterSubscription => _emitter.addListener('audioChunk', f),
@@ -57,14 +65,13 @@ export const NativeSpectro = {
 
   renderAudioPathToSpectroPath: async (
     audioPath: string,
-    spectroPathBase: string,
+    spectroPath: string,
     opts: {
-      f_bins: number,
       denoise?: boolean,
     },
   ): Promise<null | ImageFile> => RNSpectro.renderAudioPathToSpectroPath(
     audioPath,
-    spectroPathBase,
+    spectroPath,
     opts,
   ),
 

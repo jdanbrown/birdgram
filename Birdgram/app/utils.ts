@@ -41,6 +41,28 @@ export async function tryElseAsync<Z, X extends Z = Z, Y extends Z = Z>(x: X, f:
   }
 }
 
+export function catchTry<X>(
+  c: (e: Error) => X,
+  f: () => X,
+): X {
+  try {
+    return f();
+  } catch (e) {
+    return c(e);
+  }
+}
+
+export async function catchTryAsync<X>(
+  c: (e: Error) => Promise<X>,
+  f: () => Promise<X>,
+): Promise<X> {
+  try {
+    return await f();
+  } catch (e) {
+    return await c(e);
+  }
+}
+
 // TODO Change cases to functions, like the other ADT matchFoo functions
 // `X0 extends X` so that x0 can't (quietly) generalize the type of the case patterns (e.g. to include null)
 //  - e.g. fail on `match(X | null, ...)` if the case patterns don't include null
@@ -380,6 +402,15 @@ export function dirname(path: string): string {
 }
 export function basename(path: string): string {
   return path.split(/\//g).slice(-1)[0]!;
+}
+export function isAbsolute(path: string): boolean {
+  return path[0] === '/';
+}
+
+// Replace unsafe chars in path
+//  - e.g. ':' in ios paths [they map to dir separator, I think?]
+export function safePath(path: string, to: string = '-'): string {
+  return path.replace(/:/g, to);
 }
 
 //

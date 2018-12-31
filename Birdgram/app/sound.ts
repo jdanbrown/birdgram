@@ -1,5 +1,7 @@
 import _Sound from 'react-native-sound';
 
+import { finallyAsync } from './utils';
+
 export default class Sound extends _Sound {
 
   // Expose some useful private props as public
@@ -13,7 +15,7 @@ export default class Sound extends _Sound {
     return new Promise((resolve, reject) => {
       const sound: Sound = new Sound(
         filename,
-        filename[0] === '/' ? '' : basePath || '', // HACK(asset_main_bundle): Allow abs paths i/o implicitly rel to Sound.MAIN_BUNDLE
+        basePath || '',
         error => error ? reject(error) : resolve(sound),
       );
     });
@@ -27,5 +29,14 @@ export default class Sound extends _Sound {
   getCurrentTimeAsync = (): Promise<{seconds: number, isPlaying: boolean}> => new Promise((resolve, reject) => {
     this.getCurrentTime((seconds, isPlaying) => resolve({seconds, isPlaying}));
   });
+
+  // Allocate and release a Sound for scoped usage
+  static scoped = <X>(filename: string, basePath?: string) => async (f: (sound: Sound) => Promise<X>): Promise<X> => {
+    const sound = await Sound.newAsync(filename, basePath);
+    const xAsync = (async () => f(sound))(); // Map sync exceptions to promise failure
+    return await finallyAsync(xAsync, async () => {
+      sound.release();
+    });
+  }
 
 }

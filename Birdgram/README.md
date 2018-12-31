@@ -174,6 +174,8 @@ android
   - Solution: temporarily comment out `export SKIP_BUNDLING=true` in Build Phases:
     - https://facebook.github.io/react-native/docs/running-on-device#3-configure-app-to-use-static-bundle
   - (But I don't really understand the problem, since shouldn't this only matter for Release builds...?)
+- Laptop sound output is messed up (very tinny)
+  - Solution: change sound input device to "Internal Microphone"
 - 'config.h' "File not found"
   - I fixed it by cleaning and rebuilding yarn/xcode a number of times
   - But if I get stuck on this again, try these:

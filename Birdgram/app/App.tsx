@@ -25,6 +25,7 @@ import { TabRoutes, TabLink } from './components/TabRoutes';
 import * as Colors from './colors';
 import { config } from './config';
 import { MetadataSpecies, Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
+import { DB } from './db';
 import { Ebird } from './ebird';
 import { Log, rich } from './log';
 import { NativeHttp } from './native/Http';
@@ -110,13 +111,18 @@ timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));   
 timed('url-parse',          () => global.urlParse        = require('url-parse'));               // ?
 global.fs = global.RNFB.fs;
 
-interface Props {}
+interface Props {
+  f_bins: number;
+  sampleRate: number;
+  channels: number;
+  bitsPerSample: number;
+}
 
 interface State {
   tabIndex: number;
   orientation: 'portrait' | 'landscape';
   loading: boolean;
-  // Loaded async (e.g. from storage)
+  // Loaded async (e.g. from fs, storage)
   histories?: Histories;
   serverConfig?: ServerConfig;
   metadataSpecies?: MetadataSpecies;
@@ -124,6 +130,7 @@ interface State {
   modelsSearch?: ModelsSearch;
   settings?: Settings;
   settingsWrites?: SettingsWrites;
+  db?: DB;
   appContext?: AppContext;
 }
 
@@ -138,18 +145,23 @@ const AppContext = React.createContext(
 
 export default class App extends PureComponent<Props, State> {
 
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      tabIndex: 2, // TODO
-      orientation: getOrientation(),
-      loading: true,
-    };
-    global.App = this; // XXX Debug
-  }
+  // Many of these are hardcoded to match Bubo/Models.swift:Features (which is in turn hardcoded to match py Features config)
+  static defaultProps: Partial<Props> = {
+    f_bins:        80, // NOTE Recording shows higher res spectros (f_bins=80) than model actually uses (f_bins=40)
+    sampleRate:    22050,
+    channels:      1,
+    bitsPerSample: 16,
+  };
+
+  state: State = {
+    tabIndex: 2, // TODO
+    orientation: getOrientation(),
+    loading: true,
+  };
 
   componentDidMount = async () => {
     log.info('componentDidMount');
+    global.App = this; // XXX Debug
     await log.timedAsync('componentDidMount [total]', async () => {
 
       // Load/create histories
@@ -198,6 +210,9 @@ export default class App extends PureComponent<Props, State> {
         return this.state.settings!
       });
 
+      // Load db (async) on app startup
+      const db = await DB.newAsync();
+
       // Load serverConfig (async) on app startup
       const serverConfigPath = `${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`;
       const serverConfig = (
@@ -234,6 +249,17 @@ export default class App extends PureComponent<Props, State> {
         await NativeSearch.create(modelsSearch);
       });
 
+      // Load native spectro module (global singleton)
+      //  - After NativeSearch
+      await log.timedAsync(`Load NativeSpectro`, async () => {
+        await NativeSpectro.create({
+          f_bins:           this.props.f_bins,
+          sampleRate:       this.props.sampleRate,
+          bitsPerChannel:   this.props.bitsPerSample,
+          channelsPerFrame: this.props.channels,
+        });
+      });
+
       const appContext = {
       };
 
@@ -247,6 +273,7 @@ export default class App extends PureComponent<Props, State> {
         modelsSearch,
         settings,
         settingsWrites,
+        db,
         appContext,
       });
 
@@ -330,10 +357,16 @@ export default class App extends PureComponent<Props, State> {
                               go                      = {this.go}
                               // Settings
                               settings                = {this.state.settingsWrites!}
+                              db                      = {this.state.db!}
                               showDebug               = {this.state.settings!.showDebug}
                               refreshRate             = {this.state.settings!.refreshRate}
                               doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}
-                              spectroImageLimit       = {this.state.settings!.spectroImageLimit}
+                              spectroChunkLimit       = {this.state.settings!.spectroChunkLimit}
+                              // RecordScreen
+                              f_bins                  = {this.props.f_bins}
+                              sampleRate              = {this.props.sampleRate}
+                              channels                = {this.props.channels}
+                              bitsPerSample           = {this.props.bitsPerSample}
                             />
                           ),
                         }, {
@@ -348,6 +381,7 @@ export default class App extends PureComponent<Props, State> {
                               ebird                   = {this.state.ebird!}
                               // Settings
                               settings                = {this.state.settingsWrites!}
+                              db                      = {this.state.db!}
                               showDebug               = {this.state.settings!.showDebug}
                               showMetadataLeft        = {this.state.settings!.showMetadataLeft}
                               showMetadataBelow       = {this.state.settings!.showMetadataBelow}
@@ -410,7 +444,7 @@ export default class App extends PureComponent<Props, State> {
                               // RecordScreen
                               refreshRate             = {this.state.settings!.refreshRate}
                               doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}
-                              spectroImageLimit       = {this.state.settings!.spectroImageLimit}
+                              spectroChunkLimit       = {this.state.settings!.spectroChunkLimit}
                               // SearchScreen
                               playingProgressEnable   = {this.state.settings!.playingProgressEnable}
                               playingProgressInterval = {this.state.settings!.playingProgressInterval}

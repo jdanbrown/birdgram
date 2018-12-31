@@ -66,11 +66,8 @@ class RNSpectro: RCTEventEmitter, RNProxy {
     withPromiseNoProxy(resolve, reject, "create") {
       self.proxy = try Spectro.create(
         emitter:          self,
-        outputPath:       self.getPropRequired(opts, "outputPath"),
         f_bins:           self.getPropRequired(opts, "f_bins"),
         // TODO Clean up unused params
-        refreshRate:      self.getPropOptional(opts, "refreshRate"),
-        bufferSize:       self.getPropOptional(opts, "bufferSize"),
         sampleRate:       self.getPropOptional(opts, "sampleRate"),
         channels:         self.getPropOptional(opts, "channels"),
         bytesPerPacket:   self.getPropOptional(opts, "bytesPerPacket"),
@@ -83,9 +80,15 @@ class RNSpectro: RCTEventEmitter, RNProxy {
   }
 
   @objc func start(
-    _ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
+    _ opts: Props,
+    resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
   ) -> Void {
-    withPromise(resolve, reject, "start") { _proxy in try _proxy.start() }
+    withPromise(resolve, reject, "start") { _proxy in
+      try _proxy.start(
+        outputPath:  self.getPropRequired(opts, "outputPath"),
+        refreshRate: self.getPropRequired(opts, "refreshRate")
+      )
+    }
   }
 
   @objc func stop(
@@ -152,11 +155,8 @@ public class Spectro {
 
   static func create(
     emitter:          RCTEventEmitter,
-    outputPath:       String,
     f_bins:           Int,
     // TODO Clean up unused params
-    refreshRate:      UInt32?,
-    bufferSize:       UInt32?,
     sampleRate:       Double?,
     channels:         UInt32?,
     bytesPerPacket:   UInt32?,
@@ -172,14 +172,6 @@ public class Spectro {
     let mBytesPerPacket   = bytesPerPacket   ?? (mBitsPerChannel / 8 * mChannelsPerFrame)
     let mBytesPerFrame    = bytesPerFrame    ?? mBytesPerPacket // Default assumes PCM
     let mFramesPerPacket  = framesPerPacket  ?? 1 // 1 for uncompressed
-    // let _bufferSize       = bufferSize       ?? 2048 // HACK Manually tuned for (22050hz,1ch,16bit)
-    // Calculation: bufferSize
-    //  = bytes/buffer
-    //  = bytes/s / (buffer/s)
-    //  = bytes/sample * sample/s / (buffer/s)
-    //  = mBytesPerPacket * mSampleRate / refreshRate
-    let _refreshRate      = refreshRate      ?? 2 // Hz
-    let _bufferSize       = bufferSize       ?? UInt32(Double(mBytesPerPacket) * mSampleRate / Double(_refreshRate))
     let mFormatFlags      = (
       // TODO Understand this. Was crashing without it. Blindly copied from RNAudioRecord.m (react-native-audio-record)
       mBitsPerChannel == 8
@@ -188,9 +180,7 @@ public class Spectro {
     )
     return try Spectro(
       emitter:    emitter,
-      outputPath: outputPath,
       f_bins:     f_bins,
-      bufferSize: _bufferSize,
       format:     AudioStreamBasicDescription(
         // TODO Clean up unused params
         // https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
@@ -219,13 +209,12 @@ public class Spectro {
 
   // Params
   let emitter:    RCTEventEmitter
-  let outputPath: String
   let f_bins:     Int
-  let bufferSize: UInt32
   let numBuffers: Int
   var format:     AudioStreamBasicDescription
 
   // State
+  var outputPath:      String?               = nil
   var queue:           AudioQueueRef?        = nil
   var buffers:         [AudioQueueBufferRef] = []
   var audioFile:       AudioFileID?          = nil
@@ -237,16 +226,12 @@ public class Spectro {
 
   init(
     emitter:    RCTEventEmitter,
-    outputPath: String,
     f_bins:     Int,
-    bufferSize: UInt32,
     numBuffers: Int = 3, // ≥3 on iphone? [https://books.google.com/books?id=jiwEcrb_H0EC&pg=PA160]
     format:     AudioStreamBasicDescription
   ) throws {
     Log.info(String(format: "Spectro.init: %@", [
-      "outputPath": outputPath,
       "f_bins":     f_bins,
-      "bufferSize": bufferSize,
       "numBuffers": numBuffers,
       "format":     format,
     ]))
@@ -258,9 +243,7 @@ public class Spectro {
     self.searchBirdgram = searchBirdgram
 
     self.emitter    = emitter
-    self.outputPath = outputPath
     self.f_bins     = f_bins
-    self.bufferSize = bufferSize
     self.numBuffers = numBuffers
     self.format     = format
 
@@ -282,7 +265,10 @@ public class Spectro {
 
   }
 
-  func start() throws -> Void {
+  func start(
+    outputPath:  String,
+    refreshRate: Double // Hz
+  ) throws -> Void {
     Log.info(String(format: "Spectro.start: %@", pretty([
       "outputPath": outputPath,
       "f_bins":     f_bins,
@@ -300,6 +286,7 @@ public class Spectro {
     try session.setCategory(.playAndRecord, mode: .default, options: [])
 
     // Reset audio file state
+    self.outputPath = outputPath
     audioFile       = nil
     nPacketsWritten = 0
     nPathsSent      = 0
@@ -307,7 +294,6 @@ public class Spectro {
     spectroRange    = Spectro.zeroSpectroRange
 
     // Create audio file to record to
-    //  - TODO Take full outputPath from caller instead of hardcoding documentDirectory() here
     let outputUrl  = NSURL(fileURLWithPath: outputPath)
     let fileType   = kAudioFileWAVEType // TODO .mp4 [Timesink! Need muck with format + general trial and error]
     Log.debug(String(format: "Spectro.start: AudioFileCreateWithURL: %@", pretty([
@@ -340,6 +326,13 @@ public class Spectro {
       &queue
     ))
     let _queue = queue!
+
+    // Calculate bufferSize from refreshRate
+    //  = bytes/buffer
+    //  = bytes/s / (buffer/s)
+    //  = bytes/sample * sample/s / (buffer/s)
+    //  = mBytesPerPacket * mSampleRate / refreshRate
+    let bufferSize = UInt32(Double(format.mBytesPerPacket) * format.mSampleRate / Double(refreshRate))
 
     // Allocate buffers for audio queue
     buffers = []
@@ -374,8 +367,9 @@ public class Spectro {
       Log.info("Spectro.stop")
 
       // Noop unless recording
-      guard let _queue     = self.queue     else { return nil }
-      guard let _audioFile = self.audioFile else { return nil } // Should be defined if queue is, but let's not risk races
+      guard let _queue      = self.queue      else { return nil }
+      guard let _audioFile  = self.audioFile  else { return nil } // Should be defined if queue is, but let's not risk races
+      guard let _outputPath = self.outputPath else { return nil } // Should be defined if queue is, but let's not risk races
 
       // Stop recording
       Log.debug("Spectro.stop: AudioQueueStop + AudioQueueDispose")
@@ -393,7 +387,7 @@ public class Spectro {
       // Close audio file (but don't reset its state until the next .start(), so we can continue reading it)
       try checkStatus(AudioFileClose(_audioFile))
 
-      return self.outputPath
+      return _outputPath
     }
   }
 
@@ -566,15 +560,15 @@ public class Spectro {
     ]
   }
 
-  // Uses Spectro.f_bins (e.g. 80), not features.f_bins (e.g. 40)
+  // Uses self.f_bins (e.g. 80), not features.f_bins (e.g. 40)
   func renderAudioPathToSpectroPath(
     _ audioPath: String,
-    _ spectroPathBase: String,
+    _ spectroPath: String,
     denoise: Bool
   ) throws -> ImageFile? {
     Log.info(String(format: "Spectro.renderAudioPathToSpectroPath: %@", [
       "audioPath": audioPath,
-      "spectroPathBase": spectroPathBase,
+      "spectroPath": spectroPath,
       "denoise": denoise,
     ]))
 
@@ -602,7 +596,7 @@ public class Spectro {
       return nil
     }
     let imageFile = try matrixToImageFile(
-      spectroPathBase,
+      spectroPath,
       S,
       range: Interval(min(S.grid), max(S.grid)), // [Is min/max a robust behavior in general? Works well for doneRecording, at least]
       colors: colors

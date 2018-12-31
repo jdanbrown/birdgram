@@ -151,3 +151,19 @@ global.puts        = puts;
 global.print       = print;
 global.pp          = pp;
 global.debug_print = debug_print;
+
+export function logErrors<X>(label: string, f: () => void): void {
+  try {
+    f();
+  } catch (e) {
+    log.error(label, {e});
+  };
+}
+
+export async function logErrorsAsync<X>(label: string, f: () => Promise<void>): Promise<void> {
+  try {
+    await f();
+  } catch (e) {
+    log.error(label, {e});
+  };
+}

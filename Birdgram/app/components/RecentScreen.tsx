@@ -159,7 +159,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                     }),
                   }}>
                     {matchSearchPathParams(searchPathParamsFromLocation(recent.location), {
-                      none:    ()                    => 'Home (/)',
+                      root:    ()                    => 'Home (/)',
                       random:  ({filters, seed})     => `Random (${seed})`,
                       species: ({filters, species})  => `Species: ${species}`,
                       rec:     ({filters, sourceId}) => `Rec: ${showSourceId(sourceId)}`,

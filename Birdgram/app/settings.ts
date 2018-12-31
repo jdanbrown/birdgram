@@ -20,7 +20,7 @@ export interface Props {
   // For RecordScreen
   readonly refreshRate: number;
   readonly doneSpectroChunkWidth: number
-  readonly spectroImageLimit: number;
+  readonly spectroChunkLimit: number;
   // For SearchScreen
   readonly showMetadataLeft: boolean;
   readonly showMetadataBelow: boolean;
@@ -43,7 +43,7 @@ export const DEFAULTS: Props = {
   // For RecordScreen
   refreshRate: 8,
   doneSpectroChunkWidth: 25, // (ios dims: https://tinyurl.com/y8xsdvnk)
-  spectroImageLimit: 0, // 0 for unlimited
+  spectroChunkLimit: 0, // 0 for unlimited
   // For SearchScreen
   showMetadataLeft: false,
   showMetadataBelow: false,
@@ -67,7 +67,7 @@ export const TYPES: {[key: string]: Array<string>} = {
   // For RecordScreen
   refreshRate: ['number'],
   doneSpectroChunkWidth: ['number'],
-  spectroImageLimit: ['number'],
+  spectroChunkLimit: ['number'],
   // For SearchScreen
   showMetadataLeft: ['boolean'],
   showMetadataBelow: ['boolean'],
@@ -91,7 +91,7 @@ export const KEYS = [
   // For RecordScreen
   'refreshRate',
   'doneSpectroChunkWidth',
-  'spectroImageLimit',
+  'spectroChunkLimit',
   // For SearchScreen
   'showMetadataLeft',
   'showMetadataBelow',
@@ -145,7 +145,7 @@ export class Settings implements SettingsWrites, Props {
     // For RecordScreen
     public readonly refreshRate: number,
     public readonly doneSpectroChunkWidth: number,
-    public readonly spectroImageLimit: number,
+    public readonly spectroChunkLimit: number,
     // For SearchScreen
     public readonly showMetadataLeft: boolean,
     public readonly showMetadataBelow: boolean,

@@ -28,7 +28,7 @@ type Props = {
   // RecordScreen
   refreshRate: number;
   doneSpectroChunkWidth: number
-  spectroImageLimit: number;
+  spectroChunkLimit: number;
   // SearchScreen
   playingProgressEnable: boolean;
   playingProgressInterval: number;
@@ -147,15 +147,15 @@ export class SettingsScreen extends PureComponent<Props, State> {
 
             {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
             <SettingsList.Item
-              id='spectroImageLimit (0 for unlimited)'
-              title='spectroImageLimit (0 for unlimited)'
+              id='spectroChunkLimit (0 for unlimited)'
+              title='spectroChunkLimit (0 for unlimited)'
               isEditable={true}
               hasNavArrow={false}
-              value={(this.props.spectroImageLimit || '').toString()}
+              value={(this.props.spectroChunkLimit || '').toString()}
               onTextChange={async str => {
                 const x = parseInt(str);
-                const spectroImageLimit = _.isNaN(x) ? 1 : x;
-                await this.props.settings.set('spectroImageLimit', spectroImageLimit);
+                const spectroChunkLimit = _.isNaN(x) ? 1 : x;
+                await this.props.settings.set('spectroChunkLimit', spectroChunkLimit);
               }}
             />
 
