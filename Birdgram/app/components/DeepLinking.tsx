@@ -1,7 +1,6 @@
 import React, { PureComponent } from 'react';
 import { Linking } from 'react-native';
 import { Route } from 'react-router-native';
-import { History } from 'history';
 
 import { Log, rich } from '../log';
 import { urlpack } from '../urlpack';

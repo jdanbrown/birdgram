@@ -15,6 +15,7 @@ export const Styles = {
     justifyContent: 'center', // Vertical
     alignItems: 'center', // Horizontal
   } as ViewProps,
+  rotate45:       {transform: [{rotate: '45deg'}]},
   rotate90:       {transform: [{rotate: '90deg'}]},
   rotate180:      {transform: [{rotate: '180deg'}]},
   rotate270:      {transform: [{rotate: '270deg'}]},

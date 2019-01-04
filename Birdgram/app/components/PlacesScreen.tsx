@@ -1,5 +1,4 @@
 import _ from 'lodash';
-import { Location, MemoryHistory } from 'history';
 import React, { PureComponent } from 'react';
 import { Dimensions, FlatList, Image, Platform, SectionList, Text, View, WebView } from 'react-native';
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
@@ -7,11 +6,11 @@ import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import {
-  matchSearchPathParams, MetadataSpecies, Place, showSourceId, Species,
+  matchSearchPathParams, MetadataSpecies, Place, Species,
 } from '../datatypes';
 import { Ebird } from '../ebird';
 import { Log, rich } from '../log';
-import { Go, Histories } from '../router';
+import { Go, Histories, History, Location } from '../router';
 import { SettingsWrites } from '../settings';
 import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
@@ -22,7 +21,7 @@ const log = new Log('PlacesScreen');
 interface Props {
   // App globals
   location:        Location;
-  history:         MemoryHistory;
+  history:         History;
   histories:       Histories;
   go:              Go;
   metadataSpecies: MetadataSpecies;
@@ -75,7 +74,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
             marginBottom: 10,
             ...material.titleObject,
           }}>
-            Saved Places
+            Places
           </Text>
         </View>
 

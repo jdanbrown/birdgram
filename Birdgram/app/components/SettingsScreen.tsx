@@ -25,6 +25,10 @@ type Props = {
   showDebug: boolean;
   allowUploads: boolean;
   maxHistory: number;
+  f_bins: number;
+  // Geo
+  geoHighAccuracy: boolean;
+  geoWarnIfNoCoords: boolean;
   // RecordScreen
   refreshRate: number;
   doneSpectroChunkWidth: number
@@ -101,6 +105,40 @@ export class SettingsScreen extends PureComponent<Props, State> {
               hasSwitch={true}
               switchState={this.props.allowUploads}
               switchOnValueChange={async x => await this.props.settings.set('allowUploads', x)}
+            /> */}
+
+            <SettingsList.Item
+              id='geoHighAccuracy'
+              title='geoHighAccuracy'
+              hasNavArrow={false}
+              hasSwitch={true}
+              switchState={this.props.geoHighAccuracy}
+              switchOnValueChange={async x => await this.props.settings.set('geoHighAccuracy', x)}
+            />
+
+            <SettingsList.Item
+              id='geoWarnIfNoCoords'
+              title='geoWarnIfNoCoords'
+              hasNavArrow={false}
+              hasSwitch={true}
+              switchState={this.props.geoWarnIfNoCoords}
+              switchOnValueChange={async x => await this.props.settings.set('geoWarnIfNoCoords', x)}
+            />
+
+            {/* FIXME Various (small) issues when changing this: */}
+            {/* - <Image>'s warn on file not found for intermediate f_bins values (e.g. 80 -> 4 -> 40) */}
+            {/* - RecordScreen scales really wacky on f_bins!=80 (e.g. 40 very small, 160 very large) */}
+            {/* <SettingsList.Item
+              id='f_bins (requires restart)'
+              title='f_bins (requires restart)'
+              isEditable={true}
+              hasNavArrow={false}
+              value={(this.props.f_bins || '').toString()}
+              onTextChange={async str => {
+                const x = parseInt(str);
+                const f_bins = _.isNaN(x) ? DEFAULTS.f_bins : x;
+                await this.props.settings.set('f_bins', f_bins);
+              }}
             /> */}
 
             {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}

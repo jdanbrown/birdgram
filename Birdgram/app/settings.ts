@@ -7,7 +7,7 @@ import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, Metadata
 import { HARDCODED_PLACES } from './data/places';
 import { Place } from './datatypes';
 import { Log, puts, rich } from './log';
-import { json, objectKeysTyped, yaml } from './utils';
+import { json, objectKeysTyped, typed, yaml } from './utils';
 
 const log = new Log('Settings');
 
@@ -17,6 +17,10 @@ export interface Props {
   readonly showDebug: boolean;
   readonly allowUploads: boolean;
   readonly maxHistory: number;
+  readonly f_bins: number;
+  // For Geo
+  readonly geoHighAccuracy: boolean;
+  readonly geoWarnIfNoCoords: boolean;
   // For RecordScreen
   readonly refreshRate: number;
   readonly doneSpectroChunkWidth: number
@@ -40,15 +44,30 @@ export const DEFAULTS: Props = {
   showDebug: false,
   allowUploads: true,
   maxHistory: 100, // 0 for unlimited
+  f_bins: 80, // Show higher-res spectros for user recs than model uses to query xc recs (f_bins=40)
+  // For Geo
+  geoHighAccuracy: true,
+  geoWarnIfNoCoords: true,
   // For RecordScreen
   refreshRate: 8,
-  doneSpectroChunkWidth: 25, // (ios dims: https://tinyurl.com/y8xsdvnk)
+  doneSpectroChunkWidth: 5, // (ios dims: https://tinyurl.com/y8xsdvnk)
   spectroChunkLimit: 0, // 0 for unlimited
   // For SearchScreen
   showMetadataLeft: false,
   showMetadataBelow: false,
-  metadataColumnsLeft: ['com_name'] as Array<MetadataColumnLeft>,
-  metadataColumnsBelow: objectKeysTyped(MetadataColumnsBelow) as Array<MetadataColumnBelow>,
+  metadataColumnsLeft: typed<Array<MetadataColumnLeft>>([
+    'com_name',
+  ]),
+  metadataColumnsBelow: typed<Array<MetadataColumnBelow>>([
+    'species',
+    'species_group',
+    'id',
+    'recordist',
+    'quality',
+    'month_day',
+    'place',
+    'remarks',
+  ]),
   editing: false,
   seekOnPlay: false,
   playingProgressEnable: false, // FIXME High cpu
@@ -64,6 +83,10 @@ export const TYPES: {[key: string]: Array<string>} = {
   showDebug: ['boolean'],
   allowUploads: ['boolean'],
   maxHistory: ['number'],
+  f_bins: ['number'],
+  // For Geo
+  geoHighAccuracy: ['boolean'],
+  geoWarnIfNoCoords: ['boolean'],
   // For RecordScreen
   refreshRate: ['number'],
   doneSpectroChunkWidth: ['number'],
@@ -88,6 +111,10 @@ export const KEYS = [
   'showDebug',
   'allowUploads',
   'maxHistory',
+  'f_bins',
+  // For Geo
+  'geoHighAccuracy',
+  'geoWarnIfNoCoords',
   // For RecordScreen
   'refreshRate',
   'doneSpectroChunkWidth',
@@ -142,6 +169,10 @@ export class Settings implements SettingsWrites, Props {
     public readonly showDebug: boolean,
     public readonly allowUploads: boolean,
     public readonly maxHistory: number,
+    public readonly f_bins: number,
+    // For Geo
+    public readonly geoHighAccuracy: boolean,
+    public readonly geoWarnIfNoCoords: boolean,
     // For RecordScreen
     public readonly refreshRate: number,
     public readonly doneSpectroChunkWidth: number,

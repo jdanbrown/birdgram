@@ -1,11 +1,10 @@
-import { Location, MemoryHistory } from 'history';
 import React, { PureComponent } from 'react';
 import { Dimensions, Image, Platform, ScrollView, Text, View, WebView } from 'react-native';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { Log, rich } from '../log';
-import { Go, Histories } from '../router';
+import { Go, Histories, History, Location } from '../router';
 import { StyleSheet } from '../stylesheet';
 import { global, json, shallowDiffPropsState, yaml } from '../utils';
 
@@ -14,7 +13,7 @@ const log = new Log('HelpScreen');
 interface Props {
   // App globals
   location:   Location;
-  history:    MemoryHistory;
+  history:    History;
   histories:  Histories;
   go:         Go;
 }

@@ -1,7 +1,7 @@
 // Based on https://github.com/react-navigation/react-navigation-tabs/blob/v0.5.1/src/views/BottomTabBar.js
 
 import _ from 'lodash';
-import { createMemoryHistory, Location, MemoryHistory } from 'history';
+import memoizeOne from 'memoize-one';
 import React, { Component, ComponentClass, PureComponent, ReactNode } from 'React';
 import { Dimensions, Platform, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
@@ -10,9 +10,9 @@ import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-rout
 
 import { Log, puts, rich } from '../log';
 import { getOrientation, matchOrientation, Orientation } from '../orientation';
-import { Histories, HistoryConsumer, ObserveHistory, RouterWithHistory, TabName } from '../router';
+import { Histories, History, HistoryConsumer, Location, ObserveHistory, RouterWithHistory, TabName } from '../router';
 import { StyleSheet } from '../stylesheet';
-import { json, pretty, shallowDiffPropsState, Style } from '../utils';
+import { json, pretty, shallowDiffPropsState, Style, throw_ } from '../utils';
 
 const log = new Log('TabRoutes');
 
@@ -48,7 +48,7 @@ export interface TabRouteRoute {
 export interface TabRouteProps {
   key: TabRouteKey;
   location: Location;
-  history: MemoryHistory;
+  history: History;
   histories: Histories;
 }
 
@@ -187,6 +187,14 @@ export class TabRoutes extends PureComponent<TabRoutesProps, TabRoutesState> {
   matchedRouteIndex = (location: Location): number => {
     return _.findIndex(this.props.routes, route => routeMatchesLocation(route.route, location));
   }
+
+  iconNameForTab = (tab: TabRouteKey): string => this._iconNameForTab(this.props.routes)(tab);
+  _iconNameForTab: (routes: Array<TabRoute>) => (tab: TabRouteKey) => string = (
+    memoizeOne((routes: Array<TabRoute>) => {
+      const m = new Map(routes.map<[TabRouteKey, string]>(x => [x.key, x.iconName]));
+      return (tab: TabRouteKey) => m.get(tab) || throw_(`Unknown tab: ${tab}`);
+    })
+  );
 
 }
 

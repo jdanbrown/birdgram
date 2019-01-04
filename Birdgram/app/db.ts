@@ -1,12 +1,14 @@
+import _ from 'lodash';
 import SQLite, { SQLiteDatabase } from 'react-native-sqlite-storage';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
-import { matchSourceId, Rec, SearchRecs, SourceId, UserRec, XCRec } from './datatypes';
+import { EditRec, matchSource, Rec, SearchRecs, Source, SourceId, UserRec, XCRec } from './datatypes';
 import { Log, puts, rich, tap } from './log';
 import { NativeSearch } from './native/Search';
 import Sound from './sound';
 import { querySql, QuerySql, sqlf } from './sql';
+import { local, typed } from './utils';
 
 const log = new Log('DB');
 
@@ -39,10 +41,11 @@ export class DB {
 
   loadRec = async (sourceId: SourceId): Promise<Rec> => {
     log.info('loadRec', {sourceId});
-    return await matchSourceId(sourceId, {
-      xc: async ({xc_id}) => {
+    const source = Source.parse(sourceId);
+    return await matchSource<Promise<Rec>>(source, {
+      xc: async source => {
 
-        // Read xc rec from db
+        // Read xc rec from db search_recs (includes f_preds as cols)
         return await this.query<XCRec>(sqlf`
           select *
           from search_recs
@@ -53,52 +56,116 @@ export class DB {
         });
 
       },
-      user: async ({name, clip}) => {
+      user: async source => {
 
-        // Predict f_preds from audio
-        //  - Audio not spectro: model uses its own f_bins=40, separate from RecordScreen.props.f_bins=80 that we use to
-        //    draw while recording
-        const f_preds = await log.timedAsync('loadRec: f_preds', async () => {
-          return await NativeSearch.f_preds(UserRec.audioPath(sourceId));
+        // Predict (and read metadata) from audio file
+        const {f_preds, duration_s} = await this.predsFromAudioFile(source, UserRec)
+
+        // Make UserRec
+        return typed<UserRec>({
+          // UserRec
+          kind:                  'user',
+          f_preds,
+          // Rec:bubo
+          source_id:             sourceId,
+          duration_s,
+          // Rec:xc (mock)
+          //  - TODO Push these fields into XCRec and update consumers to supply 'unknown' values for user/edit recs
+          species:               'unknown',
+          species_taxon_order:   '_UNK',
+          species_com_name:      'unknown',
+          species_sci_name:      'unknown',
+          species_species_group: 'unknown',
+          species_family:        'unknown',
+          species_order:         'unknown',
+          recs_for_sp:           -1,
+          quality:               'no score',
+          date:                  '',
+          month_day:             '',
+          year:                  -1,
+          place:                 '',
+          place_only:            '',
+          state:                 '',
+          state_only:            '',
+          recordist:             '',
+          license_type:          '',
+          remarks:               '',
         });
-        if (f_preds === null) {
-          throw `DB.loadRec: Unexpected null f_preds (audio < nperseg), for sourceId[${sourceId}]`;
-        } else {
 
-          let userRec: UserRec = {
-            source_id:           sourceId,
-            duration_s:          NaN, // TODO(stretch_user_rec)
-            f_preds,
-            // Mock the xc fields
-            //  - TODO Clean up junk fields after splitting subtypes XCRec, UserRec <: Rec
-            xc_id:               -1,
-            species:             'unknown',
-            species_taxon_order: '_UNK',
-            species_com_name:    'unknown',
-            species_sci_name:    'unknown',
-            recs_for_sp:         -1,
-            quality:             'no score',
-            month_day:           '',
-            place:               '',
-            place_only:          '',
-            state:               '',
-            state_only:          '',
-            recordist:           '',
-            license_type:        '',
-            remarks:             '',
-          };
+      },
+      edit: async source => {
 
-          // HACK Read duration_s from audio file
-          //  - TODO Dedupe with SearchScreen.getOrAllocateSoundAsync
-          await Sound.scoped<void>(UserRec.audioPath(sourceId))(async sound => {
-            userRec.duration_s = sound.getDuration();
-          });
+        // Predict (and read metadata) from audio file
+        const {f_preds, duration_s} = await this.predsFromAudioFile(source, EditRec)
 
-          return userRec
-        }
+        // Make EditRec
+        return typed<EditRec>({
+          // EditRec
+          kind:                  'edit',
+          edit:                  source.edit,
+          f_preds,
+          // Rec:bubo
+          source_id:             sourceId,
+          duration_s,
+          // Rec:xc (mock)
+          //  - TODO(user_metadata): Read (some of) these from .metadata.json (see EditRec.newAudioPath)
+          species:               'unknown',
+          species_taxon_order:   '_UNK',
+          species_com_name:      'unknown',
+          species_sci_name:      'unknown',
+          species_species_group: 'unknown',
+          species_family:        'unknown',
+          species_order:         'unknown',
+          recs_for_sp:           -1,
+          quality:               'no score',
+          date:                  '',
+          month_day:             '',
+          year:                  -1,
+          place:                 '',
+          place_only:            '',
+          state:                 '',
+          state_only:            '',
+          recordist:             '',
+          license_type:          '',
+          remarks:               '',
+        });
 
       },
     });
+  }
+
+  predsFromAudioFile = async <X extends Source>(source: X, RecType: {
+    audioPath: (source: X) => string,
+  }): Promise<{
+    // Preds
+    f_preds: Array<number>,
+    // Audio metadata (that requires reading the file, which we're already doing)
+    duration_s: number,
+  }> => {
+
+    // Params
+    const sourceId  = Source.stringify(source);
+    const audioPath = RecType.audioPath(source);
+
+    // Predict f_preds from audio file
+    //  - Predict from audio not spectro: our spectros use Settings.f_bins (e.g. >40) i/o model's f_bins=40
+    const f_preds = await log.timedAsync('loadRec: f_preds (from audio file)', async () => {
+      return await NativeSearch.f_preds(audioPath);
+    });
+    if (f_preds === null) {
+      throw `Unexpected null f_preds (audio < nperseg), for sourceId[${sourceId}]`;
+    }
+
+    // Read duration_s from audio file
+    //  - TODO Push down into NativeSearch.f_preds / reuse SearchScreen.getOrAllocateSoundAsync?
+    const duration_s = await log.timedAsync('loadRec: duration_s (from audio file)', async () => {
+      return await Sound.scoped<number>(audioPath)(async sound => {
+        return sound.getDuration();
+      });
+    });
+
+    return {f_preds, duration_s};
+
   }
 
 }

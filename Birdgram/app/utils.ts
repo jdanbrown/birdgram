@@ -3,6 +3,7 @@
 //
 
 import _ from 'lodash';
+import { sprintf } from 'sprintf-js';
 
 // Export global:any, which would have otherwise come from DOM but we disable DOM for react-native (tsconfig -> "lib")
 //  - Fallback to a mock `{}` for release builds, which run in jsc instead of chrome v8 and don't have window.global
@@ -10,16 +11,32 @@ import _ from 'lodash';
 // @ts-ignore
 export const global: any = window.global || {};
 
-export function assert(value: any, msg?: string) {
+// throw in expression context
+export function throw_(e: any): never {
+  throw e;
+}
+
+export function assert(value: any, msg?: string | (() => string)) {
   if (!value) {
+    if (msg instanceof Function) msg = msg(); // Lazy if requested, to avoid perf bottlenecks
     throw new Error(`Assertion failed: ${msg}`);
   }
+}
+
+// Simple idiom for local block scope in expression context, like: (() => {...})()
+export function local<X>(f: () => X): X {
+  return f();
 }
 
 // Useful for pattern matching in an expression context
 //  - Example usage: into(<complex-expression>, x => ...)
 export function into<X, Y>(x: X, f: (x: X) => Y): Y {
   return f(x);
+}
+
+// Type annotation (not type assertion)
+export function typed<X>(x: X): X {
+  return x;
 }
 
 export function all(...xs: Array<any>): boolean { return xs.every(Boolean); }
@@ -66,10 +83,10 @@ export async function catchTryAsync<X>(
 // TODO Change cases to functions, like the other ADT matchFoo functions
 // `X0 extends X` so that x0 can't (quietly) generalize the type of the case patterns (e.g. to include null)
 //  - e.g. fail on `match(X | null, ...)` if the case patterns don't include null
-export function match<X, X0 extends X, Y>(x0: X0, ...cases: Array<[X | Match, () => Y]>): Y {
+export function match<X, Y = X, X0 extends X = X>(x0: X0, ...cases: Array<[X | Match, (x0: X0) => Y]>): Y {
   for (let [x, f] of cases) {
     if (x === x0 || x === Match.Default) {
-      return f();
+      return f(x0);
     }
   }
   throw new Error(`No cases matched: ${x0} not in ${cases}`);
@@ -90,26 +107,53 @@ export function matchUndefined<X, Y>(x: undefined | X, cases: {x: (x: X) => Y, u
   return (x === undefined
     ? cases.undefined()
     : cases.x(x)
-  )
+  );
 }
 
 export function matchNil<X, Y>(x: undefined | null | X, cases: {x: (x: X) => Y, nil: (nil: undefined | null) => Y}): Y {
   return (_.isNil(x)
     ? cases.nil(x)
     : cases.x(x)
-  )
+  );
+}
+
+export function matchEmpty<X, Y>(x: X, cases: {nonEmpty: (x: X) => Y, empty: (x: X) => Y}): Y {
+  return (_.isEmpty(x)
+    ? cases.empty(x)
+    : cases.nonEmpty(x)
+  );
 }
 
 export function mapNull<X, Y>(x: null | X, f: (x: X) => Y): null | Y {
-  return matchNull(x, {null: () => null, x: x => f(x)});
+  return matchNull(x, {null: () => null, x: f});
 }
 
 export function mapUndefined<X, Y>(x: undefined | X, f: (x: X) => Y): undefined | Y {
-  return matchUndefined(x, {undefined: () => undefined, x: x => f(x)});
+  return matchUndefined(x, {undefined: () => undefined, x: f});
 }
 
 export function mapNil<X, Y>(x: undefined | null | X, f: (x: X) => Y): undefined | null | Y {
-  return matchNil(x, {nil: nil => nil, x: x => f(x)});
+  return matchNil(x, {nil: nil => nil, x: f});
+}
+
+export function mapEmpty<X>(x: X, f: (x: X) => X): X {
+  return matchEmpty(x, {empty: x => x, nonEmpty: f});
+}
+
+export function ifNull<X>(x: null | X, f: () => X): X {
+  return matchNull(x, {null: f, x: x => x});
+}
+
+export function ifUndefined<X>(x: undefined | X, f: () => X): X {
+  return matchUndefined(x, {undefined: f, x: x => x});
+}
+
+export function ifNil<X>(x: undefined | null | X, f: () => X): X {
+  return matchNil(x, {nil: f, x: x => x});
+}
+
+export function ifEmpty<X>(x: X, f: () => X): X {
+  return matchEmpty(x, {empty: f, nonEmpty: x => x});
 }
 
 export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
@@ -119,8 +163,20 @@ export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
   return map.get(k)!;
 }
 
+// js is ridiculous
+export function safeParseInt(s: string): number {
+  const x = Number(s);
+  if (_.isNaN(x) || String(x) !== s) throw `Failed to parse int: ${s}`;
+  return x;
+}
+
 export function round(x: number, prec: number = 0): number {
   return Math.round(x * 10**prec) / 10**prec;
+}
+
+export function splitFirst(s: string, sep: string): Array<string> {
+  const [first, ...rest] = s.split(sep);
+  return [first, rest.join(sep)];
 }
 
 export function mapMapKeys<K, V, L>(map: Map<K, V>, f: (k: K) => L): Map<L, V> {
@@ -133,6 +189,31 @@ export function mapMapValues<K, V, U>(map: Map<K, V>, f: (v: V) => U): Map<K, U>
 
 export function mapMapEntries<K, V, L, U>(map: Map<K, V>, f: (k: K, v: V) => [L, U]): Map<L, U> {
   return new Map(Array.from(map).map<[L, U]>(([k, v]) => f(k, v)));
+}
+
+export function enumerate<X>(xs: Array<X>): Array<{x: X, i: number}> {
+  return xs.map((x, i) => ({x, i}));
+}
+
+export function mergeArraysWith<X, Y>(f: (x: X) => Y, ...xss: Array<Array<X>>): Array<X> {
+  xss = xss.map(xs => xs.slice()); // Copy each array so we can mutate
+  const result: X[] = [];
+  while (true) {
+    // Filter out empty xs (else need more complexity below)
+    xss = xss.filter(xs => xs.length);
+    // Stop when no nonempty xs remain
+    if (!xss.length) break;
+    // Pick max xs[0]
+    const {x, i} = _.maxBy(
+      xss.map((xs, i) => ({x: xs[0], i})),
+      ({x, i}) => f(x),
+    )!;
+    // Pop xs[0] from xss[i]
+    xss[i].shift();
+    // Add xs[0] to result
+    result.push(x);
+  }
+  return result;
 }
 
 export class Timer {
@@ -195,6 +276,21 @@ export class ExpWeightedRate {
   get value(): number { return 1 / this._mean.value }
 }
 
+export type Point = {
+  x: number;
+  y: number;
+};
+
+export type Dim<X> = {
+  width:  X;
+  height: X;
+};
+
+export type Clamp<X> = {
+  min: X;
+  max: X;
+};
+
 export function timed<X>(f: () => X): number {
   return _timed(f).time;
 }
@@ -218,6 +314,109 @@ global.times = times;
 global.str   = (x: any) => x.toString(); // e.g. for nj.array, which have a not useful console.log but a useful .toString()
 
 //
+// Typescript
+//
+
+export type Omit<X, K> = Pick<X, Exclude<keyof X, K>>;
+
+//
+// show
+//
+
+export function showDate(d: Date): string {
+  // FIXME(android) toLocaleTimeString won't work on android [https://github.com/facebook/react-native/issues/15717]
+  return `${d.toDateString()}, ${d.toLocaleTimeString()}`;
+}
+
+export function showSuffix<X>(sep: string, x: X | undefined, show: (x: X) => string): string {
+  return mapEmpty(mapUndefined(x, show) || '', s => sep + s);
+}
+
+//
+// Interval
+//
+
+export type IntervalEndpoint  = 'open' | 'closed';
+export type IntervalEndpoints = {lo: IntervalEndpoint, hi: IntervalEndpoint};
+export type IntervalBraces    = {lo: '(' | '[', hi: ')' | ']'};
+
+export class Interval {
+
+  constructor(
+    public lo:        number,
+    public hi:        number,
+    public endpoints: IntervalEndpoints = {lo: 'open', hi: 'closed'},
+  ) {}
+
+  static bottom = new Interval(Infinity,  -Infinity, {lo: 'open', hi: 'open'});
+  static top    = new Interval(-Infinity, Infinity,  {lo: 'open', hi: 'open'});
+
+  contains = (x: number | Interval): boolean => {
+    const {lo, hi, endpoints} = this;
+    if (x instanceof Interval) {
+      return this.contains(x.lo) && this.contains(x.hi);
+    } else {
+      return (
+        (endpoints.lo === 'open' ? lo < x : lo <= x) &&
+        (endpoints.hi === 'open' ? hi > x : hi >= x)
+      );
+    }
+  }
+
+  overlaps = (x: Interval): boolean => {
+    return this.contains(x.lo) || this.contains(x.hi);
+  }
+
+  // Can't simply json/unjson because we have to JsonSafeNumber to handle Infinity/-Infinity
+  //  - And along the way we simplify '{"lo":x,"hi":y}' -> '[x,y]'
+  stringify = (): string => {
+    const braces = Interval.endpointsToBraces(this.endpoints);
+    return [
+      braces.lo,
+      json([
+        JsonSafeNumber.safe(this.lo),
+        JsonSafeNumber.safe(this.hi),
+      ]).slice(1, -1),
+      braces.hi,
+    ].join('');
+  }
+  static parse = (s: string): Interval => {
+    if (!s) throw `String must be nonempty: ${s}`;
+    const braces = {lo: s[0], hi: s[-1]} as IntervalBraces; // HACK Type (rely on match in bracesToEndpoints to flag errors)
+    const [lo, hi] = unjson(['[', s.slice(1, -1), ']'].join('')); // TODO Include s in unjson() error msgs
+    // TODO Handle lo/hi values not in JsonSafeNumber
+    //  - TODO Possible to do a safe downcast generically?
+    //    - Maybe: https://github.com/Microsoft/TypeScript/issues/3193#issuecomment-103118767
+    //    - But... https://stackoverflow.com/a/6625960/397334
+    return new Interval(
+      JsonSafeNumber.unsafe(lo),
+      JsonSafeNumber.unsafe(hi),
+      Interval.bracesToEndpoints(braces),
+    );
+  }
+
+  static endpointsToBraces = (endpoints: IntervalEndpoints): IntervalBraces => {
+    return {
+      lo: match<IntervalEndpoints['lo'], IntervalBraces['lo']>(endpoints.lo, ['open', () => '('], ['closed', () => '[']),
+      hi: match<IntervalEndpoints['hi'], IntervalBraces['hi']>(endpoints.hi, ['open', () => ')'], ['closed', () => ']']),
+    };
+  }
+
+  static bracesToEndpoints = (braces: IntervalBraces): IntervalEndpoints => {
+    return {
+      lo: match<IntervalBraces['lo'], IntervalEndpoints['lo']>(braces.lo, ['(', () => 'open'], ['[', () => 'closed']),
+      hi: match<IntervalBraces['hi'], IntervalEndpoints['hi']>(braces.hi, [')', () => 'open'], [']', () => 'closed']),
+    };
+  }
+
+  show = (): string => {
+    const braces = Interval.endpointsToBraces(this.endpoints);
+    return sprintf('%s%.2f–%.2fs%s', braces.lo, this.lo, this.hi, braces.hi);
+  }
+
+};
+
+//
 // json
 //
 
@@ -232,6 +431,30 @@ export const unjson = JSON.parse;
 global.json   = json;
 global.pretty = pretty;
 global.unjson = unjson;
+
+export type JsonSafeNumber = number | 'NaN' | 'Infinity' | '-Infinity';
+
+export const JsonSafeNumber = {
+
+  safe: (x: number): JsonSafeNumber => {
+    return match<number, JsonSafeNumber>(x,
+      [NaN,           () => 'NaN'],
+      [Infinity,      () => 'Infinity'],
+      [-Infinity,     () => '-Infinity'],
+      [match.default, x  => x],
+    );
+  },
+
+  unsafe: (x: JsonSafeNumber): number => {
+    return match<JsonSafeNumber, number>(x,
+      ['NaN',         () => NaN],
+      ['Infinity',    () => Infinity],
+      ['-Infinity',   () => -Infinity],
+      [match.default, x  => x as number],
+    );
+  },
+
+};
 
 //
 // yaml
@@ -266,12 +489,6 @@ global.Yaml       = Yaml;
 global.yaml       = yaml;
 global.yamlPretty = yamlPretty;
 global.unyaml     = unyaml;
-
-//
-// Typescript
-//
-
-export type Omit<X, K> = Pick<X, Exclude<keyof X, K>>;
 
 //
 // Promise
@@ -324,19 +541,19 @@ import { ImageStyle, RegisteredStyle, TextStyle, ViewStyle } from 'react-native'
 // Evolving approach to how to pass StyleSheet parts around
 export type Style = RegisteredStyle<ViewStyle | TextStyle | ImageStyle>
 
-// Sounds like this is an anti-pattern
+// Avoid: sounds like this is an anti-pattern
 //  - https://github.com/facebook/react/pull/9989#issuecomment-309141521
 //  - https://github.com/facebook/react/issues/2642#issuecomment-66676469
 //  - https://github.com/facebook/react/issues/2642#issuecomment-309142005
 //  - https://github.com/facebook/react/issues/2642#issuecomment-352135607
-// export function setStateAsync<P, S, K extends keyof S>(
-//   component: Component<P, S>,
-//   state: ((prevState: Readonly<S>, props: Readonly<P>) => (Pick<S, K> | S | null)) | (Pick<S, K> | S | null),
-// ): Promise<void> {
-//   return new Promise((resolve, reject) => {
-//     component.setState(state, () => resolve());
-//   });
-// }
+export function setStateAsync<P, S, K extends keyof S>(
+  component: Component<P, S>,
+  state: ((prevState: Readonly<S>, props: Readonly<P>) => (Pick<S, K> | S | null)) | (Pick<S, K> | S | null),
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    component.setState(state, () => resolve());
+  });
+}
 
 // Typesafe wrapper around react-fast-compare
 export function deepEqual<X, Y extends X>(x: X, y: Y | null | undefined): boolean {
@@ -375,33 +592,27 @@ export function __F_IF_DEV__<F extends (...args: any[]) => void>(f: F): F {
   return __DEV__ ? f : noop;
 }
 
-export type Point = {
-  x: number;
-  y: number;
-};
-
-export type Dim<X> = {
-  width:  X;
-  height: X;
-};
-
-export type Clamp<X> = {
-  min: X;
-  max: X;
-};
-
 //
 // path
 //  - Based on https://github.com/LittoCats/react-native-path/blob/master/index.js
+//  - Based on https://nodejs.org/api/path.html
 //
 
 // TODO Need more normalize()?
 //  - https://github.com/LittoCats/react-native-path/blob/master/index.js#L127-L129
+export function basename(path: string): string {
+  return path.split(/\//g).slice(-1)[0]!;
+}
 export function dirname(path: string): string {
   return path.split(/\//g).slice(0, -1).join('/');
 }
-export function basename(path: string): string {
-  return path.split(/\//g).slice(-1)[0]!;
+export function extname(path: string): string {
+  path = path.replace(/^[\.]+/, '');
+  if (/\./.test(path)) {
+    return path.match(/\.[^.]*$/)![0];
+  } else {
+    return '';
+  }
 }
 export function isAbsolute(path: string): boolean {
   return path[0] === '/';
@@ -413,10 +624,19 @@ export function safePath(path: string, to: string = '-'): string {
   return path.replace(/:/g, to);
 }
 
+// Fail if unsafe chars in path
+//  - e.g. ':' in ios paths [they map to dir separator, I think?]
+export function requireSafePath(path: string): string {
+  if (/:/.test(path)) throw `Unsafe chars in path: ${path}`;
+  return path;
+}
+
 //
 // URL
 //
 
+// TODO Do we need url-parse in addition to query-string?
+//  - e.g. queryString.parse in datatypes, queryString.stringify in ebird
 import urlParse from 'url-parse';
 
 export function parseUrl(url: string): {
@@ -432,6 +652,36 @@ export function parseUrl(url: string): {
     // @ts-ignore (Bad d.ts)
     true,
   );
+}
+
+export function parseUrlNoQuery<X>(url: string): {
+  protocol: string,
+  host:     string,
+  port:     string, // TODO number
+  pathname: string,
+  query:    string,
+  hash:     string,
+} {
+  return urlParse(
+    url,
+    // @ts-ignore (Bad d.ts)
+    false,
+  );
+}
+
+export function parseUrlWithQuery<X>(url: string, parseQuery: (s: string) => X): {
+  protocol: string,
+  host:     string,
+  port:     string, // TODO number
+  pathname: string,
+  query:    X,
+  hash:     string,
+} {
+  const xs = parseUrlNoQuery(url);
+  return {
+    ...xs,
+    query: parseQuery(xs.query),
+  };
 }
 
 // A parsed query string

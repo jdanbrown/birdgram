@@ -155,7 +155,7 @@ public class Features: Loadable {
   public let denoise:      Bool
 
   // State
-  let mel_basis_cache: Dictionary<Int, Matrix<Float>>
+  var mel_basis_cache: Dictionary<Int, Matrix<Float>> = [:]
 
   public convenience required init(load props: FileProps) throws {
     let timer = Timer()
@@ -193,15 +193,6 @@ public class Features: Loadable {
     self.n_mels       = f_bins
     self.denoise      = true
 
-    // Extracted as constant to remove bottleneck in spectro()
-    //  - TODO Cache mappings for new values of n_mels dynamically
-    self.mel_basis_cache = Dictionary(uniqueKeysWithValues: [
-      40, // Used in tests (to match py test cases)
-      80, // Used in mobile (RecordScreen)
-    ].map { [sample_rate, nperseg] n_mels in
-      (n_mels, librosa.filters.mel(sample_rate, n_fft: nperseg, n_mels: n_mels))
-    })
-
   }
 
   public func _patches(_ spectro: Melspectro) -> Patches {
@@ -227,8 +218,10 @@ public class Features: Loadable {
     let f_bins  = _f_bins  ?? self.f_bins
     let denoise = _denoise ?? self.denoise
     let n_mels  = f_bins
-    guard let mel_basis = mel_basis_cache[n_mels] else {
-      preconditionFailure("n_mels[\(n_mels)] not in mel_basis_cache[\(mel_basis_cache.keys)]")
+
+    // Cache mel_basis to remove bottleneck in spectro()
+    let mel_basis = mel_basis_cache.getOrSet(n_mels) {
+      librosa.filters.mel(sample_rate, n_fft: nperseg, n_mels: n_mels)
     }
 
     // Like Melspectro

@@ -1,10 +1,9 @@
 import cheerio from 'cheerio-without-node-native';
 import _ from 'lodash';
-import { createMemoryHistory, Location, MemoryHistory } from 'history';
 import React, { Component, ComponentType, PureComponent, ReactNode, RefObject } from 'React';
 import {
-  ActivityIndicator, Animated, AsyncStorage, Dimensions, Linking, NativeModules, Platform, SafeAreaView, StatusBar,
-  Text, View,
+  ActivityIndicator, Alert, Animated, AsyncStorage, Dimensions, Linking, NativeModules, Platform, SafeAreaView,
+  StatusBar, Text, View,
 } from 'react-native';
 import KeepAwake from 'react-native-keep-awake';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
@@ -15,6 +14,7 @@ const fs = RNFB.fs;
 
 import { DeepLinking } from './components/DeepLinking';
 import { HelpScreen } from './components/HelpScreen';
+import { Geo, geolocation } from './components/Geo';
 import { PlacesScreen } from './components/PlacesScreen';
 import { RecentScreen } from './components/RecentScreen';
 import { RecordScreen } from './components/RecordScreen';
@@ -24,7 +24,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { TabRoutes, TabLink } from './components/TabRoutes';
 import * as Colors from './colors';
 import { config } from './config';
-import { MetadataSpecies, Models, ModelsSearch, SearchRecs, ServerConfig } from './datatypes';
+import { MetadataSpecies, Models, ModelsSearch, Rec, SearchRecs, ServerConfig, UserRec } from './datatypes';
 import { DB } from './db';
 import { Ebird } from './ebird';
 import { Log, rich } from './log';
@@ -41,9 +41,10 @@ import { querySql } from './sql';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
 import {
-  assert, deepEqual, dirname, global, json, match, Omit, pretty, readJsonFile, shallowDiff, shallowDiffPropsState,
-  Style, Timer, yaml,
+  assert, deepEqual, dirname, global, Interval, json, match, matchNil, Omit, pretty, readJsonFile, shallowDiff,
+  shallowDiffPropsState, Style, Timer, yaml,
 } from './utils';
+import { XC } from './xc';
 
 const log = new Log('App');
 
@@ -60,6 +61,7 @@ const log = new Log('App');
 // });
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
+global.Alert = Alert;
 global.Animated = Animated;
 global.AsyncStorage = AsyncStorage;
 global.cheerio = cheerio;
@@ -67,9 +69,12 @@ global.Colors = Colors;
 global.deepEqual = deepEqual;
 global.Dimensions = Dimensions;
 global.Ebird = Ebird;
+global.Geo = Geo;
+global.geolocation = geolocation;
 global.Linking = Linking;
 global.Platform = Platform;
 global.iOSColors = iOSColors;
+global.Interval = Interval;
 global.matchPath = matchPath;
 global.material = material;
 global.materialColors = materialColors;
@@ -78,11 +83,14 @@ global.NativeHttp = NativeHttp;
 global.NativeSearch = NativeSearch;
 global.NativeSpectro = NativeSpectro;
 global.querySql = querySql;
+global.Rec = Rec;
 global.shallowDiff = shallowDiff;
 global.Settings = Settings;
 global.systemWeights = systemWeights;
 global.Timer = Timer;
 global.urlpack = urlpack;
+global.UserRec = UserRec;
+global.XC = XC;
 const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
 global.sj = {};
 timed('AudioUtils',         () => global.AudioUtils      = require('../third-party/magenta/music/transcription/audio_utils'));
@@ -97,6 +105,7 @@ timed('path-to-regexp',     () => global.pathToRegexp    = require('path-to-rege
 timed('ndarray',            () => global.ndarray         = require('ndarray'));                 // 1ms
 timed('nj',                 () => global.nj              = require('../third-party/numjs/dist/numjs.min')); // 130ms
 timed('sj.ops',             () => global.sj.ops          = require('ndarray-ops'));             // 50ms
+timed('query-string',       () => global.queryString     = require('query-string'));            // ?
 timed('React',              () => global.R               = require('React'));                   // 0ms
 timed('ReactNative',        () => global.RN              = require('ReactNative'));             // 13ms
 timed('rn-fetch-blob',      () => global.RNFB            = require('rn-fetch-blob').default);   // 0ms
@@ -112,10 +121,10 @@ timed('url-parse',          () => global.urlParse        = require('url-parse'))
 global.fs = global.RNFB.fs;
 
 interface Props {
-  f_bins: number;
   sampleRate: number;
   channels: number;
   bitsPerSample: number;
+  iconForTab: {[key in TabName]: string};
 }
 
 interface State {
@@ -126,6 +135,7 @@ interface State {
   histories?: Histories;
   serverConfig?: ServerConfig;
   metadataSpecies?: MetadataSpecies;
+  xc?: XC;
   ebird?: Ebird;
   modelsSearch?: ModelsSearch;
   settings?: Settings;
@@ -147,10 +157,19 @@ export default class App extends PureComponent<Props, State> {
 
   // Many of these are hardcoded to match Bubo/Models.swift:Features (which is in turn hardcoded to match py Features config)
   static defaultProps: Partial<Props> = {
-    f_bins:        80, // NOTE Recording shows higher res spectros (f_bins=80) than model actually uses (f_bins=40)
     sampleRate:    22050,
     channels:      1,
     bitsPerSample: 16,
+    iconForTab:    {
+      record:   'activity',
+      search:   'search',
+      // recent:   'list',
+      recent:   'clock',
+      saved:    'bookmark',
+      places:   'map-pin',
+      settings: 'settings',
+      help:     'help-circle',
+    },
   };
 
   state: State = {
@@ -158,6 +177,9 @@ export default class App extends PureComponent<Props, State> {
     orientation: getOrientation(),
     loading: true,
   };
+
+  // Refs
+  geoRef: RefObject<Geo> = React.createRef();
 
   componentDidMount = async () => {
     log.info('componentDidMount');
@@ -229,6 +251,9 @@ export default class App extends PureComponent<Props, State> {
         })
       );
 
+      // Load xc
+      const xc = await XC.newAsync(db);
+
       // Load ebird (not much to it, just needs metadataSpecies)
       const ebird = new Ebird(metadataSpecies);
 
@@ -253,7 +278,7 @@ export default class App extends PureComponent<Props, State> {
       //  - After NativeSearch
       await log.timedAsync(`Load NativeSpectro`, async () => {
         await NativeSpectro.create({
-          f_bins:           this.props.f_bins,
+          f_bins:           settings.f_bins, // NOTE Requires restart
           sampleRate:       this.props.sampleRate,
           bitsPerChannel:   this.props.bitsPerSample,
           channelsPerFrame: this.props.channels,
@@ -269,6 +294,7 @@ export default class App extends PureComponent<Props, State> {
         histories,
         serverConfig,
         metadataSpecies,
+        xc,
         ebird,
         modelsSearch,
         settings,
@@ -319,6 +345,12 @@ export default class App extends PureComponent<Props, State> {
               {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
               <StatusBar hidden />
 
+              {/* Track geo coords (while app is running) */}
+              <Geo
+                ref={this.geoRef}
+                enableHighAccuracy={this.state.settings!.geoHighAccuracy}
+              />
+
               {/* Top-level tab router (nested stacks will have their own router) */}
               <RouterWithHistory history={this.state.histories!.tabs}>
                 <View style={styles.fill}>
@@ -349,12 +381,14 @@ export default class App extends PureComponent<Props, State> {
                       routes={[
                         {
                           key: 'record', route: {path: '/record'},
-                          label: 'Record', iconName: 'activity',
+                          label: 'Record', iconName: this.props.iconForTab['record'],
                           render: props => (
                             <RecordScreen {...props}
                               // App globals
                               modelsSearch            = {this.state.modelsSearch!}
                               go                      = {this.go}
+                              geo                     = {this.geoRef.current!}              // Pull (no update on change)
+                              // geoCoords            = {this.geoRef.current!.state.coords} // Push (update on change)
                               // Settings
                               settings                = {this.state.settingsWrites!}
                               db                      = {this.state.db!}
@@ -362,8 +396,9 @@ export default class App extends PureComponent<Props, State> {
                               refreshRate             = {this.state.settings!.refreshRate}
                               doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}
                               spectroChunkLimit       = {this.state.settings!.spectroChunkLimit}
+                              geoWarnIfNoCoords       = {this.state.settings!.geoWarnIfNoCoords}
                               // RecordScreen
-                              f_bins                  = {this.props.f_bins}
+                              f_bins                  = {this.state.settings!.f_bins}
                               sampleRate              = {this.props.sampleRate}
                               channels                = {this.props.channels}
                               bitsPerSample           = {this.props.bitsPerSample}
@@ -371,13 +406,14 @@ export default class App extends PureComponent<Props, State> {
                           ),
                         }, {
                           key: 'search', route: {path: '/search'},
-                          label: 'Search', iconName: 'search',
+                          label: 'Search', iconName: this.props.iconForTab['search'],
                           render: props => (
                             <SearchScreen {...props}
                               // App globals
                               serverConfig            = {this.state.serverConfig!}
                               modelsSearch            = {this.state.modelsSearch!}
                               go                      = {this.go}
+                              xc                      = {this.state.xc!}
                               ebird                   = {this.state.ebird!}
                               // Settings
                               settings                = {this.state.settingsWrites!}
@@ -394,29 +430,42 @@ export default class App extends PureComponent<Props, State> {
                               spectroScale            = {this.state.settings!.spectroScale}
                               place                   = {this.state.settings!.place}
                               places                  = {this.state.settings!.places}
+                              // SearchScreen
+                              f_bins                  = {this.state.settings!.f_bins}
                             />
                           ),
                         }, {
                           key: 'recent', route: {path: '/recent'},
-                          label: 'Recent', iconName: 'list',
+                          label: 'Recent', iconName: this.props.iconForTab['recent'],
                           render: props => (
                             <RecentScreen {...props}
                               // App globals
                               go         = {this.go}
+                              xc         = {this.state.xc!}
+                              ebird      = {this.state.ebird!}
                               // Settings
                               showDebug  = {this.state.settings!.showDebug}
                               maxHistory = {this.state.settings!.maxHistory}
+                              // RecentScreen
+                              iconForTab = {this.props.iconForTab}
                             />
                           ),
                         }, {
                           key: 'saved', route: {path: '/saved'},
-                          label: 'Saved', iconName: 'bookmark',
+                          label: 'Saved', iconName: this.props.iconForTab['saved'],
                           render: props => (
-                            <SavedScreen {...props} />
+                            <SavedScreen {...props}
+                              // App globals
+                              go         = {this.go}
+                              xc         = {this.state.xc!}
+                              ebird      = {this.state.ebird!}
+                              // SavedScreen
+                              iconForTab = {this.props.iconForTab}
+                            />
                           ),
                         }, {
                           key: 'places', route: {path: '/places'},
-                          label: 'Places', iconName: 'map-pin',
+                          label: 'Places', iconName: this.props.iconForTab['places'],
                           render: props => (
                             <PlacesScreen {...props}
                               // App globals
@@ -432,7 +481,7 @@ export default class App extends PureComponent<Props, State> {
                           ),
                         }, {
                           key: 'settings', route: {path: '/settings'},
-                          label: 'Settings', iconName: 'settings',
+                          label: 'Settings', iconName: this.props.iconForTab['settings'],
                           render: props => (
                             <SettingsScreen {...props}
                               // Settings
@@ -440,7 +489,10 @@ export default class App extends PureComponent<Props, State> {
                               // Global
                               showDebug               = {this.state.settings!.showDebug}
                               allowUploads            = {this.state.settings!.allowUploads}
+                              geoHighAccuracy         = {this.state.settings!.geoHighAccuracy}
+                              geoWarnIfNoCoords       = {this.state.settings!.geoWarnIfNoCoords}
                               maxHistory              = {this.state.settings!.maxHistory}
+                              f_bins                  = {this.state.settings!.f_bins}
                               // RecordScreen
                               refreshRate             = {this.state.settings!.refreshRate}
                               doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}
@@ -452,7 +504,7 @@ export default class App extends PureComponent<Props, State> {
                           ),
                         }, {
                           key: 'help', route: {path: '/help'},
-                          label: 'Help', iconName: 'help-circle',
+                          label: 'Help', iconName: this.props.iconForTab['help'],
                           render: props => (
                             <HelpScreen {...props}
                               // App globals
@@ -498,19 +550,21 @@ export default class App extends PureComponent<Props, State> {
 
   go = (tab: TabName, to: GoTo) => {
     log.info('go', {tab, to});
-    if (tab) { // [XXX Why allow falsy TabName?]
-      // Show tab
-      this.state.histories!.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)
-      const history = this.state.histories![tab];
-      if (to.path !== undefined) {
-        // Jump to most recent location, then push new location (else we lose items)
-        //  - QUESTION Perf: does jumping twice create an unnecessary render?
-        history.go((history.length - 1) - history.index);
-        history.push(to.path);
-      } else if (to.index !== undefined) {
-        history.go(history.length - 1 - to.index - history.index);
-      }
+    // Update tab location (async, can't await)
+    const history = this.state.histories![tab];
+    if (to.path !== undefined) {
+      // Push new location on top of most recent location (else we lose items)
+      //  - HACK Mutate history.index i/o calling history.go() to avoid an unnecessary update
+      //    - Ref: https://github.com/ReactTraining/history/blob/v4.7.2/modules/createMemoryHistory.js#L61
+      history.index = history.length - 1;
+      history.push(to.path, {
+        timestamp: new Date(),
+      });
+    } else if (to.index !== undefined) {
+      history.go(to.index - history.index);
     }
+    // Switch to tab
+    this.state.histories!.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)
   }
 
 }

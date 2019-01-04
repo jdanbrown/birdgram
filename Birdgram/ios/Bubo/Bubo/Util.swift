@@ -264,6 +264,18 @@ extension StringProtocol {
 
 }
 
+extension Dictionary {
+
+  public mutating func getOrSet(_ k: Key, _ f: () -> Value) -> Value {
+    // Test for key using index() i/o self[k], since the latter conflates nil for missing key with nil values
+    if (index(forKey: k) == nil) {
+      self[k] = f()
+    }
+    return self[k]!
+  }
+
+}
+
 public func nowSeconds() -> Double {
   return Double(DispatchTime.now().uptimeNanoseconds) / 1e9
 }

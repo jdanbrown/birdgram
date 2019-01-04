@@ -113,6 +113,7 @@ class RNSpectro: RCTEventEmitter, RNProxy {
       guard let imageFile = try _proxy.renderAudioPathToSpectroPath(
         audioPath,
         spectroPath,
+        f_bins: self.getPropRequired(opts, "f_bins"),
         denoise: self.getPropRequired(opts, "denoise")
       ) else {
         return nil
@@ -556,19 +557,20 @@ public class Spectro {
       "nPacketsWritten": nPacketsWritten,
       "nPathsSent": nPathsSent,
       "spectroRange": spectroRange.description,
-      "outputPath": outputPath,
+      "outputPath": outputPath as Any,
     ]
   }
 
-  // Uses self.f_bins (e.g. 80), not features.f_bins (e.g. 40)
   func renderAudioPathToSpectroPath(
     _ audioPath: String,
     _ spectroPath: String,
+    f_bins: Int, // Independent of self.f_bins [TODO Confusing, clean up]
     denoise: Bool
   ) throws -> ImageFile? {
     Log.info(String(format: "Spectro.renderAudioPathToSpectroPath: %@", [
       "audioPath": audioPath,
       "spectroPath": spectroPath,
+      "f_bins": f_bins,
       "denoise": denoise,
     ]))
 

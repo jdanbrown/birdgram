@@ -1,5 +1,4 @@
 import * as d3sc from 'd3-scale-chromatic';
-import { Location, MemoryHistory } from 'history';
 import _ from 'lodash';
 import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import RN, {
@@ -29,22 +28,22 @@ const fs = RNFB.fs;
 
 import { ActionSheetBasic } from './ActionSheets';
 import {
-  MetadataColumnBelow, MetadataColumnsBelow, MetadataColumnLeft, MetadataColumnsLeft, MetadataText,
+  MetadataColumnBelow, MetadataColumnsBelow, MetadataColumnLeft, MetadataColumnsLeft, metadataLabel, MetadataLabel,
+  MetadataText,
 } from './MetadataColumns';
-import { CCIcon, LicenseTypeIcons } from './Misc';
 import { TabBarStyle } from './TabRoutes';
 import { config } from '../config';
 import {
-  ModelsSearch, matchRec, matchSearchPathParams, matchSourceId, Place, Quality, Rec, rec_f_preds, Rec_f_preds,
-  SearchPathParams, searchPathParamsFromLocation, SearchRecs, ServerConfig, showSourceId, SourceId, Species,
-  SpeciesMetadata, UserRec, XCRec,
+  EditRec, ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams,
+  searchPathParamsFromLocation, SearchRecs, ServerConfig, SourceId, Species, SpeciesMetadata, SpectroPathOpts, UserRec,
+  XCRec,
 } from '../datatypes';
 import { DB } from '../db';
 import { Ebird } from '../ebird';
 import { Log, puts, rich, tap } from '../log';
 import { NativeSearch } from '../native/Search';
 import { NativeSpectro } from '../native/Spectro';
-import { Go } from '../router';
+import { Go, History, Location } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
 import { SQL, sqlf } from '../sql';
@@ -53,8 +52,9 @@ import { normalizeStyle, LabelStyle, labelStyles, Styles } from '../styles';
 import {
   all, any, assert, chance, Clamp, deepEqual, Dim, ensureParentDir, finallyAsync, getOrSet, global, json, mapMapValues,
   match, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round,
-  shallowDiffPropsState, Style, Timer, yaml, yamlPretty, zipSame,
+  shallowDiffPropsState, Style, throw_, Timer, yaml, yamlPretty, zipSame,
 } from '../utils';
+import { XC } from '../xc';
 
 const log = new Log('SearchScreen');
 
@@ -114,8 +114,9 @@ interface Props {
   serverConfig:            ServerConfig;
   modelsSearch:            ModelsSearch;
   location:                Location;
-  history:                 MemoryHistory;
+  history:                 History;
   go:                      Go;
+  xc:                      XC;
   ebird:                   Ebird;
   // Settings
   settings:                SettingsWrites;
@@ -133,6 +134,7 @@ interface Props {
   place:                   null | Place;
   places:                  Array<Place>;
   // SearchScreen
+  f_bins:                  number;
   spectroBase:             Dim<number>;
   spectroScaleClamp:       Clamp<number>;
   default_n_recs:          number;
@@ -211,7 +213,11 @@ export class SearchScreen extends PureComponent<Props, State> {
   }
 
   // Getters for props
-  get pathParams (): SearchPathParams { return this._pathParams(); }
+  get pathParams      (): SearchPathParams { return this._pathParams(); }
+  get spectroPathOpts (): SpectroPathOpts  { return {
+    f_bins:  this.props.f_bins, // Higher res for user recs, ignored for xc recs (which are all f_bins=40)
+    denoise: true,              // For predict (like Bubo/py/model.swift:Features.denoise=true)
+  }}
 
   // Getters for state
   get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
@@ -286,7 +292,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
     // Query f_preds_* cols (once)
     log.info('componentDidMount: Querying f_preds_* cols');
-    await this.props.db.query<Rec>(`
+    await this.props.db.query<XCRec>(`
       select *
       from search_recs
       limit 1
@@ -443,7 +449,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       none:    ()                    => 'none',
       random:  ({filters, seed})     => `random/${seed}`,
       species: ({filters, species})  => species,
-      rec:     ({filters, sourceId}) => showSourceId(sourceId),
+      rec:     ({filters, sourceId}) => SourceId.show(sourceId, {species: null}),
     });
   }
 
@@ -518,7 +524,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         // TODO Get deterministic results from seed [how? sqlite doesn't support random(seed) or hash()]
         random: async ({filters, seed}) => {
           log.info(`loadRecsFromQuery: Querying random recs`, {seed});
-          await this.props.db.query<Rec>(sqlf`
+          await this.props.db.query<XCRec>(sqlf`
             select *
             from (
               select
@@ -543,7 +549,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
         species: async ({filters, species}) => {
           log.info('loadRecsFromQuery: Querying recs for species', {species});
-          await this.props.db.query<Rec>(sqlf`
+          await this.props.db.query<XCRec>(sqlf`
             select *
             from (
               select
@@ -597,26 +603,30 @@ export class SearchScreen extends PureComponent<Props, State> {
           }
 
           // Ensure spectro exists
-          //  - e.g. in case this is a user rec from an old code version and user spectros have moved
-          //  - TODO Assert that this never recreates spectros for xc recs
-          const spectroPath = Rec.spectroPath(query_rec);
+          //  - e.g. in case this is a user/edit rec from an old code version and the spectroCachePath's have moved
+          const spectroPath = Rec.spectroPath(query_rec, this.spectroPathOpts);
           if (!await fs.exists(spectroPath)) {
             matchRec(query_rec, {
-              xc:   _ => { throw `loadRecsFromQuery: Missing spectro for xc query_rec: ${sourceId}`; },
-              user: _ => log.info(`loadRecsFromQuery: Recreating spectro for user query_rec: ${sourceId}`),
+              xc:   _ => { throw `loadRecsFromQuery: Missing spectro asset for xc query_rec: ${sourceId}`; },
+              user: _ => log.info(`loadRecsFromQuery: Caching spectro for user query_rec: ${sourceId}`),
+              edit: _ => log.info(`loadRecsFromQuery: Caching spectro for edit query_rec: ${sourceId}`),
             });
             await NativeSpectro.renderAudioPathToSpectroPath(
               Rec.audioPath(query_rec),
               await ensureParentDir(spectroPath),
-              {denoise: true}, // Like Bubo/py/model.swift:Features.denoise=true
+              {
+                f_bins: this.props.f_bins,
+                denoise: true, // Like Bubo/py/model.swift:Features.denoise=true
+              },
             );
           }
 
           // Read sp_p's (species probs) from query_rec.f_preds_*
           //  - Filter by place.species (else too few results downstream after filtering in sql)
+          const f_preds = Rec.f_preds(query_rec);
           const sp_ps: Map<string, number> = new Map(zipSame(
             this.props.modelsSearch.classes_,
-            f_preds_cols.map(c => rec_f_preds(query_rec)[c]),
+            f_preds_cols.map(c => f_preds[c]),
           ));
 
           // Compute slp's (species (negative) log prob) from sp_p's
@@ -694,7 +704,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Run query
           log.info('loadRecsFromQuery: Querying recs for query_rec', {sourceId});
-          await this.props.db.query<Rec>(sql, {
+          await this.props.db.query<XCRec>(sql, {
             // logTruncate: null, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
@@ -717,7 +727,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     await Promise.all(
       Array.from(this.soundsCache).map(async ([sourceId, soundAsync]) => {
         log.debug('releaseSounds: Releasing sound',
-          showSourceId(sourceId), // Noisy (but these log lines don't de-dupe anyway when rndebugger timestamps are shown)
+          sourceId, // Noisy (but these log lines don't de-dupe anyway when rndebugger timestamps are shown)
         );
         (await soundAsync).release();
       }),
@@ -733,7 +743,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     let soundAsync = this.soundsCache.get(rec.source_id);
     if (!soundAsync) {
       log.debug('getOrAllocateSoundAsync: Allocating sound',
-        showSourceId(rec.source_id), // Noisy (but these log lines don't de-dupe anyway when rndebugger timestamps are shown)
+        rec.source_id, // Noisy (but these log lines don't de-dupe anyway when rndebugger timestamps are shown)
       );
       // Allocate + cache sound resource
       //  - Cache the promise so that get+set is atomic, else we race and allocate multiple sounds per rec.source_id
@@ -1031,7 +1041,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       <this.GenericModal>
 
         <this.GenericModalTitle
-          title={`${rec.species}/${showSourceId(rec.source_id)}`}
+          title={`${rec.species}/${SourceId.show(rec.source_id, {species: this.props.xc})}`}
         />
 
         {/* Spectro */}
@@ -1043,7 +1053,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           }}
           foo
           resizeMode='stretch' // TODO(info_modal) Wrap to show whole spectro i/o stretching
-          source={{uri: Rec.spectroPath(rec)}}
+          source={{uri: Rec.spectroPath(rec, this.spectroPathOpts)}}
         />
 
         <Separator/>
@@ -1057,7 +1067,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               onPress: () => this.props.go('search', {path: `/species/${encodeURIComponent(rec.species)}`}),
             }, {
               ...defaults,
-              label: `${showSourceId(rec.source_id)}`,
+              label: `${SourceId.show(rec.source_id, {species: this.props.xc})}`,
               iconName: 'search',
               buttonColor: iOSColors.blue,
               onPress: () => this.props.go('search', {path: `/rec/${encodeURIComponent(rec.source_id)}`}),
@@ -1078,7 +1088,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               })),
             }, {
               ...defaults,
-              label: `${showSourceId(rec.source_id)}`,
+              label: `${SourceId.show(rec.source_id, {species: this.props.xc})}`,
               iconName: 'x',
               buttonColor: iOSColors.red,
               onPress: () => this.setState((state: State, props: Props) => ({
@@ -1162,7 +1172,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             onPress: () => {},
           }, {
             ...defaults,
-            label: `Save to list (${showSourceId(rec.source_id)})`,
+            label: `Save to list (${SourceId.show(rec.source_id, {species: this.props.xc})})`,
             iconName: 'bookmark',
             buttonColor: iOSColors.orange,
             onPress: () => {},
@@ -1209,10 +1219,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 marginBottom: 3,
               }}
             >
-              <Text style={{
-                ...material.captionObject,
-                fontWeight: 'bold',
-              }}>{c}:</Text> {MetadataColumnsBelow[c](rec)}
+              <MetadataLabel col={c} /> {MetadataColumnsBelow[c](rec)}
             </MetadataText>
           ))}
         </View>
@@ -1316,19 +1323,27 @@ export class SearchScreen extends PureComponent<Props, State> {
       {/* Toggle metadata: left */}
       <this.BottomControlsButton
         help='Info'
-        active={this.props.showMetadataLeft}
-        // iconProps={{name: 'file-minus'}}
-        iconProps={{name: 'sidebar'}}
-        onPress={() => this.props.settings.toggle('showMetadataLeft')}
-        onLongPress={() => this.setState({
+        active={!this.props.showMetadataBelow && this.props.showMetadataLeft}
+        iconProps={{
+          // name: 'file-minus',
+          name: 'sidebar',
+          style: (!this.props.showMetadataBelow ? {} : {
+            color: iOSColors.gray,
+          }),
+        }}
+        onPress={() => !this.props.showMetadataBelow && (
+          this.props.settings.toggle('showMetadataLeft')
+        )}
+        onLongPress={() => !this.props.showMetadataBelow && this.setState({
           showGenericModal: () => (
             <this.ActionModal title='Show columns' actions={
               objectKeysTyped(MetadataColumnsLeft).map(c => ({
-                label: c,
+                label: metadataLabel(c),
                 textColor: iOSColors.black,
                 buttonColor: this.props.metadataColumnsLeft.includes(c) ? iOSColors.tealBlue : iOSColors.customGray,
                 buttonStyle: {
-                  marginVertical: 2,
+                  marginVertical:  2, // Compact so we can fit many buttons
+                  paddingVertical: 5, // Compact so we can fit many buttons
                 },
                 dismiss: false,
                 onPress: () => this.props.settings.update('metadataColumnsLeft', cs => (
@@ -1352,11 +1367,12 @@ export class SearchScreen extends PureComponent<Props, State> {
           showGenericModal: () => (
             <this.ActionModal title='Show columns' actions={
               objectKeysTyped(MetadataColumnsBelow).map(c => ({
-                label: c,
+                label: metadataLabel(c),
                 textColor: iOSColors.black,
                 buttonColor: this.props.metadataColumnsBelow.includes(c) ? iOSColors.tealBlue : iOSColors.customGray,
                 buttonStyle: {
-                  marginVertical: 2,
+                  marginVertical:  2, // Compact so we can fit many buttons
+                  paddingVertical: 5, // Compact so we can fit many buttons
                 },
                 dismiss: false,
                 onPress: () => this.props.settings.update('metadataColumnsBelow', cs => (
@@ -1864,7 +1880,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                             <Animated.Image
                               style={this.spectroDim(rec.duration_s)}
                               resizeMode='stretch'
-                              source={{uri: Rec.spectroPath(rec)}}
+                              source={{uri: Rec.spectroPath(rec, this.spectroPathOpts)}}
                             />
 
                             {/* Start time cursor (if playing + startTime) */}
@@ -1930,10 +1946,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                                 marginBottom: 3,
                               }}
                             >
-                              <Text style={{
-                                ...material.captionObject,
-                                fontWeight: 'bold',
-                              }}>{c}:</Text> {MetadataColumnsBelow[c](rec)}
+                              <MetadataLabel col={c} /> {MetadataColumnsBelow[c](rec)}
                             </MetadataText>
                           ))}
                         </View>

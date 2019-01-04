@@ -3,18 +3,20 @@ import concatTypedArray from 'concat-typed-array';
 import { color, RGBColor } from 'd3-color';
 import { interpolateMagma } from 'd3-scale-chromatic';
 // import Jimp from 'jimp'; // XXX Unused
-import { Location } from 'history';
 import Humanize from 'humanize-plus';
 import _ from 'lodash';
 import React, { Component, PureComponent, RefObject } from 'react';
 import shallowCompare from 'react-addons-shallow-compare';
 import {
-  ActivityIndicator, Animated, Button, Dimensions, EmitterSubscription, Image, ImageStyle, Platform, ScrollView, Text,
-  TextProps, View, ViewProps,
+  ActivityIndicator, Alert, Animated, Button, Dimensions, EmitterSubscription, Image, Platform, ScrollView, StyleProp,
+  Text, TextProps, View, ViewProps,
 } from 'react-native';
 import AudioRecord from 'react-native-audio-record';
-import FastImage from 'react-native-fast-image';
-import { BaseButton, BorderlessButton, LongPressGestureHandler, RectButton, TapGestureHandler } from 'react-native-gesture-handler';
+import FastImage, { ImageStyle } from 'react-native-fast-image';
+import * as Gesture from 'react-native-gesture-handler';
+import {
+  BaseButton, BorderlessButton, LongPressGestureHandler, RectButton, TapGestureHandler,
+} from 'react-native-gesture-handler';
 import MicStream from 'react-native-microphone-stream';
 import Permissions from 'react-native-permissions';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
@@ -27,23 +29,25 @@ const {fs, base64} = RNFB;
 
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
 import nj from '../../third-party/numjs/dist/numjs.min';
+import { Geo, GeoCoords } from './Geo';
 import * as Colors from '../colors';
 import {
-  F_Preds, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, SourceId,
+  DraftEdit, Edit, EditRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source, SourceId,
+  UserRec,
 } from '../datatypes';
 import { DB } from '../db';
-import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from '../log';
+import { Log, logErrors, logErrorsAsync, puts, rich } from '../log';
 import { NativeSearch } from '../native/Search';
 import { ImageFile, NativeSpectro, NativeSpectroStats } from '../native/Spectro';
-import { Go } from '../router';
+import { Go, Location } from '../router';
 import { SettingsWrites } from '../settings';
 import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
   basename, catchTry, catchTryAsync, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean, ExpWeightedRate,
-  finallyAsync, global, into, json, match, matchNil, matchNull, matchUndefined, pretty, round, safePath,
-  shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty,
+  finallyAsync, global, ifEmpty, Interval, into, json, local, match, matchNil, matchNull, matchUndefined, pretty, round,
+  setStateAsync, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty, zipSame,
 } from '../utils';
 
 const log = new Log('RecordScreen');
@@ -66,6 +70,7 @@ export interface Props {
   modelsSearch: ModelsSearch;
   location: Location;
   go: Go;
+  geo: Geo;
   // Settings
   settings: SettingsWrites;
   db: DB;
@@ -78,6 +83,7 @@ export interface Props {
   refreshRate: number;
   doneSpectroChunkWidth: number;
   spectroChunkLimit: number;
+  geoWarnIfNoCoords: boolean;
 }
 
 interface State {
@@ -93,22 +99,11 @@ interface State {
   nSpectroWidth: number;
   // Editing (after done recording)
   editRecording: null | EditRecording;
+  editClipMode: EditClipMode;
+  draftEdit: DraftEdit;
 }
 
-interface EditRecording {
-  sourceId: string;
-  audioPath: string;
-  spectros: EditRecordingSpectros;
-}
-
-type EditRecordingSpectros = Map<Denoise, EditRecordingSpectro>;
-type Denoise = boolean;
-interface EditRecordingSpectro {
-  single: ImageFile;
-  chunked: Array<ImageFile>;
-}
-
-type RecordingState = 'loading' | 'stopped' | 'recording' | 'saving';
+type RecordingState = 'loading-for-edit' | 'stopped' | 'recording' | 'saving';
 
 interface SpectroChunk {
   source: {uri?: string};
@@ -118,6 +113,24 @@ interface SpectroChunk {
 }
 
 type DebugTimes = Array<{k: string, v: number}>; // Array<{k,v}> because swift Dictionary doesn't preserve order
+
+interface EditRecording {
+  rec: Rec;
+  spectros: EditRecordingSpectros;
+}
+
+type EditRecordingSpectros = Map<Denoise, EditRecordingSpectro>;
+type Denoise = boolean;
+interface EditRecordingSpectro {
+  single:  ImageFile;
+  chunked: Array<{
+    imageFile:     ImageFile,
+    widthInterval: Interval,
+    timeInterval:  Interval,
+  }>;
+}
+
+type EditClipMode = 'off' | 'lo' | 'hi';
 
 export class RecordScreen extends Component<Props, State> {
 
@@ -136,10 +149,14 @@ export class RecordScreen extends Component<Props, State> {
     nSamples: 0,
     nSpectroWidth: 0,
     editRecording: null,
+    editClipMode: 'off',
+    draftEdit: {},
   };
 
-  // Getters for state
-  get nSamplesPerImage(): number { return this.props.sampleRate / this.props.refreshRate; }
+  // Getters for props/state
+  get nSamplesPerImage():  number  { return this.props.sampleRate / this.props.refreshRate; }
+  get hasEdits():          boolean { return DraftEdit.hasEdits(this.state.draftEdit); }
+  get draftEditHasClips(): boolean { return !_.isEmpty(this.state.draftEdit.clips); }
 
   // Listeners
   _listeners: Array<EmitterSubscription> = [];
@@ -234,7 +251,10 @@ export class RecordScreen extends Component<Props, State> {
 
   updateForLocation = async (prevLocation: null | Location) => {
     if (this.props.location !== prevLocation) {
-      if (this.state.recordingState !== 'stopped') {
+      if (![
+        'stopped',          // Safe: no recording in progress
+        'loading-for-edit', // Safe: no recording in progress [else we drop transitions on go->go races]
+      ].includes(this.state.recordingState)) {
 
         // TODO Is it less surprising to the user if we stop the recording or drop the nav change?
         //  - Simpler to drop the nav change, so that's what we do for now
@@ -251,12 +271,14 @@ export class RecordScreen extends Component<Props, State> {
         // Reset state
         //  - TODO Dedupe with startRecording
         this.setState({
-          recordingState: 'loading',
+          recordingState: 'loading-for-edit',
           spectroChunks: [],
           nSpectroChunks: 0,
           nSamples: 0,
           nSpectroWidth: 0,
           editRecording: null,
+          editClipMode: 'off',
+          draftEdit: {},
         });
         this._renderRate.reset();
 
@@ -270,9 +292,9 @@ export class RecordScreen extends Component<Props, State> {
           edit: async ({sourceId}) => {
             // Show editRecording for sourceId
             const editRecording = await EditRecording({
+              rec: await this.props.db.loadRec(sourceId),
+              f_bins: this.props.f_bins,
               doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
-              sourceId,
-              audioPath: Rec.audioPath(await this.props.db.loadRec(sourceId)),
             });
             this.setState({
               recordingState: 'stopped',
@@ -296,7 +318,7 @@ export class RecordScreen extends Component<Props, State> {
       ]}>
 
         {/* Loading spinner */}
-        {this.state.recordingState === 'loading' && (
+        {this.state.recordingState === 'loading-for-edit' && (
           <View style={{
             flex: 1,
             justifyContent: 'center',
@@ -306,7 +328,7 @@ export class RecordScreen extends Component<Props, State> {
         )}
 
         {/* Spectro images */}
-        {this.state.recordingState !== 'loading' && (
+        {this.state.recordingState !== 'loading-for-edit' && (
           <ScrollView
             ref={this._scrollViewRef}
             style={{
@@ -344,17 +366,22 @@ export class RecordScreen extends Component<Props, State> {
             ) : (
 
               // Done recording: recorded spectro (chunks computed in stopRecording)
-              into(this.state.editRecording.spectros.get(this.state.denoised), spectros => spectros && (
-                <WrappedSpectroImages
-                  spectros={spectros.chunked.map(({path, ...props}) => ({
-                    source: {uri: path},
-                    ...props,
-                  }))}
-                  spectroScale={this.state.spectroScale}
-                  showDebug={this.props.showDebug}
-                  showMoreDebug={this.state.showMoreDebug}
-                />
-              ))
+              into(this.state.editRecording, editRecording => {
+                const spectros = editRecording.spectros.get(this.state.denoised);
+                return spectros && (
+                  <WrappedSpectroImages
+                    spectros={spectros.chunked.map(({imageFile: {path, ...props}}) => ({
+                      source: {uri: path},
+                      ...props,
+                    }))}
+                    spectroScale={this.state.spectroScale}
+                    spectroStyle={this.spectroStyle(spectros)}
+                    onSpectroPress={this.onSpectroPress(spectros)}
+                    showDebug={this.props.showDebug}
+                    showMoreDebug={this.state.showMoreDebug}
+                  />
+                );
+              })
 
             )}
           </ScrollView>
@@ -404,6 +431,9 @@ export class RecordScreen extends Component<Props, State> {
           follow={this.state.follow}
           denoised={this.state.denoised}
           editRecording={this.state.editRecording}
+          editClipMode={this.state.editClipMode}
+          hasEdits={this.hasEdits}
+          draftEditHasClips={this.draftEditHasClips}
           // NOTE Pass these as bound methods i/o lambdas else ControlsBar will unnecessarily update on every render (and be slow)
           setStateProxy={this} // Had some 'undefined' trouble with passing this.setState, so passing this instead
           startRecording={this.startRecording}
@@ -428,23 +458,53 @@ export class RecordScreen extends Component<Props, State> {
           bitsPerSample: this.props.bitsPerSample,
         });
 
-        // Reset state
-        //  - TODO Dedupe with updateForLocation
-        this.setState({
-          recordingState: 'recording',
-          spectroChunks: [],
-          nSpectroChunks: 0,
-          nSamples: 0,
-          nSpectroWidth: 0,
-          editRecording: null,
-        });
-        this._renderRate.reset();
+        var cancel: boolean = false;
 
-        // Start recording
-        await NativeSpectro.start({
-          outputPath:  await this.freshPath('wav'),
-          refreshRate: this.props.refreshRate,
-        });
+        // Get geo coords for user rec
+        const coords = this.props.geo.coords;
+        if (coords === null) {
+          log.info('startRecording: No coords', {coords, geoWarnIfNoCoords: this.props.geoWarnIfNoCoords});
+          if (this.props.geoWarnIfNoCoords) {
+            cancel = await new Promise<boolean>((resolve, reject) => {
+              Alert.alert('No GPS', [
+                "Failed to get GPS coordinates to save with your recording.",
+                "Continue recording without GPS metadata?",
+                "\n\nThis warning can be disabled in settings.",
+              ].join(' '), [
+                {style: 'cancel',  text: "Cancel recording",   onPress: () => resolve(true)},
+                {style: 'default', text: "Record without GPS", onPress: () => resolve(false)},
+              ]);
+            });
+          }
+        }
+
+        if (cancel) {
+          log.info('startRecording: Cancelled', {coords, geoWarnIfNoCoords: this.props.geoWarnIfNoCoords});
+        } else {
+
+          // Reset state
+          //  - TODO Dedupe with updateForLocation
+          this.setState({
+            recordingState: 'recording',
+            spectroChunks: [],
+            nSpectroChunks: 0,
+            nSamples: 0,
+            nSpectroWidth: 0,
+            editRecording: null,
+            editClipMode: 'off',
+            draftEdit: {},
+          });
+          this._renderRate.reset();
+
+          // Start recording
+          await NativeSpectro.start({
+            outputPath: await UserRec.newAudioPath('wav', {
+              coords,
+            }),
+            refreshRate: this.props.refreshRate,
+          });
+
+        }
 
       }
     });
@@ -456,7 +516,8 @@ export class RecordScreen extends Component<Props, State> {
         log.info('stopRecording');
 
         // State: recording -> saving
-        this.setState({
+        //  - HACK setStateAsync to avoid races (setState->setState->go) [and can't await go]
+        await setStateAsync(this, {
           recordingState: 'saving',
         });
         this._nativeStats = null; // Else shouldComponentUpdate gets stuck with lag>0
@@ -464,25 +525,24 @@ export class RecordScreen extends Component<Props, State> {
         // Stop recording
         const audioPath = await NativeSpectro.stop();
 
-        // Compute editRecording
+        // Compute sourceId
         //  - null if audioPath is null [When does this happen? Not on no audio samples]
         log.info('stopRecording: Got', {audioPath});
-        var editRecording: null | EditRecording;
+        var sourceId: SourceId | null;
         if (audioPath === null) {
           log.info('stopRecording: Noop: No audioPath');
-          editRecording = null;
+          sourceId = null;
         } else {
-          editRecording = await EditRecording({
-            doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
-            sourceId: SourceId('user', basename(audioPath)),
-            audioPath,
-          });
+          sourceId = Source.stringify({kind: 'user', name: basename(audioPath)});
         }
 
-        // State: saving -> stopped
-        this.setState({
-          recordingState: 'stopped',
-          editRecording,
+        // Edit rec via go() else it won't show up in history
+        //  - HACK setStateAsync to avoid races (setState->go) [and can't await go]
+        await setStateAsync(this, {
+          recordingState: 'loading-for-edit', // (Else updateForLocation will noop on 'saving')
+        });
+        this.props.go('record', {
+          path: !sourceId ? '/edit' : `/edit/${sourceId}`,
         });
 
       }
@@ -524,15 +584,38 @@ export class RecordScreen extends Component<Props, State> {
     }
   }
 
-  freshPath = async (ext: string, dir: string = fs.dirs.DocumentDir): Promise<string> => {
-    const subdir = 'user-recs-v0';
-    const timestamp = safePath( // Avoid ':' for ios paths
-      new Date().toISOString()
-      .slice(0, 19)                            // Cosmetic: drop millis/tz
-      .replace(/[-:]/g, '').replace(/T/g, '-') // Cosmetic: 'YYYY-MM-DDThh:mm:ss' -> 'YYYYMMDD-hhmmss'
-    );
-    const hash = chance.hash({length: 8}); // Long enough to be unique across users
-    return ensureParentDir(`${dir}/${subdir}/${timestamp}-${hash}.${ext}`);
+  onSpectroPress = (spectros: EditRecordingSpectro) => (i: number) => async (pointerInside: boolean) => {
+    const spectro        = spectros.chunked[i];
+    const {editClipMode} = this.state; // Consistent read (outside of setState -- ok)
+    if (['lo', 'hi'].includes(editClipMode)) {
+      log.debug('onSpectroPress', {
+        i,
+        pointerInside,
+        editClipMode,
+        draftEdit: this.state.draftEdit, // (Might observe an outdated value, but maybe bad to log inside setState?)
+        timeInterval: spectro.timeInterval,
+      });
+      this.setState((state, props) => {
+        // TODO(multi_clip): Add UI for multi-clip editing, and handle multiple clips here
+        const [clip] = ifEmpty(state.draftEdit.clips || [], () => [Interval.top]);
+        return match(state.editClipMode,
+          ['lo', () => ({draftEdit: {...state.draftEdit, clips: [new Interval(spectro.timeInterval.lo, clip.hi)]}})],
+          ['hi', () => ({draftEdit: {...state.draftEdit, clips: [new Interval(clip.lo, spectro.timeInterval.hi)]}})],
+        );
+      });
+    }
+  }
+
+  // Method for shallowCompare in SpectroImage.shouldComponentUpdate (else excessive updates)
+  spectroStyle = (spectros: EditRecordingSpectro) => (i: number): StyleProp<ImageStyle> => {
+    // Fade spectro chunks outside of draftEdit.clips intervals
+    const spectro = spectros.chunked[i];
+    return !(
+      !this.draftEditHasClips ||
+      _.some(this.state.draftEdit.clips || [], x => x.overlaps(spectro.timeInterval))
+    ) && {
+      opacity: .333, // TODO tintColor [https://github.com/DylanVann/react-native-fast-image/issues/124]
+    }
   }
 
   // Debug components
@@ -563,7 +646,9 @@ export interface WrappedSpectroImagesProps {
     height: number,
     debugTimes?: DebugTimes,
   }>;
-  spectroScale: number,
+  spectroScale: number;
+  spectroStyle?: (i: number) => StyleProp<ImageStyle>;
+  onSpectroPress?: (i: number) => (pointerInside: boolean) => void;
   showDebug: boolean;
   showMoreDebug: boolean;
 }
@@ -590,13 +675,16 @@ export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProp
   render = () => {
     // this.log.info('render');
     return (
-      this.props.spectros.map(({source, width, height, debugTimes}) => (
+      this.props.spectros.map(({source, width, height, debugTimes}, i) => (
         <SpectroImage
           key={source.uri}
           source={source}
           spectroScale={this.props.spectroScale}
           width={width}
           height={height}
+          i={i}
+          style={this.props.spectroStyle}
+          onPress={this.props.onSpectroPress}
           debugTimes={debugTimes}
           showDebug={this.props.showDebug}
           showMoreDebug={this.props.showMoreDebug}
@@ -612,6 +700,10 @@ export interface SpectroImageProps {
   source: {uri?: string};
   width: number;
   height: number;
+  // Take i as prop so that {style,onPress} can shallowCompare in shouldComponentUpdate (else excessive updates)
+  i: number;
+  style?: (i: number) => StyleProp<ImageStyle>;
+  onPress?: (i: number) => (pointerInside: boolean) => void;
   debugTimes?: DebugTimes;
   spectroScale: number;
   showDebug: boolean;
@@ -640,17 +732,17 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
   render = () => {
     // this.log.info('render');
     return (
-      <View>
+      <BaseButton onPress={this.props.onPress && this.props.onPress(this.props.i)}>
         <FastImage
-          //  - HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing rndebugger
-          //    - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
-          //    - https://github.com/DylanVann/react-native-fast-image
-          style={{
+          // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing rndebugger
+          //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
+          //  - https://github.com/DylanVann/react-native-fast-image
+          style={[this.props.style && this.props.style(this.props.i), {
             width:  this.props.spectroScale * this.props.width,
             height: this.props.spectroScale * this.props.height,
             marginBottom: 1,
             marginRight: this.props.showDebug && this.props.showMoreDebug ? 1 : 0, // Separate chunks for debug
-          }}
+          }]}
           source={this.props.source}
           // resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
           // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
@@ -664,7 +756,7 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
             ))}
           </this.DebugView>
         )}
-      </View>
+      </BaseButton>
     );
   }
 
@@ -691,16 +783,19 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
 
 // Split out control buttons as component else excessive updates cause render bottleneck
 export interface ControlsBarProps {
-  go:             Props["go"];
-  showDebug:      Props["showDebug"];
-  showMoreDebug:  State["showMoreDebug"];
-  recordingState: State["recordingState"];
-  follow:         State["follow"];
-  denoised:       State["denoised"];
-  editRecording:  State["editRecording"];
-  setStateProxy:  RecordScreen;
-  startRecording: typeof RecordScreen.prototype.startRecording;
-  stopRecording:  typeof RecordScreen.prototype.stopRecording;
+  go:                Props["go"];
+  showDebug:         Props["showDebug"];
+  showMoreDebug:     State["showMoreDebug"];
+  recordingState:    State["recordingState"];
+  follow:            State["follow"];
+  denoised:          State["denoised"];
+  editRecording:     State["editRecording"];
+  editClipMode:      State["editClipMode"];
+  hasEdits:          boolean;
+  draftEditHasClips: boolean;
+  setStateProxy:     RecordScreen;
+  startRecording:    typeof RecordScreen.prototype.startRecording;
+  stopRecording:     typeof RecordScreen.prototype.stopRecording;
 }
 export interface ControlsBarState {}
 export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarState> {
@@ -730,7 +825,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         {/* Record/stop */}
         {/* - On left side for left-handed phone use [TODO Add setting to toggle left/right] */}
         {match(this.props.recordingState,
-          ['loading', () => (
+          ['loading-for-edit', () => (
             <RectButton style={styles.bottomControlsButton} onPress={() => {}}>
               <ActivityIndicator size='small' />
             </RectButton>
@@ -756,18 +851,93 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           )],
         )}
 
-        {/* Search */}
+        {/* Clip lo/hi */}
         <RectButton style={styles.bottomControlsButton} onPress={() => {
           if (this.props.editRecording) {
-            this.props.go('search', {path: `/rec/${this.props.editRecording.sourceId}`});
+            this.props.setStateProxy.setState((state, props) => ({
+              editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
+                ['off', () => 'lo'],
+                ['lo',  () => 'off'],
+                ['hi',  () => 'lo'],
+              ),
+            }))
           }
         }}>
           <Feather style={[styles.bottomControlsButtonIcon, {
-            ...(this.props.editRecording ? {} : {color: iOSColors.gray}),
+            color: (
+              !this.props.editRecording ? iOSColors.gray :
+              this.props.editClipMode === 'lo' ? iOSColors.blue :
+              iOSColors.black
+            ),
           }]}
-            name='search'
+            name='scissors'
           />
         </RectButton>
+        <RectButton style={styles.bottomControlsButton} onPress={() => {
+          if (this.props.editRecording) {
+            this.props.setStateProxy.setState((state, props) => ({
+              draftEdit: {
+                ...state.draftEdit,
+                clips: undefined,
+              },
+            }));
+          }
+        }}>
+          <Feather style={[styles.bottomControlsButtonIcon, Styles.rotate45, {
+            color: !this.props.editRecording || !this.props.draftEditHasClips ? iOSColors.gray : iOSColors.black,
+          }]}
+            name='maximize-2'
+          />
+        </RectButton>
+        <RectButton style={styles.bottomControlsButton} onPress={() => {
+          if (this.props.editRecording) {
+            this.props.setStateProxy.setState((state, props) => ({
+              editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
+                ['off', () => 'hi'],
+                ['lo',  () => 'hi'],
+                ['hi',  () => 'off'],
+              ),
+            }))
+          }
+        }}>
+          <Feather style={[styles.bottomControlsButtonIcon, Styles.rotate180, {
+            color: (
+              !this.props.editRecording ? iOSColors.gray :
+              this.props.editClipMode === 'hi' ? iOSColors.blue :
+              iOSColors.black
+            ),
+          }]}
+            name='scissors'
+          />
+        </RectButton>
+
+        {this.props.editRecording && this.props.hasEdits ? (
+
+          // Save draftEdit as new edit rec
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
+            // TODO(edit_rec): Make new rec from draftEdit [probably need native -- maybe follow Search.f_preds]
+          }}>
+            <Feather style={styles.bottomControlsButtonIcon}
+              name='check'
+            />
+          </RectButton>
+
+        ) : (
+
+          // Search
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
+            if (this.props.editRecording) {
+              this.props.go('search', {path: `/rec/${this.props.editRecording.rec.source_id}`});
+            }
+          }}>
+            <Feather style={[styles.bottomControlsButtonIcon, {
+              ...(this.props.editRecording ? {} : {color: iOSColors.gray}),
+            }]}
+              name='search'
+            />
+          </RectButton>
+
+        )}
 
         {this.props.showDebug && (
           // Toggle showMoreDebug
@@ -808,43 +978,75 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
 // TODO -> datatypes (along with types for EditRecording)
 export async function EditRecording(props: {
+  rec: Rec,
+  f_bins: number,
   doneSpectroChunkWidth: number,
-  sourceId: string,
-  audioPath: string,
 }): Promise<null | EditRecording> {
+
   // Render audioPath -> spectros
   //  - null if any value is null (audio samples < nperseg)
   //  - Compute spectros for denoise=true/false (true for preds, false so user can toggle to see pre-denoise)
   //  - Compute spectros for single/chunked (single for preds, chunked for wrapped display)
   var _spectros: EditRecordingSpectros = await log.timedAsync('EditRecording: spectros', async () => new Map(
     await Promise.all([true, false].map(async denoise => {
-      // HACK Duped in UserRec.spectroPath
-      //  - TODO DocumentDir -> CacheDir to avoid bloat
-      //    - [Requires updating all consumers to ensure computed (easy), async (hard)]
-      const spectroPath = `${fs.dirs.DocumentDir}/spectros-v0/${safePath(props.sourceId)}.spectros/denoise=${denoise}.png`;
+
+      // Get a writable spectroCachePath for nonstandard f_bins
+      //  - TODO Refactor to simplify
+      const spectroCachePath = Rec.spectroCachePath(props.rec.source_id, {
+        f_bins: props.f_bins,
+        denoise,
+      });
       const single = await NativeSpectro.renderAudioPathToSpectroPath(
-        props.audioPath,
-        await ensureParentDir(spectroPath),
-        {denoise},
+        Rec.audioPath(props.rec),
+        await ensureParentDir(spectroCachePath),
+        {
+          f_bins: props.f_bins,
+          denoise,
+        },
       );
+
+      // Compute spectro chunks
       const spectros = !single ? null : {
         single,
-        chunked: await NativeSpectro.chunkImageFile(single.path, props.doneSpectroChunkWidth),
+        chunked: await local(async () => {
+          const imageFiles = await NativeSpectro.chunkImageFile(single.path, props.doneSpectroChunkWidth);
+
+          // Compute width/time intervals
+          var cumWidth = 0;
+          const widthIntervals = imageFiles.map(({width}) => {
+            cumWidth += width;
+            return new Interval(cumWidth, cumWidth - width);
+          });
+          const timeIntervals = widthIntervals.map(({lo, hi}) => {
+            return new Interval(
+              lo / cumWidth * props.rec.duration_s,
+              hi / cumWidth * props.rec.duration_s,
+            );
+          });
+
+          return _.zip(imageFiles, widthIntervals, timeIntervals).map(([imageFile, widthInterval, timeInterval]) => ({
+            imageFile,
+            widthInterval,
+            timeInterval,
+          }));
+        }),
       };
+
       return [denoise, spectros] as [Denoise, EditRecordingSpectro];
     })),
   ));
+
   const spectros: null | EditRecordingSpectros = _.values(_spectros).some(x => x === null) ? null : _spectros;
   if (spectros === null) {
     log.info('EditRecording: Noop: No spectro (samples < nperseg)');
     return null;
   } else {
     return {
-      sourceId: props.sourceId,
-      audioPath: props.audioPath,
+      rec: props.rec,
       spectros,
     };
   }
+
 }
 
 const styles = StyleSheet.create({

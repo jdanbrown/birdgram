@@ -21,7 +21,7 @@ export interface BarchartProps {
 
 export class Ebird {
 
-  speciesFromSpeciesCode: Map<SpeciesCode, Species>;
+  speciesFromSpeciesCode:     Map<SpeciesCode, Species>;
   speciesMetadataFromSpecies: Map<Species, SpeciesMetadata>;
 
   constructor(
@@ -30,8 +30,12 @@ export class Ebird {
     // Manually map species_code -> species
     //  - XXX after we add species_code to datasets.metadata_from_dataset, which requires rebuilding the load._metadata
     //    cache, which takes ~overnight (see metadata_from_dataset)
-    this.speciesFromSpeciesCode = new Map(metadataSpecies.map<[SpeciesCode, Species]>(x => [x.species_code, x.shorthand]));
-    this.speciesMetadataFromSpecies = new Map(metadataSpecies.map<[Species, SpeciesMetadata]>(x => [x.shorthand, x]));
+    this.speciesFromSpeciesCode = new Map(metadataSpecies.map<[SpeciesCode, Species]>(x => [
+      x.species_code, x.shorthand,
+    ]));
+    this.speciesMetadataFromSpecies = new Map(metadataSpecies.map<[Species, SpeciesMetadata]>(x => [
+      x.shorthand, x,
+    ]));
   }
 
   barchartSpecies = async (props: BarchartProps): Promise<Array<Species>> => {
@@ -59,4 +63,4 @@ export class Ebird {
     return `https://ebird.org/barchart?${queryString.stringify(props)}`;
   }
 
-};
+}

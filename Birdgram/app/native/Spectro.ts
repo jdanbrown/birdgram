@@ -67,7 +67,8 @@ export const NativeSpectro = {
     audioPath: string,
     spectroPath: string,
     opts: {
-      denoise?: boolean,
+      f_bins: number,
+      denoise: boolean,
     },
   ): Promise<null | ImageFile> => RNSpectro.renderAudioPathToSpectroPath(
     audioPath,
