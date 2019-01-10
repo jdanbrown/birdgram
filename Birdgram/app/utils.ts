@@ -657,6 +657,10 @@ export function isAbsolute(path: string): boolean {
   return path[0] === '/';
 }
 
+export function stripExt(path: string): string {
+  return basename(path, extname(path));
+}
+
 // Replace unsafe chars in path
 //  - (See requireSafePath for details)
 export function safePath(path: string, to: string = '-'): string {

@@ -540,8 +540,7 @@ export class RecordScreen extends Component<Props, State> {
           log.info('stopRecording: Noop: No audioPath');
           sourceId = null;
         } else {
-          const source = UserRec.sourceFromAudioFilename(basename(audioPath));
-          if (!source) throw `stopRecording: audioPath from Nativespectro.stop() should parse to source: ${audioPath}`;
+          const source = await UserRec.new(audioPath);
           sourceId = Source.stringify(source);
         }
 
@@ -948,10 +947,10 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           // Done editing: save and show edit rec
           <RectButton style={styles.bottomControlsButton} onPress={async () => {
             if (this.props.editRecording) {
-              const editSource = await EditRec.newRecFromEdits(
-                this.props.editRecording.rec,
-                this.props.draftEdit,
-              );
+              const editSource = await EditRec.new({
+                parent:    this.props.editRecording.rec,
+                draftEdit: this.props.draftEdit,
+              });
               this.props.go('record', {path: `/edit/${Source.stringify(editSource)}`});
             }
           }}>
@@ -1030,7 +1029,7 @@ export async function EditRecording(props: {
 
       // Get a writable spectroCachePath for nonstandard f_bins
       //  - TODO Refactor to simplify
-      const spectroCachePath = Rec.spectroCachePath(props.rec.source_id, {
+      const spectroCachePath = Rec.spectroCachePath(Source.parseOrFail(props.rec.source_id), {
         f_bins: props.f_bins,
         denoise,
       });

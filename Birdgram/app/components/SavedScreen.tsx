@@ -58,7 +58,18 @@ export class SavedScreen extends PureComponent<Props, State> {
   componentDidMount = async () => {
     log.info('componentDidMount');
 
-    // TODO(edit_rec): Reload saveds when a new user/edit recs is created
+    // Reload saveds when a new user/edit recs is created
+    ['user', 'edit'].forEach(k => Rec.emitter.addListener(k, async (source: Source) => {
+      log.info('Rec.emitter.listener', {source});
+      await this.loadSavedsFromFs();
+    }));
+
+    await this.loadSavedsFromFs();
+
+  }
+
+  loadSavedsFromFs = async () => {
+    log.info('loadSavedsFromFs');
 
     // Load user/edit recs
     //  - Current representation of "saved" is all user/edit recs in the fs
