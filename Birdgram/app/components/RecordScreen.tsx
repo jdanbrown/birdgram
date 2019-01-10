@@ -32,11 +32,11 @@ import nj from '../../third-party/numjs/dist/numjs.min';
 import { Geo, GeoCoords } from './Geo';
 import * as Colors from '../colors';
 import {
-  DraftEdit, Edit, EditRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source, SourceId,
-  UserRec,
+  DraftEdit, Edit, EditRec, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source,
+  SourceId, UserRec,
 } from '../datatypes';
 import { DB } from '../db';
-import { Log, logErrors, logErrorsAsync, puts, rich } from '../log';
+import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from '../log';
 import { NativeSearch } from '../native/Search';
 import { ImageFile, NativeSpectro, NativeSpectroStats } from '../native/Spectro';
 import { Go, Location } from '../router';
@@ -45,9 +45,10 @@ import Sound from '../sound';
 import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, Styles } from '../styles';
 import {
-  basename, catchTry, catchTryAsync, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean, ExpWeightedRate,
-  finallyAsync, global, ifEmpty, Interval, into, json, local, match, matchNil, matchNull, matchUndefined, pretty, round,
-  setStateAsync, shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, yaml, yamlPretty, zipSame,
+  assertFalse, basename, catchTry, catchTryAsync, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean,
+  ExpWeightedRate, finallyAsync, global, ifEmpty, Interval, into, json, local, mapNil, mapNull, mapUndefined, match,
+  matchNil, matchNull, matchUndefined, pretty, round, setStateAsync, shallowDiffPropsState, timed, Timer, tryElse,
+  tryElseAsync, yaml, yamlPretty, zipSame,
 } from '../utils';
 
 const log = new Log('RecordScreen');
@@ -155,7 +156,7 @@ export class RecordScreen extends Component<Props, State> {
 
   // Getters for props/state
   get nSamplesPerImage():  number  { return this.props.sampleRate / this.props.refreshRate; }
-  get hasEdits():          boolean { return DraftEdit.hasEdits(this.state.draftEdit); }
+  get draftEditHasEdits(): boolean { return DraftEdit.hasEdits(this.state.draftEdit); }
   get draftEditHasClips(): boolean { return !_.isEmpty(this.state.draftEdit.clips); }
 
   // Listeners
@@ -291,15 +292,20 @@ export class RecordScreen extends Component<Props, State> {
           },
           edit: async ({sourceId}) => {
             // Show editRecording for sourceId
-            const editRecording = await EditRecording({
-              rec: await this.props.db.loadRec(sourceId),
-              f_bins: this.props.f_bins,
-              doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
-            });
-            this.setState({
-              recordingState: 'stopped',
-              editRecording,
-            });
+            const source = Source.parse(sourceId);
+            if (!source) {
+              log.warn('updateForLocation: Failed to parse sourceId', rich({sourceId, location: this.props.location}));
+            } else {
+              const editRecording = await EditRecording({
+                rec: await this.props.db.loadRec(source),
+                f_bins: this.props.f_bins,
+                doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
+              });
+              this.setState({
+                recordingState: 'stopped',
+                editRecording,
+              });
+            }
           },
         });
 
@@ -432,7 +438,8 @@ export class RecordScreen extends Component<Props, State> {
           denoised={this.state.denoised}
           editRecording={this.state.editRecording}
           editClipMode={this.state.editClipMode}
-          hasEdits={this.hasEdits}
+          draftEdit={this.state.draftEdit}
+          draftEditHasEdits={this.draftEditHasEdits}
           draftEditHasClips={this.draftEditHasClips}
           // NOTE Pass these as bound methods i/o lambdas else ControlsBar will unnecessarily update on every render (and be slow)
           setStateProxy={this} // Had some 'undefined' trouble with passing this.setState, so passing this instead
@@ -533,7 +540,9 @@ export class RecordScreen extends Component<Props, State> {
           log.info('stopRecording: Noop: No audioPath');
           sourceId = null;
         } else {
-          sourceId = Source.stringify({kind: 'user', name: basename(audioPath)});
+          const source = UserRec.sourceFromAudioFilename(basename(audioPath));
+          if (!source) throw `stopRecording: audioPath from Nativespectro.stop() should parse to source: ${audioPath}`;
+          sourceId = Source.stringify(source);
         }
 
         // Edit rec via go() else it won't show up in history
@@ -597,10 +606,10 @@ export class RecordScreen extends Component<Props, State> {
       });
       this.setState((state, props) => {
         // TODO(multi_clip): Add UI for multi-clip editing, and handle multiple clips here
-        const [clip] = ifEmpty(state.draftEdit.clips || [], () => [Interval.top]);
+        const [clip] = ifEmpty(state.draftEdit.clips || [], () => [{time: Interval.top}]);
         return match(state.editClipMode,
-          ['lo', () => ({draftEdit: {...state.draftEdit, clips: [new Interval(spectro.timeInterval.lo, clip.hi)]}})],
-          ['hi', () => ({draftEdit: {...state.draftEdit, clips: [new Interval(clip.lo, spectro.timeInterval.hi)]}})],
+          ['lo', () => ({draftEdit: {...state.draftEdit, clips: [{time: new Interval(spectro.timeInterval.lo, clip.time.hi)}]}})],
+          ['hi', () => ({draftEdit: {...state.draftEdit, clips: [{time: new Interval(clip.time.lo, spectro.timeInterval.hi)}]}})],
         );
       });
     }
@@ -612,7 +621,7 @@ export class RecordScreen extends Component<Props, State> {
     const spectro = spectros.chunked[i];
     return !(
       !this.draftEditHasClips ||
-      _.some(this.state.draftEdit.clips || [], x => x.overlaps(spectro.timeInterval))
+      _.some(this.state.draftEdit.clips || [], clip => clip.time.overlaps(spectro.timeInterval))
     ) && {
       opacity: .333, // TODO tintColor [https://github.com/DylanVann/react-native-fast-image/issues/124]
     }
@@ -791,7 +800,8 @@ export interface ControlsBarProps {
   denoised:          State["denoised"];
   editRecording:     State["editRecording"];
   editClipMode:      State["editClipMode"];
-  hasEdits:          boolean;
+  draftEdit:         State["draftEdit"];
+  draftEditHasEdits: boolean;
   draftEditHasClips: boolean;
   setStateProxy:     RecordScreen;
   startRecording:    typeof RecordScreen.prototype.startRecording;
@@ -850,6 +860,28 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
             </RectButton>
           )],
         )}
+
+        {/* Go to parent rec */}
+        {local(() => {
+          const parent = mapNil(this.props.editRecording, ({rec}) => matchRec(rec, {
+            xc:   rec => null,
+            user: rec => null,
+            edit: rec => rec.edit.parent,
+          }));
+          return (
+            <RectButton style={styles.bottomControlsButton} onPress={() => {
+              if (parent) {
+                this.props.go('record', {path: `/edit/${parent}`});
+              }
+            }}>
+              <Feather style={[styles.bottomControlsButtonIcon, {
+                color: !parent ? iOSColors.gray : iOSColors.black,
+              }]}
+                name='rewind'
+              />
+            </RectButton>
+          );
+        })}
 
         {/* Clip lo/hi */}
         <RectButton style={styles.bottomControlsButton} onPress={() => {
@@ -911,11 +943,17 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           />
         </RectButton>
 
-        {this.props.editRecording && this.props.hasEdits ? (
+        {this.props.editRecording && this.props.draftEditHasEdits ? (
 
-          // Save draftEdit as new edit rec
-          <RectButton style={styles.bottomControlsButton} onPress={() => {
-            // TODO(edit_rec): Make new rec from draftEdit [probably need native -- maybe follow Search.f_preds]
+          // Done editing: save and show edit rec
+          <RectButton style={styles.bottomControlsButton} onPress={async () => {
+            if (this.props.editRecording) {
+              const editSource = await EditRec.newRecFromEdits(
+                this.props.editRecording.rec,
+                this.props.draftEdit,
+              );
+              this.props.go('record', {path: `/edit/${Source.stringify(editSource)}`});
+            }
           }}>
             <Feather style={styles.bottomControlsButtonIcon}
               name='check'

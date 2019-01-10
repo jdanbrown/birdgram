@@ -10,6 +10,9 @@
 
 import { EmitterSubscription, NativeEventEmitter, NativeModules } from 'react-native';
 
+import { DraftEdit } from '../datatypes';
+import { json, JsonSafeNumber, mapUndefined, typed } from '../utils';
+
 const {RNSpectro} = NativeModules;
 
 const _emitter = new NativeEventEmitter(RNSpectro);
@@ -84,5 +87,18 @@ export const NativeSpectro = {
     path,
     chunkWidth,
   ),
+
+  // TODO Move out of NativeSpectro
+  editAudioPathToAudioPath: async (
+    props: {
+      parentAudioPath: string,
+      editAudioPath: string,
+      draftEdit: DraftEdit,
+    },
+  ): Promise<void> => RNSpectro.editAudioPathToAudioPath({
+    ...props,
+    // HACK I gave up on trying to unpack complex Props values in swift, went with json instead
+    draftEdit: json(DraftEdit.jsonSafe(props.draftEdit)),
+  }),
 
 };

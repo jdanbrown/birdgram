@@ -118,20 +118,34 @@ public class FeaturesBirdgram {
     samples: [Float],
     sampleRate: Int
   ) {
+    Log.info(String(format: "FeaturesBirdgram.samplesFromAudioPath: %@", [
+      "audioPath": audioPath,
+    ]))
     let file = try AKAudioFile(forReading: URL(fileURLWithPath: audioPath))
+    Log.debug(String(format: "FeaturesBirdgram.samplesFromAudioPath: file: %@", [
+      "url":              file.url,
+      "fileFormat":       file.fileFormat.settings,
+      "processingFormat": file.processingFormat.settings,
+    ]))
     guard let floatChannelData = file.floatChannelData else { throw AppError("Null floatChannelData in file[\(file.url)]") }
     let Samples = Matrix(floatChannelData)
-    // Log.debug("Spectro.samplesFromAudioPath: Samples.shape[\(Samples.shape)]") // XXX Debug
+    // Log.debug("Search.samplesFromAudioPath: Samples.shape[\(Samples.shape)]") // XXX Debug
     let samples: [Float] = (Samples.shape.0 == 1
       ? Samples.grid               // 1ch -> 1ch
       : Samples.T.map { mean($0) } // 2ch -> 1ch [NOTE Slow-ish: record produces 1ch, but re-rendering xc recs will produce 2ch]
     )
-    // Require sampleRate = config sample_rate
+    // Assert sampleRate = config sample_rate
+    //  - TODO(import_rec): We'll need to convert the input rec encoding when the user can import arbitrary audio files
     let sampleRate = Int(file.processingFormat.sampleRate)
     if sampleRate != features.sample_rate {
       // Throw i/o crashing (e.g. via downstream precondition in features._spectro)
       throw AppError("sampleRate[\(sampleRate)] must be \(features.sample_rate) (in \(file.url))")
     }
+    Log.debug(String(format: "FeaturesBirdgram.samplesFromAudioPath: return: %@", [
+      "(ch,samples)": Samples.shape,
+      "samples":      samples.count,
+      "sampleRate":   sampleRate,
+    ]))
     return (
       samples:    samples,
       sampleRate: sampleRate

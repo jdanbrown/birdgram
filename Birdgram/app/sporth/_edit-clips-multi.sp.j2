@@ -1,0 +1,99 @@
+#
+# Docs
+#   - https://github.com/PaulBatchelor/Sporth/blob/master/ugen_reference.txt
+#   - https://pbat.ch/proj/cook/ugens/
+#   - https://paulbatchelor.github.io/res/soundpipe/docs/
+#
+
+# Name: setdurs
+# Args: size (f)
+# Output: n/a
+# Description: set total duration (in samples)
+
+# Name: loadfile
+# Args: table name (s), file name (s)
+# Output: n/a
+# Description: load a (mono) audio file into a table
+
+# Name: slice
+# Args: trig (f) id (f) vals (s) buf (s)
+# Output: f
+# Description: in-memory slice based sampler
+
+# Name: tick
+# Args: n/a
+# Output: f
+# Description: trigger at start of file. only use once
+
+# Name: dtrig
+# Args: trig (f) loop (f) delay (f) scale (f) tbl (s)
+# Output: f
+# Description: delta trig. loop = 1 will loop the sequence
+
+#
+# Code
+#
+
+# tick
+#   - Can only call once
+tick
+
+# # Params
+# _start       var
+# _end         var
+# {{ start_s }} _start_s print sr mul _start print _start set
+# {{ end_s   }} _end_s   print sr mul _end   print _end   set
+
+# TODO
+#   - dtrig [0 (end_i - start_i) ...]
+#   - _vals [start_i ...]
+
+# TODO Make one shared _trig/_id signal that we can dup, like the slice example
+#   - _trig: signal timing should come from dtrig
+#   - _id:   signal values should be _vals indexes
+#   - e.g. [_id=0 @ 0s], [_id=1 @ 2.5s], [_id=2 @ 8.1s], ...
+
+# trig
+#   - AH HAH -- these are durations, not starts!
+_dtrigs "2.0 4.0" gen_vals 0 0 1 _dtrigs dtrig
+_dtrig print
+
+# id
+dup
+# _id "3 4 5" gen_vals dup 0 0 1 _id dtrig
+_id print
+
+# vals
+_vals 4 zeros
+2.5 sr mul 0 _vals tset
+3.0 sr mul 1 _vals tset
+4.0 sr mul 2 _vals tset
+4.5 sr mul 3 _vals tset
+_vals
+
+# buf
+_buf {{ in_path | dquote }} loadfile
+_buf
+
+slice
+
+# setdurs
+5 sr mul setdurs
+
+# # Set duration = end - start
+# #   - Else runs forever (b/c it assumes triggers can keep happening)
+# _end get _start get sub _setdurs print setdurs
+#
+# # Set slice vals
+# #   - How to multi-clip? (e.g. how do multiple vals work?)
+# _vals 1 zeros                         # Make 1-elem table
+# _start get _vals_0 print 0 _vals tset # Set _vals[0]
+#
+# # Slice _buf at _vals
+# #   - tick to trigger once at sporth start
+# #   - QUESTION How does slice's _id arg work? `tick` works for the single-clip use case, at least...
+# tick  _trig print
+# tick  _id   print
+# _vals _vals print
+# _buf  _buf  print
+# slice # _slice print # Very Noisy

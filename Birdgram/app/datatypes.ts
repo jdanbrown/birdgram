@@ -5,18 +5,21 @@ import queryString from 'query-string';
 import { matchPath } from 'react-router-native';
 import RNFB from 'rn-fetch-blob';
 import { sprintf } from 'sprintf-js';
-const fs = RNFB.fs;
+import traverse from 'traverse';
+const {base64, fs} = RNFB;
 
 import { Filters } from './components/SearchScreen';
 import { GeoCoords } from './components/Geo';
 import { BarchartProps } from './ebird';
 import { debug_print, log, Log, rich } from './log';
+import { NativeSpectro } from './native/Spectro';
 import { Places } from './places';
 import { Location } from './router';
 import {
-  assert, basename, chance, ensureDir, ensureParentDir, extname, ifNull, ifUndefined, json, JsonSafeNumber, Interval,
-  local, mapEmpty, mapUndefined, match, matchNull, matchUndefined, Omit, parseUrl, parseUrlNoQuery, parseUrlWithQuery,
-  pretty, requireSafePath, safeParseInt, safePath, showDate, showSuffix, splitFirst, throw_, typed, unjson,
+  assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
+  JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchNull, matchUndefined, NoKind,
+  Omit, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane, requireSafePath, safeParseInt, safeParseIntOrNull,
+  safePath, showDate, showSuffix, splitFirst, throw_, tryElse, typed, unjson,
 } from './utils';
 import { XC } from './xc';
 
@@ -72,7 +75,12 @@ export const Place = {
 export type SourceId = string;
 export type Source = XCSource | UserSource | EditSource;
 export interface XCSource   { kind: 'xc';   xc_id: number; }
-export interface UserSource { kind: 'user'; name: string; }
+export interface UserSource { kind: 'user';
+  created:  Date;
+  uniq:     string;
+  ext:      string;
+  filename: string; // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
+}
 export interface EditSource { kind: 'edit'; edit: Edit; }
 
 export interface SourceShowOpts {
@@ -91,31 +99,64 @@ export const SourceId = {
     return {kind, ssp};
   },
 
-  show: (sourceId: SourceId, opts: SourceShowOpts): string => {
-    return Source.show(Source.parse(sourceId), opts);
+  stripType: (sourceId: SourceId): string => {
+    return SourceId.split(sourceId).ssp;
   },
+
+  show: (sourceId: SourceId, opts: SourceShowOpts): string => {
+    return matchNull(Source.parse(sourceId), {
+      x:    source => Source.show(source, opts),
+      null: ()     => `[Malformed: ${sourceId}]`,
+    });
+  },
+
+  pathBasename: (sourceId: SourceId): string => {
+    return Source.pathBasename(Source.parseOrFail(sourceId));
+  },
+
+  // XXX(edit_rec): Insufficient for edit sources, since an edit of an edit will have '%xx' escapes in .parent, which rn mishandles
+  //  - (See requireSafePath for details)
+  // pathSafe: (sourceId: SourceId): string => {
+  //   // Replace only first occurrence, and be idempotent
+  //   //  - e.g. 'type:name' -> 'type-name'
+  //   //  - e.g. 'type-name' -> 'type-name'
+  //   return requireSafePath(sourceId.replace(/[:-]/, '-'));
+  // },
+  // unpathSafe: (s: string): SourceId => {
+  //   // Replace only first occurrence, and be idempotent
+  //   //  - e.g. 'type-name' -> 'type:name'
+  //   //  - e.g. 'type:name' -> 'type:name'
+  //   return s.replace(/[:-]/, ':')
+  // },
 
 };
 
 export const Source = {
 
-  // NOTE Must map {kind:'xc',xc_id} -> `xc:${xc_id}` for consistency with db payload (see util.py:rec_to_source_id)
+  // NOTE Preserve {kind:'xc',xc_id} -> `xc:${xc_id}` to stay consistent with db payload (see util.py:rec_to_source_id)
   stringify: (source: Source): SourceId => {
     return matchSource(source, {
       xc:   ({xc_id}) => `xc:${xc_id}`,
-      user: ({name})  => `user:${name}`,
-      edit: ({edit})  => `edit:${Edit.stringify(edit)}`, // Something that nests, e.g. for edits of edits
+      user: source    => `user:${UserSource.stringify(source)}`,
+      edit: ({edit})  => `edit:${Edit.stringify(edit)}`, // Ensure can nest safely (e.g. edits of edits)
     });
   },
 
-  parse: (sourceId: SourceId): Source => {
+  parse: (sourceId: SourceId): Source | null => {
     const {kind, ssp} = SourceId.split(sourceId);
-    return match<string, Source>(kind,
-      ['xc',          () => ({kind: 'xc',   xc_id: safeParseInt(ssp)})],
-      ['user',        () => ({kind: 'user', name: ssp})],
-      ['edit',        () => ({kind: 'edit', edit: Edit.parse(ssp)})],
+    return match<string, Source | null>(kind,
+      ['xc',          () => mapNull(safeParseIntOrNull(ssp), xc_id => typed<XCSource>   ({kind: 'xc',   xc_id}))],
+      ['user',        () => mapNull(UserSource.parse(ssp),   x     => typed<UserSource> ({kind: 'user', ...x}))],
+      ['edit',        () => mapNull(Edit.parse(ssp),         edit  => typed<EditSource> ({kind: 'edit', edit}))],
       [match.default, () => { throw `Unknown sourceId type: ${sourceId}`; }],
     );
+  },
+
+  parseOrFail: (sourceId: SourceId): Source => {
+    return matchNull(Source.parse(sourceId), {
+      null: ()     => { throw `Failed to parse sourceId[${sourceId}]`; },
+      x:    source => source,
+    });
   },
 
   show: (source: Source, opts: SourceShowOpts): string => {
@@ -127,12 +168,12 @@ export const Source = {
           !xc ? '' : ` (${xc.speciesFromXCID.get(xc_id) || '?'})`,
         ].join('');
       },
-      user: ({name}) => {
-        // Ignore hash (in name=`${date}-${time}-${hash}`), since seconds resolution should be unique enough for human
+      user: ({created, uniq, ext}) => {
+        // Ignore uniq (in name=`${date}-${time}-${uniq}`), since seconds resolution should be unique enough for human
         //  - TODO Rethink after rec sharing (e.g. add usernames to avoid collisions)
         return [
           !opts.long ? '' : 'Recording: ',
-          showDate(Source._parseUserName(name)),
+          showDate(created),
         ].join('');
       },
       edit: ({edit}) => {
@@ -141,23 +182,80 @@ export const Source = {
     });
   },
 
-  // QUESTION Should we pass around Moment's i/o Date's?
-  _parseUserName: (name: string): Date => {
-    return moment(
-      name.replace(/[^\d]/g, '').slice(0, 14), // Strip all non-numbers to be robust to changing formats
-      'YYYYMMDDhhmmss',
+  stringifyDate: (d: Date): string => {
+    return (d
+      .toISOString()         // Render from local to utc
+      .replace(/[^\d]/g, '') // Strip 'YYYY-MM-DDThh:mm:ss.SSS' -> 'YYYYMMDDThhmmssSSS'
+    );
+  },
+
+  // [Maybe simpler to pass around Moment i/o Date?]
+  parseDate: (s: string): Date => {
+    return moment.utc(         // Parse from utc into local
+      s.replace(/[^\d]/g, ''), // Strip all non-numbers to be robust to changing formats
+      'YYYYMMDDhhmmssSSS',     // This is robust to missing values at the end (e.g. no SSS -> millis=0)
     ).toDate();
+  },
+
+  // Examples
+  //  - xc:   'xc-1234'
+  //  - user: 'user-20190109205640977-336b2bb7'
+  //  - clip: 'clip-20190108011526401-d892e4be'
+  pathBasename: (source: Source): string => {
+    return requireSafePath(
+      matchSource(source, {
+        xc:   source => XCRec.pathBasename(source),
+        user: source => UserRec.pathBasename(source),
+        edit: source => EditRec.pathBasename(source),
+      }),
+    );
   },
 
 };
 
-export function matchSourceId<X>(sourceId: SourceId, cases: {
-  xc:   (source: XCSource)   => X,
-  user: (source: UserSource) => X,
-  edit: (source: EditSource) => X,
-}): X {
-  return matchSource(Source.parse(sourceId), cases);
-}
+export const UserSource = {
+
+  stringify: (source: NoKind<UserSource>): string => {
+    // Return preserved filename so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
+    return source.filename;
+  },
+
+  parse: (ssp: string): NoKind<UserSource> | null => {
+    try {
+      // Format: 'created-uniq.ext'
+      //  - Assume uniq has no special chars, and let created + ext match everything outside of '-' and '.'
+      const match = ssp.match(/^(.+)-([^-.]+)\.(.+)$/);
+      if (!match)   throw `UserSource.parse: Invalid ssp[${ssp}]`;
+      const [_, created, uniq, ext] = match;
+      if (!created) throw `UserSource.parse: Invalid created[${created}]`;
+      if (!uniq)    throw `UserSource.parse: Invalid uniq[${uniq}]`;
+      if (!ext)     throw `UserSource.parse: Invalid ext[${created}]`;
+      return {
+        created: Source.parseDate(created),
+        uniq,
+        ext,
+        filename: ssp, // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
+      };
+    } catch (e) {
+      log.warn('UserSource.parse: Failed', rich({ssp, e}));
+      return null;
+    }
+  },
+
+  new: (source: Omit<UserSource, 'kind' | 'filename'>): UserSource => {
+    return typed<UserSource>({
+      kind:     'user',
+      filename: UserSource._newFilename(source), // Nothing to preserve for fresh user rec (e.g. not from saved file)
+      ...source,
+    });
+  },
+
+  _newFilename: (source: Omit<UserSource, 'kind' | 'filename'>): string => {
+    // Generate filename from UserSource metadata
+    return `${Source.stringifyDate(source.created)}-${source.uniq}.${source.ext}`;
+  },
+
+};
 
 export function matchSource<X>(source: Source, cases: {
   xc:   (source: XCSource)   => X,
@@ -171,14 +269,16 @@ export function matchSource<X>(source: Source, cases: {
   }
 }
 
-// HACK Refactor callers so we don't need this
-export function matchUserSourceId<X>(sourceId: SourceId,
-  f: (x: {name: string}) => X,
-): X {
-  return matchSourceId(sourceId, {
-    xc:   () => { throw `Expected user sourceId, got: ${sourceId}`; },
-    user: x  => f(x),
-    edit: () => { throw `Expected user sourceId, got: ${sourceId}`; },
+// Prefer matchSource(source) to avoid having to handle the null case when sourceId fails to parse
+export function matchSourceId<X>(sourceId: SourceId, cases: {
+  null: (sourceId: SourceId) => X,
+  xc:   (source: XCSource)   => X,
+  user: (source: UserSource) => X,
+  edit: (source: EditSource) => X,
+}): X {
+  return matchNull(Source.parse(sourceId), {
+    null: ()     => cases.null(sourceId),
+    x:    source => matchSource(source, cases),
   });
 }
 
@@ -257,9 +357,10 @@ export function matchRec<X>(rec: Rec, cases: {
 }): X {
   // HACK Switch on rec.source_id until we refactor all Rec constructors to include .kind
   return matchSourceId(rec.source_id, {
-    xc:   source => cases.xc   (rec as XCRec,   source),
-    user: source => cases.user (rec as UserRec, source),
-    edit: source => cases.edit (rec as EditRec, source),
+    null: sourceId => { throw `matchRec: No Rec should have an invalid sourceId: ${sourceId}`; },
+    xc:   source   => cases.xc   (rec as XCRec,   source),
+    user: source   => cases.user (rec as UserRec, source),
+    edit: source   => cases.edit (rec as EditRec, source),
   });
 }
 
@@ -300,7 +401,11 @@ export const Rec = {
   //  - EditRecording can't use Rec.spectroPath because it maps xc sourceIds to their static asset spectroPath (40px)
   //  - TODO Add concept for "writable spectroPath for user/xc rec"
   spectroCachePath: (sourceId: SourceId, opts: SpectroPathOpts): string => {
-    return `${Rec.spectroCacheDir}/${safePath(sourceId)}.spectros/f_bins=${opts.f_bins},denoise=${opts.denoise}.png`;
+    return [
+      `${Rec.spectroCacheDir}`,
+      `${SourceId.pathBasename(sourceId)}.spectros`,
+      `f_bins=${opts.f_bins},denoise=${opts.denoise}.png`,
+    ].join('/');
   },
 
   f_preds: (rec: Rec): Rec_f_preds => {
@@ -354,16 +459,54 @@ export const Rec = {
     }
   },
 
+  listAudioSources: async <FileSource>(FileRec: {
+    audioDir:                string,
+    sourceFromAudioFilename: (filename: string) => FileSource | null,
+  }): Promise<Array<FileSource>> => {
+    return _.flatMap(
+      await Rec.listAudioFilenames(FileRec.audioDir),
+      filename => {
+        const source = FileRec.sourceFromAudioFilename(filename);
+        if (!source) {
+          log.warn("listAudioSources: Dropping: Failed to parse sourceId", rich({
+            audioDir: FileRec.audioDir,
+            filename,
+          }));
+          return [];
+        } else {
+          return [source];
+        }
+      },
+    );
+  },
+
+  listAudioPaths: async (dir: string): Promise<Array<string>> => {
+    return (await Rec.listAudioFilenames(dir)).map(x => `${dir}/${x}`);
+  },
+
+  listAudioFilenames: async (dir: string): Promise<Array<string>> => {
+    const excludes = [/\.metadata\.json$/];
+    return (
+      (await fs.ls(await ensureDir(dir)))
+      .filter(x => !_.some(excludes, exclude => exclude.test(x)))
+      .sort()
+    );
+  },
+
 };
 
 export const XCRec = {
+
+  pathBasename: (source: XCSource): string => {
+    return safePath(Source.stringify(source));
+  },
 
   audioPath: (rec: XCRec): string => {
     return SearchRecs.assetPath('audio', rec.species, rec.xc_id, 'mp4');
   },
 
   // TODO (When needed)
-  // sourceFromAudioFilename: (filename: string): XCSource => {
+  // sourceFromAudioFilename: (filename: string): XCSource | null => {
   //   ...
   // },
 
@@ -382,12 +525,22 @@ export const UserRec = {
 
   log: new Log('UserRec'),
 
-  audioPath: (source: UserSource): string => {
-    return `${Rec.userRecDir}/${source.name}`;
+  audioDir: Rec.userRecDir,
+
+  pathBasename: (source: UserSource): string => {
+    // TODO(edit_rec)
+    // return safePath(Source.stringify(source));
+    return source.filename;
   },
 
-  sourceFromAudioFilename: (filename: string): UserSource => {
-    return Source.parse(`user:${filename}`) as UserSource; // HACK Type
+  audioPath: (source: UserSource): string => {
+    const pathBasename = Source.pathBasename(source);
+    const filename = `${SourceId.stripType(Source.stringify(source))}`; // Don't include 'user:'
+    return `${UserRec.audioDir}/${filename}`;
+  },
+
+  sourceFromAudioFilename: (filename: string): UserSource | null => {
+    return mapNull(Source.parse(`user:${filename}`), x => x as UserSource); // HACK Type
   },
 
   spectroPath: (source: UserSource, opts: SpectroPathOpts): string => {
@@ -399,13 +552,12 @@ export const UserRec = {
   }): Promise<string> => {
 
     // Create audioPath
-    const timestamp = safePath( // Avoid ':' for ios paths
-      new Date().toISOString()
-      .slice(0, 19)                            // Cosmetic: drop millis/tz
-      .replace(/[-:]/g, '').replace(/T/g, '-') // Cosmetic: 'YYYY-MM-DDThh:mm:ss' -> 'YYYYMMDD-hhmmss'
-    );
-    const hash = chance.hash({length: 8}); // Long enough to be unique across users
-    const audioPath = `${Rec.userRecDir}/${timestamp}-${hash}.${ext}`;
+    const source = UserSource.new({
+      created: new Date(),
+      uniq:    chance.hash({length: 8}), // Long enough to be unique across users
+      ext,
+    });
+    const audioPath = UserRec.audioPath(source);
 
     // Ensure parent dir for caller
     //  - Also for us, to write the metadata file (next step)
@@ -422,19 +574,10 @@ export const UserRec = {
 
   },
 
-  listAudioPaths: async (exts?: Array<string>): Promise<Array<string>> => {
-    return (await UserRec.listAudioFilenames(exts)).map(x => `${Rec.userRecDir}/${x}`);
-  },
-
-  listAudioFilenames: async (_exts?: Array<string>): Promise<Array<string>> => {
-    // HACK Filter exts to determine audio files vs. others (e.g. .metadata.json)
-    const exts = _exts || ['wav', 'mp4', 'm4a', 'aac', 'mp3'];
-    return (
-      (await fs.ls(await ensureDir(Rec.userRecDir)))
-      .sort()
-      .filter(x => exts.includes(extname(x).replace(/^\./, '')))
-    );
-  },
+  // Wrap Rec.listAudio*
+  listAudioSources:   async (): Promise<Array<UserSource>> => Rec.listAudioSources   (UserRec),
+  listAudioPaths:     async (): Promise<Array<string>>     => Rec.listAudioPaths     (UserRec.audioDir),
+  listAudioFilenames: async (): Promise<Array<string>>     => Rec.listAudioFilenames (UserRec.audioDir),
 
 };
 
@@ -442,17 +585,47 @@ export const EditRec = {
 
   log: new Log('EditRec'),
 
-  audioPath: (source: EditSource): string => {
-    const filename = `${SourceId.split(Source.stringify(source)).ssp}`; // Don't include 'edit:'
-    return `${Rec.editDir}/${filename}`;
+  audioDir: Rec.editDir,
+
+  // Give edit rec files a proper audio file ext, else e.g. ios AKAudioFile(forReading:) fails to infer the filetype
+  //  - HACK Pin filetype to .wav (tight coupling with NativeSpectro.editAudioPathToAudioPath)
+  audioExt: 'wav',
+
+  pathBasename: (source: EditSource): string => {
+    return safePath(Source.stringify(source));
   },
 
-  sourceFromAudioFilename: (filename: string): EditSource => {
-    return Source.parse(`edit:${filename}`) as EditSource; // HACK Type
+  audioPath: (source: EditSource): string => {
+    const basename = `${SourceId.stripType(Source.stringify(source))}`; // Don't include 'edit:'
+    return `${EditRec.audioDir}/${basename}.${EditRec.audioExt}`;
+  },
+
+  sourceFromAudioFilename: (filename: string): EditSource | null => {
+    const ext = extname(filename).replace(/^\./, '');
+    if (ext != EditRec.audioExt) throw `Expected ext[${EditRec.audioExt}], got ext[${ext}] in filename[${filename}]`;
+    const ssp = basename(filename, `.${ext}`);
+    return mapNull(Source.parse(`edit:${ssp}`), x => x as EditSource); // HACK Type
   },
 
   spectroPath: (source: EditSource, opts: SpectroPathOpts): string => {
     return Rec.spectroCachePath(Source.stringify(source), opts);
+  },
+
+  newRecFromEdits: async (parent: Rec, draftEdit: DraftEdit): Promise<EditSource> => {
+    const edit = {
+      ...draftEdit,
+      parent:  parent.source_id,
+      created: new Date(),
+      uniq:    chance.hash({length: 8}),
+    };
+    const parentAudioPath = Rec.audioPath(parent);
+    const editAudioPath   = await EditRec.newAudioPath(edit, {parent});
+    await NativeSpectro.editAudioPathToAudioPath({
+      parentAudioPath,
+      editAudioPath,
+      draftEdit: typed<DraftEdit>(edit),
+    });
+    return {kind: 'edit', edit};
   },
 
   newAudioPath: async (edit: Edit, metadata: {
@@ -465,7 +638,7 @@ export const EditRec = {
 
     // Create audioPath
     const source: EditSource = {kind: 'edit', edit};
-    const audioPath = EditRec.audioPath(source);
+    const audioPath = EditRec.audioPath({kind: 'edit', edit});
 
     // Ensure parent dir for caller
     //  - Also for us, to write the metadata file (next step)
@@ -482,16 +655,10 @@ export const EditRec = {
 
   },
 
-  listAudioPaths: async (): Promise<Array<string>> => {
-    return (await EditRec.listAudioFilenames()).map(x => `${Rec.editDir}/${x}`);
-  },
-
-  listAudioFilenames: async (): Promise<Array<string>> => {
-    return (
-      (await fs.ls(await ensureDir(Rec.editDir)))
-      .sort()
-    );
-  },
+  // Wrap Rec.listAudio*
+  listAudioSources:   async (): Promise<Array<EditSource>> => Rec.listAudioSources   (EditRec),
+  listAudioPaths:     async (): Promise<Array<string>>     => Rec.listAudioPaths     (EditRec.audioDir),
+  listAudioFilenames: async (): Promise<Array<string>>     => Rec.listAudioFilenames (EditRec.audioDir),
 
 };
 
@@ -501,41 +668,62 @@ export const EditRec = {
 
 // A (commited) edit, which has a well defined mapping to an edit rec file
 export interface Edit extends DraftEdit {
-  parent: SourceId;
-  hash:   string; // Ensure a new filename for each EditRec (so we don't have to think about file collisions / purity)
+  parent:  SourceId;
+  created: Date;
+  uniq:    string; // Ensure a new filename for each EditRec (so we don't have to think about file collisions / purity)
 }
 
 // A draft edit, which isn't yet associated with any edit rec file
-//  - For RecordScreen.state
+//  - Produced by RecordScreen (UX for creating edits from existing recs)
+//  - Consumed by NativeSpectro (Spectro.swift:Spectro.editAudioPathToAudioPath)
 export interface DraftEdit {
-  clips?: Array<Interval>;
-  // Room to grow: freq filter, gain adjust, airbrush, ...
+  clips?: Array<Clip>;
+}
+
+export interface Clip {
+  time:  Interval;
+  gain?: number; // TODO Unused
+  // Room to grow: freq filter, airbrush, ...
 }
 
 export const Edit = {
 
   // Can't simply json/unjson because it's unsafe for Interval (which needs to JsonSafeNumber)
   stringify: (edit: Edit): string => {
-    return queryString.stringify(typed<{[key in keyof Edit]: undefined | string | string[]}>({
-      hash:   edit.hash,
-      parent: edit.parent,
-      clips:  mapUndefined(edit.clips, x => x.map(x => x.stringify())),
-    }));
+    return requireSafePath(
+      // Ensure safe for paths, since we're used as a Source ssp (e.g. no ':' for ios)
+      qsSane.stringify(typed<{[key in keyof Edit]: any}>({
+        // base64 parent id to avoid '%xx' escapes (e.g. edits of edits), which are mishandled by react-native
+        //  - (See requireSafePath for details)
+        //  - Strip trailing '=' (base64 padding chars), to avoid another source of '%xx' escapes
+        parent:  base64.encode(edit.parent).replace(/=+$/, ''),
+        created: Source.stringifyDate(edit.created),
+        uniq:    edit.uniq,
+        clips:   mapUndefined(edit.clips, clips => clips.map(clip => Clip.jsonSafe(clip))),
+      })),
+    );
   },
-  parse: (x: string | {[key: string]: undefined | string | string[]}): Edit => {
-    const q = typeof x === 'string' ? queryString.parse(x) : x;
-    return {
-      parent: Edit._asSingle(ifUndefined(q.parent, () => throw_(`Field 'parent' required: ${json(q)}`))),
-      hash:   Edit._asSingle(ifUndefined(q.hash,   () => throw_(`Field 'hash' required: ${json(q)}`))),
-      clips:  mapUndefined(q.clips, x => Edit._asArray(x).map(Interval.parse)),
-    };
+  // parse: (x: string | {[key: string]: undefined | string | string[]}): Edit | null => {
+  parse: (x: string): Edit | null => {
+    try {
+      const q = qsSane.parse(x);
+      return {
+        parent:  Edit._required(q, 'parent',  (x: string) => base64.decode(x)),
+        created: Edit._required(q, 'created', (x: string) => Source.parseDate(x)),
+        uniq:    Edit._required(q, 'uniq',    (x: string) => x),
+        clips:   Edit._optional(q, 'clips',   (xs: any[]) => xs.map(x => Clip.unjsonSafe(x))),
+      };
+    } catch (e) {
+      log.warn('Edit.parse: Failed', rich({x, e}));
+      return null;
+    }
   },
 
   show: (edit: Edit, opts: SourceShowOpts): string => {
     const parts = [
-      // Ignore hash for human
+      // Ignore uniq for human
       SourceId.show(edit.parent, opts),
-      ...(edit.clips || []).map(x => x.show()),
+      ...(edit.clips || []).map(x => Clip.show(x)),
     ];
     return (parts
       .filter(x => !_.isEmpty(x)) // Exclude null, undefined, '' (and [], {})
@@ -543,19 +731,62 @@ export const Edit = {
     );
   },
 
-  // Handle the `undefined | string | string[]` fields from queryString.parse
-  _asSingle: (x: string | string[]): string   => typeof x === 'string' ? x   : throw_(`Expected string: ${json(x)}`),
-  _asArray:  (x: string | string[]): string[] => typeof x === 'string' ? [x] : x,
+  // Parse results of qsSane.parse
+  //  - TODO Add runtime type checks for X [how?] so we fail when q[k] isn't an X
+  _optional: <X, Y>(q: any, k: keyof Edit, f: (x: X) => Y): Y | undefined => mapUndefined(q[k], x => f(x)),
+  _required: <X, Y>(q: any, k: keyof Edit, f: (x: X) => Y): Y             => f(Edit._requireKey(q, k)),
+  _requireKey: (q: any, k: keyof Edit): any => ifUndefined(q[k], () => throw_(`Edit: Field '${k}' required: ${json(q)}`)),
 
 };
 
 export const DraftEdit = {
+
+  // For NativeSpectro.editAudioPathToAudioPath [see HACK there]
+  jsonSafe: (draftEdit: DraftEdit): any => {
+    return {
+      clips: mapUndefined(draftEdit.clips, xs => xs.map(x => Clip.jsonSafe(x))),
+    };
+  },
+  // TODO When needed
+  // unjsonSafe: (x: any): DraftEdit => {
+  // },
 
   hasEdits: (edit: DraftEdit): boolean => {
     return !_(edit).values().every(_.isEmpty);
   },
 
 };
+
+export const Clip = {
+
+  stringify: (clip: Clip): string => {
+    return json(Clip.jsonSafe(clip));
+  },
+  parse: (x: string): Clip => {
+    return Clip.unjsonSafe(unjson(x));
+  },
+
+  jsonSafe: (clip: Clip): any => {
+    return {
+      time: clip.time.jsonSafe(),
+      gain: clip.gain,
+    };
+  },
+  unjsonSafe: (x: any): Clip => {
+    return {
+      time: Interval.unjsonSafe(x.time),
+      gain: x.gain,
+    };
+  },
+
+  show: (clip: Clip): string => {
+    return [
+      (clip.time.intersect(Interval.nonNegative) || clip.time).show(), // Show [0.00–1.23] i/o [–1.23], but keep [1.23–]
+      showSuffix('×', clip.gain, x => sprintf('%.2f', x)),
+    ].join('');
+  },
+
+}
 
 //
 // RecordPathParams

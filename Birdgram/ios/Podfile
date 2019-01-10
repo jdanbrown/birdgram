@@ -24,6 +24,7 @@ def bubo_pods
   pod 'AudioKit', '~> 4.5'
   # pod 'Surge', '~> 2.2.0' # XXX Vendored [why?]
   pod 'SigmaSwiftStatistics', '~> 8.0'
+  pod 'Stencil', '~> 0.13.1'
   pod 'SwiftyJSON', '~> 4.0'
   pod 'Yams', '~> 1.0.1'
 end

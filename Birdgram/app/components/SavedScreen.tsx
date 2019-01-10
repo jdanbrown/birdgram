@@ -9,17 +9,17 @@ import { human, iOSColors, material, materialColors, systemWeights } from 'react
 import Feather from 'react-native-vector-icons/Feather';
 
 import {
-  EditRec, matchRecordPathParams, matchSearchPathParams, recordPathParamsFromLocation, Rec,
+  EditRec, matchRecordPathParams, matchSearchPathParams, matchSource, recordPathParamsFromLocation, Rec,
   searchPathParamsFromLocation, Source, SourceId, UserRec, XCRec,
 } from '../datatypes';
 import { Ebird } from '../ebird';
-import { Log, rich } from '../log';
+import { debug_print, Log, puts, rich } from '../log';
 import { Go, TabName } from '../router';
 import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
 import {
   global, into, json, local, mapNil, mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined, mergeArraysWith,
-  shallowDiffPropsState, showDate, yaml,
+  shallowDiffPropsState, showDate, throw_, yaml,
 } from '../utils';
 import { XC } from '../xc';
 
@@ -58,25 +58,27 @@ export class SavedScreen extends PureComponent<Props, State> {
   componentDidMount = async () => {
     log.info('componentDidMount');
 
+    // TODO(edit_rec): Reload saveds when a new user/edit recs is created
+
     // Load user/edit recs
     //  - Current representation of "saved" is all user/edit recs in the fs
     //  - TODO Add a delete/unsave button so user can clean up unwanted recs
-    const userRecSources = (
-      (await UserRec.listAudioFilenames())
-      .map(filename => UserRec.sourceFromAudioFilename(filename))
-    );
-    const editSources = (
-      (await EditRec.listAudioFilenames())
-      .map(filename => EditRec.sourceFromAudioFilename(filename))
-    );
+    const userRecSources = await UserRec.listAudioSources();
+    const editSources    = await EditRec.listAudioSources();
 
     // Order saveds
-    //  - TODO How to order? Or, just let user order manually and skip this?
     const saveds = (
-      _.concat<Source>(
-        userRecSources, // Show last
-        editSources,    // Show first
-      )
+      _<Source[][]>([
+        userRecSources,
+        editSources,
+      ])
+      .flatten()
+      .sortBy(x => matchSource(x, {
+        xc:   source => throw_(`Impossible xc case: ${x}`),
+        user: source => source.created,
+        edit: source => source.edit.created,
+      }))
+      .value()
       .slice().reverse() // (Copy b/c reverse mutates)
       .map<Saved>(source => ({
         tab:  'record',

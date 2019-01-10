@@ -8,8 +8,10 @@ import os // For os_log
 import Foundation
 
 import Bubo // Before Bubo_Pods imports
+import AudioKit
 import Promises
 import Surge
+import SwiftyJSON
 
 // Docs
 //  - https://facebook.github.io/react-native/docs/native-modules-ios
@@ -66,15 +68,15 @@ class RNSpectro: RCTEventEmitter, RNProxy {
     withPromiseNoProxy(resolve, reject, "create") {
       self.proxy = try Spectro.create(
         emitter:          self,
-        f_bins:           self.getPropRequired(opts, "f_bins"),
+        f_bins:           propsGetRequired(opts, "f_bins"),
         // TODO Clean up unused params
-        sampleRate:       self.getPropOptional(opts, "sampleRate"),
-        channels:         self.getPropOptional(opts, "channels"),
-        bytesPerPacket:   self.getPropOptional(opts, "bytesPerPacket"),
-        framesPerPacket:  self.getPropOptional(opts, "framesPerPacket"),
-        bytesPerFrame:    self.getPropOptional(opts, "bytesPerFrame"),
-        channelsPerFrame: self.getPropOptional(opts, "channelsPerFrame"),
-        bitsPerChannel:   self.getPropOptional(opts, "bitsPerChannel")
+        sampleRate:       propsGetOptional(opts, "sampleRate"),
+        channels:         propsGetOptional(opts, "channels"),
+        bytesPerPacket:   propsGetOptional(opts, "bytesPerPacket"),
+        framesPerPacket:  propsGetOptional(opts, "framesPerPacket"),
+        bytesPerFrame:    propsGetOptional(opts, "bytesPerFrame"),
+        channelsPerFrame: propsGetOptional(opts, "channelsPerFrame"),
+        bitsPerChannel:   propsGetOptional(opts, "bitsPerChannel")
       )
     }
   }
@@ -85,8 +87,8 @@ class RNSpectro: RCTEventEmitter, RNProxy {
   ) -> Void {
     withPromise(resolve, reject, "start") { _proxy in
       try _proxy.start(
-        outputPath:  self.getPropRequired(opts, "outputPath"),
-        refreshRate: self.getPropRequired(opts, "refreshRate")
+        outputPath:  propsGetRequired(opts, "outputPath"),
+        refreshRate: propsGetRequired(opts, "refreshRate")
       )
     }
   }
@@ -113,8 +115,8 @@ class RNSpectro: RCTEventEmitter, RNProxy {
       guard let imageFile = try _proxy.renderAudioPathToSpectroPath(
         audioPath,
         spectroPath,
-        f_bins: self.getPropRequired(opts, "f_bins"),
-        denoise: self.getPropRequired(opts, "denoise")
+        f_bins: propsGetRequired(opts, "f_bins"),
+        denoise: propsGetRequired(opts, "denoise")
       ) else {
         return nil
       }
@@ -123,6 +125,19 @@ class RNSpectro: RCTEventEmitter, RNProxy {
         "width":  imageFile.width,
         "height": imageFile.height,
       ]
+    }
+  }
+
+  @objc func editAudioPathToAudioPath(
+    _ props: Props,
+    resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
+  ) -> Void {
+    withPromise(resolve, reject, "editAudioPathToAudioPath") { _proxy -> Void in
+      try _proxy.editAudioPathToAudioPath(
+        parentAudioPath: propsGetRequired(props, "parentAudioPath"),
+        editAudioPath:   propsGetRequired(props, "editAudioPath"),
+        draftEdit:       DraftEdit.fromJson(Json.loads(propsGetRequired(props, "draftEdit")))
+      )
     }
   }
 
@@ -180,9 +195,9 @@ public class Spectro {
         : (kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked)
     )
     return try Spectro(
-      emitter:    emitter,
-      f_bins:     f_bins,
-      format:     AudioStreamBasicDescription(
+      emitter:           emitter,
+      f_bins:            f_bins,
+      streamDescription: AudioStreamBasicDescription(
         // TODO Clean up unused params
         // https://developer.apple.com/documentation/coreaudio/audiostreambasicdescription
         // https://developer.apple.com/documentation/coreaudio/core_audio_data_types/1572096-audio_data_format_identifiers
@@ -212,7 +227,12 @@ public class Spectro {
   let emitter:    RCTEventEmitter
   let f_bins:     Int
   let numBuffers: Int
-  var format:     AudioStreamBasicDescription
+  // - TODO Simplify streamDescription:AudioStreamBasicDescription -> format:AVAudioFormat
+  //    - https://developer.apple.com/documentation/avfoundation/avaudioformat -- "this class wraps AudioStreamBasicDescription"
+  //    - Simplify our 7 input params to just (sampleRate, channels, bitDepth), consumed via AVAudioFormat(settings:)
+  //    - AudioQueueNewInput still needs an AudioStreamBasicDescription, which we can get from AVAudioFormat.streamDescription
+  //    - Will need to review the streamDescription fields we rely on for recording (mBytesPerPacket, bitsPerChannel)
+  var streamDescription: AudioStreamBasicDescription
 
   // State
   var outputPath:      String?               = nil
@@ -225,16 +245,45 @@ public class Spectro {
   var spectroRange:    Interval<Float>       = Spectro.zeroSpectroRange
   static let zeroSpectroRange = Interval.bottom // Unit for union
 
+  // Getters for streamDescription: AVAudioFormat / settings
+  //  - General settings: https://developer.apple.com/documentation/avfoundation/avaudioplayer/general_audio_format_settings
+  var sampleRate:                NSNumber      { get { return settingsGetRequired(AVSampleRateKey) } }
+  var numberOfChannels:          NSNumber      { get { return settingsGetRequired(AVNumberOfChannelsKey) } }
+  var formatId:                  AudioFormatID { get { return settingsGetRequired(AVFormatIDKey) } }
+  //  - LinearPCM settings: https://tinyurl.com/y957wjur (linear_pcm_format_settings)
+  //    - TODO Make these optional for avFormatId != kAudioFormatLinearPCM (e.g. mp4 i/o wav)
+  var linearPCMBitDepth:         NSNumber      { get { return settingsGetRequired(AVLinearPCMBitDepthKey) } }
+  var linearPCMIsBigEndian:      Bool          { get { return settingsGetRequired(AVLinearPCMIsBigEndianKey) } }
+  var linearPCMIsFloat:          Bool          { get { return settingsGetRequired(AVLinearPCMIsFloatKey) } }
+  var linearPCMIsNonInterleaved: Bool          { get { return settingsGetRequired(AVLinearPCMIsNonInterleaved) } }
+  //  - Caveats for AVAudioFormat<->settings
+  //    - https://developer.apple.com/documentation/avfoundation/avaudioformat/1389347-init
+  //    - https://developer.apple.com/documentation/avfoundation/avaudioformat/1386904-settings
+  //    - https://developer.apple.com/documentation/avfoundation/avaudioformat/1387931-init
+  var settings:    [String: Any] { get { return audioFormat.settings }}
+  var audioFormat: AVAudioFormat { get {
+    guard let audioFormat = AVAudioFormat(
+      streamDescription: &streamDescription,
+      channelLayout:     nil // nil means use mono/stereo layout for 1/2 channels
+    ) else { preconditionFailure("nil AVAudioFormat from streamDescription[\(streamDescription)]") }
+    return audioFormat
+  }}
+  func settingsGetRequired<X>(_ k: String) -> X {
+    let v = settings[k]
+    guard let x = v as? X else { preconditionFailure("Invalid setting[\(k)]: \(v as Any)") }
+    return x
+  }
+
   init(
-    emitter:    RCTEventEmitter,
-    f_bins:     Int,
-    numBuffers: Int = 3, // ≥3 on iphone? [https://books.google.com/books?id=jiwEcrb_H0EC&pg=PA160]
-    format:     AudioStreamBasicDescription
+    emitter:           RCTEventEmitter,
+    f_bins:            Int,
+    numBuffers:        Int = 3, // ≥3 on iphone? [https://books.google.com/books?id=jiwEcrb_H0EC&pg=PA160]
+    streamDescription: AudioStreamBasicDescription
   ) throws {
     Log.info(String(format: "Spectro.init: %@", [
-      "f_bins":     f_bins,
-      "numBuffers": numBuffers,
-      "format":     format,
+      "f_bins":            f_bins,
+      "numBuffers":        numBuffers,
+      "streamDescription": streamDescription,
     ]))
 
     // TODO(refactor_native_deps) Refactor so that all native singletons are created together at App init, so deps can be passed in
@@ -243,10 +292,10 @@ public class Spectro {
     guard let searchBirdgram = SearchBirdgram.singleton else { throw AppError("Spectro.init: SearchBirdgram.singleton is nil") }
     self.searchBirdgram = searchBirdgram
 
-    self.emitter    = emitter
-    self.f_bins     = f_bins
-    self.numBuffers = numBuffers
-    self.format     = format
+    self.emitter           = emitter
+    self.f_bins            = f_bins
+    self.numBuffers        = numBuffers
+    self.streamDescription = streamDescription
 
   }
 
@@ -296,26 +345,26 @@ public class Spectro {
 
     // Create audio file to record to
     let outputUrl  = NSURL(fileURLWithPath: outputPath)
-    let fileType   = kAudioFileWAVEType // TODO .mp4 [Timesink! Need muck with format + general trial and error]
+    let fileType   = kAudioFileWAVEType // TODO .mp4 [Timesink! Need to muck with format/streamDescription + general trial and error]
     Log.debug(String(format: "Spectro.start: AudioFileCreateWithURL: %@", pretty([
       "outputUrl": outputUrl,
       "fileType": fileType,
-      "format": format,
+      "streamDescription": streamDescription,
     ])))
     try checkStatus(AudioFileCreateWithURL(
       outputUrl,
       fileType,
-      &format,
+      &streamDescription,
       .eraseFile, // NOTE Silently overwrite existing files, else weird hangs _after_ recording starts when file already exists
       &audioFile
     ))
 
     // Allocate audio queue
     Log.debug(String(format: "Spectro.start: AudioQueueNewInput: %@", pretty([
-      "format": format,
+      "streamDescription": streamDescription,
     ])))
     try checkStatus(AudioQueueNewInput(
-      &format,
+      &streamDescription,
       { (selfOpaque, inAQ, inBuffer, inStartTime, inNumberPacketDescriptions, inPacketDescs) -> Void in
         let selfTyped = Unmanaged<Spectro>.fromOpaque(selfOpaque!).takeUnretainedValue()
         return selfTyped.onAudioData(inAQ, inBuffer, inStartTime, inNumberPacketDescriptions, inPacketDescs)
@@ -333,7 +382,7 @@ public class Spectro {
     //  = bytes/s / (buffer/s)
     //  = bytes/sample * sample/s / (buffer/s)
     //  = mBytesPerPacket * mSampleRate / refreshRate
-    let bufferSize = UInt32(Double(format.mBytesPerPacket) * format.mSampleRate / Double(refreshRate))
+    let bufferSize = UInt32(Double(streamDescription.mBytesPerPacket) * streamDescription.mSampleRate / Double(refreshRate))
 
     // Allocate buffers for audio queue
     buffers = []
@@ -438,8 +487,9 @@ public class Spectro {
       // Read samples from inBuffer->mAudioData
       //  - 16-bit (because mBitsPerChannel)
       //  - Signed [QUESTION Empirically correct, but what determines signed vs. unsigned?]
+      //  - TODO Probably need more checks here
       typealias Sample = Int16
-      assert(format.mBitsPerChannel == 16, "Expected 16bit PCM data, got: \(format)") // TODO Probably more checks needed here
+      assert(streamDescription.mBitsPerChannel == 16, "Expected 16bit PCM data, got: \(streamDescription)")
       let nSamples = Int(inBuffer.pointee.mAudioDataByteSize) / (Sample.bitWidth / 8)
 
       // Don't emit event if no samples (e.g. flushing empty buffers on stop)
@@ -487,7 +537,7 @@ public class Spectro {
           //  - (fs/ts are mocked as [] since we don't use them yet)
           let (_, _, S) = features._spectro(
             samplesReady,
-            sample_rate: Int(format.mSampleRate),
+            sample_rate: Int(streamDescription.mSampleRate),
             f_bins: f_bins,
             // Denoise doesn't make sense for streaming chunks in isolation:
             //  - Median filtering only makes sense when Δt is long enough for variation, which small chunks don't have
@@ -551,9 +601,9 @@ public class Spectro {
 
   func stats() -> Props {
     return [
-      "sampleRate": format.mSampleRate,
-      "channels": format.mChannelsPerFrame,
-      "bitsPerSample": format.mBitsPerChannel,
+      "sampleRate": streamDescription.mSampleRate,
+      "channels": streamDescription.mChannelsPerFrame,
+      "bitsPerSample": streamDescription.mBitsPerChannel,
       "nPacketsWritten": nPacketsWritten,
       "nPathsSent": nPathsSent,
       "spectroRange": spectroRange.description,
@@ -608,4 +658,170 @@ public class Spectro {
 
   }
 
+  func editAudioPathToAudioPath(
+    parentAudioPath: String,
+    editAudioPath: String,
+    draftEdit: DraftEdit
+  ) throws -> Void {
+    try Log.info(String(format: "Spectro.editAudioPathToAudioPath: %@", [
+      "parentAudioPath": parentAudioPath,
+      "editAudioPath": editAudioPath,
+      "draftEdit": draftEdit,
+    ]))
+
+    // Open parentFile (xc.mp4 | user.wav)
+    let parentFile = try AKAudioFile(forReading: URL(fileURLWithPath: parentAudioPath))
+    Log.debug(String(format: "Spectro.editAudioPathToAudioPath: parentFile: %@", [
+      "path":             parentAudioPath,
+      "length":           parentFile.length,
+      "fileFormat":       parentFile.fileFormat.settings,
+      "processingFormat": parentFile.processingFormat.settings,
+    ]))
+    // Assert sampleRate = config sample_rate, regardless of rec source
+    //  - TODO(import_rec): We'll need to convert the input rec encoding when the user can import arbitrary audio files
+    //  - User recs are [currently] .wav 22KHz,1ch as created by Spectro.swift:Spectro.start
+    //  - XC recs are [currently] .mp4 22KHz,1ch as created by payloads.py
+    if Int(parentFile.processingFormat.sampleRate) != sampleRate.intValue { // HACK Compare as int i/o double to avoid spurious failure
+      throw AppError("parentFile sampleRate[\(parentFile.processingFormat.sampleRate))] must be \(sampleRate) (in \(parentFile.url))")
+    }
+
+    // Read parentSamples
+    let parentSamples: [Float] = try local {
+      guard let floatChannelData = parentFile.floatChannelData else {
+        throw AppError("Null floatChannelData in parentFile[\(parentFile.url)]")
+      }
+      let Samples = Matrix(floatChannelData)
+      let samples: [Float] = (Samples.shape.0 == 1
+        ? Samples.grid               // 1ch -> 1ch
+        : Samples.T.map { mean($0) } // 2ch -> 1ch
+      )
+      Log.debug(String(format: "Spectro.editAudioPathToAudioPath: parentSamples: %@", [
+        "(ch,samples)": Samples.shape,
+        "samples": samples.count,
+      ]))
+      return samples
+    }
+
+    // Make editFile to write to (.wav)
+    //  - Avoid partial writes: write to a tmp file, then mv to editAudioPath to commit
+    let tmpPath = NSTemporaryDirectory() / UUID().uuidString
+    let editFile = try AVAudioFile(
+      forWriting: URL(fileURLWithPath: tmpPath),
+      settings:   settings
+    )
+    Log.debug(String(format: "Spectro.editAudioPathToAudioPath: editFile(prepare): %@", [
+      "path":             tmpPath,
+      "fileFormat":       editFile.fileFormat.settings,
+      "processingFormat": editFile.processingFormat.settings,
+    ]))
+
+    // Make editSamples <- parentSamples clips
+    //  - TODO Avoid the extra array copy [nontrivial complexity for a small perf gain that's not a bottleneck we care about]
+    let editSamples: [Float]
+    if let clips = draftEdit.clips {
+      editSamples = clips.flatMap { clip -> [Float] in
+        let n           = parentSamples.count
+        let loSample    = clip.time.lo == -.infinity ? 0 : Int(round(clip.time.lo * sampleRate.doubleValue))
+        let hiSample    = clip.time.hi == .infinity  ? n : Int(round(clip.time.hi * sampleRate.doubleValue))
+        let gain        = clip.gain ?? 1 // QUESTION Is per-clip gain useful? Junks up the per-freq median clipping part of denoising...
+        let clipSamples = (
+          Array(parentSamples[loSample..<hiSample]) // Clip parent
+          * Float(gain)                             // Apply gain
+        )
+        Log.debug(String(format: "Spectro.editAudioPathToAudioPath: clip: %@", [
+          "clip":          clip,
+          "loSample":      loSample,
+          "hiSample":      hiSample,
+          "gain":          gain,
+          "parentSamples": parentSamples.count,
+          "clipSamples":   clipSamples.count,
+        ]))
+        return clipSamples
+      }
+    } else {
+      editSamples = parentSamples
+    }
+
+    // Write editSamples -> editFile
+    precondition(editFile.processingFormat.channelCount == 1, "Expected ch=1: editFile.processingFormat[\(editFile.processingFormat)]")
+    let editFrames = UInt32(editSamples.count) // Assuming frames = samples [NOTE Revisit if we write edits as mp4 i/o wav]
+    guard let editBuffer = AVAudioPCMBuffer(
+      pcmFormat:     editFile.processingFormat,
+      frameCapacity: editFrames
+    ) else { preconditionFailure("nil AVAudioPCMBuffer(pcmFormat: \(editFile.processingFormat), frameCapacity: \(editFrames))") }
+    guard let editBufferSamples = editBuffer.floatChannelData?[0] else { preconditionFailure("nil editBuffer.floatChannelData") }
+    for i in 0..<Int(editFrames) {
+      editBufferSamples[i] = editSamples[i]
+    }
+    editBuffer.frameLength = editFrames // Mark all frameCapacity as valid
+    try editFile.write(from: editBuffer)
+
+    // Commit editFile: mv tmp -> editAudioPath
+    Log.debug(String(format: "Spectro.editAudioPathToAudioPath: editFile(commit): %@", [
+      "editAudioPath": editAudioPath,
+    ]))
+    try FileManager.default.moveItem(at: editFile.url, to: URL(fileURLWithPath: editAudioPath))
+
+  }
+
+}
+
+//
+// TODO Make a home for these
+//
+
+// Keep in sync with app/datatypes.ts:DraftEdit
+public struct DraftEdit {
+
+  public let clips: Array<Clip>?
+
+  static func fromJson(_ json: JSON) throws -> DraftEdit {
+    return DraftEdit(
+      clips: try (json["clips"].array as [JSON]?).map { clips in
+        try clips.map { try Clip.fromJson($0) }
+      }
+    )
+  }
+
+}
+
+// Keep in sync with app/datatypes.ts:Clip
+public struct Clip {
+
+  public let time: Interval<Double>
+  public let gain: Double?
+
+  static func fromJson(_ json: JSON) throws -> Clip {
+    return Clip(
+      time: try Interval<Double>.fromJson(json["time"]),
+      gain: json["gain"].double
+    )
+  }
+
+}
+
+extension Interval {
+  static func fromJson(_ json: JSON) throws -> Interval<Double> {
+    return Interval<Double>(
+      try JsonSafeNumber.unsafe(json["lo"]),
+      try JsonSafeNumber.unsafe(json["hi"])
+    )
+  }
+}
+
+public enum JsonSafeNumber {
+  static func unsafe(_ json: JSON) throws -> Double {
+    if let n = json.double {
+      return n
+    } else if let s = json.string {
+      switch (s) {
+        case "NaN":       return Double.nan
+        case "Infinity":  return Double.infinity
+        case "-Infinity": return -Double.infinity
+        default:          throw AppError("Expected NaN/Infinity/-Infinity, got[\(s)] in: \(json)")
+      }
+    } else {
+      throw AppError("Expected number or string for element[\(json)]")
+    }
+  }
 }

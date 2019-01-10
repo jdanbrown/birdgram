@@ -148,6 +148,19 @@ export async function loadHistories(): Promise<null | Histories> {
   return histories;
 }
 
+// For debugging, e.g. to throw away malformed history locations after changing a new sourceId format
+//  - NOTE Requires app restart after success, to reload histories from AsyncStorage
+export async function _dev_trimHistoriesToCurrentIndex(histories: Histories): Promise<void> {
+  _.toPairs(histories).forEach(([k, history]) => {
+    const before = json(_.pick(history, 'index', 'length'));
+    history.entries = history.entries.slice(0, history.index + 1);
+    history.length  = history.entries.length;
+    const after = json(_.pick(history, 'index', 'length'));
+    log.info(`${k}: ${before} -> ${after}`);
+  });
+  await saveHistories(histories);
+}
+
 export function createDefaultHistories(): Histories {
   return {
     tabs:     createHistory(),

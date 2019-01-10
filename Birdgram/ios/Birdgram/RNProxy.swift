@@ -91,15 +91,4 @@ extension RNProxy {
     }
   }
 
-  func getPropOptional<X>(_ props: Props, _ key: String) throws -> X? {
-    guard let any: Any = props[key] else { return nil }
-    guard let x:   X   = any as? X  else { throw AppError("Failed to convert \(key)[\(any)] to type \(X.self)") }
-    return x
-  }
-
-  func getPropRequired<X>(_ props: Props, _ key: String) throws -> X {
-    guard let x: X = try getPropOptional(props, key) else { throw AppError("\(key) is required") }
-    return x
-  }
-
 }

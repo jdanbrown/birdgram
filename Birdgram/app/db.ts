@@ -39,9 +39,9 @@ export class DB {
   // Wrap: db.querySql = querySql(db.sqlite)
   query: QuerySql = querySql(this.sqlite);
 
-  loadRec = async (sourceId: SourceId): Promise<Rec> => {
-    log.info('loadRec', {sourceId});
-    const source = Source.parse(sourceId);
+  loadRec = async (source: Source): Promise<Rec> => {
+    log.info('loadRec', {source});
+    const sourceId = Source.stringify(source);
     return await matchSource<Promise<Rec>>(source, {
       xc: async source => {
 

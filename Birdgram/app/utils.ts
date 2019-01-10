@@ -5,6 +5,8 @@
 import _ from 'lodash';
 import { sprintf } from 'sprintf-js';
 
+import { debug_print, puts } from './log';
+
 // Export global:any, which would have otherwise come from DOM but we disable DOM for react-native (tsconfig -> "lib")
 //  - Fallback to a mock `{}` for release builds, which run in jsc instead of chrome v8 and don't have window.global
 //  - https://facebook.github.io/react-native/docs/javascript-environment
@@ -17,10 +19,12 @@ export function throw_(e: any): never {
 }
 
 export function assert(value: any, msg?: string | (() => string)) {
-  if (!value) {
-    if (msg instanceof Function) msg = msg(); // Lazy if requested, to avoid perf bottlenecks
-    throw new Error(`Assertion failed: ${msg}`);
-  }
+  if (!value) assertFalse(msg);
+}
+
+export function assertFalse(msg?: string | (() => string)): never {
+  if (msg instanceof Function) msg = msg(); // Lazy if requested, to avoid perf bottlenecks
+  throw new Error(`Assertion failed: ${msg}`);
 }
 
 // Simple idiom for local block scope in expression context, like: (() => {...})()
@@ -164,10 +168,19 @@ export function getOrSet<K, V>(map: Map<K, V>, k: K, v: () => V): V {
 }
 
 // js is ridiculous
+//  - HACK This is `safeParseInt` i/o `safeParseNumber` b/c the String(x) check isn't safe for floats...
 export function safeParseInt(s: string): number {
   const x = Number(s);
   if (_.isNaN(x) || String(x) !== s) throw `Failed to parse int: ${s}`;
   return x;
+}
+
+export function safeParseIntOrNull(s: string): number | null {
+  try {
+    return safeParseInt(s);
+  } catch {
+    return null;
+  }
 }
 
 export function round(x: number, prec: number = 0): number {
@@ -317,10 +330,11 @@ global.str   = (x: any) => x.toString(); // e.g. for nj.array, which have a not 
 // Typescript
 //
 
+export type NoKind<X>  = Omit<X, 'kind'>; // For ADTs
 export type Omit<X, K> = Pick<X, Exclude<keyof X, K>>;
 
 //
-// show
+// stringify / parse / show
 //
 
 export function showDate(d: Date): string {
@@ -336,82 +350,95 @@ export function showSuffix<X>(sep: string, x: X | undefined, show: (x: X) => str
 // Interval
 //
 
-export type IntervalEndpoint  = 'open' | 'closed';
-export type IntervalEndpoints = {lo: IntervalEndpoint, hi: IntervalEndpoint};
-export type IntervalBraces    = {lo: '(' | '[', hi: ')' | ']'};
-
+// Closed-open intervals
 export class Interval {
 
   constructor(
-    public lo:        number,
-    public hi:        number,
-    public endpoints: IntervalEndpoints = {lo: 'open', hi: 'closed'},
+    public lo: number,
+    public hi: number,
   ) {}
 
-  static bottom = new Interval(Infinity,  -Infinity, {lo: 'open', hi: 'open'});
-  static top    = new Interval(-Infinity, Infinity,  {lo: 'open', hi: 'open'});
+  static bottom      = new Interval(Infinity,  -Infinity);
+  static top         = new Interval(-Infinity, Infinity);
+  static nonNegative = new Interval(0, Infinity);
+  static nonPositive = new Interval(-Infinity, 0);
 
   contains = (x: number | Interval): boolean => {
-    const {lo, hi, endpoints} = this;
-    if (x instanceof Interval) {
-      return this.contains(x.lo) && this.contains(x.hi);
-    } else {
-      return (
-        (endpoints.lo === 'open' ? lo < x : lo <= x) &&
-        (endpoints.hi === 'open' ? hi > x : hi >= x)
-      );
-    }
+    const {lo, hi} = this;
+    return (!(x instanceof Interval) ? (
+      // Point: closed-open
+      (lo === Infinity || lo <= x) &&
+      (hi === Infinity || x < hi)
+    ) : (
+      // Interval: compare endpoints like closed-closed
+      (lo === Infinity || lo <= x.lo) &&
+      (hi === Infinity || x.hi <= hi)
+    ));
   }
 
   overlaps = (x: Interval): boolean => {
     return this.contains(x.lo) || this.contains(x.hi);
   }
 
-  // Can't simply json/unjson because we have to JsonSafeNumber to handle Infinity/-Infinity
-  //  - And along the way we simplify '{"lo":x,"hi":y}' -> '[x,y]'
-  stringify = (): string => {
-    const braces = Interval.endpointsToBraces(this.endpoints);
-    return [
-      braces.lo,
-      json([
-        JsonSafeNumber.safe(this.lo),
-        JsonSafeNumber.safe(this.hi),
-      ]).slice(1, -1),
-      braces.hi,
-    ].join('');
+  clamp = (x: number): number => {
+    return _.clamp(x, this.lo, this.hi);
   }
-  static parse = (s: string): Interval => {
-    if (!s) throw `String must be nonempty: ${s}`;
-    const braces = {lo: s[0], hi: s[-1]} as IntervalBraces; // HACK Type (rely on match in bracesToEndpoints to flag errors)
-    const [lo, hi] = unjson(['[', s.slice(1, -1), ']'].join('')); // TODO Include s in unjson() error msgs
-    // TODO Handle lo/hi values not in JsonSafeNumber
-    //  - TODO Possible to do a safe downcast generically?
-    //    - Maybe: https://github.com/Microsoft/TypeScript/issues/3193#issuecomment-103118767
-    //    - But... https://stackoverflow.com/a/6625960/397334
+
+  union = (x: Interval): Interval => {
     return new Interval(
-      JsonSafeNumber.unsafe(lo),
-      JsonSafeNumber.unsafe(hi),
-      Interval.bracesToEndpoints(braces),
+      Math.min(this.lo, x.lo),
+      Math.max(this.hi, x.hi),
     );
   }
 
-  static endpointsToBraces = (endpoints: IntervalEndpoints): IntervalBraces => {
-    return {
-      lo: match<IntervalEndpoints['lo'], IntervalBraces['lo']>(endpoints.lo, ['open', () => '('], ['closed', () => '[']),
-      hi: match<IntervalEndpoints['hi'], IntervalBraces['hi']>(endpoints.hi, ['open', () => ')'], ['closed', () => ']']),
-    };
+  intersect = (x: Interval): Interval | null => {
+    const lo = Math.max(this.lo, x.lo);
+    const hi = Math.min(this.hi, x.hi);
+    return lo > hi ? null : new Interval(lo, hi);
   }
 
-  static bracesToEndpoints = (braces: IntervalBraces): IntervalEndpoints => {
+  // Can't simply json/unjson because we have to JsonSafeNumber to handle Infinity/-Infinity
+  //  - And along the way we simplify '{"lo":x,"hi":y}' -> '[x,y]'
+  stringify = (): string => {
+    return json(this.jsonSafe());
+  }
+  static parse = (s: string): Interval => {
+    return Interval.unjsonSafe(unjson(s));
+  }
+
+  jsonSafe = (): any => {
     return {
-      lo: match<IntervalBraces['lo'], IntervalEndpoints['lo']>(braces.lo, ['(', () => 'open'], ['[', () => 'closed']),
-      hi: match<IntervalBraces['hi'], IntervalEndpoints['hi']>(braces.hi, [')', () => 'open'], [']', () => 'closed']),
+      lo: JsonSafeNumber.safe(this.lo),
+      hi: JsonSafeNumber.safe(this.hi),
     };
+  }
+  static unjsonSafe = (x: any): Interval => {
+    return new Interval(
+      JsonSafeNumber.unsafe(x.lo),
+      JsonSafeNumber.unsafe(x.hi),
+    );
   }
 
   show = (): string => {
-    const braces = Interval.endpointsToBraces(this.endpoints);
-    return sprintf('%s%.2f–%.2fs%s', braces.lo, this.lo, this.hi, braces.hi);
+    return sprintf('[%s–%s]',
+      this._showNumber(this.lo),
+      this._showNumber(this.hi),
+    );
+  }
+
+  _showNumber = (x: number): string => {
+    const y = JsonSafeNumber.safe(x);
+    if (typeof y === 'string') {
+      // HACK A bit specialized for concerns in {Edit->DraftEdit->Clip}.show
+      return match(y,
+        ['NaN',         () => 'NaN'],
+        ['-Infinity',   () => ''],
+        ['Infinity',    () => ''],
+        [match.default, y  => y],
+      );
+    } else {
+      return sprintf('%.2f', y);
+    }
   }
 
 };
@@ -437,19 +464,23 @@ export type JsonSafeNumber = number | 'NaN' | 'Infinity' | '-Infinity';
 export const JsonSafeNumber = {
 
   safe: (x: number): JsonSafeNumber => {
-    return match<number, JsonSafeNumber>(x,
-      [NaN,           () => 'NaN'],
-      [Infinity,      () => 'Infinity'],
-      [-Infinity,     () => '-Infinity'],
-      [match.default, x  => x],
-    );
+    // WARNING Can't match() on NaN, must _.isNaN
+    if (_.isNaN(x)) {
+      return 'NaN';
+    } else {
+      return match<number, JsonSafeNumber>(x,
+        [Infinity,      () => 'Infinity'],
+        [-Infinity,     () => '-Infinity'],
+        [match.default, x  => x],
+      );
+    }
   },
 
   unsafe: (x: JsonSafeNumber): number => {
     return match<JsonSafeNumber, number>(x,
-      ['NaN',         () => NaN],
-      ['Infinity',    () => Infinity],
-      ['-Infinity',   () => -Infinity],
+      ['NaN',            () => NaN],
+      ['Infinity',       () => Infinity],
+      ['-Infinity',      () => -Infinity],
       [match.default, x  => x as number],
     );
   },
@@ -600,8 +631,16 @@ export function __F_IF_DEV__<F extends (...args: any[]) => void>(f: F): F {
 
 // TODO Need more normalize()?
 //  - https://github.com/LittoCats/react-native-path/blob/master/index.js#L127-L129
-export function basename(path: string): string {
-  return path.split(/\//g).slice(-1)[0]!;
+export function basename(path: string, ext?: string): string {
+  const basename = path.split(/\//g).pop()!;
+  if (ext) {
+    const tmp = basename.split(/\./g);
+    const _ext = tmp.pop();
+    if (ext === _ext || ext.slice(1) === _ext) {
+      return tmp.join('.')
+    }
+  }
+  return basename;
 }
 export function dirname(path: string): string {
   return path.split(/\//g).slice(0, -1).join('/');
@@ -619,15 +658,19 @@ export function isAbsolute(path: string): boolean {
 }
 
 // Replace unsafe chars in path
-//  - e.g. ':' in ios paths [they map to dir separator, I think?]
+//  - (See requireSafePath for details)
 export function safePath(path: string, to: string = '-'): string {
-  return path.replace(/:/g, to);
+  return path.replace(/[:%]/g, to);
 }
 
 // Fail if unsafe chars in path
-//  - e.g. ':' in ios paths [they map to dir separator, I think?]
+//  - ':' maps to dir separator on ios
+//  - '%xx' escapes are mishandled by many react-native libs (e.g. they uri decode too early which garbles 'path/a%3Ab' -> 'path/a:b')
+//    - Broken: new Sound(path) -> file not found
+//    - Broken: RNFB.fs.createFile(path) -> can't create file
+//    - Broken: <Image source={{uri}} /> -> file not found [did I observe the issue with Image or FastImage?]
 export function requireSafePath(path: string): string {
-  if (/:/.test(path)) throw `Unsafe chars in path: ${path}`;
+  if (/[:%]/.test(path)) throw `Unsafe chars in path[${path}]`;
   return path;
 }
 
@@ -686,6 +729,44 @@ export function parseUrlWithQuery<X>(url: string, parseQuery: (s: string) => X):
 
 // A parsed query string
 export type QueryString = {[key: string]: string};
+
+//
+// qs
+//  - https://github.com/ljharb/qs
+//
+
+import qs from 'qs';
+import traverse from 'traverse';
+
+// Wrap qs to provide sane defaults (i/o some quite insane defaults)
+export const qsSane = {
+  stringify: (x: any, opts?: qs.IStringifyOptions): string => {
+    return qs.stringify(
+      traverse(x).map(x => !_.isArray(x) ? x : Object.assign({}, x)), // Render {a:['b']} as 'a.0=b' i/o 'a[0]=b'
+      {...(opts || {}),
+        allowDots:     true,            // Render {a:{b:'c'}}  as 'a.b=c' i/o 'a[b]=c'
+        sort:          compare, // Stable key order (by string compare)
+        serializeDate: (d: Date) => { throw `Serialize your own dates (because I can't parse them for you): ${d}`; },
+      },
+    );
+  },
+  parse: (s: string, opts?: qs.IParseOptions): any => {
+    return qs.parse(
+      s,
+      {...(opts || {}),
+        allowDots:         true,     // Parse 'a.b=c' like 'a[b]=c'
+        ignoreQueryPrefix: true,     // Ignore leading '?' (default: include in first key)
+        arrayLimit:        Infinity, // Always return arrays (default: return object i/o array if size > arrayLimit)
+        depth:             Infinity, // Always unroll object (default: produce flat objects with weird keys after depth)
+        parameterLimit:    Infinity, // Parse all params (default: drop params beyond parameterLimit)
+      },
+    );
+  },
+};
+
+export function compare<X>(x: X, y: X): number {
+  return x < y ? -1 : x > y ? 1 : 0;
+}
 
 //
 // fs (via rn-fetch-blob)

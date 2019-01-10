@@ -35,8 +35,8 @@ import { TabBarStyle } from './TabRoutes';
 import { config } from '../config';
 import {
   EditRec, ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams,
-  searchPathParamsFromLocation, SearchRecs, ServerConfig, SourceId, Species, SpeciesMetadata, SpectroPathOpts, UserRec,
-  XCRec,
+  searchPathParamsFromLocation, SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesMetadata, SpectroPathOpts,
+  UserRec, XCRec,
 } from '../datatypes';
 import { DB } from '../db';
 import { Ebird } from '../ebird';
@@ -594,11 +594,16 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Load query_rec from db
           //  - Bail if sourceId not found (e.g. from persisted history)
-          const query_rec = await this.props.db.loadRec(sourceId);
-          // log.debug('loadRecsFromQuery: query_rec', rich(query_rec)); // XXX Debug
+          const source = Source.parse(sourceId);
+          if (!source) {
+            log.warn('loadRecsFromQuery: Failed to parse sourceId', rich({sourceId}));
+            _setRecs({recs: 'loading'}); // FIXME 'loading'?
+            return;
+          }
+          const query_rec = await this.props.db.loadRec(source);
           if (!query_rec) {
-            log.warn(`loadRecsFromQuery: sourceId not found: ${sourceId}`);
-            _setRecs({recs: 'loading'});
+            log.warn('loadRecsFromQuery: sourceId not found', rich({sourceId}));
+            _setRecs({recs: 'loading'}); // FIXME 'loading'?
             return;
           }
 

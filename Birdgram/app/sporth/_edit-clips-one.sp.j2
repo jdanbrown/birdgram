@@ -1,0 +1,57 @@
+#
+# Docs
+#   - https://github.com/PaulBatchelor/Sporth/blob/master/ugen_reference.txt
+#   - https://pbat.ch/proj/cook/ugens/
+#   - https://paulbatchelor.github.io/res/soundpipe/docs/
+#
+
+# Name: setdurs
+# Args: size (f)
+# Output: n/a
+# Description: set total duration (in samples)
+
+# Name: loadfile
+# Args: table name (s), file name (s)
+# Output: n/a
+# Description: load a (mono) audio file into a table
+
+# Name: slice
+# Args: trig (f) id (f) vals (s) buf (s)
+# Output: f
+# Description: in-memory slice based sampler
+
+# Name: tick
+# Args: n/a
+# Output: f
+# Description: trigger at start of file. only use once
+
+#
+# Code
+#
+
+# Params
+_sample_rate var
+_start       var
+_end         var
+_buf {{ in_path | dquote }} loadfile
+{{ sample_rate }} _sample_rate print _sample_rate set
+{{ start_s }} _start_s print _sample_rate get mul _start print _start set
+{{ end_s   }} _end_s   print _sample_rate get mul _end   print _end   set
+
+# Set duration = end - start
+#   - Else runs forever (b/c it assumes triggers can keep happening)
+_end get _start get sub _setdurs print setdurs
+
+# Set slice vals
+#   - How to multi-clip? (e.g. how do multiple vals work?)
+_vals 1 zeros                         # Make 1-elem table
+_start get _vals_0 print 0 _vals tset # Set _vals[0]
+
+# Slice _buf at _vals
+#   - tick to trigger once at sporth start
+#   - QUESTION How does slice's _id arg work? `tick` works for the single-clip use case, at least...
+tick  _trig print
+tick  _id   print
+_vals _vals print
+_buf  _buf  print
+slice # _slice print # Very Noisy

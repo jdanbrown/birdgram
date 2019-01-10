@@ -35,6 +35,10 @@ public enum AppError: Error, CustomStringConvertible {
 
 }
 
+public func local<X>(f: () throws -> X) rethrows -> X {
+  return try f()
+}
+
 // Generic <X> i/o Never because Never isn't bottom [https://forums.swift.org/t/pitch-never-as-a-bottom-type/5920]
 public func throw_<X>(_ e: Error) throws -> X {
   throw e
@@ -95,6 +99,18 @@ public func documentsDirectory() -> String {
 
 // Common type for react-native js/ios serdes
 public typealias Props = Dictionary<String, Any>
+
+public func propsGetOptional<X>(_ props: Props, _ key: String) throws -> X? {
+  guard let any: Any = props[key] else { return nil }
+  guard let x:   X   = any as? X  else { throw AppError("Failed to convert \(key)[\(any)] to type \(X.self)") }
+  return x
+}
+
+// FIXME Doesn't support nil values (different from missing keys)
+public func propsGetRequired<X>(_ props: Props, _ key: String) throws -> X {
+  guard let x: X = try propsGetOptional(props, key) else { throw AppError("\(key) is required, in props: \(props)") }
+  return x
+}
 
 extension Float {
 
@@ -266,11 +282,13 @@ extension StringProtocol {
 
 extension Dictionary {
 
+  public func has(_ k: Key) -> Bool {
+    return index(forKey: k) != nil
+  }
+
   public mutating func getOrSet(_ k: Key, _ f: () -> Value) -> Value {
     // Test for key using index() i/o self[k], since the latter conflates nil for missing key with nil values
-    if (index(forKey: k) == nil) {
-      self[k] = f()
-    }
+    if (!has(k)) { self[k] = f() }
     return self[k]!
   }
 

@@ -24,7 +24,9 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { TabRoutes, TabLink } from './components/TabRoutes';
 import * as Colors from './colors';
 import { config } from './config';
-import { MetadataSpecies, Models, ModelsSearch, Rec, SearchRecs, ServerConfig, UserRec } from './datatypes';
+import {
+  EditRec, MetadataSpecies, Models, ModelsSearch, Rec, SearchRecs, ServerConfig, UserRec, XCRec,
+} from './datatypes';
 import { DB } from './db';
 import { Ebird } from './ebird';
 import { Log, rich } from './log';
@@ -41,7 +43,7 @@ import { querySql } from './sql';
 import { StyleSheet } from './stylesheet';
 import { urlpack } from './urlpack';
 import {
-  assert, deepEqual, dirname, global, Interval, json, match, matchNil, Omit, pretty, readJsonFile, shallowDiff,
+  assert, deepEqual, dirname, global, Interval, json, match, matchNil, Omit, pretty, qsSane, readJsonFile, shallowDiff,
   shallowDiffPropsState, Style, Timer, yaml,
 } from './utils';
 import { XC } from './xc';
@@ -61,6 +63,13 @@ const log = new Log('App');
 // });
 
 // HACK Globals for dev (rely on type checking to catch improper uses of these in real code)
+Object.assign(global,
+  require('./datatypes'),
+  require('./db'),
+  require('./router'),
+  require('./sql'),
+  require('./utils'),
+);
 global.Alert = Alert;
 global.Animated = Animated;
 global.AsyncStorage = AsyncStorage;
@@ -69,6 +78,7 @@ global.Colors = Colors;
 global.deepEqual = deepEqual;
 global.Dimensions = Dimensions;
 global.Ebird = Ebird;
+global.EditRec = EditRec;
 global.Geo = Geo;
 global.geolocation = geolocation;
 global.Linking = Linking;
@@ -83,6 +93,7 @@ global.NativeHttp = NativeHttp;
 global.NativeSearch = NativeSearch;
 global.NativeSpectro = NativeSpectro;
 global.querySql = querySql;
+global.qsSane = qsSane;
 global.Rec = Rec;
 global.shallowDiff = shallowDiff;
 global.Settings = Settings;
@@ -91,6 +102,7 @@ global.Timer = Timer;
 global.urlpack = urlpack;
 global.UserRec = UserRec;
 global.XC = XC;
+global.XCRec = XCRec;
 const timed = (desc: string, f: () => void) => { log.time(desc); f(); log.timeEnd(desc); };
 global.sj = {};
 timed('AudioUtils',         () => global.AudioUtils      = require('../third-party/magenta/music/transcription/audio_utils'));
@@ -112,12 +124,14 @@ timed('rn-fetch-blob',      () => global.RNFB            = require('rn-fetch-blo
 timed('Gesture',            () => global.Gesture         = require('react-native-gesture-handler')); // ?
 timed('./sound',            () => global.Sound           = require('./sound').default);         // 1ms
 timed('SQLite',             () => global.SQLite          = require('react-native-sqlite-storage')); // 0ms
+timed('traverse',           () => global.traverse        = require('traverse'));                // ?
 timed('typography',         () => global.typography      = require('react-native-typography')); // 27ms
 timed('wavefile',           () => global.WaveFile        = require('wavefile/dist/wavefile'));  // ?
 timed('sj.zeros',           () => global.sj.zeros        = require('zeros'));                   // 0ms
 // timed('sj.getPixels',    () => global.sj.getPixels    = require('get-pixels'));              // 10ms // XXX Doesn't work in RN
 // timed('sj.savePixels',   () => global.sj.savePixels   = require('save-pixels'));             // 30ms // XXX Doesn't work in RN
 timed('url-parse',          () => global.urlParse        = require('url-parse'));               // ?
+global.base64 = global.RNFB.base64;
 global.fs = global.RNFB.fs;
 
 interface Props {

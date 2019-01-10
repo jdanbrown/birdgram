@@ -74,7 +74,7 @@ const _columns = {
 
   date: (rec: Rec) => (
     <MetadataText>
-      {rec.date.split(' ')[0]} {/* Drop timestamp, keep date */}
+      {rec.date.split(' ')[0]} {/* Drop time, keep date */}
     </MetadataText>
   ),
 
