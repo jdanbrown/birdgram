@@ -14,7 +14,7 @@ fi
 cmd=(
   swift
   # HACK Hardcoded framework deps (inspect the build dir to find more)
-  -F"$xcode_build_dir"/{,Yams-macOS,SwiftyJSON-macOS,Stencil-macOS}
+  -F"$xcode_build_dir"/{,Yams-macOS,SwiftyJSON-macOS}
   # HACK Fix `import SwiftNpy` -> "missing required module Cminimap"
   # - (See notes in README)
   -Xcc -fmodule-map-file="$dir"/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap
