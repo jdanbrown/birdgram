@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import React, { RefObject, PureComponent } from 'react';
 import {
-  Dimensions, FlatList, Image, Platform, Text, TouchableWithoutFeedback, View, WebView,
+  ActivityIndicator, Dimensions, FlatList, Image, Platform, Text, TouchableWithoutFeedback, View, WebView,
 } from 'react-native';
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
@@ -19,7 +19,7 @@ import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
 import {
   global, into, json, local, mapNil, mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined, mergeArraysWith,
-  shallowDiffPropsState, showDate, throw_, yaml,
+  shallowDiffPropsState, showDate, throw_, typed, yaml,
 } from '../utils';
 import { XC } from '../xc';
 
@@ -35,6 +35,7 @@ interface Props {
 }
 
 interface State {
+  status: 'loading' | 'ready';
   saveds: Array<Saved>;
 }
 
@@ -48,7 +49,8 @@ export class SavedScreen extends PureComponent<Props, State> {
   static defaultProps = {
   };
 
-  state = {
+  state: State = {
+    status: 'loading',
     saveds: [],
   };
 
@@ -93,11 +95,12 @@ export class SavedScreen extends PureComponent<Props, State> {
       .slice().reverse() // (Copy b/c reverse mutates)
       .map<Saved>(source => ({
         tab:  'record',
-        path: `/edit/${Source.stringify(source)}`,
+        path: `/edit/${encodeURIComponent(Source.stringify(source))}`,
       }))
     );
 
     this.setState({
+      status: 'ready',
       saveds,
     });
 
@@ -138,111 +141,128 @@ export class SavedScreen extends PureComponent<Props, State> {
           flex: 1,
         }}>
 
+          {/* Loading spinner */}
+          {this.state.status === 'loading' && (
+            <View style={{
+              flex: 1,
+              justifyContent: 'center',
+            }}>
+              <ActivityIndicator size='large' />
+            </View>
+          )}
+
           {/* TODO SectionList with dates [of what?] as section headers */}
-          <FlatList <Saved>
-            ref={this.flatListRef}
-            style={{
-              ...Styles.fill,
-            }}
-            contentInset={{
-              top:    -1, // Hide top elem border under bottom border of title bar
-              bottom: -1, // Hide bottom elem border under top border of tab bar
-            }}
-            data={this.state.saveds}
-            keyExtractor={(saved, index) => `${index}`}
-            ListHeaderComponent={(
-              // Simulate top border on first item
-              <View style={{
-                height: 0,
-                borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
-              }}/>
-            )}
-            renderItem={({item: saved}) => (
-              <RectButton
-                onPress={() => {
-                  this.props.go(saved.tab, {path: saved.path});
-                }}
-              >
-                <View style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  padding: 5,
-                  borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
-                  ...Styles.center,
-                }}>
-                  <Feather style={{
-                    ...material.titleObject,
-                    color: iOSColors.gray,
+          {this.state.status === 'ready' && (
+            <FlatList <Saved>
+              ref={this.flatListRef}
+              style={{
+                ...Styles.fill,
+              }}
+              contentInset={{
+                top:    -1, // Hide top elem border under bottom border of title bar
+                bottom: -1, // Hide bottom elem border under top border of tab bar
+              }}
+              initialNumToRender={20} // Enough to fill one screen (and not much more)
+              data={this.state.saveds} // TODO
+              keyExtractor={(saved, index) => `${index}`}
+              ListEmptyComponent={(
+                <View style={[Styles.center, {padding: 30}]}>
+                  <Text style={material.subheading}>
+                    No saved items
+                  </Text>
+                </View>
+              )}
+              renderItem={({item: saved, index}) => (
+                <RectButton
+                  onPress={() => {
+                    this.props.go(saved.tab, {path: saved.path});
                   }}
-                    name={this.props.iconForTab[saved.tab]}
-                  />
+                >
                   <View style={{
                     flex: 1,
-                    flexDirection: 'column',
-                    paddingLeft: 5,
+                    flexDirection: 'row',
+                    padding: 5,
+                    // Bottom border on all items, top border on first item
+                    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
+                    ...(index != 0 ? {} : {
+                      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'black',
+                    }),
+                    ...Styles.center,
                   }}>
-                    <Text style={{
-                      ...material.body1Object,
+                    <Feather style={{
+                      ...material.titleObject,
+                      color: iOSColors.gray,
+                    }}
+                      name={this.props.iconForTab[saved.tab]}
+                    />
+                    <View style={{
+                      flex: 1,
+                      flexDirection: 'column',
+                      paddingLeft: 5,
                     }}>
+                      <Text style={{
+                        ...material.body1Object,
+                      }}>
 
-                      {/* {saved.path} */}
+                        {/* {saved.path} */}
 
-                      {/* TODO Dedupe with RecentScreen.render */}
-                      {local(() => {
+                        {/* TODO Dedupe with RecentScreen.render */}
+                        {local(() => {
 
-                        // Mock a location from saved.path for *PathParamsFromLocation
-                        //  - TODO Refactor *PathParamsFromLocation so we don't need to mock junk fields
-                        const location = {
-                          pathname: saved.path,               // Used
-                          search:   '',                       // Used
-                          hash:     '',                       // Ignored
-                          key:      undefined,                // Ignored
-                          state:    {timestamp: new Date(0)}, // Ignored
-                        };
+                          // Mock a location from saved.path for *PathParamsFromLocation
+                          //  - TODO Refactor *PathParamsFromLocation so we don't need to mock junk fields
+                          const location = {
+                            pathname: saved.path,               // Used
+                            search:   '',                       // Used
+                            hash:     '',                       // Ignored
+                            key:      undefined,                // Ignored
+                            state:    {timestamp: new Date(0)}, // Ignored
+                          };
 
-                        return match<TabName, string>(saved.tab,
-                          ['record', () => matchRecordPathParams(recordPathParamsFromLocation(location), {
-                            root: () => (
-                              '[ROOT]'
-                            ),
-                            edit: ({sourceId}) => (
-                              SourceId.show(sourceId, {
-                                species: this.props.xc,
-                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                              })
-                            ),
-                          })],
-                          ['search', () => matchSearchPathParams(searchPathParamsFromLocation(location), {
-                            root: () => (
-                              '[ROOT]' // Shouldn't ever show b/c redirect
-                            ),
-                            random: ({filters, seed}) => (
-                              `Random`
-                            ),
-                            species: ({filters, species}) => (
-                              species === '_BLANK' ? '[BLANK]' :
-                              matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
-                                undefined: () => `${species} (?)`,
-                                x:         x  => `${species} (${x.com_name})`,
-                              })
-                            ),
-                            rec: ({filters, sourceId}) => (
-                              SourceId.show(sourceId, {
-                                species: this.props.xc,
-                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                              })
-                            ),
-                          })],
-                        );
+                          return match<TabName, string>(saved.tab,
+                            ['record', () => matchRecordPathParams(recordPathParamsFromLocation(location), {
+                              root: () => (
+                                '[ROOT]'
+                              ),
+                              edit: ({sourceId}) => (
+                                SourceId.show(sourceId, {
+                                  species: this.props.xc,
+                                  long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                })
+                              ),
+                            })],
+                            ['search', () => matchSearchPathParams(searchPathParamsFromLocation(location), {
+                              root: () => (
+                                '[ROOT]' // Shouldn't ever show b/c redirect
+                              ),
+                              random: ({filters, seed}) => (
+                                `Random`
+                              ),
+                              species: ({filters, species}) => (
+                                species === '_BLANK' ? '[BLANK]' :
+                                matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+                                  undefined: () => `${species} (?)`,
+                                  x:         x  => `${species} (${x.com_name})`,
+                                })
+                              ),
+                              rec: ({filters, sourceId}) => (
+                                SourceId.show(sourceId, {
+                                  species: this.props.xc,
+                                  long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                })
+                              ),
+                            })],
+                          );
 
-                      })}
+                        })}
 
-                    </Text>
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              </RectButton>
-            )}
-          />
+                </RectButton>
+              )}
+            />
+          )}
 
         </View>
 

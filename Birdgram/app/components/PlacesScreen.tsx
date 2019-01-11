@@ -41,7 +41,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
   static defaultProps = {
   };
 
-  state = {
+  state: State = {
   };
 
   componentDidMount = async () => {
@@ -93,12 +93,12 @@ export class PlacesScreen extends PureComponent<Props, State> {
             }}
             data={[null, ...this.props.places]}
             keyExtractor={(place, index) => `${index}`}
-            ListHeaderComponent={(
-              // Simulate top border on first item
-              <View style={{
-                height: 0,
-                borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
-              }}/>
+            ListEmptyComponent={(
+              <View style={[Styles.center, {padding: 30}]}>
+                <Text style={material.subheading}>
+                  No places
+                </Text>
+              </View>
             )}
             renderItem={({item: place, index}) => (
               <RectButton
@@ -109,7 +109,11 @@ export class PlacesScreen extends PureComponent<Props, State> {
                   flexDirection: 'column',
                   backgroundColor: deepEqual(place, this.props.place) ? iOSColors.lightGray : iOSColors.white,
                   padding: 5,
+                  // Bottom border on all items, top border on first item
                   borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
+                  ...(index != 0 ? {} : {
+                    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'black',
+                  }),
                 }}>
                   {/* TODO(ebird_priors): Better formatting */}
                   {matchNull(place, {

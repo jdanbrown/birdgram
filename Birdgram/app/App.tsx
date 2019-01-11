@@ -321,7 +321,7 @@ export default class App extends PureComponent<Props, State> {
   }
 
   componentDidUpdate = (prevProps: Props, prevState: State) => {
-    log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+    // log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state))); // Noisy in xcode
     global.histories = this.state.histories; // XXX Debug
     global.settings = this.state.settings; // XXX Debug
   }

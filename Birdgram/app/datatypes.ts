@@ -720,23 +720,26 @@ export const Edit = {
   // Can't simply json/unjson because it's unsafe for Interval (which needs to JsonSafeNumber)
   stringify: (edit: Edit): string => {
     return qsSane.stringify(typed<{[key in keyof Edit]: any}>({
-      parent:  edit.parent,
+      // HACK parent: Avoid chars that need uri encoding, since something keeps garbling them [router / location?]
+      parent:  base64.encode(edit.parent).replace(/=+$/, ''),
       created: Source.stringifyDate(edit.created),
       uniq:    edit.uniq,
       clips:   mapUndefined(edit.clips, clips => clips.map(clip => Clip.jsonSafe(clip))),
     }));
   },
   parse: (x: string): Edit | null => {
+    var q: any; // To include in logging (as any | null)
     try {
-      const q = qsSane.parse(x);
+      q = qsSane.parse(x);
       return {
-        parent:  Edit._required(q, 'parent',  (x: string) => x),
+        // HACK parent: Avoid chars that need uri encoding, since something keeps garbling them [router / location?]
+        parent:  Edit._required(q, 'parent',  (x: string) => /:/.test(x) ? x : base64.decode(x)),
         created: Edit._required(q, 'created', (x: string) => Source.parseDate(x)),
         uniq:    Edit._required(q, 'uniq',    (x: string) => x),
         clips:   Edit._optional(q, 'clips',   (xs: any[]) => xs.map(x => Clip.unjsonSafe(x))),
       };
     } catch (e) {
-      log.warn('Edit.parse: Failed', rich({x, e}));
+      log.warn('Edit.parse: Failed', rich({q, x, e}));
       return null;
     }
   },
@@ -745,7 +748,8 @@ export const Edit = {
     const parts = [
       // Ignore uniq for human
       SourceId.show(edit.parent, opts),
-      ...(edit.clips || []).map(x => Clip.show(x)),
+      // Strip outer '[...]' per clip so we can wrap all clips together in one '[...]'
+      sprintf('[%s]', (edit.clips || []).map(x => Clip.show(x).replace(/^\[|\]$/g, '')).join(',')),
     ];
     return (parts
       .filter(x => !_.isEmpty(x)) // Exclude null, undefined, '' (and [], {})
@@ -818,7 +822,7 @@ export const Clip = {
 
   show: (clip: Clip): string => {
     return [
-      (clip.time.intersect(Interval.nonNegative) || clip.time).show(), // Show [0.00–1.23] i/o [–1.23], but keep [1.23–]
+      (clip.time.intersect(Interval.nonNegative) || clip.time).show(), // Replace [–1.23] with [0.00–1.23], but keep [1.23–] as is
       showSuffix('×', clip.gain, x => sprintf('%.2f', x)),
     ].join('');
   },
@@ -892,7 +896,6 @@ export function searchPathParamsFromLocation(location: Location): SearchPathPara
   const tryParseInt = (_default: number, s: string): number => { try { return parseInt(s); } catch { return _default; } };
   const {pathname: path, search} = location;
   const queries = queryString.parse(search);
-  // debug_print('searchPathParamsFromLocation', {location, queries}); // XXX Debug
   let match;
   match = matchPath<{}>(path, {path: '/', exact: true});
   if (match) return {kind: 'root'};

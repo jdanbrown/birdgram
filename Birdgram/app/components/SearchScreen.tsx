@@ -51,7 +51,7 @@ import { StyleSheet } from '../stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from '../styles';
 import {
   all, any, assert, chance, Clamp, deepEqual, Dim, ensureParentDir, finallyAsync, getOrSet, global, json, mapMapValues,
-  match, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round,
+  match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round,
   shallowDiffPropsState, Style, throw_, Timer, yaml, yamlPretty, zipSame,
 } from '../utils';
 import { XC } from '../xc';
@@ -948,7 +948,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                   showGenericModal: null, // Dismiss modal
                 });
                 // Show species
-                this.props.go('search', {path: `/species/${speciesMetadata.shorthand}`});
+                this.props.go('search', {path: `/species/${encodeURIComponent(speciesMetadata.shorthand)}`});
               }}
             >
               {/* TODO(browse_species): Better formatting */}
@@ -1111,7 +1111,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               label: 'Edit',
               iconName: 'edit',
               buttonColor: iOSColors.green,
-              onPress: () => this.props.go('record', {path: `/edit/${rec.source_id}`}),
+              onPress: () => this.props.go('record', {path: `/edit/${encodeURIComponent(rec.source_id)}`}),
             }
           ]})}
         </View>
@@ -1316,7 +1316,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       <this.BottomControlsButton
         help='Blank'
         iconProps={{name: 'power'}}
-        onPress={() => this.props.go('search', {path: `/species/_BLANK`})} // HACK No results via non-existent species
+        onPress={() => this.props.go('search', {path: `/species/${encodeURIComponent('_BLANK')}`})} // HACK No results via junk species
       />
       {/* Random recs */}
       <this.BottomControlsButton
@@ -1796,179 +1796,190 @@ export class SearchScreen extends PureComponent<Props, State> {
 
             {/* Rec rows */}
             <View style={{flex: 1}}>
-              {this.recsOrEmpty.map((rec, recIndex) => [
+              {matchEmpty<Array<Rec>, ReactNode>(this.recsOrEmpty, {
+                empty: recs => (
+                  <View style={[Styles.center, {padding: 30,
+                    width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
+                  }]}>
+                    <Text style={material.subheading}>
+                      No results
+                    </Text>
+                  </View>
+                ),
+                nonEmpty: recs => recs.map((rec, recIndex) => [
 
-                // Rec row (with editing buttons)
-                <Animated.View
-                  key={`row-${recIndex}-${rec.source_id}`}
-                  style={{
-                    flex: 1, flexDirection: 'row',
-                    // Alternating row colors
-                    // backgroundColor: recIndex % 2 == 0 ? iOSColors.white : iOSColors.lightGray,
-                    // Compact controls/labels when zoom makes image smaller than controls/labels
-                    ...(this.props.showMetadataBelow ? {} : {
-                      height: this.spectroDim(rec.duration_s).height,
-                    }),
-                  }}
-                >
+                  // Rec row (with editing buttons)
+                  <Animated.View
+                    key={`row-${recIndex}-${rec.source_id}`}
+                    style={{
+                      flex: 1, flexDirection: 'row',
+                      // Alternating row colors
+                      // backgroundColor: recIndex % 2 == 0 ? iOSColors.white : iOSColors.lightGray,
+                      // Compact controls/labels when zoom makes image smaller than controls/labels
+                      ...(this.props.showMetadataBelow ? {} : {
+                        height: this.spectroDim(rec.duration_s).height,
+                      }),
+                    }}
+                  >
 
-                  {/* Rec editing buttons */}
-                  {/* - NOTE Condition duplicated in scrollViewContentWidths */}
-                  {this.props.editing && (
-                    <this.RecEditingButtons rec={rec} />
-                  )}
+                    {/* Rec editing buttons */}
+                    {/* - NOTE Condition duplicated in scrollViewContentWidths */}
+                    {this.props.editing && (
+                      <this.RecEditingButtons rec={rec} />
+                    )}
 
-                  {/* Rec region without the editing buttons  */}
-                  <LongPressGestureHandler onHandlerStateChange={this.onSpectroLongPress(rec)}>
-                    <Animated.View style={{
-                      flex: 1, flexDirection: 'column',
-                    }}>
+                    {/* Rec region without the editing buttons  */}
+                    <LongPressGestureHandler onHandlerStateChange={this.onSpectroLongPress(rec)}>
+                      <Animated.View style={{
+                        flex: 1, flexDirection: 'column',
+                      }}>
 
-                      {/* Rec row */}
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          ...(this.props.showMetadataBelow ? {} : {
-                            // Compact controls/labels when zoom makes image smaller than controls/labels
-                            height: this.spectroDim(rec.duration_s).height,
-                          }),
-                        }}
-                      >
+                        {/* Rec row */}
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            ...(this.props.showMetadataBelow ? {} : {
+                              // Compact controls/labels when zoom makes image smaller than controls/labels
+                              height: this.spectroDim(rec.duration_s).height,
+                            }),
+                          }}
+                        >
 
-                        {/* Rec debug info */}
-                        {this.props.showMetadataLeft && (
-                          <this.DebugView style={{
-                            padding: 0, // Reset padding:3 from debugView
-                            width: this.scrollViewContentWidths.debugInfo,
-                          }}>
-                            <MetadataText style={Styles.debugText}>slp: {rec.slp && round(rec.slp, 2)}</MetadataText>
-                            <MetadataText style={Styles.debugText}>d_pc: {rec.d_pc && round(rec.d_pc, 2)}</MetadataText>
-                            <MetadataText style={Styles.debugText}>n_recs: {rec.recs_for_sp}</MetadataText>
-                          </this.DebugView>
-                        )}
+                          {/* Rec debug info */}
+                          {this.props.showMetadataLeft && (
+                            <this.DebugView style={{
+                              padding: 0, // Reset padding:3 from debugView
+                              width: this.scrollViewContentWidths.debugInfo,
+                            }}>
+                              <MetadataText style={Styles.debugText}>slp: {rec.slp && round(rec.slp, 2)}</MetadataText>
+                              <MetadataText style={Styles.debugText}>d_pc: {rec.d_pc && round(rec.d_pc, 2)}</MetadataText>
+                              <MetadataText style={Styles.debugText}>n_recs: {rec.recs_for_sp}</MetadataText>
+                            </this.DebugView>
+                          )}
 
-                        {/* Rec metadata left */}
-                        {this.props.showMetadataLeft && !this.props.showMetadataBelow && (
+                          {/* Rec metadata left */}
+                          {this.props.showMetadataLeft && !this.props.showMetadataBelow && (
+                            <View style={{
+                              flexDirection: 'column',
+                              width: this.scrollViewContentWidths.metadataLeft,
+                              borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: iOSColors.midGray,
+                            }}>
+                              {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
+                              {objectKeysTyped(MetadataColumnsLeft).map(c => this.props.metadataColumnsLeft.includes(c) && (
+                                <MetadataText key={c} children={MetadataColumnsLeft[c](rec)} />
+                              ))}
+                            </View>
+                          )}
+
+                          {/* Sideways species label */}
+                          {/* - After controls/metadata so that label+spectro always abut (e.g. if scrolled all the way to the right) */}
+                          {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
+                          <View style={[styles.recSpeciesSidewaysView, {
+                            backgroundColor: styleForSpecies.get(rec.species)!.backgroundColor,
+                          }]}>
+                            <View style={styles.recSpeciesSidewaysViewInner}>
+                              <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
+                                fontSize: this.state._spectroScale >= 2 ? 11 : 6, // Compact species label to fit within tiny rows
+                                color: styleForSpecies.get(rec.species)!.color,
+                              }]}>
+                                {rec.species}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Spectro (tap) */}
+                          <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(rec)}>
+                            <Animated.View>
+
+                              {/* Image */}
+                              <Animated.Image
+                                style={this.spectroDim(rec.duration_s)}
+                                resizeMode='stretch'
+                                source={{uri: Rec.spectroPath(rec, this.spectroPathOpts)}}
+                              />
+
+                              {/* Start time cursor (if playing + startTime) */}
+                              {this.recIsPlaying(rec.source_id, this.state.playing) && (
+                                this.state.playing!.startTime && (
+                                  <View style={{
+                                    position: 'absolute', width: 1, height: '100%',
+                                    left: this.spectroXFromTime(this.state.playing!.sound, this.state.playing!.startTime!),
+                                    backgroundColor: iOSColors.gray,
+                                  }}/>
+                                )
+                              )}
+
+                              {/* Progress time cursor (if playing + playingCurrentTime) */}
+                              {this.recIsPlaying(rec.source_id, this.state.playing) && (
+                                this.state.playing!.startTime && this.state.playingCurrentTime !== undefined && (
+                                  <View style={{
+                                    position: 'absolute', width: 1, height: '100%',
+                                    left: this.spectroXFromTime(this.state.playing!.sound, this.state.playingCurrentTime),
+                                    backgroundColor: iOSColors.black,
+                                  }}/>
+                                )
+                              )}
+
+                              {/* HACK Visual feedback for playing rec [XXX after adding progress bar by default] */}
+                              {this.recIsPlaying(rec.source_id, this.state.playing) && (
+                                <View style={{
+                                  position: 'absolute', height: '100%', width: 5,
+                                  left: 0,
+                                  backgroundColor: iOSColors.red,
+                                }}/>
+                              )}
+
+                              {/* HACK Visual feedback for long-press ActionModal rec */}
+                              {/* - HACK Condition on showGenericModal b/c we can't (yet) onDismiss to unset sourceIdForActionModal */}
+                              {this.state.showGenericModal && this.state.sourceIdForActionModal === rec.source_id && (
+                                <View style={{
+                                  position: 'absolute', height: '100%', width: 5,
+                                  left: 0,
+                                  backgroundColor: iOSColors.black,
+                                }}/>
+                              )}
+
+                            </Animated.View>
+                          </TapGestureHandler>
+
+                        </View>
+
+                        {/* Rec metadata below */}
+                        {this.props.showMetadataBelow && (
                           <View style={{
+                            width: Dimensions.get('window').width, // Fit within the left-most screen width of ScrollView content
                             flexDirection: 'column',
-                            width: this.scrollViewContentWidths.metadataLeft,
-                            borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: iOSColors.midGray,
+                            // borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iOSColors.black, // TODO Make full width
+                            marginTop: 3,
+                            // marginBottom: 3,
                           }}>
                             {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
-                            {objectKeysTyped(MetadataColumnsLeft).map(c => this.props.metadataColumnsLeft.includes(c) && (
-                              <MetadataText key={c} children={MetadataColumnsLeft[c](rec)} />
+                            {objectKeysTyped(MetadataColumnsBelow).map(c => this.props.metadataColumnsBelow.includes(c) && (
+                              <MetadataText
+                                key={c}
+                                style={{
+                                  marginBottom: 3,
+                                }}
+                              >
+                                <MetadataLabel col={c} /> {MetadataColumnsBelow[c](rec)}
+                              </MetadataText>
                             ))}
                           </View>
                         )}
 
-                        {/* Sideways species label */}
-                        {/* - After controls/metadata so that label+spectro always abut (e.g. if scrolled all the way to the right) */}
-                        {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
-                        <View style={[styles.recSpeciesSidewaysView, {
-                          backgroundColor: styleForSpecies.get(rec.species)!.backgroundColor,
-                        }]}>
-                          <View style={styles.recSpeciesSidewaysViewInner}>
-                            <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
-                              fontSize: this.state._spectroScale >= 2 ? 11 : 6, // Compact species label to fit within tiny rows
-                              color: styleForSpecies.get(rec.species)!.color,
-                            }]}>
-                              {rec.species}
-                            </Text>
-                          </View>
-                        </View>
+                      </Animated.View>
+                    </LongPressGestureHandler>
 
-                        {/* Spectro (tap) */}
-                        <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(rec)}>
-                          <Animated.View>
+                  </Animated.View>
 
-                            {/* Image */}
-                            <Animated.Image
-                              style={this.spectroDim(rec.duration_s)}
-                              resizeMode='stretch'
-                              source={{uri: Rec.spectroPath(rec, this.spectroPathOpts)}}
-                            />
-
-                            {/* Start time cursor (if playing + startTime) */}
-                            {this.recIsPlaying(rec.source_id, this.state.playing) && (
-                              this.state.playing!.startTime && (
-                                <View style={{
-                                  position: 'absolute', width: 1, height: '100%',
-                                  left: this.spectroXFromTime(this.state.playing!.sound, this.state.playing!.startTime!),
-                                  backgroundColor: iOSColors.gray,
-                                }}/>
-                              )
-                            )}
-
-                            {/* Progress time cursor (if playing + playingCurrentTime) */}
-                            {this.recIsPlaying(rec.source_id, this.state.playing) && (
-                              this.state.playing!.startTime && this.state.playingCurrentTime !== undefined && (
-                                <View style={{
-                                  position: 'absolute', width: 1, height: '100%',
-                                  left: this.spectroXFromTime(this.state.playing!.sound, this.state.playingCurrentTime),
-                                  backgroundColor: iOSColors.black,
-                                }}/>
-                              )
-                            )}
-
-                            {/* HACK Visual feedback for playing rec [XXX after adding progress bar by default] */}
-                            {this.recIsPlaying(rec.source_id, this.state.playing) && (
-                              <View style={{
-                                position: 'absolute', height: '100%', width: 5,
-                                left: 0,
-                                backgroundColor: iOSColors.red,
-                              }}/>
-                            )}
-
-                            {/* HACK Visual feedback for long-press ActionModal rec */}
-                            {/* - HACK Condition on showGenericModal b/c we can't (yet) onDismiss to unset sourceIdForActionModal */}
-                            {this.state.showGenericModal && this.state.sourceIdForActionModal === rec.source_id && (
-                              <View style={{
-                                position: 'absolute', height: '100%', width: 5,
-                                left: 0,
-                                backgroundColor: iOSColors.black,
-                              }}/>
-                            )}
-
-                          </Animated.View>
-                        </TapGestureHandler>
-
-                      </View>
-
-                      {/* Rec metadata below */}
-                      {this.props.showMetadataBelow && (
-                        <View style={{
-                          width: Dimensions.get('window').width, // Fit within the left-most screen width of ScrollView content
-                          flexDirection: 'column',
-                          // borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iOSColors.black, // TODO Make full width
-                          marginTop: 3,
-                          // marginBottom: 3,
-                        }}>
-                          {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
-                          {objectKeysTyped(MetadataColumnsBelow).map(c => this.props.metadataColumnsBelow.includes(c) && (
-                            <MetadataText
-                              key={c}
-                              style={{
-                                marginBottom: 3,
-                              }}
-                            >
-                              <MetadataLabel col={c} /> {MetadataColumnsBelow[c](rec)}
-                            </MetadataText>
-                          ))}
-                        </View>
-                      )}
-
-                    </Animated.View>
-                  </LongPressGestureHandler>
-
-                </Animated.View>
-
-              ])}
+                ]),
+              })}
             </View>
 
             {/* Footer */}
             <View style={{
               ...Styles.center,
-              width: Dimensions.get('window').width,
+              width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
               paddingVertical: 5,
               flexDirection: 'row',
             }}>

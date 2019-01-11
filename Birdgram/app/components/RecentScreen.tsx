@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import React, { RefObject, PureComponent } from 'react';
 import {
-  Dimensions, FlatList, Image, Platform, SectionList, Text, TouchableWithoutFeedback, View, WebView,
+  ActivityIndicator, Dimensions, FlatList, Image, Platform, SectionList, Text, TouchableWithoutFeedback, View, WebView,
 } from 'react-native';
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
@@ -19,7 +19,7 @@ import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
 import {
   enumerate, global, into, json, local, mapNil, mapNull, mapUndefined, match, matchUndefined, mergeArraysWith,
-  objectKeysTyped, pretty, shallowDiffPropsState, showDate, throw_, yaml,
+  objectKeysTyped, pretty, shallowDiffPropsState, showDate, throw_, typed, yaml,
 } from '../utils';
 import { XC } from '../xc';
 
@@ -55,6 +55,7 @@ interface Props {
 }
 
 interface State {
+  status:       'ready' | 'loading';
   recents:      Array<Recent>;
   tabLocations: {[key in CapturedTabName]: Location}, // Track as state to avoid having to .forceUpdate()
 }
@@ -69,7 +70,8 @@ export class RecentScreen extends PureComponent<Props, State> {
   static defaultProps = {
   };
 
-  state = {
+  state: State = {
+    status:       'loading',
     recents:      [],
     tabLocations: _.mapValues(this.props.histories, x => x.location),
   };
@@ -126,6 +128,7 @@ export class RecentScreen extends PureComponent<Props, State> {
 
   setTabLocations = () => {
     this.setState((state, props) => ({
+      status:       'ready',
       tabLocations: _.mapValues(props.histories, x => x.location),
     }));
   }
@@ -166,113 +169,130 @@ export class RecentScreen extends PureComponent<Props, State> {
           // backgroundColor: iOSColors.customGray,
         }}>
 
+          {/* Loading spinner */}
+          {this.state.status === 'loading' && (
+            <View style={{
+              flex: 1,
+              justifyContent: 'center',
+            }}>
+              <ActivityIndicator size='large' />
+            </View>
+          )}
+
           {/* TODO SectionList with dates (recent.timestamp) as section headers */}
-          <FlatList <Recent>
-            ref={this.flatListRef}
-            style={{
-              ...Styles.fill,
-            }}
-            contentInset={{
-              top:    -1, // Hide top elem border under bottom border of title bar
-              bottom: -1, // Hide bottom elem border under top border of tab bar
-            }}
-            data={this.state.recents}
-            keyExtractor={(recent, index) => `${index}`}
-            ListHeaderComponent={(
-              // Simulate top border on first item
-              <View style={{
-                height: 0,
-                borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
-              }}/>
-            )}
-            renderItem={({item: recent}) => (
-              <RectButton
-                onPress={() => {
-                  this.props.go(recent.tab, {
-                    index: _.findIndex(
-                      this.props.histories[recent.tab].entries,
-                      x => x.key === recent.location.key,
-                    )!,
-                  });
-                }}
-              >
-                <View style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  // backgroundColor: iOSColors.white,
-                  // Highlight active location per tab
-                  backgroundColor: (recent.location.key === this.state.tabLocations[recent.tab].key
-                    ? `${capturedTabProps[recent.tab].color}22`
-                    : undefined
-                  ),
-                  padding: 5,
-                  borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
-                  ...Styles.center,
-                }}>
-                  <Feather style={{
-                    ...material.titleObject,
-                    // Highlight active location per tab
-                    color: (recent.location.key === this.state.tabLocations[recent.tab].key
-                      ? capturedTabProps[recent.tab].color
-                      : iOSColors.gray
-                    )
+          {this.state.status === 'ready' && (
+            <FlatList <Recent>
+              ref={this.flatListRef}
+              style={{
+                ...Styles.fill,
+              }}
+              contentInset={{
+                top:    -1, // Hide top elem border under bottom border of title bar
+                bottom: -1, // Hide bottom elem border under top border of tab bar
+              }}
+              initialNumToRender={20} // Enough to fill one screen (and not much more)
+              data={this.state.recents}
+              keyExtractor={(recent, index) => `${index}`}
+              ListEmptyComponent={(
+                <View style={[Styles.center, {padding: 30}]}>
+                  <Text style={material.subheading}>
+                    No history yet
+                  </Text>
+                </View>
+              )}
+              renderItem={({item: recent, index}) => (
+                <RectButton
+                  onPress={() => {
+                    this.props.go(recent.tab, {
+                      index: _.findIndex(
+                        this.props.histories[recent.tab].entries,
+                        x => x.key === recent.location.key,
+                      )!,
+                    });
                   }}
-                    name={this.props.iconForTab[recent.tab]}
-                  />
+                >
                   <View style={{
                     flex: 1,
-                    flexDirection: 'column',
-                    paddingLeft: 5,
+                    flexDirection: 'row',
+                    // backgroundColor: iOSColors.white,
+                    // Highlight active location per tab
+                    backgroundColor: (recent.location.key === this.state.tabLocations[recent.tab].key
+                      ? `${capturedTabProps[recent.tab].color}22`
+                      : undefined
+                    ),
+                    padding: 5,
+                    // Bottom border on all items, top border on first item
+                    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
+                    ...(index != 0 ? {} : {
+                      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'black',
+                    }),
+                    ...Styles.center,
                   }}>
-                    <Text style={{
-                      ...material.body1Object,
+                    <Feather style={{
+                      ...material.titleObject,
+                      // Highlight active location per tab
+                      color: (recent.location.key === this.state.tabLocations[recent.tab].key
+                        ? capturedTabProps[recent.tab].color
+                        : iOSColors.gray
+                      )
+                    }}
+                      name={this.props.iconForTab[recent.tab]}
+                    />
+                    <View style={{
+                      flex: 1,
+                      flexDirection: 'column',
+                      paddingLeft: 5,
                     }}>
+                      <Text style={{
+                        ...material.body1Object,
+                      }}>
 
-                      {/* TODO Dedupe with SavedScreen.render */}
-                      {match<CapturedTabName, string>(recent.tab,
-                        ['record', () => matchRecordPathParams(recordPathParamsFromLocation(recent.location), {
-                          root: () => (
-                            '[ROOT]' // TODO When does this show? How should it display?
-                          ),
-                          edit: ({sourceId}) => (
-                            SourceId.show(sourceId, {
-                              species: this.props.xc,
-                              long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                            })
-                          ),
-                        })],
-                        ['search', () => matchSearchPathParams(searchPathParamsFromLocation(recent.location), {
-                          root: () => (
-                            '[ROOT]' // Shouldn't ever show b/c redirect
-                          ),
-                          random: ({filters, seed}) => (
-                            `Random`
-                          ),
-                          species: ({filters, species}) => (
-                            species === '_BLANK' ? '[BLANK]' :
-                            matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
-                              undefined: () => `${species} (?)`,
-                              x:         x  => `${species} (${x.com_name})`,
-                            })
-                          ),
-                          rec: ({filters, sourceId}) => (
-                            SourceId.show(sourceId, {
-                              species: this.props.xc,
-                              long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                            })
-                          ),
-                        })],
-                      )}
+                        {/* TODO Dedupe with SavedScreen.render */}
+                        {match<CapturedTabName, string>(recent.tab,
+                          ['record', () => matchRecordPathParams(recordPathParamsFromLocation(recent.location), {
+                            root: () => (
+                              '[ROOT]' // TODO When does this show? How should it display?
+                            ),
+                            edit: ({sourceId}) => (
+                              SourceId.show(sourceId, {
+                                species: this.props.xc,
+                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                              })
+                            ),
+                          })],
+                          ['search', () => matchSearchPathParams(searchPathParamsFromLocation(recent.location), {
+                            root: () => (
+                              '[ROOT]' // Shouldn't ever show b/c redirect
+                            ),
+                            random: ({filters, seed}) => (
+                              `Random`
+                            ),
+                            species: ({filters, species}) => (
+                              species === '_BLANK' ? '[BLANK]' :
+                              matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+                                undefined: () => `${species} (?)`,
+                                x:         x  => `${species} (${x.com_name})`,
+                              })
+                            ),
+                            rec: ({filters, sourceId}) => (
+                              SourceId.show(sourceId, {
+                                species: this.props.xc,
+                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                              })
+                            ),
+                          })],
+                        )}
 
-                    </Text>
-                    <Text style={material.caption}>
-                      {showDate(recent.location.state.timestamp)}
-                    </Text>
+                      </Text>
+                      <Text style={material.caption}>
+                        {showDate(recent.location.state.timestamp)}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              </RectButton>
-            )}
-          />
+                </RectButton>
+              )}
+            />
+          )}
 
         </View>
 

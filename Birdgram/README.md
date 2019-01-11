@@ -154,8 +154,6 @@ android
 - Xcode Release build fails with "main.jsbundle does not exist. This must be a bug with"
   - Not the real error -- find the preceeding error msg in Xcode
   - Last time it was a js build-time error that tripped in Release but not Debug (b/c it relied on `__DEV__` true vs. undefined)
-- App starts loading _very_ slowly in Debug mode (with high cpu on laptop)
-  - Try restarting rndebugger (this worked for me once)
 - App does weird stuff, e.g. fails on startup with strange errors, or loads to a blank screen
   - Make sure you're on a happy path
     - ✅ Debug build + "Debug JS Remotely"
@@ -163,7 +161,9 @@ android
     - ✅ Release build
   - Try toggling "Debug JS Remotely" back and forth
     - I've observed this make Debug build + no "Debug JS Remotely" go from blank screen to a working app...
-- App hangs on startup
+- App starts loading _very_ slowly in Debug mode (with high cpu on laptop)
+  - Try restarting rndebugger (this worked for me once)
+- App hangs/slow on startup
   - Solution: if using chrome rn debugger, try toggling http://192.168.0.196:8081/debugger-ui/ vs. http://localhost:8081/debugger-ui/
     - Simulator wants http://localhost:8081/debugger-ui/
     - Phone wants http://192.168.0.196:8081/debugger-ui/

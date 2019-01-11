@@ -3,6 +3,7 @@
 //
 
 import _ from 'lodash';
+import moment from 'moment';
 import { sprintf } from 'sprintf-js';
 
 import { debug_print, puts } from './log';
@@ -89,7 +90,10 @@ export async function catchTryAsync<X>(
 //  - e.g. fail on `match(X | null, ...)` if the case patterns don't include null
 export function match<X, Y = X, X0 extends X = X>(x0: X0, ...cases: Array<[X | Match, (x0: X0) => Y]>): Y {
   for (let [x, f] of cases) {
-    if (x === x0 || x === Match.Default) {
+    if (
+      x === x0 || // Shallow equality
+      x === Match.Default
+    ) {
       return f(x0);
     }
   }
@@ -338,8 +342,13 @@ export type Omit<X, K> = Pick<X, Exclude<keyof X, K>>;
 //
 
 export function showDate(d: Date): string {
-  // FIXME(android) toLocaleTimeString won't work on android [https://github.com/facebook/react-native/issues/15717]
-  return `${d.toDateString()}, ${d.toLocaleTimeString()}`;
+  const nowYear = new Date().getFullYear();
+  return (d.getFullYear() === nowYear
+    ? moment(d).format('ddd M/D h:mm:ssa')   // e.g. 'Thu 1/10 5:39:49pm'
+    : moment(d).format('ddd Y/M/D h:mm:ssa') // e.g. 'Thu 2019/1/10 5:39:49pm'
+    // ? moment(d).format('ddd MMM D h:mm:ssa')   // e.g. 'Thu Jan 10 5:39:49pm'
+    // : moment(d).format('Y ddd MMM D h:mm:ssa') // e.g. '2019 Thu Jan 10 5:39:49pm'
+  );
 }
 
 export function showSuffix<X>(sep: string, x: X | undefined, show: (x: X) => string): string {

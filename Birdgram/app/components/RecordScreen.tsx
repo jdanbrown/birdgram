@@ -267,7 +267,7 @@ export class RecordScreen extends Component<Props, State> {
 
       } else {
 
-        log.info('updateForLocation', {location: this.props.location, prevLocation});
+        log.info('updateForLocation', rich({location: this.props.location, prevLocation}));
 
         // Reset state
         //  - TODO Dedupe with startRecording
@@ -604,12 +604,62 @@ export class RecordScreen extends Component<Props, State> {
         timeInterval: spectro.timeInterval,
       });
       this.setState((state, props) => {
-        // TODO(multi_clip): Add UI for multi-clip editing, and handle multiple clips here
-        const [clip] = ifEmpty(state.draftEdit.clips || [], () => [{time: Interval.top}]);
-        return match(state.editClipMode,
-          ['lo', () => ({draftEdit: {...state.draftEdit, clips: [{time: new Interval(spectro.timeInterval.lo, clip.time.hi)}]}})],
-          ['hi', () => ({draftEdit: {...state.draftEdit, clips: [{time: new Interval(clip.time.lo, spectro.timeInterval.hi)}]}})],
+
+        // Update draftEdit.clips for pressed spectro
+        //  - TODO(multi_clip): Add UI for multi-clip editing, and handle multiple clips here
+        //  - Only a subset of draftEdit.clips are possible (since we don't yet support full multi-clip editing):
+        //    - No edit:         {clips: undefined} / {clips: []}
+        //    - Include {lo,hi}: {clips: [{time: {lo, hi}}]}
+        //    - Exclude {hi,lo}: {clips: [{time: {-Infinity, lo}}, {time: {hi, Infinity}}]}
+
+        // Unpack clips back to a simple {lo,hi} where lo > hi is possible
+        var clips = ifEmpty(state.draftEdit.clips || [], () => [{time: Interval.top}]); // Treat "No edit" like "Include {-inf,inf}"
+        var {lo, hi} = match<number, {lo: number, hi: number}>(clips.length,
+          [1, () => {
+            // Unpack lo < hi
+            const [{time: {lo, hi}}] = clips;
+            return {lo, hi};
+          }],
+          [2, () => {
+            // Unpack lo > hi
+            const [{time: {lo: _neginf, hi}}, {time: {lo, hi: _inf}}] = clips;
+            if (!(_neginf === -Infinity && _inf === Infinity)) throw `Invalid 2-length clips[${json(clips)}]`;
+            return {lo, hi};
+          }],
+          [match.default, n => {
+            // Nothing should be producing this shape yet
+            throw `Invalid clips.length[${n}]`;
+          }],
         );
+
+        // Update lo or hi, as selected by editClipMode
+        if (state.editClipMode === 'lo') lo = spectro.timeInterval.lo;
+        if (state.editClipMode === 'hi') hi = spectro.timeInterval.hi;
+
+        // Reconstruct clips from {lo,hi}, depending on lo < hi vs. lo > hi
+        //  -
+        clips = (
+          lo < hi ? [{time: new Interval(lo, hi)}] :                                            // lo < hi -> "Include {lo,hi}"
+          lo > hi ? [{time: new Interval(-Infinity, hi)}, {time: new Interval(lo, Infinity)}] : // lo < hi -> "Exclude {hi,lo}"
+          []                                                                                    // lo = hi -> reset (weird edge case)
+        );
+
+        // Advance editClipMode (lo -> hi -> off)
+        //  - Let user manually press the lo/hi buttons when they want to redo
+        const editClipMode = match<EditClipMode, EditClipMode>(state.editClipMode,
+          ['lo',  () => 'hi'],
+          ['hi',  () => 'off'],
+        );
+
+        // Return new state
+        return {
+          editClipMode,
+          draftEdit: {
+            ...state.draftEdit,
+            clips,
+          },
+        };
+
       });
     }
   }
@@ -870,7 +920,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           return (
             <RectButton style={styles.bottomControlsButton} onPress={() => {
               if (parent) {
-                this.props.go('record', {path: `/edit/${parent}`});
+                this.props.go('record', {path: `/edit/${encodeURIComponent(parent)}`});
               }
             }}>
               <Feather style={[styles.bottomControlsButtonIcon, {
@@ -909,7 +959,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
             this.props.setStateProxy.setState((state, props) => ({
               draftEdit: {
                 ...state.draftEdit,
-                clips: undefined,
+                clips: [],
               },
             }));
           }
@@ -951,7 +1001,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
                 parent:    this.props.editRecording.rec,
                 draftEdit: this.props.draftEdit,
               });
-              this.props.go('record', {path: `/edit/${Source.stringify(editSource)}`});
+              this.props.go('record', {path: `/edit/${encodeURIComponent(Source.stringify(editSource))}`});
             }
           }}>
             <Feather style={styles.bottomControlsButtonIcon}
@@ -964,7 +1014,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           // Search
           <RectButton style={styles.bottomControlsButton} onPress={() => {
             if (this.props.editRecording) {
-              this.props.go('search', {path: `/rec/${this.props.editRecording.rec.source_id}`});
+              this.props.go('search', {path: `/rec/${encodeURIComponent(this.props.editRecording.rec.source_id)}`});
             }
           }}>
             <Feather style={[styles.bottomControlsButtonIcon, {
