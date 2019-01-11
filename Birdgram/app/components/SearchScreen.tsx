@@ -380,10 +380,24 @@ export class SearchScreen extends PureComponent<Props, State> {
     return `/random/${seed}`;
   }
 
-  spectroDim = (duration_s: number): Dim<number> => {
+  // Spectro dims: spectroDimImage (with padding) / spectroDimContent (no padding)
+  //  - xc spectro image widths are padded out to ~10s, regardless of duration_s
+  //  - user/edit spectro image widths are sized to duration_s
+  spectroDimImage = (rec: Rec): Dim<number> => {
     return {
       height: this.props.spectroBase.height * this.state._spectroScale,
-      width:  this.scrollViewContentWidths.image / this.props.searchRecsMaxDurationS * duration_s,
+      width:  this.scrollViewContentWidths.image * matchRec(rec, {
+        xc:   rec => 1,                                                  // Image width ~ 10s
+        user: rec => rec.duration_s / this.props.searchRecsMaxDurationS, // Image width ~ duration_s
+        edit: rec => rec.duration_s / this.props.searchRecsMaxDurationS, // Image width ~ duration_s
+      }),
+    };
+  }
+  spectroDimContent = (rec: Rec): Dim<number> => {
+    return {...this.spectroDimImage(rec),
+      width: this.scrollViewContentWidths.image * (
+        rec.duration_s / this.props.searchRecsMaxDurationS // Content width ~ duration_s
+      ),
     };
   }
 
@@ -822,7 +836,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           // Compute startTime to seek rec (if enabled)
           let startTime;
           if (this.props.seekOnPlay) {
-            startTime = this.spectroTimeFromX(sound, x, absoluteX);
+            startTime = this.spectroTimeFromX(rec, x);
           } else {
             // startTime = 0; // TODO Show some kind of visual feedback when not seekOnPlay
           }
@@ -875,22 +889,22 @@ export class SearchScreen extends PureComponent<Props, State> {
     };
   }
 
-  spectroTimeFromX = (sound: Sound, x: number, absoluteX: number): number => {
+  spectroTimeFromX = (rec: Rec, x: number): number => {
     const {contentOffset} = this._scrollViewState;
-    const duration_s = sound.getDuration();
-    const {width} = this.spectroDim(duration_s);
+    const duration_s = rec.duration_s;
+    const {width} = this.spectroDimContent(rec); // Exclude image width padding
     const {audio_s} = this.props.serverConfig.api.recs.search_recs.params;
-    const time = x / width * audio_s;
-    // log.debug('spectroTimeFromX', () => pretty({time, x, absoluteX, contentOffset, width, audio_s, duration_s}));
+    const time = x / width * duration_s;
+    // log.debug('spectroTimeFromX', () => pretty({time, x, contentOffset, width, audio_s, duration_s}));
     return time;
   }
 
-  spectroXFromTime = (sound: Sound, time: number): number => {
+  spectroXFromTime = (rec: Rec, time: number): number => {
     const {contentOffset} = this._scrollViewState;
-    const duration_s = sound.getDuration();
-    const {width} = this.spectroDim(duration_s);
+    const duration_s = rec.duration_s;
+    const {width} = this.spectroDimContent(rec); // Exclude image width padding
     const {audio_s} = this.props.serverConfig.api.recs.search_recs.params;
-    const x = time / audio_s * width;
+    const x = time / duration_s * width;
     // log.debug('spectroXFromTime', () => pretty({x, time, contentOffset, width, audio_s, duration_s}));
     return x;
   }
@@ -1052,8 +1066,8 @@ export class SearchScreen extends PureComponent<Props, State> {
         {/* Spectro */}
         <Animated.Image
           style={{
-            // ...this.spectroDim(rec.duration_s), // XXX Bad(info_modal)
-            height: this.spectroDim(rec.duration_s).height,
+            // ...this.spectroDimImage(rec), // XXX Bad(info_modal)
+            height: this.spectroDimImage(rec).height,
             width: '100%',
           }}
           foo
@@ -1817,7 +1831,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                       // backgroundColor: recIndex % 2 == 0 ? iOSColors.white : iOSColors.lightGray,
                       // Compact controls/labels when zoom makes image smaller than controls/labels
                       ...(this.props.showMetadataBelow ? {} : {
-                        height: this.spectroDim(rec.duration_s).height,
+                        height: this.spectroDimImage(rec).height,
                       }),
                     }}
                   >
@@ -1840,7 +1854,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                             flexDirection: 'row',
                             ...(this.props.showMetadataBelow ? {} : {
                               // Compact controls/labels when zoom makes image smaller than controls/labels
-                              height: this.spectroDim(rec.duration_s).height,
+                              height: this.spectroDimImage(rec).height,
                             }),
                           }}
                         >
@@ -1893,7 +1907,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
                               {/* Image */}
                               <Animated.Image
-                                style={this.spectroDim(rec.duration_s)}
+                                style={this.spectroDimImage(rec)}
                                 resizeMode='stretch'
                                 source={{uri: Rec.spectroPath(rec, this.spectroPathOpts)}}
                               />
@@ -1903,7 +1917,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                                 this.state.playing!.startTime && (
                                   <View style={{
                                     position: 'absolute', width: 1, height: '100%',
-                                    left: this.spectroXFromTime(this.state.playing!.sound, this.state.playing!.startTime!),
+                                    left: this.spectroXFromTime(this.state.playing!.rec, this.state.playing!.startTime!),
                                     backgroundColor: iOSColors.gray,
                                   }}/>
                                 )
@@ -1914,7 +1928,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                                 this.state.playing!.startTime && this.state.playingCurrentTime !== undefined && (
                                   <View style={{
                                     position: 'absolute', width: 1, height: '100%',
-                                    left: this.spectroXFromTime(this.state.playing!.sound, this.state.playingCurrentTime),
+                                    left: this.spectroXFromTime(this.state.playing!.rec, this.state.playingCurrentTime),
                                     backgroundColor: iOSColors.black,
                                   }}/>
                                 )
