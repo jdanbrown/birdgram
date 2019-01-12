@@ -1,7 +1,7 @@
-# Docs:
+# Docs
 # - https://facebook.github.io/react-native/docs/integration-with-existing-apps#configuring-cocoapods-dependencies
 # - https://shift.infinite.red/beginner-s-guide-to-using-cocoapods-with-react-native-46cb4d372995
-
+#
 # Troubleshooting
 # - `pod install` -> error "Unable to find a specification for `FooBar`"
 #   - Try inspecting stuff

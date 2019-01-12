@@ -913,9 +913,14 @@ export function searchPathParamsFromLocation(location: Location): SearchPathPara
 // App globals
 //
 
+export class Paths {
+  static payloads    = 'payloads';
+  static search_recs = `${Paths.payloads}/search_recs`;
+};
+
 export const Models = {
   search: {
-    path: `search_recs/models/search.json`,
+    path: `${Paths.search_recs}/models/search.json`,
   },
 };
 
@@ -930,13 +935,13 @@ export interface ModelsSearch extends FileProps {
 
 export const SearchRecs = {
 
-  serverConfigPath:    'search_recs/server-config.json',
-  metadataSpeciesPath: 'search_recs/metadata/species.json',
-  dbPath:              'search_recs/search_recs.sqlite3', // TODO Test asset paths on android (see notes in README)
+  serverConfigPath:    `${Paths.search_recs}/server-config.json`,
+  metadataSpeciesPath: `${Paths.search_recs}/metadata/species.json`,
+  dbPath:              `${Paths.search_recs}/search_recs.sqlite3`, // TODO Test asset paths on android (see notes in README)
 
   // TODO After verifying that asset dirs are preserved on android, simplify the basenames back to `${xc_id}.${format}`
   assetPath: (kind: string, species: string, xc_id: number, format: string): string => (
-    `${fs.dirs.MainBundleDir}/search_recs/${kind}/${species}/${kind}-${species}-${xc_id}.${format}`
+    `${fs.dirs.MainBundleDir}/${Paths.search_recs}/${kind}/${species}/${kind}-${species}-${xc_id}.${format}`
   ),
 
 };
