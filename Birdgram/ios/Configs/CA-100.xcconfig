@@ -1,8 +1,0 @@
-// Docs
-//  - https://help.apple.com/xcode/#/dev745c5c974
-//  - https://robots.thoughtbot.com/let-s-setup-your-ios-environments
-
-#include "Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram.debug.xcconfig"
-
-APP_NAME = Birdgram CA-100
-APP_BUNDLE_ID = app.birdgram.birdgram-ca-100
