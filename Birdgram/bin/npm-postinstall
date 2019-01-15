@@ -11,3 +11,8 @@ _sed_i () { sed --version >/dev/null 2>&1 && sed -i -- "$@" || sed -i '' "$@"; }
 # Comment out a couple vars in node/index.d.ts that react-native/index.d.ts redefines
 _sed_i 's#^declare var require:#//\0#g' node_modules/\@types/node/index.d.ts
 _sed_i 's#^declare var console:#//\0#g' node_modules/\@types/node/index.d.ts
+
+# For https://github.com/thekevinbrown/react-native-schemes-manager
+# - See also https://medium.com/@guerrix/multiple-schemes-and-configurations-in-a-react-native-ios-app-fb1812b940c8
+react-native-schemes-manager fix-script
+react-native-schemes-manager fix-libraries

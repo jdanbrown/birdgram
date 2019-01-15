@@ -6,6 +6,11 @@
     "postinstall": "./bin/npm-postinstall",
     "tsc-jest-cant-watch": "tsc && jest"
   },
+	"xcodeSchemes": {
+		"Debug": ["Debug CA-100"],
+		"Release": ["Release CA-100"],
+		"settings": {}
+  },
   "rnpm": {
     "assets": [
       "./app/assets/auto"
@@ -111,6 +116,7 @@
     "react-devtools": "^3.4.3",
     "react-native-asset": "^1.1.2",
     "react-native-debugger-open": "^0.3.17",
+    "react-native-schemes-manager": "^1.0.5",
     "react-native-typescript-transformer": "^1.2.10",
     "react-test-renderer": "16.5.0",
     "ts-jest": "^23.10.4",
