@@ -1,0 +1,51 @@
+#!/bin/bash -eux
+set -o pipefail
+#
+# Generate .env from $SCHEME_NAME
+# - Called from bin/xcode-build-env
+# - For https://github.com/luggit/react-native-config
+
+# Log env for debugging
+env
+
+# cd to Birdgram/
+dir="$SRCROOT/.."
+cd "$dir"
+
+# e.g. "Birdgram US" -> "Birdgram", "US"
+export SCHEME_PREFIX="$(echo "$SCHEME_NAME" | cut -d' ' -f1)"
+export SCHEME_SUFFIX="$(echo "$SCHEME_NAME" | cut -d' ' -f2-)"
+
+# Generate .env <- .env.shared + .env.$SCHEME_SUFFIX
+env_shared_file=".env.shared";         [ -e "$env_shared_file" ]
+env_scheme_file=".env.$SCHEME_SUFFIX"; [ -e "$env_scheme_file" ]
+env_file=".env"
+(
+  echo "# From file[$env_shared_file]"          | sed 's/^/++ /'
+  . "$env_shared_file"
+  echo                                          | sed 's/^/++ /'
+  echo "# From file[$env_scheme_file]"          | sed 's/^/++ /'
+  . "$env_scheme_file"
+  echo                                          | sed 's/^/++ /'
+  echo "# All env vars available during build:" | sed 's/^/++ /'
+  env | sort                                    | sed 's/^/++ # /'
+# HACK _Very_ brittle ('++ foo=bar')
+# - What's a simpler way to allow .env.* files to have vars that depend on other vars in the same file?
+) 2>&1 \
+  | ack '^\+\+ (\w+=.*|#.*|\s*)$' --output='$1' \
+  | ack -v '^export ' \
+  >"$env_file"
+
+# [Nope] HACK Manually edit project.pbxproj, since it seems there's no way to feed it variables (unlike Info.plist)
+# - [Problem] Modifying project.pbxproj during the build pre-action causes the build to cancel
+# - [Workaround] Unset PRODUCT_BUNDLE_IDENTIFIER (in project.pbxproj) and use CFBundleIdentifier (in Info.plist), which
+#   we can control with react-native-config vars (via Info.plist preprocessing)
+# - [QUESTION] Will having an unset PRODUCT_BUNDLE_IDENTIFIER cause any xcode build problems down the road?
+#   - "Apple says in the Xcode 7 release notes that PRODUCT_BUNDLE_IDENTIFIER is now 'the recommended place to set the
+#     Bundle Identifier for a target'" [https://github.com/fastlane/fastlane/issues/684]
+# (
+#   . "$env_file"
+#   perl -pi -e \
+#     's/(\bPRODUCT_BUNDLE_IDENTIFIER\s*=\s*"app\.birdgram\.)birdgram-[^"]+(";)/\1'"$BUNDLE_ID_NAME"'\2/g' \
+#     'ios/Birdgram.xcodeproj/project.pbxproj'
+# )

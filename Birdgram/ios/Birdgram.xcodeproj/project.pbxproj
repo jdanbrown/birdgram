@@ -529,6 +529,7 @@
 		B7A49DE021B318120076B0A2 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Image.swift; path = Birdgram/Image.swift; sourceTree = "<group>"; };
 		B7B1EB0221AAEC5C003EE032 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7D1BCC321C1C877006B9677 /* Http.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Http.m; path = Birdgram/Http.m; sourceTree = "<group>"; };
+		B7FF150521EE963800919F28 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Birdgram/Base.lproj/LaunchScreen.template.xib; sourceTree = "<group>"; };
 		B8ED9E6567504A149A09641B /* SQLite.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = SQLite.xcodeproj; path = "../node_modules/react-native-sqlite-storage/src/ios/SQLite.xcodeproj"; sourceTree = "<group>"; };
 		C6B6829AB2D043BB990531DD /* FontAwesome.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome.ttf"; sourceTree = "<group>"; };
 		DCA049B7438047599F841446 /* libRNAudioRecord.a */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = archive.ar; path = libRNAudioRecord.a; sourceTree = "<group>"; };
@@ -677,6 +678,7 @@
 				13B07FB01A68108700A75B9A /* AppDelegate.m */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
+				B7FF150421EE963800919F28 /* LaunchScreen.template.xib */,
 				13B07FB11A68108700A75B9A /* LaunchScreen.xib */,
 				13B07FB71A68108700A75B9A /* main.m */,
 				B70DB6D921A1F45100968F4D /* Birdgram-Bridging-Header.h */,
@@ -974,7 +976,7 @@
 			buildConfigurationList = B7068AE021ED36B700EC2F0B /* Build configuration list for PBXLegacyTarget "build-env" */;
 			buildPhases = (
 			);
-			buildToolPath = "${SRCROOT}/../bin/build-env";
+			buildToolPath = "${SRCROOT}/../bin/xcode-build-env";
 			buildWorkingDirectory = "${SRCROOT}/..";
 			dependencies = (
 			);
@@ -1011,7 +1013,7 @@
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
-				B720681821E96A48000EA80B /* Copy app/assets/payloads/$SCHEME_NAME/ -> payloads/ */,
+				B720681821E96A48000EA80B /* Copy app/assets/payloads/$SCHEME_SUFFIX/ -> payloads/ */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				B72CC80D21A34706009D8690 /* Embed Frameworks */,
 				566F0755AA0DF6EED2C65ACD /* [CP] Embed Pods Frameworks */,
@@ -1613,7 +1615,7 @@
 			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		B720681821E96A48000EA80B /* Copy app/assets/payloads/$SCHEME_NAME/ -> payloads/ */ = {
+		B720681821E96A48000EA80B /* Copy app/assets/payloads/$SCHEME_SUFFIX/ -> payloads/ */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 12;
 			files = (
@@ -1622,14 +1624,14 @@
 			);
 			inputPaths = (
 			);
-			name = "Copy app/assets/payloads/$SCHEME_NAME/ -> payloads/";
+			name = "Copy app/assets/payloads/$SCHEME_SUFFIX/ -> payloads/";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Copy app/assets/payloads/$CONFIGURATION/ into app bundle\n# - Based on https://stackoverflow.com/a/5770672/397334\nset -eux\nsource \"$SRCROOT/../.env\"\nASSETS=\"$SRCROOT/../app/assets\"\nBUNDLE_DIR=\"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app\"\nrsync -av --delete \"$ASSETS\"/payloads/\"$SCHEME_NAME\"/ \"$BUNDLE_DIR\"/payloads/\n";
+			shellScript = "# Copy app/assets/payloads/$SCHEME_SUFFIX/ to app bundle\n# - Based on https://stackoverflow.com/a/5770672/397334\nset -eux\nsource \"$SRCROOT/../.env\"\nASSETS=\"$SRCROOT/../app/assets\"\nBUNDLE_DIR=\"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app\"\nrsync -av --delete \"$ASSETS\"/payloads/\"$SCHEME_SUFFIX\"/ \"$BUNDLE_DIR\"/payloads/\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1680,6 +1682,14 @@
 			);
 			name = LaunchScreen.xib;
 			path = Birdgram;
+			sourceTree = "<group>";
+		};
+		B7FF150421EE963800919F28 /* LaunchScreen.template.xib */ = {
+			isa = PBXVariantGroup;
+			children = (
+				B7FF150521EE963800919F28 /* Base */,
+			);
+			name = LaunchScreen.template.xib;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
@@ -1797,7 +1807,6 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
 				PRODUCT_NAME = Birdgram;
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -1837,7 +1846,6 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
 				PRODUCT_NAME = Birdgram;
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_VERSION = 4.2;

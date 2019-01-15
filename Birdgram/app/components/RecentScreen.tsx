@@ -12,8 +12,8 @@ import {
   matchRecordPathParams, matchSearchPathParams, recordPathParamsFromLocation, searchPathParamsFromLocation, SourceId,
 } from '../datatypes';
 import { Ebird } from '../ebird';
-import { Log, rich } from '../log';
-import { Go, Histories, History, Location, tabHistoriesKeys, TabName } from '../router';
+import { debug_print, Log, rich, puts, tap } from '../log';
+import { Go, Histories, History, Location, locationStateOrEmpty, tabHistoriesKeys, TabName } from '../router';
 import { Settings } from '../settings';
 import { Styles } from '../styles';
 import { StyleSheet } from '../stylesheet';
@@ -89,7 +89,7 @@ export class RecentScreen extends PureComponent<Props, State> {
     //  - TODO How to avoid races?
     this.addRecents(
       mergeArraysWith( // [TODO Why did I mergeArraysWith i/o just _.sortBy?]
-        recent => recent.location.state.timestamp,
+        recent => locationStateOrEmpty(recent.location.state).timestamp || new Date(),
         ...capturedTabs.map(tab =>
           this.props.histories[tab].entries
           .map(location => ({tab, location}))
@@ -285,7 +285,7 @@ export class RecentScreen extends PureComponent<Props, State> {
 
                       </Text>
                       <Text style={material.caption}>
-                        {showDate(recent.location.state.timestamp)}
+                        {mapNull(locationStateOrEmpty(recent.location.state).timestamp, showDate)}
                       </Text>
                     </View>
                   </View>

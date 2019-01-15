@@ -1,0 +1,18 @@
+#!/bin/bash -eux
+set -o pipefail
+#
+# Run by Xcode -> Edit Scheme -> Build (expand arrow) -> Pre-actions -> Run Script
+
+# Pre-/post-action exit status is ignored (poop)
+# - https://stackoverflow.com/a/5434725/397334
+
+# Pre-action output doesn't go to the build log; manually log to file
+# - https://stackoverflow.com/a/42497746/397334
+exec >/tmp/birdgram-xcode-pre-actions.log 2>&1
+
+# Save $SCHEME_NAME for build steps
+# - (b/c xcode exposes $SCHEME_NAME during pre-actions but not build)
+echo "export SCHEME_NAME=\"$SCHEME_NAME\"" >"$SRCROOT/../.env.SCHEME_NAME"
+
+# Mark success in the log so we can distinguish from a partial run (b/c exit status is ignored -- see above)
+echo 'Success'

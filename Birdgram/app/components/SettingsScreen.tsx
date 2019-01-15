@@ -8,6 +8,8 @@ import SettingsList from 'react-native-settings-list';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 
+import { config } from '../config';
+import { ServerConfig } from '../datatypes';
 import { Log, rich } from '../log';
 import { DEFAULTS, SettingsWrites } from '../settings';
 import { Styles } from '../styles';
@@ -21,6 +23,7 @@ export const refreshRateMax = 64;
 
 type Props = {
   // Settings
+  serverConfig: ServerConfig;
   settings: SettingsWrites;
   showDebug: boolean;
   allowUploads: boolean;
@@ -267,6 +270,19 @@ export class SettingsScreen extends PureComponent<Props, State> {
               // surfaces as a build error, and if it doesn't then you have a Release app that's silently stuck on stale
               // js code even though your Debug app has the latest js code. UGH.
               ['__DEV__']: __DEV__,
+              config: _.omit(config,
+                'env', // TODO Very tall, show somewhere less disruptive
+              ),
+              // TODO Very tall, show somewhere less disruptive (e.g. a sub-page within Settings)
+              //  - And then show all of:
+              //    - this.props.serverConfig.server_globals.sg_load.search
+              //    - this.props.serverConfig.server_globals.sg_load.xc_meta
+              //    - this.props.serverConfig.api.recs.search_recs.params
+              payload: {
+                ...this.props.serverConfig.server_globals.sg_load.xc_meta,
+                ..._.pick(this.props.serverConfig.api.recs.search_recs.params, ['limit', 'audio_s']),
+                ..._.pick(this.props.serverConfig.server_globals.sg_load.search, ['cv_str']),
+              },
             })}/>
           </View>
         )}

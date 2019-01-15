@@ -5,9 +5,9 @@ import { Alert, AsyncStorage } from 'react-native';
 import { MemoryRouterProps } from 'react-router';
 import { Route, Router } from 'react-router-native';
 
-import { Log, rich } from './log';
+import { debug_print, Log, puts, rich } from './log';
 import { Settings } from './settings';
-import { global, into, json, local, shallowDiffPropsState, yaml } from './utils';
+import { global, into, json, local, pretty, shallowDiffPropsState, typed, yaml } from './utils';
 
 const log = new Log('router');
 
@@ -56,10 +56,18 @@ export function ObserveHistory(props: {globalKey: string}) {
 //
 
 // Redefine standard history types with our own LocationState
-export type Location = _history.Location<LocationState>;
-export type History  = _history.MemoryHistory<LocationState>;
+//  - Need `| undefined` for locations that are created from just a path (e.g. <Redirect to={path}/> i/o <Redirect to={location}/>)
+//  - TODO If we update _all_ uses of Redirect [any other location producers?] then we can remove `| undefined`
+export type Location = _history.Location<LocationState | undefined>;
+export type History  = _history.MemoryHistory<LocationState | undefined>;
 export interface LocationState {
   timestamp: Date;
+}
+
+export function locationStateOrEmpty(state?: LocationState): LocationState | {[key in keyof LocationState]: null} {
+  return state || {
+    timestamp: null,
+  };
 }
 
 export function createHistory(opts: {
@@ -67,11 +75,16 @@ export function createHistory(opts: {
   initialIndex?:   number;
   keyLength?:      number;
 } = {}): History {
-  return _history.createMemoryHistory({
+  const history = _history.createMemoryHistory({
     initialEntries: opts.initialEntries as unknown as Array<string>, // HACK Work around bunk type (string i/o Location)
     initialIndex:   opts.initialIndex,
     keyLength:      opts.keyLength,
   });
+  // Add initial state (undefined by default -- which is only observable on first launch after app install!)
+  history.location.state = typed<LocationState>({
+    timestamp: new Date(),
+  });
+  return history;
 }
 
 export interface TabHistories {

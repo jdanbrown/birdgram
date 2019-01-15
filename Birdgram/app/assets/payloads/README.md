@@ -1,0 +1,4 @@
+- Keyed by `$SCHEME_SUFFIX`
+  - Keying done by: Project -> Birdgram -> Build Phases -> "Copy app/assets/payloads/..." step
+  - `$SCHEME_SUFFIX` computed in bin/xcode-build-env-from-scheme
+- TODO Document how to add a new region (maybe in root README i/o here?)

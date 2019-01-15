@@ -1,0 +1,57 @@
+#/bin/sh
+# Can't rely on shebang line [why?]
+set -eux
+set -o pipefail
+#
+# Build script for the build-env target in the Birdgram xcode project
+# - For https://github.com/luggit/react-native-config
+
+dir="$SRCROOT/.."
+bin="$dir/bin"
+
+# Read $SCHEME_NAME from bin/xcode-pre-actions
+# - (b/c xcode exposes $SCHEME_NAME during pre-actions but not build)
+source "$dir/.env.SCHEME_NAME"
+
+# Bust cache
+# - Force Info.plist to be recomputed from .env (via xcode INFOPLIST_PREPROCESS, from react-native-config README)
+rm -f "$CONFIGURATION_TEMP_DIR/Birdgram.build/Preprocessed-Info.plist"
+
+# Build .env from $SCHEME_NAME
+"$bin"/xcode-build-env-from-scheme
+
+# Run BuildDotenvConfig.ruby
+# - [Why did we have to do this manually?]
+# - From https://github.com/luggit/react-native-config/issues/187#issuecomment-353156419
+# - cf. https://github.com/ueno-llc/react-native-starter/blob/master/scripts/build-env.sh
+if [ -n "$SYMROOT" ]; then
+  RNC_DIR='node_modules/react-native-config/ios'
+
+  # Ensure dirs
+  mkdir -p "$SYMROOT"
+  mkdir -p "$BUILD_DIR"
+
+  # Build dotenv
+  (cd "$RNC_DIR" && ReactNativeConfig/BuildDotenvConfig.ruby)
+
+  # QUESTION Is "  " i/o " " in the .h a problem?
+  # - https://github.com/luggit/react-native-config/issues/294
+  # - Using -traditional seems to avoid the issue for Info.plist preprocessing
+  # - But are there any other downstream consumers where this is a problem?
+  # - Complexity: running this perl replace on the $BUILD_DIR file does fix the $RNC_DIR file, but the $BUILD_DIR file
+  #   somehow gets reverted to two spaces i/o one [why?]
+  # perl -pi -e 's/  / /g' "$BUILD_DIR/GeneratedInfoPlistDotEnv.h"
+
+  # Copy generated dotenv files to node_modules directory
+  cp "$BUILD_DIR/GeneratedInfoPlistDotEnv.h" "$RNC_DIR/ReactNativeConfig/GeneratedInfoPlistDotEnv.h"
+  cp "$SYMROOT/GeneratedDotEnv.m"            "$RNC_DIR/ReactNativeConfig/GeneratedDotEnv.m"
+
+fi
+
+# HACK Generate LaunchScreen.xib from LaunchScreen.template.xib
+# - So we can do __RN_CONFIG_* var substitution, like with Info.plist
+cat "$dir"/ios/Birdgram/Base.lproj/LaunchScreen.template.xib \
+  | perl -pe "$(cat "$INFOPLIST_PREFIX_HEADER" | perl -pe 's/^#define ([^ ]+)\s+(.*)$/s#\\b\1\\b#\2#g;/g')" \
+  >"$dir"/ios/Birdgram/Base.lproj/LaunchScreen.xib
+
+# vi: ft=sh

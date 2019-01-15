@@ -502,6 +502,7 @@ export default class App extends PureComponent<Props, State> {
                           render: props => (
                             <SettingsScreen {...props}
                               // Settings
+                              serverConfig            = {this.state.serverConfig!}
                               settings                = {this.state.settingsWrites!}
                               // Global
                               showDebug               = {this.state.settings!.showDebug}

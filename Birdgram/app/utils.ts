@@ -212,7 +212,10 @@ export function enumerate<X>(xs: Array<X>): Array<{x: X, i: number}> {
   return xs.map((x, i) => ({x, i}));
 }
 
-export function mergeArraysWith<X, Y>(f: (x: X) => Y, ...xss: Array<Array<X>>): Array<X> {
+export function mergeArraysWith<X, Y>(
+  f: (x: X) => NonNullable<Y>, // NonNullable else errors inside _.maxBy (which lodash types don't catch)
+  ...xss: Array<Array<X>>
+): Array<X> {
   xss = xss.map(xs => xs.slice()); // Copy each array so we can mutate
   const result: X[] = [];
   while (true) {
