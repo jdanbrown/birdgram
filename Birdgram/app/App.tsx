@@ -50,6 +50,8 @@ import { XC } from './xc';
 
 const log = new Log('App');
 
+log.info('config', pretty(config));
+
 // // XXX Debug: log bridge msgs
 // //  - https://blog.callstack.io/reactnative-how-to-check-what-passes-through-your-bridge-e435571ffd85
 // //  - https://github.com/jondot/rn-snoopy
@@ -75,6 +77,7 @@ global.Animated = Animated;
 global.AsyncStorage = AsyncStorage;
 global.cheerio = cheerio;
 global.Colors = Colors;
+global.config = config;
 global.deepEqual = deepEqual;
 global.Dimensions = Dimensions;
 global.Ebird = Ebird;

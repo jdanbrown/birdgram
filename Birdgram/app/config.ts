@@ -1,5 +1,12 @@
+// Loaded from .env.* file [https://github.com/luggit/react-native-config]
+import envConfig from 'react-native-config';
+
 // TODO config -> Settings.state [how to share globally?]
 export const config = {
+
+  // Merge .env into top level
+  //  - .env keys should all be uppercase by convention (like env vars)
+  ...envConfig,
 
   host: 'local',
   // host: 'remote',
@@ -13,4 +20,4 @@ export const config = {
   useNativeDriver: true,
   // useNativeDriver: false, // FIXME Buggy / exposes bugs in our gross gestures/animated logic (ugh)
 
-}
+};

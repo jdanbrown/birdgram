@@ -58,6 +58,8 @@ target 'Birdgram' do
   project 'Birdgram.xcodeproj'
   all_pods
   # # This causes warnings. Commented out for now.
+  pod 'react-native-config', :path => '../node_modules/react-native-config'
+
   # target 'BirdgramTests' do
   #   inherit! :search_paths
   # end

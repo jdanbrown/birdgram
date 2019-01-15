@@ -52,6 +52,7 @@
 		B74413F421C1C13800572D12 /* Http.swift in Sources */ = {isa = PBXBuildFile; fileRef = B74413F321C1C13800572D12 /* Http.swift */; };
 		B76003CC21A3A7E200E1347A /* RCTSwiftLog.m in Sources */ = {isa = PBXBuildFile; fileRef = B76003C921A3A7E200E1347A /* RCTSwiftLog.m */; };
 		B76003CD21A3A7E200E1347A /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003CB21A3A7E200E1347A /* Log.swift */; };
+		B76432FF21ED4CA0008A7254 /* libReactNativeConfig.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B76432FC21ED4C87008A7254 /* libReactNativeConfig.a */; };
 		B771632F21AA032000BBF1DD /* Pods_Birdgram.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 84DD8563EA53EA75065B87DD /* Pods_Birdgram.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B774255C21BA177D00DA249C /* Search.m in Sources */ = {isa = PBXBuildFile; fileRef = B774255B21BA177D00DA249C /* Search.m */; };
 		B774255E21BA17D400DA249C /* Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = B774255D21BA17D400DA249C /* Search.swift */; };
@@ -406,6 +407,20 @@
 			remoteGlobalIDString = E23D7B471ACEFE2A00C59171;
 			remoteInfo = SQLite;
 		};
+		B76432FB21ED4C87008A7254 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B76432F621ED4C87008A7254 /* ReactNativeConfig.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = EB2648DF1C7BE17A00B8F155;
+			remoteInfo = ReactNativeConfig;
+		};
+		B76432FD21ED4C87008A7254 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B76432F621ED4C87008A7254 /* ReactNativeConfig.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 3DF7F6AC203AA09B00D0EAB7;
+			remoteInfo = "ReactNativeConfig-tvOS";
+		};
 		B7B6A95C219D210C008DDDBC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 71E00DAC45944927ACF700A6 /* RNAudioRecord.xcodeproj */;
@@ -502,6 +517,7 @@
 		B76003C921A3A7E200E1347A /* RCTSwiftLog.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = RCTSwiftLog.m; path = Birdgram/RCTSwiftLog.m; sourceTree = "<group>"; };
 		B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RCTSwiftLog.h; path = Birdgram/RCTSwiftLog.h; sourceTree = "<group>"; };
 		B76003CB21A3A7E200E1347A /* Log.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = Log.swift; path = Birdgram/Log.swift; sourceTree = "<group>"; };
+		B76432F621ED4C87008A7254 /* ReactNativeConfig.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = ReactNativeConfig.xcodeproj; path = "../node_modules/react-native-config/ios/ReactNativeConfig.xcodeproj"; sourceTree = "<group>"; };
 		B774255B21BA177D00DA249C /* Search.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Search.m; path = Birdgram/Search.m; sourceTree = "<group>"; };
 		B774255D21BA17D400DA249C /* Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Search.swift; path = Birdgram/Search.swift; sourceTree = "<group>"; };
 		B774255F21BA1A0100DA249C /* RNProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RNProxy.swift; path = Birdgram/RNProxy.swift; sourceTree = "<group>"; };
@@ -548,6 +564,7 @@
 				ADBDB9381DFEBF1600ED6528 /* libRCTBlob.a in Frameworks */,
 				11D1A2F320CAFA9E000508D9 /* libRCTAnimation.a in Frameworks */,
 				146834051AC3E58100842450 /* libReact.a in Frameworks */,
+				B76432FF21ED4CA0008A7254 /* libReactNativeConfig.a in Frameworks */,
 				00C302E51ABCBA2D00DB3ED1 /* libRCTActionSheet.a in Frameworks */,
 				00C302E71ABCBA2D00DB3ED1 /* libRCTGeolocation.a in Frameworks */,
 				00C302E81ABCBA2D00DB3ED1 /* libRCTImage.a in Frameworks */,
@@ -766,6 +783,7 @@
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
 			isa = PBXGroup;
 			children = (
+				B76432F621ED4C87008A7254 /* ReactNativeConfig.xcodeproj */,
 				5E91572D1DD0AC6500FF2AA8 /* RCTAnimation.xcodeproj */,
 				146833FF1AC3E56700842450 /* React.xcodeproj */,
 				00C302A71ABCB8CE00DB3ED1 /* RCTActionSheet.xcodeproj */,
@@ -922,6 +940,15 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		B76432F721ED4C87008A7254 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B76432FC21ED4C87008A7254 /* libReactNativeConfig.a */,
+				B76432FE21ED4C87008A7254 /* libReactNativeConfig-tvOS.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		B7B6A959219D210C008DDDBC /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -939,6 +966,23 @@
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
+
+/* Begin PBXLegacyTarget section */
+		B7068ADF21ED36B700EC2F0B /* build-env */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "$(ACTION)";
+			buildConfigurationList = B7068AE021ED36B700EC2F0B /* Build configuration list for PBXLegacyTarget "build-env" */;
+			buildPhases = (
+			);
+			buildToolPath = "${SRCROOT}/../bin/build-env";
+			buildWorkingDirectory = "${SRCROOT}/..";
+			dependencies = (
+			);
+			name = "build-env";
+			passBuildSettingsInEnvironment = 1;
+			productName = "build-env";
+		};
+/* End PBXLegacyTarget section */
 
 /* Begin PBXNativeTarget section */
 		00E356ED1AD99517003FC87E /* BirdgramTests */ = {
@@ -967,7 +1011,7 @@
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
-				B720681821E96A48000EA80B /* Copy app/assets/payloads/$CONFIGURATION/ -> payloads/ */,
+				B720681821E96A48000EA80B /* Copy app/assets/payloads/$SCHEME_NAME/ -> payloads/ */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				B72CC80D21A34706009D8690 /* Embed Frameworks */,
 				566F0755AA0DF6EED2C65ACD /* [CP] Embed Pods Frameworks */,
@@ -998,6 +1042,11 @@
 					13B07F861A680F5B00A75B9A = {
 						DevelopmentTeam = 6S8S88RYPG;
 						LastSwiftMigration = 1010;
+					};
+					B7068ADF21ED36B700EC2F0B = {
+						CreatedOnToolsVersion = 10.1;
+						DevelopmentTeam = 6S8S88RYPG;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -1074,6 +1123,10 @@
 					ProjectRef = 146833FF1AC3E56700842450 /* React.xcodeproj */;
 				},
 				{
+					ProductGroup = B76432F721ED4C87008A7254 /* Products */;
+					ProjectRef = B76432F621ED4C87008A7254 /* ReactNativeConfig.xcodeproj */;
+				},
+				{
 					ProductGroup = B7125502216EC3C500B2BDB2 /* Products */;
 					ProjectRef = F96F1FE7A7F843F097A08E74 /* ReactNativePermissions.xcodeproj */;
 				},
@@ -1104,6 +1157,7 @@
 			);
 			projectRoot = "";
 			targets = (
+				B7068ADF21ED36B700EC2F0B /* build-env */,
 				13B07F861A680F5B00A75B9A /* Birdgram */,
 				00E356ED1AD99517003FC87E /* BirdgramTests */,
 			);
@@ -1433,6 +1487,20 @@
 			remoteRef = B72893B221768985009FF1ED /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		B76432FC21ED4C87008A7254 /* libReactNativeConfig.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libReactNativeConfig.a;
+			remoteRef = B76432FB21ED4C87008A7254 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		B76432FE21ED4C87008A7254 /* libReactNativeConfig-tvOS.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libReactNativeConfig-tvOS.a";
+			remoteRef = B76432FD21ED4C87008A7254 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 		B7B6A95D219D210C008DDDBC /* libRNAudioRecord.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
@@ -1497,7 +1565,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# From https://facebook.github.io/react-native/docs/running-on-device\nif [ \"${CONFIGURATION}\" == \"Debug\" ]; then export SKIP_BUNDLING=true; fi\n\nexport NODE_BINARY=node\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
+			shellScript = "# From https://facebook.github.io/react-native/docs/running-on-device\n#if [ \"${CONFIGURATION}\" == \"Debug\" ]; then export SKIP_BUNDLING=true; fi\n\nexport NODE_BINARY=node\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
 		};
 		2AFC3E054FFDE9C2372E7D8B /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1545,7 +1613,7 @@
 			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		B720681821E96A48000EA80B /* Copy app/assets/payloads/$CONFIGURATION/ -> payloads/ */ = {
+		B720681821E96A48000EA80B /* Copy app/assets/payloads/$SCHEME_NAME/ -> payloads/ */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 12;
 			files = (
@@ -1554,14 +1622,14 @@
 			);
 			inputPaths = (
 			);
-			name = "Copy app/assets/payloads/$CONFIGURATION/ -> payloads/";
+			name = "Copy app/assets/payloads/$SCHEME_NAME/ -> payloads/";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Copy app/assets/payloads/$CONFIGURATION/ into app bundle\n# - Based on https://stackoverflow.com/a/5770672/397334\nset -eu\nASSETS=\"$SRCROOT/../app/assets\"\nBUNDLE_DIR=\"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app\"\nrsync -av --delete \"$ASSETS\"/payloads/\"$CONFIGURATION\"/ \"$BUNDLE_DIR\"/payloads/\n";
+			shellScript = "# Copy app/assets/payloads/$CONFIGURATION/ into app bundle\n# - Based on https://stackoverflow.com/a/5770672/397334\nset -eux\nsource \"$SRCROOT/../.env\"\nASSETS=\"$SRCROOT/../app/assets\"\nBUNDLE_DIR=\"$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app\"\nrsync -av --delete \"$ASSETS\"/payloads/\"$SCHEME_NAME\"/ \"$BUNDLE_DIR\"/payloads/\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1719,6 +1787,7 @@
 					"$(SRCROOT)/../node_modules/rn-fetch-blob/ios/**",
 					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
 					"$(SRCROOT)/../node_modules/react-native-audio-record/ios",
+					"$(SRCROOT)/../node_modules/react-native-config/ios",
 				);
 				INFOPLIST_FILE = Birdgram/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -1758,6 +1827,7 @@
 					"$(SRCROOT)/../node_modules/rn-fetch-blob/ios/**",
 					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
 					"$(SRCROOT)/../node_modules/react-native-audio-record/ios",
+					"$(SRCROOT)/../node_modules/react-native-config/ios",
 				);
 				INFOPLIST_FILE = Birdgram/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -1822,6 +1892,9 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = "-traditional";
+				INFOPLIST_PREFIX_HEADER = "${BUILD_DIR}/GeneratedInfoPlistDotEnv.h";
+				INFOPLIST_PREPROCESS = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1868,10 +1941,58 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = "-traditional";
+				INFOPLIST_PREFIX_HEADER = "${BUILD_DIR}/GeneratedInfoPlistDotEnv.h";
+				INFOPLIST_PREPROCESS = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		B7068AE121ED36B700EC2F0B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUGGING_SYMBOLS = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		B7068AE221ED36B700EC2F0B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				MTL_FAST_MATH = YES;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
 		};
@@ -1901,6 +2022,15 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B7068AE021ED36B700EC2F0B /* Build configuration list for PBXLegacyTarget "build-env" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B7068AE121ED36B700EC2F0B /* Debug */,
+				B7068AE221ED36B700EC2F0B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

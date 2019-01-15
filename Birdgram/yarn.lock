@@ -6799,6 +6799,11 @@ react-native-audio-record@^0.1.2:
   resolved "https://registry.yarnpkg.com/react-native-audio-record/-/react-native-audio-record-0.1.2.tgz#49eb417d7f3d4cf01f3009a9801eb5d63ecaaf9f"
   integrity sha512-4hh1ipX3t60FfpVbl7QxxNwrGTNQTs/LYj9DMnV5EBogXyhu7dio/iqz3xVTXCq48zkLzfZy3ME2tK5Te0iiwQ==
 
+react-native-config@^0.11.7:
+  version "0.11.7"
+  resolved "https://registry.yarnpkg.com/react-native-config/-/react-native-config-0.11.7.tgz#a2b323f2ecd76a4df88cbb6bc86eaa2ef9febee7"
+  integrity sha512-dn5s+zhwLyE25vRT/vaEtLk/j8ZL1UZKvejORNDWakSwpOnLmFurFeaZV83IqkPlfWHXHFdsYe2IRYG1WN4WkQ==
+
 react-native-console-time-polyfill@^0.0.6:
   version "0.0.6"
   resolved "https://registry.yarnpkg.com/react-native-console-time-polyfill/-/react-native-console-time-polyfill-0.0.6.tgz#7823d86fe83439c74480d1b124a92b1a78571889"

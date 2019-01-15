@@ -7,6 +7,7 @@
 #import <React/RCTEventDispatcher.h>
 #import <React/RCTEventEmitter.h>
 #import <React/RCTLog.h>
+#import <ReactNativeConfig/ReactNativeConfig.h>
 
 #import "ImageHelper.h"
 #import "RCTSwiftLog.h"
