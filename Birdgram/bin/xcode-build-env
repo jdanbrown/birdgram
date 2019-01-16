@@ -6,19 +6,20 @@ set -o pipefail
 # Build script for the build-env target in the Birdgram xcode project
 # - For https://github.com/luggit/react-native-config
 
-dir="$SRCROOT/.."
-bin="$dir/bin"
+# Export for callees
+export BIRDGRAM_DIR="$SRCROOT/.."
+export BIRDGRAM_BIN="$BIRDGRAM_DIR/bin"
 
 # Read $SCHEME_NAME from bin/xcode-pre-actions
 # - (b/c xcode exposes $SCHEME_NAME during pre-actions but not build)
-source "$dir/.env.SCHEME_NAME"
+source "$BIRDGRAM_DIR/.env.SCHEME_NAME"
 
 # Bust cache
 # - Force Info.plist to be recomputed from .env (via xcode INFOPLIST_PREPROCESS, from react-native-config README)
 rm -f "$CONFIGURATION_TEMP_DIR/Birdgram.build/Preprocessed-Info.plist"
 
 # Build .env from $SCHEME_NAME
-"$bin"/xcode-build-env-from-scheme
+"$BIRDGRAM_BIN"/xcode-build-env-from-scheme
 
 # Run BuildDotenvConfig.ruby
 # - [Why did we have to do this manually?]
@@ -50,8 +51,27 @@ fi
 
 # HACK Generate LaunchScreen.xib from LaunchScreen.template.xib
 # - So we can do __RN_CONFIG_* var substitution, like with Info.plist
-cat "$dir"/ios/Birdgram/Base.lproj/LaunchScreen.template.xib \
+cat "$BIRDGRAM_DIR"/ios/Birdgram/Base.lproj/LaunchScreen.template.xib \
   | perl -pe "$(cat "$INFOPLIST_PREFIX_HEADER" | perl -pe 's/^#define ([^ ]+)\s+(.*)$/s#\\b\1\\b#\2#g;/g')" \
-  >"$dir"/ios/Birdgram/Base.lproj/LaunchScreen.xib
+  >"$BIRDGRAM_DIR"/ios/Birdgram/Base.lproj/LaunchScreen.xib
+
+# HACK HACK Fix cocoapods MACH_O_TYPE: "Static Library" -> "Dynamic Library"
+# - Else error at the end of app publish (after the slooow Archive step)
+#   - "Found an unexpected Mach-O header code: 0x72613c21"
+#   - https://www.google.com/search?q=pods+"Found+an+unexpected+Mach-O+header+code%3A+0x72613c21"
+# - Problem: Modifying project.pbxproj during the build pre-action causes the build to cancel
+# - Workaround: Don't modify project.pbxproj unless its contents are changing (i.e. on scheme switch). This will cause
+#   an (annoying) "Build cancelled" on the first build after switching schemes, but it should work normally after that.
+# - TODO(slow_app_launch): Investigate whether dynamic i/o static pods libs meaningfully slows down app launch
+#   - https://blog.automatic.com/how-we-cut-our-ios-apps-launch-time-in-half-with-this-one-cool-trick-7aca2011e2ea
+(
+  tmp="`mktemp`"
+  pbxproj="$SRCROOT/Pods/Pods.xcodeproj/project.pbxproj"
+  perl -pe >"$tmp" <"$pbxproj" \
+    's/MACH_O_TYPE = staticlib;/MACH_O_TYPE = mh_dylib;/g'
+  if ! diff "$tmp" "$pbxproj" >/dev/null; then
+    cp -vf "$tmp" "$pbxproj"
+  fi
+)
 
 # vi: ft=sh

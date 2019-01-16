@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+#
+# Generate build numbers (for .env.shared)
+# - version must increment on each release
+# - (version, build) must increment on each upload
+# - https://stackoverflow.com/a/38009895
+
+from datetime import *
+
+# Can't release more than once per 60s -> valid for 190y
+(from_year, granularity_sec) = (2000, 60)
+
+build_n = int((datetime.utcnow() - datetime(from_year, 1, 1)).total_seconds() / granularity_sec)
+
+# Ensure that CFBundleVersion will conform to 'nnnn.nn.nn'
+assert build_n < 1e8, '\n'.join([
+    'build_n[%(build_n)s] >= 1e8; increase from_year[%(from_year)s] to proceed',
+    '- Build number (CFBundleVersion) is safe to reset whenever version (CFBundleShortVersionString) increments',
+]) % locals()
+
+# Format like 'nnnn.nn.nn'
+build_str = '%d.%d.%d' % (
+    build_n % 1e8 / 1e4,
+    build_n % 1e4 / 1e2,
+    build_n % 1e2 / 1e0,
+)
+
+# print(build_n)  # XXX Debug
+print(build_str)  # Output for shell callers (e.g. .env.shared)

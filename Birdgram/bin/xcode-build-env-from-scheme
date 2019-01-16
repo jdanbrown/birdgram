@@ -9,8 +9,7 @@ set -o pipefail
 env
 
 # cd to Birdgram/
-dir="$SRCROOT/.."
-cd "$dir"
+cd "$BIRDGRAM_DIR"
 
 # e.g. "Birdgram US" -> "Birdgram", "US"
 export SCHEME_PREFIX="$(echo "$SCHEME_NAME" | cut -d' ' -f1)"
@@ -22,10 +21,10 @@ env_scheme_file=".env.$SCHEME_SUFFIX"; [ -e "$env_scheme_file" ]
 env_file=".env"
 (
   echo "# From file[$env_shared_file]"          | sed 's/^/++ /'
-  . "$env_shared_file"
+  source "$env_shared_file"
   echo                                          | sed 's/^/++ /'
   echo "# From file[$env_scheme_file]"          | sed 's/^/++ /'
-  . "$env_scheme_file"
+  source "$env_scheme_file"
   echo                                          | sed 's/^/++ /'
   echo "# All env vars available during build:" | sed 's/^/++ /'
   env | sort                                    | sed 's/^/++ # /'
@@ -36,16 +35,23 @@ env_file=".env"
   | ack -v '^export ' \
   >"$env_file"
 
-# [Nope] HACK Manually edit project.pbxproj, since it seems there's no way to feed it variables (unlike Info.plist)
-# - [Problem] Modifying project.pbxproj during the build pre-action causes the build to cancel
-# - [Workaround] Unset PRODUCT_BUNDLE_IDENTIFIER (in project.pbxproj) and use CFBundleIdentifier (in Info.plist), which
-#   we can control with react-native-config vars (via Info.plist preprocessing)
-# - [QUESTION] Will having an unset PRODUCT_BUNDLE_IDENTIFIER cause any xcode build problems down the road?
-#   - "Apple says in the Xcode 7 release notes that PRODUCT_BUNDLE_IDENTIFIER is now 'the recommended place to set the
-#     Bundle Identifier for a target'" [https://github.com/fastlane/fastlane/issues/684]
-# (
-#   . "$env_file"
-#   perl -pi -e \
-#     's/(\bPRODUCT_BUNDLE_IDENTIFIER\s*=\s*"app\.birdgram\.)birdgram-[^"]+(";)/\1'"$BUNDLE_ID_NAME"'\2/g' \
-#     'ios/Birdgram.xcodeproj/project.pbxproj'
-# )
+# HACK Manually edit PRODUCT_BUNDLE_IDENTIFIER in project.pbxproj
+# - I can't otherwise find a way to feed it variables (like Info.plist)
+# - This creates a problem: modifying project.pbxproj during the build pre-action causes the build to cancel itself
+# - Hacky solution: only modify project.pbxproj when its contents need to change (e.g. on scheme switch). This will
+#   cause an (annoying) "Build cancelled" on the first build after switching schemes, and then should work normally
+#   until you switch schemes again.
+# - Previously, I left PRODUCT_BUNDLE_IDENTIFIER unset (in project.pbxproj) and used CFBundleIdentifier (in Info.plist)
+#   because I could control it using react-native-config vars (via Info.plist preprocessing), but this approach fell
+#   apart # when I tried publishing the app, because the "Validate App" step (after the slow Archive build step) failed
+#   on the # missing PRODUCT_BUNDLE_IDENTIFIER
+(
+  source "$env_file"
+  tmp="`mktemp`"
+  pbxproj='ios/Birdgram.xcodeproj/project.pbxproj'
+  perl -pe >"$tmp" <"$pbxproj" \
+    's/(\bPRODUCT_BUNDLE_IDENTIFIER\s*=\s*"app\.birdgram\.)(birdgram-[^"]+)(";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g'
+  if ! diff "$tmp" "$pbxproj" >/dev/null; then
+    cp -vf "$tmp" "$pbxproj"
+  fi
+)

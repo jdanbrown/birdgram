@@ -55,12 +55,18 @@ target 'Playgrounds' do
 end
 
 target 'Birdgram' do
+
   project 'Birdgram.xcodeproj'
   all_pods
-  # # This causes warnings. Commented out for now.
-  pod 'react-native-config', :path => '../node_modules/react-native-config'
 
+  # NOTE react-native-config tried to add this line but I never realized I needed to `pod install`
+  # during the setup, so I ended up doing all the linking stuff myself (I guess), so I later
+  # disabled this to avoid thrash...
+  # pod 'react-native-config', :path => '../node_modules/react-native-config'
+
+  # # This causes warnings. Commented out for now.
   # target 'BirdgramTests' do
   #   inherit! :search_paths
   # end
+
 end

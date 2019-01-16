@@ -9,7 +9,7 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
-	<string>__RN_CONFIG_APP_BUNDLE_ID</string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -17,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.0.1</string>
+	<string>__RN_CONFIG_APP_VERSION</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleURLTypes</key>
@@ -34,7 +34,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>__RN_CONFIG_APP_VERSION_BUILD</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
@@ -52,12 +52,24 @@
 			</dict>
 		</dict>
 	</dict>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Birdgram saves your gps location with each recording you make</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Birdgram saves your gps location with each recording you make</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Birdgram uses the microphone to record the bird calls you want to identify</string>
+	<string>Birdgram uses the microphone to record bird calls</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Birdgram saves the GPS location of each recording you make</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Birdgram saves the GPS location of each recording you make</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Birdgram connects to your bluetooth audio devices for recording and playback</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Birdgram uses your media library to import and export your audio recordings</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Oops! Birdgram doesn't use your accelerometer. If you see this message please report a bug.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Oops! Birdgram doesn't use phone's built-in speech recognition. If you see this message please report a bug.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Oops! Birdgram doesn't use your calendars. If you see this message please report a bug.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIAppFonts</key>
 	<array>
 		<string>AntDesign.ttf</string>

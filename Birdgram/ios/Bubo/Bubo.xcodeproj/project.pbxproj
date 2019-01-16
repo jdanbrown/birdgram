@@ -614,6 +614,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 8D2602E1555A4329442FE06D /* Pods-Bubo.debug.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGN_STYLE = Automatic;
@@ -644,6 +645,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 0275CB86FEB77DF021B4CD29 /* Pods-Bubo.release.xcconfig */;
 			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGN_STYLE = Automatic;

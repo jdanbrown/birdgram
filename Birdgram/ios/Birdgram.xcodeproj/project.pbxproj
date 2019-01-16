@@ -68,6 +68,8 @@
 		B7B1EB0321AAEC5C003EE032 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0221AAEC5C003EE032 /* Surge.framework */; };
 		B7B1EB0421AAEC5C003EE032 /* Surge.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0221AAEC5C003EE032 /* Surge.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B7D1BCC421C1C877006B9677 /* Http.m in Sources */ = {isa = PBXBuildFile; fileRef = B7D1BCC321C1C877006B9677 /* Http.m */; };
+		B7FF150B21EEA00900919F28 /* Pods_Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7FF150A21EEA00900919F28 /* Pods_Bubo.framework */; };
+		B7FF150C21EEA00900919F28 /* Pods_Bubo.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B7FF150A21EEA00900919F28 /* Pods_Bubo.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BF7C9911FA9C4338B0BF698C /* AntDesign.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E0D3CAC7BEF84537A4FD221A /* AntDesign.ttf */; };
 		C62C1AB9427E46D2BA340C1F /* libFastImage.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 15ACA59D541D436B8793C522 /* libFastImage.a */; };
 		C74E8D388A3649829EFFB91E /* libRNSound.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 58C910D952494CFAB98C0692 /* libRNSound.a */; };
@@ -407,6 +409,13 @@
 			remoteGlobalIDString = E23D7B471ACEFE2A00C59171;
 			remoteInfo = SQLite;
 		};
+		B73A78BE21EEBC39000BC054 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B7068ADF21ED36B700EC2F0B;
+			remoteInfo = "build-env";
+		};
 		B76432FB21ED4C87008A7254 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B76432F621ED4C87008A7254 /* ReactNativeConfig.xcodeproj */;
@@ -450,6 +459,7 @@
 				B771632F21AA032000BBF1DD /* Pods_Birdgram.framework in Embed Frameworks */,
 				B774256321BA2D2300DA249C /* SwiftNpy.framework in Embed Frameworks */,
 				B72CC80C21A34706009D8690 /* Bubo.framework in Embed Frameworks */,
+				B7FF150C21EEA00900919F28 /* Pods_Bubo.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -530,6 +540,8 @@
 		B7B1EB0221AAEC5C003EE032 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7D1BCC321C1C877006B9677 /* Http.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Http.m; path = Birdgram/Http.m; sourceTree = "<group>"; };
 		B7FF150521EE963800919F28 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Birdgram/Base.lproj/LaunchScreen.template.xib; sourceTree = "<group>"; };
+		B7FF150A21EEA00900919F28 /* Pods_Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Pods_Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7FF150D21EEA42600919F28 /* Birdgram.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = Birdgram.entitlements; path = Birdgram/Birdgram.entitlements; sourceTree = "<group>"; };
 		B8ED9E6567504A149A09641B /* SQLite.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = SQLite.xcodeproj; path = "../node_modules/react-native-sqlite-storage/src/ios/SQLite.xcodeproj"; sourceTree = "<group>"; };
 		C6B6829AB2D043BB990531DD /* FontAwesome.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome.ttf"; sourceTree = "<group>"; };
 		DCA049B7438047599F841446 /* libRNAudioRecord.a */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = archive.ar; path = libRNAudioRecord.a; sourceTree = "<group>"; };
@@ -556,6 +568,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B7FF150B21EEA00900919F28 /* Pods_Bubo.framework in Frameworks */,
 				B72CC80B21A34706009D8690 /* Bubo.framework in Frameworks */,
 				7A245EFCCB59431FB0ADAD55 /* Pods_Birdgram.framework in Frameworks */,
 				B7B1EB0321AAEC5C003EE032 /* Surge.framework in Frameworks */,
@@ -673,6 +686,7 @@
 		13B07FAE1A68108700A75B9A /* Birdgram */ = {
 			isa = PBXGroup;
 			children = (
+				B7FF150D21EEA42600919F28 /* Birdgram.entitlements */,
 				008F07F21AC5B25A0029DE68 /* main.jsbundle */,
 				13B07FAF1A68108700A75B9A /* AppDelegate.h */,
 				13B07FB01A68108700A75B9A /* AppDelegate.m */,
@@ -824,6 +838,7 @@
 		83CBB9F61A601CBA00E9B192 = {
 			isa = PBXGroup;
 			children = (
+				B7FF150A21EEA00900919F28 /* Pods_Bubo.framework */,
 				B774256721BA2D6D00DA249C /* SwiftZip.framework */,
 				B774256421BA2D6D00DA249C /* Cminizip.framework */,
 				B774256121BA2D2300DA249C /* SwiftNpy.framework */,
@@ -1021,6 +1036,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				B73A78BF21EEBC39000BC054 /* PBXTargetDependency */,
 			);
 			name = Birdgram;
 			productName = "Hello World";
@@ -1044,6 +1060,12 @@
 					13B07F861A680F5B00A75B9A = {
 						DevelopmentTeam = 6S8S88RYPG;
 						LastSwiftMigration = 1010;
+						ProvisioningStyle = Automatic;
+						SystemCapabilities = {
+							com.apple.iCloud = {
+								enabled = 0;
+							};
+						};
 					};
 					B7068ADF21ED36B700EC2F0B = {
 						CreatedOnToolsVersion = 10.1;
@@ -1672,6 +1694,11 @@
 			target = 13B07F861A680F5B00A75B9A /* Birdgram */;
 			targetProxy = 00E356F41AD99517003FC87E /* PBXContainerItemProxy */;
 		};
+		B73A78BF21EEBC39000BC054 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B7068ADF21ED36B700EC2F0B /* build-env */;
+			targetProxy = B73A78BE21EEBC39000BC054 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
@@ -1782,9 +1809,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Birdgram/Birdgram.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = NO;
-				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				DEVELOPMENT_TEAM = "";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
@@ -1807,7 +1837,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca-100";
 				PRODUCT_NAME = Birdgram;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 4.2;
@@ -1822,8 +1854,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Birdgram/Birdgram.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				DEVELOPMENT_TEAM = "";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
@@ -1846,7 +1881,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca-100";
 				PRODUCT_NAME = Birdgram;
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
