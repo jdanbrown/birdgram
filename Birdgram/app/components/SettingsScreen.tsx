@@ -100,6 +100,17 @@ export class SettingsScreen extends PureComponent<Props, State> {
 
             <SettingsList.Header headerStyle={{marginTop: 15}} />
 
+            <SettingsList.Item
+              id='Debug: Show debug info'
+              title='Debug: Show debug info'
+              hasNavArrow={false}
+              hasSwitch={true}
+              switchState={this.props.showDebug}
+              switchOnValueChange={async x => await this.props.settings.set('showDebug', x)}
+            />
+
+            <SettingsList.Header headerStyle={{marginTop: 15}} />
+
             {/* TODO After we do background uploads */}
             {/* <SettingsList.Item
               id='Allow uploads'
@@ -220,17 +231,6 @@ export class SettingsScreen extends PureComponent<Props, State> {
                 const x = parseInt(str);
                 await this.props.settings.set('playingProgressInterval', _.isNaN(x) ? 0 : x);
               }}
-            />
-
-            <SettingsList.Header headerStyle={{marginTop: 15}} />
-
-            <SettingsList.Item
-              id='Debug: Show debug info'
-              title='Debug: Show debug info'
-              hasNavArrow={false}
-              hasSwitch={true}
-              switchState={this.props.showDebug}
-              switchOnValueChange={async x => await this.props.settings.set('showDebug', x)}
             />
 
           </SettingsList>
