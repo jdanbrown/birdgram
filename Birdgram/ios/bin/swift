@@ -11,10 +11,15 @@ else
   xcode_build_dir='/Users/danb/Library/Developer/Xcode/DerivedData/Birdgram-higoicbsnkwebceboubdaasypfhd/Build/Products/Debug'
 fi
 
+if [ ! -d "$xcode_build_dir" ]; then
+  echo "Error: Xcode build dir not found (make sure you've built the Bubo-macos target in Xcode): $xcode_build_dir"
+  exit 1
+fi
+
 cmd=(
   swift
   # HACK Hardcoded framework deps (inspect the build dir to find more)
-  -F"$xcode_build_dir"/{,Yams-macOS,SwiftyJSON-macOS}
+  -F"$xcode_build_dir"/{,Alamofire-macOS,SigmaSwiftStatistics-macOS,SwiftyJSON-macOS,Yams-macOS}
   # HACK Fix `import SwiftNpy` -> "missing required module Cminimap"
   # - (See notes in README)
   -Xcc -fmodule-map-file="$dir"/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap

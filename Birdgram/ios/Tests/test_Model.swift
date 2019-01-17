@@ -31,7 +31,7 @@ test("Search.f_preds: search_recs.sample(10) start=0 end=10: Compute audio->f_pr
   let sample_rate = data["sample_rate"].intValue
   let audios      = data["audios"].arrayValue.map { $0.arrayValue.map { Float($0.intValue) } }
   let _f_predss   = data["f_predss"].arrayValue.map { $0.arrayValue.map { $0.floatValue } }
-  let f_predss    = audios.map { audio in search.f_preds(audio, sample_rate: sample_rate) }
+  let f_predss    = audios.map { audio in search.f_preds(audio, sample_rate: sample_rate)! }
   let limit       = (5, nil) as (Int?, Int?)
   testAlmostEqual(name, Matrix(f_predss).T, Matrix(_f_predss).T, tol: Tol(rel: 1e-3), prec: 4, limit: limit)
   testAlmostEqual(name, Matrix(f_predss).T, Matrix(_f_predss).T, tol: Tol(abs: 1e-5), prec: 4, limit: limit)
