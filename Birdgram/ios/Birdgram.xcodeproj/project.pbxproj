@@ -1837,7 +1837,7 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca-100";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
 				PRODUCT_NAME = Birdgram;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
@@ -1881,7 +1881,7 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca-100";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
 				PRODUCT_NAME = Birdgram;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
