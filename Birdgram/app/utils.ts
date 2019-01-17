@@ -626,6 +626,8 @@ export function shallowDiffPropsState<Props, State>(prevProps: Props, prevState:
 // react-native
 //
 
+import { Platform, Vibration } from 'react-native';
+
 // Like the RCT_IF_DEV() objc macro, to distinguish Xcode Debug vs. Release build
 //  - Structured as a higher-order function for js
 //  - Example usage: `f = __F_IF_DEV__(x => ...)`
@@ -633,6 +635,15 @@ export function shallowDiffPropsState<Props, State>(prevProps: Props, prevState:
 export function __F_IF_DEV__<F extends (...args: any[]) => void>(f: F): F {
   const noop = ((...args: any[]) => {}) as F; // HACK How to typecheck this properly?
   return __DEV__ ? f : noop;
+}
+
+export function vibrateNormal() {
+  // Avoid ios/android differences
+  //  - https://facebook.github.io/react-native/docs/vibration
+  Platform.select({
+    ios:     () => Vibration.vibrate(0,   false), // 0 ignored, vibrates for ~500ms
+    android: () => Vibration.vibrate(500, false), // Vibrate for 500ms
+  });
 }
 
 //

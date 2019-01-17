@@ -48,7 +48,7 @@ import {
   assertFalse, basename, catchTry, catchTryAsync, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean,
   ExpWeightedRate, finallyAsync, global, ifEmpty, Interval, into, json, local, mapNil, mapNull, mapUndefined, match,
   matchNil, matchNull, matchUndefined, pretty, round, setStateAsync, shallowDiffPropsState, timed, Timer, tryElse,
-  tryElseAsync, yaml, yamlPretty, zipSame,
+  tryElseAsync, vibrateNormal, yaml, yamlPretty, zipSame,
 } from '../utils';
 
 const log = new Log('RecordScreen');
@@ -517,6 +517,10 @@ export class RecordScreen extends Component<Props, State> {
     });
   }
 
+  // TODO(stop_after_30s)
+  //  - Start 30s timer in startRecording()
+  //  - Invalidate timer in stopRecording()
+  //  - On timer, stopRecording() and vibrateNormal() for user feedback
   stopRecording = async () => {
     logErrorsAsync('stopRecording', async () => { // So we're safe to use as an event handler
       if (this.state.recordingState === 'recording') {
