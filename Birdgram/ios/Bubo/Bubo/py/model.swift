@@ -198,9 +198,10 @@ public class Features: Loadable {
   public func _patches(_ spectro: Melspectro) -> Patches {
     let p = patch_length
     let (_, _, S) = spectro
+    let T = S.T
     return Matrix(
-      (0..<(S.columns - (p - 1))).map { i in
-        S[columns: i..<(i+p)].flatten()
+      (0..<(T.rows - (p - 1))).map { i in
+        T[rows: i..<(i+p)].T.flatten() // Perf: Prefer fast Matrix[rows:] over slow Matrix[columns:] in tight loops
       }
     ).T
   }
