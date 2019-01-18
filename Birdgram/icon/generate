@@ -1,0 +1,11 @@
+#!/bin/bash -eux
+
+dir="`dirname "$0"`"
+
+# Debug
+# - Label with just ' ' to get the shaded box, since icon.png is too low-res for any text to be useful (e.g. 'Debug'/'D')
+app-icon label -i "$dir"/icon.png -o "$dir"/icon.debug.png --bottom ' '
+(cd "$dir"/debug && app-icon generate -i ../icon.debug.png)
+
+# Release
+(cd "$dir"/release && app-icon generate -i ../icon.png)

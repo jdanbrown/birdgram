@@ -2,7 +2,7 @@
 set -o pipefail
 #
 # Generate .env from $SCHEME_NAME
-# - Called from bin/xcode-build-env (for https://github.com/luggit/react-native-config)
+# - Called from bin/xcode-switch-env (for https://github.com/luggit/react-native-config)
 # - Called from ios/bin/fastlane-env
 
 die() { echo "Error: $*" >&2; exit 1; }
@@ -28,12 +28,12 @@ env_path="$BIRDGRAM_DIR/.env"
   echo "# From file[`basename "$env_scheme_path"`]" | sed 's/^/++ /'
   source "$env_scheme_path"
   echo                                              | sed 's/^/++ /'
-  echo "# All env vars available during build:"     | sed 's/^/++ /'
-  # env | sort                                        | sed 's/^/++ # /'
+  echo "# All env vars available at build time:"    | sed 's/^/++ /'
+  env | sort                                        | sed 's/^/++ # /'
 # HACK _Very_ brittle ('++ foo=bar')
 # - What's a simpler way to allow .env.* files to have vars that depend on other vars in the same file?
 ) 2>&1 \
-  | ack '^\++ (\w+=.*|#.*|\s*)$' --output='$1' \
+  | ack '^\++ ([A-Z]\w*=.*|#.*|\s*)$' --output='$1' \
   | ack -v '^export ' \
   | perl -pe 's/^([A-Z].*)$/export \1/' \
   >"$env_path"
@@ -53,7 +53,7 @@ env_path="$BIRDGRAM_DIR/.env"
   tmp="`mktemp`"
   pbxproj="$BIRDGRAM_DIR/ios/Birdgram.xcodeproj/project.pbxproj"
   perl -pe >"$tmp" <"$pbxproj" '
-    s/(\bPRODUCT_BUNDLE_IDENTIFIER\s*=\s*"app\.birdgram\.)(birdgram-[^"]+)(";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
+    s/(\bPRODUCT_BUNDLE_IDENTIFIER\s*=\s*"app\.birdgram\.)(birdgram-[^."]+)([^"]*";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
   '
   if ! diff "$tmp" "$pbxproj" >/dev/null; then
     cp -f "$tmp" "$pbxproj"
@@ -66,8 +66,8 @@ env_path="$BIRDGRAM_DIR/.env"
   tmp="`mktemp`"
   pbxproj="$BIRDGRAM_DIR/ios/Birdgram.xcodeproj/project.pbxproj"
   perl -pe >"$tmp" <"$pbxproj" '
-    s/(\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match Development app\.birdgram\.)(birdgram-[^"]+)(";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
-    s/(\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match AppStore app\.birdgram\.)(birdgram-[^"]+)(";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
+    s/(\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match Development app\.birdgram\.)(birdgram-[^."]+)([^"]*";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
+    s/(\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match AppStore app\.birdgram\.)(birdgram-[^."]+)([^"]*";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
   '
   if ! diff "$tmp" "$pbxproj" >/dev/null; then
     cp -f "$tmp" "$pbxproj"

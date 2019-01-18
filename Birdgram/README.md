@@ -116,6 +116,19 @@ android
   - TODO
 
 # Troubleshooting (newest to oldest)
+- App hangs on startup with cryptic error in xcode logs:
+  - `... [DYGLInitPlatform] connection to host has failed: Error Domain=NSPOSIXErrorDomain Code=2 "No such file or directory"`
+  - `... aborting: platform initialization failed`
+  - Cause: no f'ing idea. _Two_ google results for this error msg, and neither is helpful:
+    - https://stackoverflow.com/questions/47224594/error-at-launch-app
+    - https://github.com/levantAJ/Measure/issues/2
+  - Workaround (I think):
+    - Stop in xcode (cmd-.)
+    - Launch app directly from device, without xcode
+    - Seems to usually work...
+    - Maybe also just retry Run in xcode
+    - Also try Clean in xcode (shift-cmd-k)
+    - Also try rebooting everything (I tried this once, could have helped)
 - `dyld: Library not loaded: @rpath/libswiftAVFoundation.dylib`
   - Clean (cmd-shift-k) and rebuild [https://stackoverflow.com/a/33502910/397334]
 - To add an SPM project (Package.swift) that doesn't have an *.xcodeproj

@@ -17,7 +17,45 @@
 #   - Add a case to PILOT_BETA_APP_DESCRIPTION (in Fastfile)
 # - For xcode only
 #   - Create a new scheme: duplicate any existing Birdgram scheme and rename it (that's all)
-# - TODO
+
+# TODO Isolate the built .ipa files ($APP_NAME.$CONFIGURATION.ipa)
+# - build_app
+#   - GYM_OUTPUT_DIRECTORY='fastlane/build'
+#   - GYM_OUTPUT_NAME="$APP_NAME.$CONFIGURATION.ipa"
+# - upload_to_testflight
+#   - PILOT_IPA="$GYM_OUTPUT_DIRECTORY/$GYM_OUTPUT_NAME"
+
+# TODO Automate a full rollout [once we get tired of doing them manually]
+# lane :'test-flight-all' do |args|
+#   sh 'fastlane-env CA100 test-flight'
+#   sh 'fastlane-env CA3500 test-flight'
+#   sh 'fastlane-env US test-flight'
+#   sh 'fastlane-env CR test-flight'
+# end
+
+# TODO Upload to App Store (deliver)
+# - [defer] See how long we can stretch out public TestFlight builds, to defer the full-on nitpicky app store review process
+# - https://docs.fastlane.tools/getting-started/ios/appstore-deployment/ -- read for overview
+# - https://docs.fastlane.tools/actions/upload_to_app_store/             -- then follow this one
+# desc 'Build and upload to App Store'
+# lane :'app-store' do
+#   ...
+#   upload_to_app_store(...)
+# end
+
+# XXX install_on_device
+# - (!) Not well paved, lots of issues to work through, slow iteration loop...
+# - Workaround: Keep using xcode
+# lane :run_device do
+#   register_devices(devices: DEVICES)
+#   sync_code_signing(type: 'development', force_for_new_devices: true)
+#   # Docs: https://docs.fastlane.tools/actions/build_app/
+#   build_app(
+#     configuration: 'Debug',
+#     export_method: 'development', # Causing problems?
+#   )
+#   install_on_device
+# end
 
 # Keep in sync with: https://developer.apple.com/account/ios/device/
 DEVICES = {
@@ -38,6 +76,12 @@ ENV['PILOT_APP_IDENTIFIER']    = ENV['APP_BUNDLE_ID']
 
 # APP_NAME
 ENV['PRODUCE_APP_NAME'] = ENV['APP_NAME']
+
+# KEYCHAIN_*
+ENV['KEYCHAIN_NAME']           = 'fastlane'
+ENV['KEYCHAIN_PASSWORD']       = 'fastlane'
+ENV['MATCH_KEYCHAIN_NAME']     = ENV['KEYCHAIN_NAME']
+ENV['MATCH_KEYCHAIN_PASSWORD'] = ENV['KEYCHAIN_PASSWORD']
 
 # misc.
 ENV['GYM_SCHEME']    = ENV['SCHEME_NAME']
@@ -88,64 +132,94 @@ ENV['PILOT_BETA_APP_DESCRIPTION'] = [
 
 ##
 
-before_all do
-  ensure_bundle_exec
-end
-
 default_platform(:ios)
+
+before_all do
+
+  # Fail if the user didn't run us via `bundle exec fastlane`
+  ensure_bundle_exec
+
+  # Ensure our 'fastlane' keychain exists
+  # - Don't use the default 'login.keychain' keychain, else we'd have to store the user's password somewhere
+  if File.exists?("#{ENV['HOME']}/Library/Keychains/#{ENV['KEYCHAIN_NAME']}-db")
+    UI.message("Keychain exists: #{ENV['KEYCHAIN_NAME']}")
+  else
+    # NOTE The first time sync_code_signing runs on an empty keychain, it will emit some noisy red error text but still succeed
+    create_keychain(
+      default_keychain:   false,
+      lock_when_sleeps:   true,
+      lock_after_timeout: false,
+    )
+  end
+
+end
 
 platform :ios do
 
-  lane :register_my_devices do
-    register_devices(devices: DEVICES)
+  desc 'Switch xcode settings to the given env (like Xcode -> switch scheme -> Build -> Target switch-env)'
+  lane :switch do
+    # Noop in fastlane, handled by bin/fastlane-env
   end
 
-  # TODO(do_fastlane) Isolate the built .ipa files ($APP_NAME.$CONFIGURATION.ipa)
-  # - build_app
-  #   - GYM_OUTPUT_DIRECTORY='fastlane/build'
-  #   - GYM_OUTPUT_NAME="$APP_NAME.$CONFIGURATION.ipa"
-  # - upload_to_testflight
-  #   - PILOT_IPA="$GYM_OUTPUT_DIRECTORY/$GYM_OUTPUT_NAME"
+  desc 'Create all resources: bundle ids, apps, provisioning profiles, device registration, ...'
+  lane :create do
+
+    # All bundle ids that we use
+    app_identifiers = {
+      'Release' => "#{ENV['APP_IDENTIFIER']}",
+      'Debug'   => "#{ENV['APP_IDENTIFIER']}.debug",
+    }
+
+    # Register devices
+    # - Console: https://developer.apple.com/account/ios/device/
+    # - Docs: https://docs.fastlane.tools/actions/register_devices/
+    register_devices(devices: DEVICES)
+
+    # Create bundle id + app (produce)
+    # - Console (bundle ids): https://developer.apple.com/account/ios/identifier/bundle
+    # - Console (apps): https://appstoreconnect.apple.com/WebObjects/iTunesConnect.woa/ra/ng/app
+    # - NOTE After the bundle/app exists, changes in the params have no effect
+    app_identifiers.each do |configuration, app_identifier|
+      create_app_online(
+        app_identifier: app_identifier,
+        skip_devcenter: false,                      # Always create the bundle id (else we can't create the provisioning profile)
+        skip_itc:       configuration != 'Release', # Only create the app for the 'Release' bundle id
+        app_version:    '0.0.0', # Real versions are managed by upload_to_testflight/upload_to_app_store
+        enable_services: {
+          game_center:     'on', # (On by default, and can't turn off)
+          in_app_purchase: 'on', # (On by default, and can't turn off)
+        },
+      )
+    end
+
+    # Create provisioning profiles (match)
+    # - Console: https://developer.apple.com/account/ios/profile/
+    # - Docs: https://docs.fastlane.tools/actions/sync_code_signing/
+    # - Run for all (type, app_identifier) pairs we use to create any provisioning profiles that don't exist
+    #  - e.g. to build/run in xcode, you'll need the 'development' provisioning profile
+    sync_code_signing(app_identifier: app_identifiers.values.join(','), type: 'development', force_for_new_devices: true)
+    sync_code_signing(app_identifier: app_identifiers.values.join(','), type: 'appstore')
+
+  end
 
   # Docs
   # - https://docs.fastlane.tools/actions/upload_to_testflight/
+  # - TODO Distribute a previously uploaded binary: https://github.com/fastlane/fastlane/issues/7957
   desc 'Build and upload to TestFlight'
   lane :'test-flight' do |args|
 
     only = (args[:only] || '').split(',')
     no   = (args[:no]   || '').split(',')
 
-    # Create bundle id + app (produce)
-    # - Bundle ids: https://developer.apple.com/account/ios/identifier/bundle
-    # - Apps: https://appstoreconnect.apple.com/WebObjects/iTunesConnect.woa/ra/ng/app
-    # - NOTE All of the params are ignored after the initial bundle/app create
-    step = 'create'; if !no.include?(step) && (only.empty? || only.include?(step))
-      create_app_online(
-        app_version: '0.0.0', # Real versions are managed by upload_to_testflight / upload_to_app_store
-        enable_services: {
-          game_center:     "on", # (On by default)
-          in_app_purchase: "on", # (On by default)
-        },
-      )
-    end
-
-    # Code signing (match) + register devices [should this live elsewhere?]
-    # - https://docs.fastlane.tools/actions/register_devices/
-    # - https://docs.fastlane.tools/actions/sync_code_signing/
+    # Code signing (match)
     step = 'sign'; if !no.include?(step) && (only.empty? || only.include?(step))
-      register_devices(devices: DEVICES)
-      # Run for all type's we care about to create any provisioning profiles that don't exist
-      # - e.g. you need the 'development' provisioning profile to build/run locally using xcode
-      # - https://developer.apple.com/account/ios/profile/
-      sync_code_signing(type: 'development', force_for_new_devices: true)
       sync_code_signing(type: 'appstore')
-      # Run 'appstore' last else build_app('Release') will fail with the wrong certs
     end
 
     # Build (gym)
     # - https://docs.fastlane.tools/actions/build_app/
     step = 'build'; if !no.include?(step) && (only.empty? || only.include?(step))
-      # Build number: noop (handled by bin/xcode-build-env-gen-app-version-build)
+      # Build number: noop (handled by bin/xcode-switch-env-gen-app-version-build)
       build_app(
         configuration: 'Release',
         include_symbols: true,
@@ -163,35 +237,5 @@ platform :ios do
     end
 
   end
-
-  # TODO(do_fastlane): Upload to App Store (deliver)
-  # - Follow https://docs.fastlane.tools/actions/upload_to_app_store/
-  # desc 'Build and upload to App Store'
-  # lane :'app-store' do
-  #   ...
-  #   upload_to_app_store(...)
-  # end
-
-  # Idea! The docs encourage you to `sh`
-  # lane :'test-flight-all' do
-  #   sh 'fastlane-env CA100 test-flight'
-  #   sh 'fastlane-env CA3500 test-flight'
-  #   sh 'fastlane-env US test-flight'
-  #   sh 'fastlane-env CR test-flight'
-  # end
-
-  # XXX install_on_device
-  # - (!) Not well paved, lots of issues to work through, slow iteration loop...
-  # - Workaround: Keep using xcode
-  # lane :run_device do
-  #   register_devices(devices: DEVICES)
-  #   sync_code_signing(type: 'development', force_for_new_devices: true)
-  #   # Docs: https://docs.fastlane.tools/actions/build_app/
-  #   build_app(
-  #     configuration: 'Debug',
-  #     export_method: 'development', # Causing problems?
-  #   )
-  #   install_on_device
-  # end
 
 end

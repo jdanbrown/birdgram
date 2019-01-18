@@ -414,7 +414,7 @@
 			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = B7068ADF21ED36B700EC2F0B;
-			remoteInfo = "build-env";
+			remoteInfo = "switch-env";
 		};
 		B76432FB21ED4C87008A7254 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -985,19 +985,19 @@
 /* End PBXGroup section */
 
 /* Begin PBXLegacyTarget section */
-		B7068ADF21ED36B700EC2F0B /* build-env */ = {
+		B7068ADF21ED36B700EC2F0B /* switch-env */ = {
 			isa = PBXLegacyTarget;
 			buildArgumentsString = "$(ACTION)";
-			buildConfigurationList = B7068AE021ED36B700EC2F0B /* Build configuration list for PBXLegacyTarget "build-env" */;
+			buildConfigurationList = B7068AE021ED36B700EC2F0B /* Build configuration list for PBXLegacyTarget "switch-env" */;
 			buildPhases = (
 			);
-			buildToolPath = "${SRCROOT}/../bin/xcode-build-env";
+			buildToolPath = "${SRCROOT}/../bin/xcode-switch-env";
 			buildWorkingDirectory = "${SRCROOT}/..";
 			dependencies = (
 			);
-			name = "build-env";
+			name = "switch-env";
 			passBuildSettingsInEnvironment = 1;
-			productName = "build-env";
+			productName = "switch-env";
 		};
 /* End PBXLegacyTarget section */
 
@@ -1181,7 +1181,7 @@
 			);
 			projectRoot = "";
 			targets = (
-				B7068ADF21ED36B700EC2F0B /* build-env */,
+				B7068ADF21ED36B700EC2F0B /* switch-env */,
 				13B07F861A680F5B00A75B9A /* Birdgram */,
 				00E356ED1AD99517003FC87E /* BirdgramTests */,
 			);
@@ -1696,7 +1696,7 @@
 		};
 		B73A78BF21EEBC39000BC054 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = B7068ADF21ED36B700EC2F0B /* build-env */;
+			target = B7068ADF21ED36B700EC2F0B /* switch-env */;
 			targetProxy = B73A78BE21EEBC39000BC054 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -1807,7 +1807,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 45495516AF5157803E035649 /* Pods-Birdgram.debug.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon.debug;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Birdgram/Birdgram.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -1837,9 +1837,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-cr";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca3500.debug";
 				PRODUCT_NAME = Birdgram;
-				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-cr";
+				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-ca3500.debug";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 4.2;
@@ -1881,9 +1881,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-cr";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca3500";
 				PRODUCT_NAME = Birdgram;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore app.birdgram.birdgram-cr";
+				PROVISIONING_PROFILE_SPECIFIER = "match AppStore app.birdgram.birdgram-ca3500";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2071,7 +2071,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B7068AE021ED36B700EC2F0B /* Build configuration list for PBXLegacyTarget "build-env" */ = {
+		B7068AE021ED36B700EC2F0B /* Build configuration list for PBXLegacyTarget "switch-env" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B7068AE121ED36B700EC2F0B /* Debug */,

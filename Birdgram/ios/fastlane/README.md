@@ -16,11 +16,16 @@ or alternatively using `brew cask install fastlane`
 
 # Available Actions
 ## iOS
-### ios register_my_devices
+### ios switch
 ```
-fastlane ios register_my_devices
+fastlane ios switch
 ```
-
+Switch xcode settings to then given env (handled by bin/fastlane-env, noop in fastlane)
+### ios create
+```
+fastlane ios create
+```
+Create all resources: bundle ids, apps, provisioning profiles, device registration, ...
 ### ios test-flight
 ```
 fastlane ios test-flight

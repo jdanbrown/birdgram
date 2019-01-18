@@ -3,7 +3,7 @@
 set -eux
 set -o pipefail
 #
-# Build script for the build-env target in the Birdgram xcode project
+# Build script for the switch-env target in the Birdgram xcode project
 # - For https://github.com/luggit/react-native-config
 
 # Export for callees
@@ -19,7 +19,7 @@ source "$BIRDGRAM_DIR/.env.SCHEME_NAME"
 
 # Build .env from $SCHEME_NAME
 # - (cf. ios/bin/fastlane-env)
-"$BIRDGRAM_DIR"/bin/xcode-build-env-from-scheme
+"$BIRDGRAM_DIR"/bin/xcode-switch-env-from-scheme
 
 # Run BuildDotenvConfig.ruby
 # - [Why did we have to do this manually?]

@@ -264,15 +264,17 @@ export class SettingsScreen extends PureComponent<Props, State> {
         {this.props.showDebug && (
           <View style={Styles.debugView}>
             <Text style={Styles.debugText} children={yamlPretty({
-              showDebug: this.props.showDebug,
               // WARNING __DEV__ must be a computed key else it gets replaced with its boolean value [how?] in the
               // Release build (but not the Debug build!), which causes the build to fail, which Xcode only _sometimes_
               // surfaces as a build error, and if it doesn't then you have a Release app that's silently stuck on stale
               // js code even though your Debug app has the latest js code. UGH.
               ['__DEV__']: __DEV__,
-              config: _.omit(config,
-                'env', // TODO Very tall, show somewhere less disruptive
-              ),
+              app: {
+                name:    `${config.env.APP_NAME}`,
+                bundle:  `${config.env.APP_BUNDLE_ID}`,
+                version: `${config.env.APP_VERSION} (${config.env.APP_VERSION_BUILD})`,
+              },
+              config: _.omit(config, 'env'),
               // TODO Very tall, show somewhere less disruptive (e.g. a sub-page within Settings)
               //  - And then show all of:
               //    - this.props.serverConfig.server_globals.sg_load.search

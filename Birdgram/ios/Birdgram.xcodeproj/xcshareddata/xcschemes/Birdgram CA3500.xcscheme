@@ -33,8 +33,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "B7068ADF21ED36B700EC2F0B"
-               BuildableName = "build-env"
-               BlueprintName = "build-env"
+               BuildableName = "switch-env"
+               BlueprintName = "switch-env"
                ReferencedContainer = "container:Birdgram.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>

@@ -6,21 +6,22 @@ dir="$bin/.."
 
 # Parse args
 if [ $# -eq 0 ]; then
-  echo >&2 "Usage: [TARGET_NAME=...] [CONFIGURATION=...] $0 <scheme-suffix> <fastlane-args> ..."
+  echo >&2 "Usage: [PROJECT_NAME=...] [CONFIGURATION=...] $0 <scheme-suffix> <fastlane-args> ..."
   exit 1
 fi
-export TARGET_NAME="${TARGET_NAME:-Birdgram}"
+export PROJECT_NAME="${PROJECT_NAME:-Birdgram}"
 export CONFIGURATION="${CONFIGURATION:-Release}"
 export SCHEME_SUFFIX="$1"; shift
 
-# HACK Mimic xcode
+# HACK Mimic xcode (select scheme -> Build -> Target switch-env)
 export BIRDGRAM_DIR="$dir/.."
-export SCHEME_PREFIX="${SCHEME_PREFIX:-"$TARGET_NAME"}"
+export SCHEME_PREFIX="${SCHEME_PREFIX:-"$PROJECT_NAME"}"
 export SCHEME_NAME="$SCHEME_PREFIX $SCHEME_SUFFIX"
 
 # Build .env from $SCHEME_NAME
-# - (cf. bin/xcode-build-env)
-"$BIRDGRAM_DIR"/bin/xcode-build-env-from-scheme
+# - (cf. bin/xcode-switch-env)
+echo "SCHEME_NAME='$SCHEME_NAME' bin/xcode-switch-env-from-scheme"
+"$BIRDGRAM_DIR"/bin/xcode-switch-env-from-scheme
 
 # NOTE `source` i/o `fastlane --env=...` because the latter only supports a limited amount of shell in .env files
 # - https://docs.fastlane.tools/best-practices/keys#dotenv
