@@ -63,11 +63,11 @@
 	<key>NSAppleMusicUsageDescription</key>
 	<string>Birdgram uses your media library to import and export your audio recordings</string>
 	<key>NSMotionUsageDescription</key>
-	<string>Oops! Birdgram doesn't use your accelerometer. If you see this message please report a bug.</string>
+	<string>Oops! Birdgram doesn&apos;t use your accelerometer. If you see this message please report a bug.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Oops! Birdgram doesn't use phone's built-in speech recognition. If you see this message please report a bug.</string>
+	<string>Oops! Birdgram doesn&apos;t use phone's built-in speech recognition. If you see this message please report a bug.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Oops! Birdgram doesn't use your calendars. If you see this message please report a bug.</string>
+	<string>Oops! Birdgram doesn&apos;t use your calendars. If you see this message please report a bug.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIAppFonts</key>

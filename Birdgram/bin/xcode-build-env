@@ -8,18 +8,18 @@ set -o pipefail
 
 # Export for callees
 export BIRDGRAM_DIR="$SRCROOT/.."
-export BIRDGRAM_BIN="$BIRDGRAM_DIR/bin"
-
-# Read $SCHEME_NAME from bin/xcode-pre-actions
-# - (b/c xcode exposes $SCHEME_NAME during pre-actions but not build)
-source "$BIRDGRAM_DIR/.env.SCHEME_NAME"
 
 # Bust cache
 # - Force Info.plist to be recomputed from .env (via xcode INFOPLIST_PREPROCESS, from react-native-config README)
 rm -f "$CONFIGURATION_TEMP_DIR/Birdgram.build/Preprocessed-Info.plist"
 
+# Read $SCHEME_NAME from bin/xcode-pre-actions
+# - (b/c xcode exposes $SCHEME_NAME during pre-actions but not build)
+source "$BIRDGRAM_DIR/.env.SCHEME_NAME"
+
 # Build .env from $SCHEME_NAME
-"$BIRDGRAM_BIN"/xcode-build-env-from-scheme
+# - (cf. ios/bin/fastlane-env)
+"$BIRDGRAM_DIR"/bin/xcode-build-env-from-scheme
 
 # Run BuildDotenvConfig.ruby
 # - [Why did we have to do this manually?]

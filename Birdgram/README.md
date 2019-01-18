@@ -116,6 +116,8 @@ android
   - TODO
 
 # Troubleshooting (newest to oldest)
+- `dyld: Library not loaded: @rpath/libswiftAVFoundation.dylib`
+  - Clean (cmd-shift-k) and rebuild [https://stackoverflow.com/a/33502910/397334]
 - To add an SPM project (Package.swift) that doesn't have an *.xcodeproj
   - (e.g. SwiftNpy: https://github.com/qoncept/swift-npy)
   - `git clone` into Birdgram/ios/ dir

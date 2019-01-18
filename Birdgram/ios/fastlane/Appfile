@@ -1,0 +1,6 @@
+# Docs
+# - https://docs.fastlane.tools/advanced#appfile
+
+apple_id('jdanbrown@gmail.com') # Apple ID
+itc_team_id('119352343')        # App Store Connect Team ID
+team_id('6S8S88RYPG')           # Developer Portal Team ID

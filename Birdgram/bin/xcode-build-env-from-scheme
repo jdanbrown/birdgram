@@ -1,39 +1,42 @@
-#!/bin/bash -eux
+#!/bin/bash -eu
 set -o pipefail
 #
 # Generate .env from $SCHEME_NAME
-# - Called from bin/xcode-build-env
-# - For https://github.com/luggit/react-native-config
+# - Called from bin/xcode-build-env (for https://github.com/luggit/react-native-config)
+# - Called from ios/bin/fastlane-env
+
+die() { echo "Error: $*" >&2; exit 1; }
 
 # Log env for debugging
-env
-
-# cd to Birdgram/
-cd "$BIRDGRAM_DIR"
+# env # XXX Too noisy for ios/bin/fastlane-env
 
 # e.g. "Birdgram US" -> "Birdgram", "US"
+# - TODO Dedupe with .env.shared
 export SCHEME_PREFIX="$(echo "$SCHEME_NAME" | cut -d' ' -f1)"
 export SCHEME_SUFFIX="$(echo "$SCHEME_NAME" | cut -d' ' -f2-)"
 
 # Generate .env <- .env.shared + .env.$SCHEME_SUFFIX
-env_shared_file=".env.shared";         [ -e "$env_shared_file" ]
-env_scheme_file=".env.$SCHEME_SUFFIX"; [ -e "$env_scheme_file" ]
-env_file=".env"
+# - TODO Dedupe with ios/bin/fastlane-env
+env_shared_path="$BIRDGRAM_DIR/.env.shared";         if [ ! -e "$env_shared_path" ]; then die "File not found: $env_shared_path"; fi
+env_scheme_path="$BIRDGRAM_DIR/.env.$SCHEME_SUFFIX"; if [ ! -e "$env_scheme_path" ]; then die "File not found: $env_scheme_path"; fi
+env_path="$BIRDGRAM_DIR/.env"
 (
-  echo "# From file[$env_shared_file]"          | sed 's/^/++ /'
-  source "$env_shared_file"
-  echo                                          | sed 's/^/++ /'
-  echo "# From file[$env_scheme_file]"          | sed 's/^/++ /'
-  source "$env_scheme_file"
-  echo                                          | sed 's/^/++ /'
-  echo "# All env vars available during build:" | sed 's/^/++ /'
-  env | sort                                    | sed 's/^/++ # /'
+  set -x
+  echo "# From file[`basename "$env_shared_path"`]" | sed 's/^/++ /'
+  source "$env_shared_path"
+  echo                                              | sed 's/^/++ /'
+  echo "# From file[`basename "$env_scheme_path"`]" | sed 's/^/++ /'
+  source "$env_scheme_path"
+  echo                                              | sed 's/^/++ /'
+  echo "# All env vars available during build:"     | sed 's/^/++ /'
+  # env | sort                                        | sed 's/^/++ # /'
 # HACK _Very_ brittle ('++ foo=bar')
 # - What's a simpler way to allow .env.* files to have vars that depend on other vars in the same file?
 ) 2>&1 \
-  | ack '^\+\+ (\w+=.*|#.*|\s*)$' --output='$1' \
+  | ack '^\++ (\w+=.*|#.*|\s*)$' --output='$1' \
   | ack -v '^export ' \
-  >"$env_file"
+  | perl -pe 's/^([A-Z].*)$/export \1/' \
+  >"$env_path"
 
 # HACK Manually edit PRODUCT_BUNDLE_IDENTIFIER in project.pbxproj
 # - I can't otherwise find a way to feed it variables (like Info.plist)
@@ -46,12 +49,27 @@ env_file=".env"
 #   apart # when I tried publishing the app, because the "Validate App" step (after the slow Archive build step) failed
 #   on the # missing PRODUCT_BUNDLE_IDENTIFIER
 (
-  source "$env_file"
+  source "$env_path"
   tmp="`mktemp`"
-  pbxproj='ios/Birdgram.xcodeproj/project.pbxproj'
-  perl -pe >"$tmp" <"$pbxproj" \
-    's/(\bPRODUCT_BUNDLE_IDENTIFIER\s*=\s*"app\.birdgram\.)(birdgram-[^"]+)(";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g'
+  pbxproj="$BIRDGRAM_DIR/ios/Birdgram.xcodeproj/project.pbxproj"
+  perl -pe >"$tmp" <"$pbxproj" '
+    s/(\bPRODUCT_BUNDLE_IDENTIFIER\s*=\s*"app\.birdgram\.)(birdgram-[^"]+)(";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
+  '
   if ! diff "$tmp" "$pbxproj" >/dev/null; then
-    cp -vf "$tmp" "$pbxproj"
+    cp -f "$tmp" "$pbxproj"
+  fi
+)
+
+# HACK Manually edit PROVISIONING_PROFILE_SPECIFIER in project.pbxproj
+(
+  source "$env_path"
+  tmp="`mktemp`"
+  pbxproj="$BIRDGRAM_DIR/ios/Birdgram.xcodeproj/project.pbxproj"
+  perl -pe >"$tmp" <"$pbxproj" '
+    s/(\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match Development app\.birdgram\.)(birdgram-[^"]+)(";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
+    s/(\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match AppStore app\.birdgram\.)(birdgram-[^"]+)(";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
+  '
+  if ! diff "$tmp" "$pbxproj" >/dev/null; then
+    cp -f "$tmp" "$pbxproj"
   fi
 )

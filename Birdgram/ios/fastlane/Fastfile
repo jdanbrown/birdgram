@@ -1,0 +1,197 @@
+# Related
+# - .env.*
+# - ios/bin/fastlane-env
+# - ios/Appfile
+# - ios/Matchfile
+#
+# Docs
+# - https://docs.fastlane.tools
+# - https://docs.fastlane.tools/actions
+# - https://docs.fastlane.tools/actions/build_app/
+# - https://docs.fastlane.tools/plugins/available-plugins
+
+# HOWTO Add a new env
+# - For fastlane/xcode
+#   - Create a new bundle id: https://developer.apple.com/account/ios/identifier/bundle
+#   - Create an .env.* file (copy an existing one)
+#   - Add a case to PILOT_BETA_APP_DESCRIPTION (in Fastfile)
+# - For xcode only
+#   - Create a new scheme: duplicate any existing Birdgram scheme and rename it (that's all)
+# - TODO
+
+# Keep in sync with: https://developer.apple.com/account/ios/device/
+DEVICES = {
+  "Dan's iPhone"            => 'd6a4ce95276312c5980b0042ceae18dc1bece052',
+  "Mu"                      => '4e81b428602568b71c73ecf1355ad812d5bc0701',
+  "Sarah's iPhone"          => 'fc373b3f40bd41bb7ebe4e87f2fca2bd4a5a2944',
+  "Whitney Grover's iPhone" => 'd510eb4c05e7e6c89eaad2dc7cce5124f40bc4a7',
+}
+
+## .env.* (via bin/fastlane-env)
+
+# APP_IDENTIFIER
+ENV['APP_IDENTIFIER']          = ENV['APP_BUNDLE_ID']
+ENV['FASTLANE_APP_IDENTIFIER'] = ENV['APP_BUNDLE_ID']
+ENV['PRODUCE_APP_IDENTIFIER']  = ENV['APP_BUNDLE_ID']
+ENV['MATCH_APP_IDENTIFIER']    = ENV['APP_BUNDLE_ID']
+ENV['PILOT_APP_IDENTIFIER']    = ENV['APP_BUNDLE_ID']
+
+# APP_NAME
+ENV['PRODUCE_APP_NAME'] = ENV['APP_NAME']
+
+# misc.
+ENV['GYM_SCHEME']    = ENV['SCHEME_NAME']
+ENV['GYM_WORKSPACE'] = ENV['WORKSPACE']
+
+# Automatically populate some of the TestFlight fields
+# - https://docs.fastlane.tools/actions/upload_to_testflight/
+# - Still have to populate some of them manually [https://github.com/fastlane/fastlane/issues/9242]
+#   - Marketing URL: https://birdgram.app
+#   - Privacy Policy URL: https://privacypolicies.com/privacy/view/d041c35c7ed5aea0eef24e58a360020a
+#   - Beta App Review Information: ...
+ENV['PILOT_BETA_APP_FEEDBACK']    = 'birdgram.app@gmail.com'
+ENV['PILOT_BETA_APP_DESCRIPTION'] = [
+  <<~EOF ,
+    Birdgram is a novel way to learn about and understand bird song. It lets the user record a bird
+    song in the wild and then searches a database of known bird recordings for possible matches. All
+    recordings and search results are presented visually as spectrograms, which are standard tools
+    that scientists and audio professionals use to quickly "see" the content of an audio signal, but
+    are critically underutilized within the birding-by-ear community.
+  EOF
+  <<~EOF ,
+    Key workflows within the app:
+    - Record a sound and search for similar recordings to try to figure out what species made it
+    - Given any search result, browse the known recordings for its species
+    - Given any search result, search for similar recordings (as if the user had just recorded it)
+  EOF
+  {
+    'CA100' => <<~EOF ,
+      This "Birdgram CA100" variant of the app is a limited version that only contains 100 known
+      recordings for birds found in California, which I'm using to learn about the TestFlight
+      submission process. I plan to follow up with a "Birdgram US" variant that has ~45k known
+      recordings for birds found throughout the US.
+    EOF
+    'CA3500' => <<~EOF ,
+      This "Birdgram CA3500" variant of the app is a limited version that only contains 3500 known
+      recordings for birds found in California, which I'm using to learn about the TestFlight
+      submission process. I plan to follow up with a "Birdgram US" variant that has ~45k known
+      recordings for birds found throughout the US.
+    EOF
+    'US' => <<~EOF ,
+      This is the US version with ~45k known recordings of birds found in the US.
+    EOF
+    'CR' => <<~EOF ,
+      This is the Costa Rica version with ~45k known recordings of birds found in Costa Rica.
+    EOF
+  }.fetch(ENV['APP_REGION']),
+].join("\n")
+
+##
+
+before_all do
+  ensure_bundle_exec
+end
+
+default_platform(:ios)
+
+platform :ios do
+
+  lane :register_my_devices do
+    register_devices(devices: DEVICES)
+  end
+
+  # TODO(do_fastlane) Isolate the built .ipa files ($APP_NAME.$CONFIGURATION.ipa)
+  # - build_app
+  #   - GYM_OUTPUT_DIRECTORY='fastlane/build'
+  #   - GYM_OUTPUT_NAME="$APP_NAME.$CONFIGURATION.ipa"
+  # - upload_to_testflight
+  #   - PILOT_IPA="$GYM_OUTPUT_DIRECTORY/$GYM_OUTPUT_NAME"
+
+  # Docs
+  # - https://docs.fastlane.tools/actions/upload_to_testflight/
+  desc 'Build and upload to TestFlight'
+  lane :'test-flight' do |args|
+
+    only = (args[:only] || '').split(',')
+    no   = (args[:no]   || '').split(',')
+
+    # Create bundle id + app (produce)
+    # - Bundle ids: https://developer.apple.com/account/ios/identifier/bundle
+    # - Apps: https://appstoreconnect.apple.com/WebObjects/iTunesConnect.woa/ra/ng/app
+    # - NOTE All of the params are ignored after the initial bundle/app create
+    step = 'create'; if !no.include?(step) && (only.empty? || only.include?(step))
+      create_app_online(
+        app_version: '0.0.0', # Real versions are managed by upload_to_testflight / upload_to_app_store
+        enable_services: {
+          game_center:     "on", # (On by default)
+          in_app_purchase: "on", # (On by default)
+        },
+      )
+    end
+
+    # Code signing (match) + register devices [should this live elsewhere?]
+    # - https://docs.fastlane.tools/actions/register_devices/
+    # - https://docs.fastlane.tools/actions/sync_code_signing/
+    step = 'sign'; if !no.include?(step) && (only.empty? || only.include?(step))
+      register_devices(devices: DEVICES)
+      # Run for all type's we care about to create any provisioning profiles that don't exist
+      # - e.g. you need the 'development' provisioning profile to build/run locally using xcode
+      # - https://developer.apple.com/account/ios/profile/
+      sync_code_signing(type: 'development', force_for_new_devices: true)
+      sync_code_signing(type: 'appstore')
+      # Run 'appstore' last else build_app('Release') will fail with the wrong certs
+    end
+
+    # Build (gym)
+    # - https://docs.fastlane.tools/actions/build_app/
+    step = 'build'; if !no.include?(step) && (only.empty? || only.include?(step))
+      # Build number: noop (handled by bin/xcode-build-env-gen-app-version-build)
+      build_app(
+        configuration: 'Release',
+        include_symbols: true,
+        include_bitcode: true,
+      )
+    end
+
+    # Upload to TestFlight (pilot)
+    # - https://docs.fastlane.tools/actions/upload_to_testflight/
+    step = 'upload'; if !no.include?(step) && (only.empty? || only.include?(step))
+      upload_to_testflight(
+        skip_waiting_for_build_processing: true, # Skip else looong wait (good for CI, less good for manual)
+        demo_account_required: false,
+      )
+    end
+
+  end
+
+  # TODO(do_fastlane): Upload to App Store (deliver)
+  # - Follow https://docs.fastlane.tools/actions/upload_to_app_store/
+  # desc 'Build and upload to App Store'
+  # lane :'app-store' do
+  #   ...
+  #   upload_to_app_store(...)
+  # end
+
+  # Idea! The docs encourage you to `sh`
+  # lane :'test-flight-all' do
+  #   sh 'fastlane-env CA100 test-flight'
+  #   sh 'fastlane-env CA3500 test-flight'
+  #   sh 'fastlane-env US test-flight'
+  #   sh 'fastlane-env CR test-flight'
+  # end
+
+  # XXX install_on_device
+  # - (!) Not well paved, lots of issues to work through, slow iteration loop...
+  # - Workaround: Keep using xcode
+  # lane :run_device do
+  #   register_devices(devices: DEVICES)
+  #   sync_code_signing(type: 'development', force_for_new_devices: true)
+  #   # Docs: https://docs.fastlane.tools/actions/build_app/
+  #   build_app(
+  #     configuration: 'Debug',
+  #     export_method: 'development', # Causing problems?
+  #   )
+  #   install_on_device
+  # end
+
+end

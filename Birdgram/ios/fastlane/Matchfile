@@ -1,0 +1,9 @@
+# Docs
+# - https://docs.fastlane.tools/actions/match
+
+# Default type: 'appstore' | 'adhoc' | 'enterprise' | 'development'
+type('development')
+
+# A private repo safe for secrets
+storage_mode('git')
+git_url('/Users/danb/Dropbox/git/fastlane-match-certs')

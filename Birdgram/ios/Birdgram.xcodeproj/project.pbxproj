@@ -1060,7 +1060,7 @@
 					13B07F861A680F5B00A75B9A = {
 						DevelopmentTeam = 6S8S88RYPG;
 						LastSwiftMigration = 1010;
-						ProvisioningStyle = Automatic;
+						ProvisioningStyle = Manual;
 						SystemCapabilities = {
 							com.apple.iCloud = {
 								enabled = 0;
@@ -1811,10 +1811,10 @@
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Birdgram/Birdgram.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = NO;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 6S8S88RYPG;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
@@ -1837,9 +1837,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-cr";
 				PRODUCT_NAME = Birdgram;
-				PROVISIONING_PROFILE_SPECIFIER = "";
+				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-cr";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 4.2;
@@ -1855,10 +1855,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Birdgram/Birdgram.entitlements";
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 6S8S88RYPG;
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
@@ -1881,9 +1881,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-cr";
 				PRODUCT_NAME = Birdgram;
-				PROVISIONING_PROFILE_SPECIFIER = "";
+				PROVISIONING_PROFILE_SPECIFIER = "match AppStore app.birdgram.birdgram-cr";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";

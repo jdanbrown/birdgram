@@ -663,7 +663,7 @@ public class Spectro {
     editAudioPath: String,
     draftEdit: DraftEdit
   ) throws -> Void {
-    try Log.info(String(format: "Spectro.editAudioPathToAudioPath: %@", [
+    Log.info(String(format: "Spectro.editAudioPathToAudioPath: %@", [
       "parentAudioPath": parentAudioPath,
       "editAudioPath": editAudioPath,
       "draftEdit": draftEdit,
