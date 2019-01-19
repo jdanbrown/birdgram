@@ -20,7 +20,7 @@ or alternatively using `brew cask install fastlane`
 ```
 fastlane ios switch
 ```
-Switch xcode settings to then given env (handled by bin/fastlane-env, noop in fastlane)
+Switch xcode settings to the given env (like Xcode -> switch scheme -> Build -> Target switch-env)
 ### ios create
 ```
 fastlane ios create
