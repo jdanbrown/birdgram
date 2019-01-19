@@ -3,9 +3,16 @@
 dir="`dirname "$0"`"
 
 # Debug
-# - Label with just ' ' to get the shaded box, since icon.png is too low-res for any text to be useful (e.g. 'Debug'/'D')
+# - Add shaded box at bottom
+# - HACK Label with ' ' b/c icon.png is way too low-res for any text to be useful (e.g. 'Debug'/'D')
 app-icon label -i "$dir"/icon.png -o "$dir"/icon.debug.png --bottom ' '
-(cd "$dir"/debug && app-icon generate -i ../icon.debug.png)
+(cd "$dir"/Debug && app-icon generate -i ../icon.debug.png)
 
 # Release
-(cd "$dir"/release && app-icon generate -i ../icon.png)
+# - Add shaded box at top
+# - HACK Label with ' ' b/c icon.png is way too low-res for any text to be useful (e.g. 'Release'/'R')
+app-icon label -i "$dir"/icon.png -o "$dir"/icon.release.png --top ' '
+(cd "$dir"/Release && app-icon generate -i ../icon.release.png)
+
+# Release-AppStore
+(cd "$dir"/Release-AppStore && app-icon generate -i ../icon.png)

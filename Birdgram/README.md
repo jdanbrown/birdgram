@@ -116,6 +116,9 @@ android
   - TODO
 
 # Troubleshooting (newest to oldest)
+- Xcode build fails with:
+  - `unable to read input file '.../Birdgram.build/Preprocessed-Info.plist': No such file or directory`
+  - Solution: retry the build (ugh)
 - App hangs on startup with cryptic error in xcode logs:
   - `... [DYGLInitPlatform] connection to host has failed: Error Domain=NSPOSIXErrorDomain Code=2 "No such file or directory"`
   - `... aborting: platform initialization failed`

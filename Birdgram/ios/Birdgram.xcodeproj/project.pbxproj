@@ -1055,6 +1055,7 @@
 					00E356ED1AD99517003FC87E = {
 						CreatedOnToolsVersion = 6.2;
 						DevelopmentTeam = 6S8S88RYPG;
+						ProvisioningStyle = Manual;
 						TestTargetID = 13B07F861A680F5B00A75B9A;
 					};
 					13B07F861A680F5B00A75B9A = {
@@ -1062,6 +1063,15 @@
 						LastSwiftMigration = 1010;
 						ProvisioningStyle = Manual;
 						SystemCapabilities = {
+							com.apple.BackgroundModes = {
+								enabled = 1;
+							};
+							com.apple.GameCenter.iOS = {
+								enabled = 0;
+							};
+							com.apple.InAppPurchase = {
+								enabled = 0;
+							};
 							com.apple.iCloud = {
 								enabled = 0;
 							};
@@ -1589,7 +1599,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# From https://facebook.github.io/react-native/docs/running-on-device\n#if [ \"${CONFIGURATION}\" == \"Debug\" ]; then export SKIP_BUNDLING=true; fi\n\nexport NODE_BINARY=node\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
+			shellScript = "# From https://facebook.github.io/react-native/docs/running-on-device\n# - Like https://github.com/facebook/react-native/blob/v0.57.2/scripts/react-native-xcode.sh#L17\n#if [[ \"${CONFIGURATION}\" = *Debug* ]]; then export SKIP_BUNDLING=true; fi\n\nexport NODE_BINARY=node\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
 		};
 		2AFC3E054FFDE9C2372E7D8B /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1727,6 +1737,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = 6S8S88RYPG;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
@@ -1760,6 +1771,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Birdgram.app/Birdgram";
 			};
 			name = Debug;
@@ -1769,6 +1781,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
 				DEVELOPMENT_TEAM = 6S8S88RYPG;
 				HEADER_SEARCH_PATHS = (
@@ -1799,6 +1812,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Birdgram.app/Birdgram";
 			};
 			name = Release;
@@ -1815,6 +1829,18 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = NO;
 				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				FALLBACK_PODS_CONFIGURATION_BUILD_DIR = "${PODS_BUILD_DIR}/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/Alamofire-iOS\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/PromisesObjC\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/PromisesSwift\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/SigmaSwiftStatistics-iOS\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/SwiftyJSON-iOS\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/Yams-iOS\"",
+					"\"${PODS_ROOT}/AudioKit/iOS\"",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/**",
+				);
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
@@ -1828,18 +1854,24 @@
 					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
 					"$(SRCROOT)/../node_modules/react-native-audio-record/ios",
 					"$(SRCROOT)/../node_modules/react-native-config/ios",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/**",
 				);
 				INFOPLIST_FILE = Birdgram/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/**",
+				);
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca3500.debug";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca100.debug";
 				PRODUCT_NAME = Birdgram;
-				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-ca3500.debug";
+				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-ca100.debug";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 4.2;
@@ -1852,13 +1884,25 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = B1811E90C52768853A485721 /* Pods-Birdgram.release.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon.release;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Birdgram/Birdgram.entitlements";
-				CODE_SIGN_IDENTITY = "iPhone Distribution";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				FALLBACK_PODS_CONFIGURATION_BUILD_DIR = "${PODS_BUILD_DIR}/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/Alamofire-iOS\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/PromisesObjC\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/PromisesSwift\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/SigmaSwiftStatistics-iOS\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/SwiftyJSON-iOS\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/Yams-iOS\"",
+					"\"${PODS_ROOT}/AudioKit/iOS\"",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/**",
+				);
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
@@ -1872,18 +1916,24 @@
 					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
 					"$(SRCROOT)/../node_modules/react-native-audio-record/ios",
 					"$(SRCROOT)/../node_modules/react-native-config/ios",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/**",
 				);
 				INFOPLIST_FILE = Birdgram/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/**",
+				);
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca3500";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca100.release";
 				PRODUCT_NAME = Birdgram;
-				PROVISIONING_PROFILE_SPECIFIER = "match AppStore app.birdgram.birdgram-ca3500";
+				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-ca100.release";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2041,6 +2091,179 @@
 			};
 			name = Release;
 		};
+		B774E34721F2C71300C764AF /* Release-AppStore */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				COPY_PHASE_STRIP = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = "-traditional";
+				INFOPLIST_PREFIX_HEADER = "${BUILD_DIR}/GeneratedInfoPlistDotEnv.h";
+				INFOPLIST_PREPROCESS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 10.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = "Release-AppStore";
+		};
+		B774E34821F2C71300C764AF /* Release-AppStore */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				MTL_FAST_MATH = YES;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = "Release-AppStore";
+		};
+		B774E34921F2C71300C764AF /* Release-AppStore */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B1811E90C52768853A485721 /* Pods-Birdgram.release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = "$(SRCROOT)/Birdgram/Birdgram.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				FALLBACK_PODS_CONFIGURATION_BUILD_DIR = "${PODS_BUILD_DIR}/Release$(EFFECTIVE_PLATFORM_NAME)";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/Alamofire-iOS\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/PromisesObjC\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/PromisesSwift\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/SigmaSwiftStatistics-iOS\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/SwiftyJSON-iOS\"",
+					"\"${PODS_CONFIGURATION_BUILD_DIR}/Yams-iOS\"",
+					"\"${PODS_ROOT}/AudioKit/iOS\"",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/**",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
+					"$(SRCROOT)/../node_modules/react-native-permissions/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-keep-awake/ios",
+					"$(SRCROOT)/../node_modules/react-native-fast-image/ios/FastImage/**",
+					"$(SRCROOT)/../node_modules/react-native-vector-icons/RNVectorIconsManager",
+					"$(SRCROOT)/../node_modules/react-native-sqlite-storage/src/ios",
+					"$(SRCROOT)/../node_modules/react-native-sound/RNSound",
+					"$(SRCROOT)/../node_modules/rn-fetch-blob/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-audio-record/ios",
+					"$(SRCROOT)/../node_modules/react-native-config/ios",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/**",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/include/**",
+				);
+				INFOPLIST_FILE = Birdgram/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME)",
+					"\"$(FALLBACK_PODS_CONFIGURATION_BUILD_DIR)\"/**",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+					"-lc++",
+				);
+				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca100";
+				PRODUCT_NAME = Birdgram;
+				PROVISIONING_PROFILE_SPECIFIER = "match AppStore app.birdgram.birdgram-ca100";
+				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
+				SWIFT_VERSION = 4.2;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = "Release-AppStore";
+		};
+		B774E34A21F2C71300C764AF /* Release-AppStore */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				DEVELOPMENT_TEAM = 6S8S88RYPG;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../node_modules/react-native-microphone-stream/ios",
+					"$(SRCROOT)/../node_modules/react-native-permissions/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-keep-awake/ios",
+					"$(SRCROOT)/../node_modules/react-native-fast-image/ios/FastImage/**",
+					"$(SRCROOT)/../node_modules/react-native-vector-icons/RNVectorIconsManager",
+					"$(SRCROOT)/../node_modules/react-native-sqlite-storage/src/ios",
+					"$(SRCROOT)/../node_modules/react-native-sound/RNSound",
+					"$(SRCROOT)/../node_modules/rn-fetch-blob/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-gesture-handler/ios/**",
+					"$(SRCROOT)/../node_modules/react-native-audio-record/ios",
+				);
+				INFOPLIST_FILE = BirdgramTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 9.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @loader_path/Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"$(SRCROOT)/$(TARGET_NAME)\"",
+					"\"$(SRCROOT)/$(TARGET_NAME)\"",
+					"\"$(SRCROOT)/$(TARGET_NAME)\"",
+				);
+				OTHER_LDFLAGS = (
+					"-ObjC",
+					"-lc++",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "org.reactjs.native.example.$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Birdgram.app/Birdgram";
+			};
+			name = "Release-AppStore";
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -2049,6 +2272,7 @@
 			buildConfigurations = (
 				00E356F61AD99517003FC87E /* Debug */,
 				00E356F71AD99517003FC87E /* Release */,
+				B774E34A21F2C71300C764AF /* Release-AppStore */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -2058,6 +2282,7 @@
 			buildConfigurations = (
 				13B07F941A680F5B00A75B9A /* Debug */,
 				13B07F951A680F5B00A75B9A /* Release */,
+				B774E34921F2C71300C764AF /* Release-AppStore */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -2067,6 +2292,7 @@
 			buildConfigurations = (
 				83CBBA201A601CBA00E9B192 /* Debug */,
 				83CBBA211A601CBA00E9B192 /* Release */,
+				B774E34721F2C71300C764AF /* Release-AppStore */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -2076,6 +2302,7 @@
 			buildConfigurations = (
 				B7068AE121ED36B700EC2F0B /* Debug */,
 				B7068AE221ED36B700EC2F0B /* Release */,
+				B774E34821F2C71300C764AF /* Release-AppStore */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

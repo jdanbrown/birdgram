@@ -164,10 +164,19 @@ platform :ios do
   desc 'Create all resources: bundle ids, apps, provisioning profiles, device registration, ...'
   lane :create do
 
-    # All bundle ids that we use
+    # 3 configs: Debug, Release, Release-AppStore
+    # - 'Debug'            ~ 'match Development' ~ install locally (via xcode)
+    # - 'Release'          ~ 'match Development' ~ install locally (via xcode)
+    # - 'Release-AppStore' ~ 'match AppStore'    ~ upload to testflight/appstore (via fastlane)
+    # - The provisioning profile for local 'Release' must be 'match Development' else you'll get the
+    #   dreaded "invalid entitlements" xcode error [https://stackoverflow.com/a/28156468]
+    # - And we have to split 'Release-AppStore' from 'Release' because fastlane requires bundle ids
+    #   and provisioning profiles to be 1-1
+    #   - https://github.com/fastlane/fastlane/blob/030ddb9/match/lib/match/generator.rb#L49-L55
     app_identifiers = {
-      'Release' => "#{ENV['APP_IDENTIFIER']}",
-      'Debug'   => "#{ENV['APP_IDENTIFIER']}.debug",
+      'Debug'            => "#{ENV['APP_IDENTIFIER']}.debug",
+      'Release'          => "#{ENV['APP_IDENTIFIER']}.release",
+      'Release-AppStore' => "#{ENV['APP_IDENTIFIER']}",
     }
 
     # Register devices
@@ -182,8 +191,8 @@ platform :ios do
     app_identifiers.each do |configuration, app_identifier|
       create_app_online(
         app_identifier: app_identifier,
-        skip_devcenter: false,                      # Always create the bundle id (else we can't create the provisioning profile)
-        skip_itc:       configuration != 'Release', # Only create the app for the 'Release' bundle id
+        skip_devcenter: false,                                 # Always create a bundle id (required for local provisioning profiles)
+        skip_itc:       !configuration.end_with?('-AppStore'), # Only create an app for 'AppStore' builds
         app_version:    '0.0.0', # Real versions are managed by upload_to_testflight/upload_to_app_store
         enable_services: {
           game_center:     'on', # (On by default, and can't turn off)
@@ -197,8 +206,13 @@ platform :ios do
     # - Docs: https://docs.fastlane.tools/actions/sync_code_signing/
     # - Run for all (type, app_identifier) pairs we use to create any provisioning profiles that don't exist
     #  - e.g. to build/run in xcode, you'll need the 'development' provisioning profile
-    sync_code_signing(app_identifier: app_identifiers.values.join(','), type: 'development', force_for_new_devices: true)
-    sync_code_signing(app_identifier: app_identifiers.values.join(','), type: 'appstore')
+    app_identifiers.each do |configuration, app_identifier|
+      if !configuration.end_with?('-AppStore')
+        sync_code_signing(app_identifier: app_identifier, type: 'development', force_for_new_devices: true)
+      else
+        sync_code_signing(app_identifier: app_identifier, type: 'appstore')
+      end
+    end
 
   end
 
@@ -219,9 +233,9 @@ platform :ios do
     # Build (gym)
     # - https://docs.fastlane.tools/actions/build_app/
     step = 'build'; if !no.include?(step) && (only.empty? || only.include?(step))
-      # Build number: noop (handled by bin/xcode-switch-env-gen-app-version-build)
+      # increment_build_number # Skip (handled by bin/xcode-switch-env-gen-app-version-build)
       build_app(
-        configuration: 'Release',
+        configuration: 'Release-AppStore',
         include_symbols: true,
         include_bitcode: true,
       )
