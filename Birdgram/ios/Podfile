@@ -21,7 +21,10 @@ workspace 'Birdgram.xcworkspace'
 
 def bubo_pods
   pod 'Alamofire', '~> 4.8.0'
-  pod 'AudioKit', '~> 4.5'
+  # XXX Only load AudioKit for Birdgram and not Bubo to avoid logged warnings on app startup:
+  #  - "Class ... is implemented in both .../Bubo.framework/Bubo and .../Birdgram.app/Birdgram.
+  #    One of the two will be used. Which one is undefined."
+  # pod 'AudioKit', '~> 4.5'
   # pod 'Surge', '~> 2.2.0' # XXX Vendored [why?]
   pod 'SigmaSwiftStatistics', '~> 8.0'
   pod 'SwiftyJSON', '~> 4.0'
@@ -29,6 +32,7 @@ def bubo_pods
 end
 
 def birdgram_pods
+  pod 'AudioKit', '~> 4.5'
   pod 'PromisesSwift', '~> 1.2.4' # Moved here b/c it gave me trouble in the Bubo-macos target
 end
 
