@@ -10,7 +10,7 @@ if [ $# -eq 0 ]; then
   exit 1
 fi
 export PROJECT_NAME="${PROJECT_NAME:-Birdgram}"
-export CONFIGURATION="${CONFIGURATION:-Release-AppStore}"
+export CONFIGURATION="${CONFIGURATION:-Release}"
 export SCHEME_SUFFIX="$1"; shift
 
 # HACK Mimic xcode (select scheme -> Build -> Target switch-env)

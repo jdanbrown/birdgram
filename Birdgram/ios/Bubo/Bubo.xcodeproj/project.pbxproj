@@ -773,7 +773,7 @@
 			};
 			name = Release;
 		};
-		B7EC60C821F2DBB6006C54BF /* Release-AppStore */ = {
+		B7EC60C821F2DBB6006C54BF /* Stage */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -829,9 +829,9 @@
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
-			name = "Release-AppStore";
+			name = Stage;
 		};
-		B7EC60C921F2DBB6006C54BF /* Release-AppStore */ = {
+		B7EC60C921F2DBB6006C54BF /* Stage */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 0275CB86FEB77DF021B4CD29 /* Pods-Bubo.release.xcconfig */;
 			buildSettings = {
@@ -859,9 +859,9 @@
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
-			name = "Release-AppStore";
+			name = Stage;
 		};
-		B7EC60CA21F2DBB6006C54BF /* Release-AppStore */ = {
+		B7EC60CA21F2DBB6006C54BF /* Stage */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
@@ -878,9 +878,9 @@
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
-			name = "Release-AppStore";
+			name = Stage;
 		};
-		B7EC60CB21F2DBB6006C54BF /* Release-AppStore */ = {
+		B7EC60CB21F2DBB6006C54BF /* Stage */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 36AA075AEEB598309B7E2A42 /* Pods-Bubo-macos.release.xcconfig */;
 			buildSettings = {
@@ -910,7 +910,7 @@
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 4.2;
 			};
-			name = "Release-AppStore";
+			name = Stage;
 		};
 /* End XCBuildConfiguration section */
 
@@ -920,7 +920,7 @@
 			buildConfigurations = (
 				B70DB75621A1F7AC00968F4D /* Debug */,
 				B70DB75721A1F7AC00968F4D /* Release */,
-				B7EC60C821F2DBB6006C54BF /* Release-AppStore */,
+				B7EC60C821F2DBB6006C54BF /* Stage */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -930,7 +930,7 @@
 			buildConfigurations = (
 				B70DB75921A1F7AC00968F4D /* Debug */,
 				B70DB75A21A1F7AC00968F4D /* Release */,
-				B7EC60C921F2DBB6006C54BF /* Release-AppStore */,
+				B7EC60C921F2DBB6006C54BF /* Stage */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -940,7 +940,7 @@
 			buildConfigurations = (
 				B70DB75C21A1F7AC00968F4D /* Debug */,
 				B70DB75D21A1F7AC00968F4D /* Release */,
-				B7EC60CA21F2DBB6006C54BF /* Release-AppStore */,
+				B7EC60CA21F2DBB6006C54BF /* Stage */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -950,7 +950,7 @@
 			buildConfigurations = (
 				B7D0960321AE0F450044A720 /* Debug */,
 				B7D0960421AE0F450044A720 /* Release */,
-				B7EC60CB21F2DBB6006C54BF /* Release-AppStore */,
+				B7EC60CB21F2DBB6006C54BF /* Stage */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

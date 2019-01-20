@@ -164,19 +164,19 @@ platform :ios do
   desc 'Create all resources: bundle ids, apps, provisioning profiles, device registration, ...'
   lane :create do
 
-    # 3 configs: Debug, Release, Release-AppStore
-    # - 'Debug'            ~ 'match Development' ~ install locally (via xcode)
-    # - 'Release'          ~ 'match Development' ~ install locally (via xcode)
-    # - 'Release-AppStore' ~ 'match AppStore'    ~ upload to testflight/appstore (via fastlane)
+    # 3 configs: Debug, Stage, Release
+    # - 'Debug'   ~ 'match Development' ~ install locally (via xcode)
+    # - 'Stage'   ~ 'match Development' ~ install locally (via xcode)
+    # - 'Release' ~ 'match AppStore'    ~ upload to testflight/appstore (via fastlane)
     # - The provisioning profile for local 'Release' must be 'match Development' else you'll get the
     #   dreaded "invalid entitlements" xcode error [https://stackoverflow.com/a/28156468]
-    # - And we have to split 'Release-AppStore' from 'Release' because fastlane requires bundle ids
+    # - And we have to split 'Stage' from 'Release' because fastlane requires bundle ids
     #   and provisioning profiles to be 1-1
     #   - https://github.com/fastlane/fastlane/blob/030ddb9/match/lib/match/generator.rb#L49-L55
     app_identifiers = {
-      'Debug'            => "#{ENV['APP_IDENTIFIER']}.debug",
-      'Release'          => "#{ENV['APP_IDENTIFIER']}.release",
-      'Release-AppStore' => "#{ENV['APP_IDENTIFIER']}",
+      'Debug'   => "#{ENV['APP_IDENTIFIER']}.debug",
+      'Stage'   => "#{ENV['APP_IDENTIFIER']}.stage",
+      'Release' => "#{ENV['APP_IDENTIFIER']}",
     }
 
     # Register devices
@@ -189,11 +189,12 @@ platform :ios do
     # - Console (apps): https://appstoreconnect.apple.com/WebObjects/iTunesConnect.woa/ra/ng/app
     # - NOTE After the bundle/app exists, changes in the params have no effect
     app_identifiers.each do |configuration, app_identifier|
+      is_local = configuration != 'Release'
       create_app_online(
         app_identifier: app_identifier,
-        skip_devcenter: false,                                 # Always create a bundle id (required for local provisioning profiles)
-        skip_itc:       !configuration.end_with?('-AppStore'), # Only create an app for 'AppStore' builds
-        app_version:    '0.0.0', # Real versions are managed by upload_to_testflight/upload_to_app_store
+        skip_devcenter: false,    # Always create a bundle id (required for local provisioning profiles)
+        skip_itc:       is_local, # Don't create an app for local (non-appstore) builds
+        app_version:    '0.0.0',  # Real versions are managed by upload_to_testflight/upload_to_app_store
         enable_services: {
           game_center:     'on', # (On by default, and can't turn off)
           in_app_purchase: 'on', # (On by default, and can't turn off)
@@ -207,7 +208,8 @@ platform :ios do
     # - Run for all (type, app_identifier) pairs we use to create any provisioning profiles that don't exist
     #  - e.g. to build/run in xcode, you'll need the 'development' provisioning profile
     app_identifiers.each do |configuration, app_identifier|
-      if !configuration.end_with?('-AppStore')
+      is_local = configuration != 'Release'
+      if is_local
         sync_code_signing(app_identifier: app_identifier, type: 'development', force_for_new_devices: true)
       else
         sync_code_signing(app_identifier: app_identifier, type: 'appstore')
@@ -235,7 +237,7 @@ platform :ios do
     step = 'build'; if !no.include?(step) && (only.empty? || only.include?(step))
       # increment_build_number # Skip (handled by bin/xcode-switch-env-gen-app-version-build)
       build_app(
-        configuration: 'Release-AppStore',
+        configuration: 'Release',
         include_symbols: true,
         include_bitcode: true,
       )
