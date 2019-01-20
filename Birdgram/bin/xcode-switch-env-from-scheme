@@ -61,15 +61,20 @@ env_path="$BIRDGRAM_DIR/.env"
 )
 
 # HACK Manually edit PROVISIONING_PROFILE_SPECIFIER in project.pbxproj
-# - 3 configs: Debug, Stage, Release
-#   - (See Fastfile for details)
+# - (See comments in Fastfile)
 (
   source "$env_path"
   tmp="`mktemp`"
   pbxproj="$BIRDGRAM_DIR/ios/Birdgram.xcodeproj/project.pbxproj"
   perl -pe >"$tmp" <"$pbxproj" '
-    s/(\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match)(\s+Development\s+)(app\.birdgram\.)(birdgram-[^."]+)([^"]*";)/\1 Development \3'"$APP_BUNDLE_ID_NAME"'\5/g;
-    s/(\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match)(\s+AppStore\s+)(app\.birdgram\.)(birdgram-[^."]+)([^"]*";)/\1 AppStore \3'"$APP_BUNDLE_ID_NAME"'\5/g;
+    s {
+      (\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match)\s+
+      (Development|AppStore)\s+
+      (app\.birdgram\.)
+      (birdgram-[^."]+)
+      ([^"]*";)
+    }
+    {\1 '"$PROVISIONING_PROFILE_TYPE"' \3'"$APP_BUNDLE_ID_NAME"'\5}xg;
   '
   if ! diff "$tmp" "$pbxproj" >/dev/null; then
     cp -f "$tmp" "$pbxproj"

@@ -8,11 +8,5 @@ dir="`dirname "$0"`"
 app-icon label -i "$dir"/icon.png -o "$dir"/icon.debug.png --bottom ' '
 (cd "$dir"/Debug && app-icon generate -i ../icon.debug.png)
 
-# Stage
-# - Add shaded box at top
-# - HACK Label with ' ' b/c icon.png is way too low-res for any text to be useful (e.g. 'Release'/'R')
-app-icon label -i "$dir"/icon.png -o "$dir"/icon.stage.png --top ' '
-(cd "$dir"/Stage && app-icon generate -i ../icon.stage.png)
-
 # Release
 (cd "$dir"/Release && app-icon generate -i ../icon.png)

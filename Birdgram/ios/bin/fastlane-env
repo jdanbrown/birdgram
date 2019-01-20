@@ -18,6 +18,11 @@ export BIRDGRAM_DIR="$dir/.."
 export SCHEME_PREFIX="${SCHEME_PREFIX:-"$PROJECT_NAME"}"
 export SCHEME_NAME="$SCHEME_PREFIX $SCHEME_SUFFIX"
 
+# XXX
+# HACK Override Release provisioning profile 'match Development' -> 'match AppStore'
+# - (See comments in Fastfile)
+# export PROVISIONING_PROFILE_TYPE='AppStore'
+
 # Build .env from $SCHEME_NAME
 # - (cf. bin/xcode-switch-env)
 echo "SCHEME_NAME='$SCHEME_NAME' bin/xcode-switch-env-from-scheme"
