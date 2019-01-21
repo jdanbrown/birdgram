@@ -179,6 +179,7 @@ platform :ios do
     #       it 100% working and the dev feedback loops were ~5-15m, so I gave up in frustration
     #   - Automatically rewrite the Release configuration provisioning profile based on which tool
     #     invokes it: xcode -> 'match Development', fastlane -> 'match AppStore'
+    #   - (See: Fastfile, .env.shared, bin/fastlane-env, bin/xcode-switch-env-from-scheme)
     app_identifiers = {
       'Debug'   => "#{ENV['APP_IDENTIFIER']}.debug",
       'Release' => "#{ENV['APP_IDENTIFIER']}",
