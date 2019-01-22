@@ -17,8 +17,8 @@ export SCHEME_SUFFIX="$(echo "$SCHEME_NAME" | cut -d' ' -f2-)"
 
 # Generate .env <- .env.shared + .env.$SCHEME_SUFFIX
 # - TODO Dedupe with ios/bin/fastlane-env
-env_shared_path="$BIRDGRAM_DIR/.env.shared";         if [ ! -e "$env_shared_path" ]; then die "File not found: $env_shared_path"; fi
-env_scheme_path="$BIRDGRAM_DIR/.env.$SCHEME_SUFFIX"; if [ ! -e "$env_scheme_path" ]; then die "File not found: $env_scheme_path"; fi
+env_shared_path="$BIRDGRAM_DIR/.env.shared";         if [ ! -e "$env_shared_path" ]; then die "Env not found: $env_shared_path"; fi
+env_scheme_path="$BIRDGRAM_DIR/.env.$SCHEME_SUFFIX"; if [ ! -e "$env_scheme_path" ]; then die "Env not found: $env_scheme_path"; fi
 env_path="$BIRDGRAM_DIR/.env"
 (
   set -x

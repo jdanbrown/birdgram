@@ -1,2 +1,7 @@
 #!/bin/bash -eu
+
+# Allow ios/bin/fastlane to be run from anywhere (fastlane uses cwd to find ./fastlane/FastFile, etc.)
+ios="`dirname "$0"`/.."
+cd "$ios"
+
 PAGER=cat exec bundle exec fastlane "$@"
