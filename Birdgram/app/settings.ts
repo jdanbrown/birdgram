@@ -53,7 +53,7 @@ export const DEFAULTS: Props = {
   doneSpectroChunkWidth: 5, // (ios dims: https://tinyurl.com/y8xsdvnk)
   spectroChunkLimit: 0, // 0 for unlimited
   // For SearchScreen
-  showMetadataLeft: false,
+  showMetadataLeft: true,
   showMetadataBelow: false,
   metadataColumnsLeft: typed<Array<MetadataColumnLeft>>([
     'com_name',
@@ -69,7 +69,7 @@ export const DEFAULTS: Props = {
     'remarks',
   ]),
   editing: false,
-  seekOnPlay: false,
+  seekOnPlay: true,
   playingProgressEnable: false, // FIXME High cpu
   // playingProgressInterval: 16, // ~frame rate (60fps), but kills rndebugger in dev
   playingProgressInterval: 250,   // Usable in dev
