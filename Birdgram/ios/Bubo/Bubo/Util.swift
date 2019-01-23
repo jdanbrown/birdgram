@@ -48,6 +48,10 @@ public func TODO<X>(file: StaticString = #file, line: UInt = #line) -> X {
   preconditionFailure("TODO", file: file, line: line)
 }
 
+public func str<X>(_ x: X) -> String {
+  return "\(x)"
+}
+
 // For debugging
 public func puts        <X>(_ x: X) -> X { return tap(x) { x in print("puts", x) } }
 public func debug_print <X>(_ x: X) -> X { return tap(x) { x in print("PRINT", x) } }
@@ -214,6 +218,10 @@ extension String {
     a = a.clamped(startIndex, endIndex)
     b = b.clamped(a,          endIndex)
     return String(self[a..<b])
+  }
+
+  public func trim() -> String {
+    return trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   public func dropPrefix(_ s: String) -> String {

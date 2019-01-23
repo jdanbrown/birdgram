@@ -33,6 +33,7 @@ import { Log, rich } from './log';
 import { NativeHttp } from './native/Http';
 import { NativeSearch } from './native/Search';
 import { NativeSpectro } from './native/Spectro';
+import { NativeTagLib } from './native/TagLib';
 import { getOrientation, matchOrientation, Orientation } from './orientation';
 import {
   createDefaultHistories, Go, GoTo, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
@@ -95,6 +96,7 @@ global.NativeModules = NativeModules;
 global.NativeHttp = NativeHttp;
 global.NativeSearch = NativeSearch;
 global.NativeSpectro = NativeSpectro;
+global.NativeTagLib = NativeTagLib;
 global.querySql = querySql;
 global.qsSane = qsSane;
 global.Rec = Rec;

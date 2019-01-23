@@ -28,6 +28,7 @@ def bubo_pods
   # pod 'Surge', '~> 2.2.0' # XXX Vendored [why?]
   pod 'SigmaSwiftStatistics', '~> 8.0'
   pod 'SwiftyJSON', '~> 4.0'
+  # pod 'TagLibIOS', '~> 0.3.0' # XXX ios only (can't test locally on mac)
   pod 'Yams', '~> 1.0.1'
 end
 
