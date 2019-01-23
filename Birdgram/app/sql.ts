@@ -2,8 +2,8 @@ import _ from 'lodash';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import _SQL from 'sqlstring-sqlite';
 
-import { Log, rich } from './log';
-import { noawait, Timer, yamlPretty } from './utils';
+import { Log, rich } from 'app/log';
+import { noawait, Timer, yamlPretty } from 'app/utils';
 
 const log = new Log('sql');
 

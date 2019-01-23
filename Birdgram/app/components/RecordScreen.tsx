@@ -27,29 +27,29 @@ import { sprintf } from 'sprintf-js';
 import WaveFile from 'wavefile/dist/wavefile';
 const {fs, base64} = RNFB;
 
-import { magSpectrogram, melSpectrogram, powerToDb, stft } from '../../third-party/magenta/music/transcription/audio_utils'
-import nj from '../../third-party/numjs/dist/numjs.min';
-import { Geo, GeoCoords } from './Geo';
-import * as Colors from '../colors';
+import { Geo, GeoCoords } from 'app/components/Geo';
+import * as Colors from 'app/colors';
 import {
   DraftEdit, Edit, EditRec, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source,
   SourceId, UserRec,
-} from '../datatypes';
-import { DB } from '../db';
-import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from '../log';
-import { NativeSearch } from '../native/Search';
-import { ImageFile, NativeSpectro, NativeSpectroStats } from '../native/Spectro';
-import { Go, Location } from '../router';
-import { SettingsWrites } from '../settings';
-import Sound from '../sound';
-import { StyleSheet } from '../stylesheet';
-import { normalizeStyle, Styles } from '../styles';
+} from 'app/datatypes';
+import { DB } from 'app/db';
+import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
+import { NativeSearch } from 'app/native/Search';
+import { ImageFile, NativeSpectro, NativeSpectroStats } from 'app/native/Spectro';
+import { Go, Location } from 'app/router';
+import { SettingsWrites } from 'app/settings';
+import Sound from 'app/sound';
+import { StyleSheet } from 'app/stylesheet';
+import { normalizeStyle, Styles } from 'app/styles';
 import {
   assertFalse, basename, catchTry, catchTryAsync, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean,
   ExpWeightedRate, finallyAsync, global, ifEmpty, Interval, into, json, local, mapNil, mapNull, mapUndefined, match,
   matchNil, matchNull, matchUndefined, pretty, round, setStateAsync, shallowDiffPropsState, timed, Timer, tryElse,
   tryElseAsync, vibrateNormal, yaml, yamlPretty, zipSame,
-} from '../utils';
+} from 'app/utils';
+import { magSpectrogram, melSpectrogram, powerToDb, stft } from 'third-party/magenta/music/transcription/audio_utils'
+import nj from 'third-party/numjs/dist/numjs.min';
 
 const log = new Log('RecordScreen');
 

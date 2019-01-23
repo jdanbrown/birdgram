@@ -2,8 +2,8 @@ import _ from 'lodash';
 import React, { PureComponent } from 'react';
 import { Geolocation, GeolocationReturnType, GeoOptions } from 'react-native';
 
-import { Log, rich } from '../log';
-import { into, json, local, match, pretty, shallowDiffPropsState } from '../utils';
+import { Log, rich } from 'app/log';
+import { into, json, local, match, pretty, shallowDiffPropsState } from 'app/utils';
 
 const log = new Log('geo');
 

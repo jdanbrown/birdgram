@@ -3,10 +3,10 @@ import { Dimensions, Image, Platform, ScrollView, Text, View, WebView } from 're
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import { Log, rich } from '../log';
-import { Go, Histories, History, Location } from '../router';
-import { StyleSheet } from '../stylesheet';
-import { global, json, shallowDiffPropsState, yaml } from '../utils';
+import { Log, rich } from 'app/log';
+import { Go, Histories, History, Location } from 'app/router';
+import { StyleSheet } from 'app/stylesheet';
+import { global, json, shallowDiffPropsState, yaml } from 'app/utils';
 
 const log = new Log('HelpScreen');
 

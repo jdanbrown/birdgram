@@ -4,9 +4,9 @@ import React, { ReactNode } from 'react';
 import { StyleProp, Text, TextStyle, View } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import { CCIcon, Hyperlink, LicenseTypeIcons } from './Misc';
-import { EditRec, matchRec, Rec, SourceId, UserRec, XCRec } from '../datatypes';
-import { match, throw_ } from '../utils';
+import { CCIcon, Hyperlink, LicenseTypeIcons } from 'app/components/Misc';
+import { EditRec, matchRec, Rec, SourceId, UserRec, XCRec } from 'app/datatypes';
+import { match, throw_ } from 'app/utils';
 
 const _columns = {
 

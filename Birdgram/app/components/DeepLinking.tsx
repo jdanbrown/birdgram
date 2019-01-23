@@ -2,9 +2,9 @@ import React, { PureComponent } from 'react';
 import { Linking } from 'react-native';
 import { Route } from 'react-router-native';
 
-import { Log, rich } from '../log';
-import { urlpack } from '../urlpack';
-import { shallowDiffPropsState } from '../utils';
+import { Log, rich } from 'app/log';
+import { urlpack } from 'app/urlpack';
+import { shallowDiffPropsState } from 'app/utils';
 
 const log = new Log('DeepLinking');
 

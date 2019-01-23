@@ -12,42 +12,42 @@ import { BackButton, Link, matchPath, Redirect, Route, Switch } from 'react-rout
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
-import { DeepLinking } from './components/DeepLinking';
-import { HelpScreen } from './components/HelpScreen';
-import { Geo, geolocation } from './components/Geo';
-import { PlacesScreen } from './components/PlacesScreen';
-import { RecentScreen } from './components/RecentScreen';
-import { RecordScreen } from './components/RecordScreen';
-import { SavedScreen } from './components/SavedScreen';
-import { SearchScreen } from './components/SearchScreen';
-import { SettingsScreen } from './components/SettingsScreen';
-import { TabRoutes, TabLink } from './components/TabRoutes';
-import * as Colors from './colors';
-import { config } from './config';
+import { DeepLinking } from 'app/components/DeepLinking';
+import { HelpScreen } from 'app/components/HelpScreen';
+import { Geo, geolocation } from 'app/components/Geo';
+import { PlacesScreen } from 'app/components/PlacesScreen';
+import { RecentScreen } from 'app/components/RecentScreen';
+import { RecordScreen } from 'app/components/RecordScreen';
+import { SavedScreen } from 'app/components/SavedScreen';
+import { SearchScreen } from 'app/components/SearchScreen';
+import { SettingsScreen } from 'app/components/SettingsScreen';
+import { TabRoutes, TabLink } from 'app/components/TabRoutes';
+import * as Colors from 'app/colors';
+import { config } from 'app/config';
 import {
   EditRec, MetadataSpecies, Models, ModelsSearch, Rec, SearchRecs, ServerConfig, UserRec, XCRec,
-} from './datatypes';
-import { DB } from './db';
-import { Ebird } from './ebird';
-import { Log, rich } from './log';
-import { NativeHttp } from './native/Http';
-import { NativeSearch } from './native/Search';
-import { NativeSpectro } from './native/Spectro';
-import { NativeTagLib } from './native/TagLib';
-import { getOrientation, matchOrientation, Orientation } from './orientation';
+} from 'app/datatypes';
+import { DB } from 'app/db';
+import { Ebird } from 'app/ebird';
+import { Log, rich } from 'app/log';
+import { NativeHttp } from 'app/native/Http';
+import { NativeSearch } from 'app/native/Search';
+import { NativeSpectro } from 'app/native/Spectro';
+import { NativeTagLib } from 'app/native/TagLib';
+import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import {
   createDefaultHistories, Go, GoTo, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
   saveHistories, TabHistories, TabName,
-} from './router';
-import { Settings, SettingsProxy, SettingsWrites } from './settings';
-import { querySql } from './sql';
-import { StyleSheet } from './stylesheet';
-import { urlpack } from './urlpack';
+} from 'app/router';
+import { Settings, SettingsProxy, SettingsWrites } from 'app/settings';
+import { querySql } from 'app/sql';
+import { StyleSheet } from 'app/stylesheet';
+import { urlpack } from 'app/urlpack';
 import {
   assert, deepEqual, dirname, global, Interval, json, match, matchNil, Omit, pretty, qsSane, readJsonFile, shallowDiff,
   shallowDiffPropsState, Style, Timer, yaml,
-} from './utils';
-import { XC } from './xc';
+} from 'app/utils';
+import { XC } from 'app/xc';
 
 const log = new Log('App');
 

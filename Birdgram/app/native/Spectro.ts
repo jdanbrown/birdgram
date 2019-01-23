@@ -10,8 +10,8 @@
 
 import { EmitterSubscription, NativeEventEmitter, NativeModules } from 'react-native';
 
-import { DraftEdit } from '../datatypes';
-import { json, JsonSafeNumber, mapUndefined, typed } from '../utils';
+import { DraftEdit } from 'app/datatypes';
+import { json, JsonSafeNumber, mapUndefined, typed } from 'app/utils';
 
 const {RNSpectro} = NativeModules;
 

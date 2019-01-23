@@ -26,35 +26,35 @@ import { sprintf } from 'sprintf-js';
 import stringHash from "string-hash";
 const fs = RNFB.fs;
 
-import { ActionSheetBasic } from './ActionSheets';
+import { ActionSheetBasic } from 'app/components/ActionSheets';
 import {
   MetadataColumnBelow, MetadataColumnsBelow, MetadataColumnLeft, MetadataColumnsLeft, metadataLabel, MetadataLabel,
   MetadataText,
-} from './MetadataColumns';
-import { TabBarStyle } from './TabRoutes';
-import { config } from '../config';
+} from 'app/components/MetadataColumns';
+import { TabBarStyle } from 'app/components/TabRoutes';
+import { config } from 'app/config';
 import {
   EditRec, ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams,
   searchPathParamsFromLocation, SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesMetadata, SpectroPathOpts,
   UserRec, XCRec,
-} from '../datatypes';
-import { DB } from '../db';
-import { Ebird } from '../ebird';
-import { Log, puts, rich, tap } from '../log';
-import { NativeSearch } from '../native/Search';
-import { NativeSpectro } from '../native/Spectro';
-import { Go, History, Location } from '../router';
-import { SettingsWrites } from '../settings';
-import Sound from '../sound';
-import { SQL, sqlf } from '../sql';
-import { StyleSheet } from '../stylesheet';
-import { normalizeStyle, LabelStyle, labelStyles, Styles } from '../styles';
+} from 'app/datatypes';
+import { DB } from 'app/db';
+import { Ebird } from 'app/ebird';
+import { Log, puts, rich, tap } from 'app/log';
+import { NativeSearch } from 'app/native/Search';
+import { NativeSpectro } from 'app/native/Spectro';
+import { Go, History, Location } from 'app/router';
+import { SettingsWrites } from 'app/settings';
+import Sound from 'app/sound';
+import { SQL, sqlf } from 'app/sql';
+import { StyleSheet } from 'app/stylesheet';
+import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
   all, any, assert, chance, Clamp, deepEqual, Dim, ensureParentDir, finallyAsync, getOrSet, global, json, mapMapValues,
   match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round,
   shallowDiffPropsState, Style, throw_, Timer, yaml, yamlPretty, zipSame,
-} from '../utils';
-import { XC } from '../xc';
+} from 'app/utils';
+import { XC } from 'app/xc';
 
 const log = new Log('SearchScreen');
 

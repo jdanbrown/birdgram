@@ -5,16 +5,14 @@ import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-h
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import {
-  matchSearchPathParams, MetadataSpecies, Place, Species,
-} from '../datatypes';
-import { Ebird } from '../ebird';
-import { Log, rich } from '../log';
-import { Go, Histories, History, Location } from '../router';
-import { SettingsWrites } from '../settings';
-import { Styles } from '../styles';
-import { StyleSheet } from '../stylesheet';
-import { deepEqual, global, json, matchNull, pretty, shallowDiffPropsState, yaml } from '../utils';
+import { matchSearchPathParams, MetadataSpecies, Place, Species } from 'app/datatypes';
+import { Ebird } from 'app/ebird';
+import { Log, rich } from 'app/log';
+import { Go, Histories, History, Location } from 'app/router';
+import { SettingsWrites } from 'app/settings';
+import { Styles } from 'app/styles';
+import { StyleSheet } from 'app/stylesheet';
+import { deepEqual, global, json, matchNull, pretty, shallowDiffPropsState, yaml } from 'app/utils';
 
 const log = new Log('PlacesScreen');
 

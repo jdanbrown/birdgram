@@ -2,7 +2,7 @@
 import 'react-native-console-time-polyfill';
 import { sprintf } from 'sprintf-js';
 
-import { __F_IF_DEV__, global, json, match, pretty, Timer } from './utils';
+import { __F_IF_DEV__, global, json, match, pretty, Timer } from 'app/utils';
 
 // Config
 const defaultLevel: LevelSetting = 'debug';

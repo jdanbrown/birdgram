@@ -2,12 +2,12 @@ import cheerio from 'cheerio-without-node-native';
 import _ from 'lodash';
 import queryString from 'query-string';
 
-import { MetadataSpecies, Species, SpeciesCode, SpeciesMetadata } from './datatypes';
-import { Log, rich } from './log';
-import { NativeHttp } from './native/Http';
+import { MetadataSpecies, Species, SpeciesCode, SpeciesMetadata } from 'app/datatypes';
+import { Log, rich } from 'app/log';
+import { NativeHttp } from 'app/native/Http';
 import {
   assert, deepEqual, dirname, global, json, match, Omit, pretty, readJsonFile,  Timer, yaml,
-} from './utils';
+} from 'app/utils';
 
 const log = new Log('ebird');
 

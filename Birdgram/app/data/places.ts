@@ -1,6 +1,6 @@
 import _ from 'lodash';
 
-import { Place } from '../datatypes';
+import { Place } from 'app/datatypes';
 
 export const HARDCODED_PLACES: Array<Place> = [
 

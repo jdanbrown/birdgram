@@ -10,18 +10,18 @@ import Feather from 'react-native-vector-icons/Feather';
 
 import {
   matchRecordPathParams, matchSearchPathParams, recordPathParamsFromLocation, searchPathParamsFromLocation, SourceId,
-} from '../datatypes';
-import { Ebird } from '../ebird';
-import { debug_print, Log, rich, puts, tap } from '../log';
-import { Go, Histories, History, Location, locationStateOrEmpty, tabHistoriesKeys, TabName } from '../router';
-import { Settings } from '../settings';
-import { Styles } from '../styles';
-import { StyleSheet } from '../stylesheet';
+} from 'app/datatypes';
+import { Ebird } from 'app/ebird';
+import { debug_print, Log, rich, puts, tap } from 'app/log';
+import { Go, Histories, History, Location, locationStateOrEmpty, tabHistoriesKeys, TabName } from 'app/router';
+import { Settings } from 'app/settings';
+import { Styles } from 'app/styles';
+import { StyleSheet } from 'app/stylesheet';
 import {
   enumerate, global, into, json, local, mapNil, mapNull, mapUndefined, match, matchUndefined, mergeArraysWith,
   objectKeysTyped, pretty, shallowDiffPropsState, showDate, throw_, typed, yaml,
-} from '../utils';
-import { XC } from '../xc';
+} from 'app/utils';
+import { XC } from 'app/xc';
 
 const log = new Log('RecentScreen');
 

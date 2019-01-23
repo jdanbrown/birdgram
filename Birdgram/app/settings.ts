@@ -3,11 +3,11 @@ import React from 'react';
 import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from './components/MetadataColumns';
-import { HARDCODED_PLACES } from './data/places';
-import { Place } from './datatypes';
-import { Log, puts, rich } from './log';
-import { json, objectKeysTyped, typed, yaml } from './utils';
+import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from 'app/components/MetadataColumns';
+import { HARDCODED_PLACES } from 'app/data/places';
+import { Place } from 'app/datatypes';
+import { Log, puts, rich } from 'app/log';
+import { json, objectKeysTyped, typed, yaml } from 'app/utils';
 
 const log = new Log('Settings');
 

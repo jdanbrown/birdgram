@@ -6,7 +6,7 @@ import _ from 'lodash';
 import moment from 'moment';
 import { sprintf } from 'sprintf-js';
 
-import { debug_print, puts } from './log';
+import { debug_print, puts } from 'app/log';
 
 // Export global:any, which would have otherwise come from DOM but we disable DOM for react-native (tsconfig -> "lib")
 //  - Fallback to a mock `{}` for release builds, which run in jsc instead of chrome v8 and don't have window.global

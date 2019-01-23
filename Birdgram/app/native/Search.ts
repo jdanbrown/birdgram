@@ -2,7 +2,7 @@
 
 import { EmitterSubscription, NativeEventEmitter, NativeModules } from 'react-native';
 
-import { ModelsSearch } from '../datatypes';
+import { ModelsSearch } from 'app/datatypes';
 
 const {RNSearch} = NativeModules;
 

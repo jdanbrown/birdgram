@@ -1,12 +1,12 @@
 import _ from 'lodash';
 
-import { Species, XCRec } from './datatypes';
-import { DB } from './db';
-import { Log, rich } from './log';
-import { sqlf } from './sql';
+import { Species, XCRec } from 'app/datatypes';
+import { DB } from 'app/db';
+import { Log, rich } from 'app/log';
+import { sqlf } from 'app/sql';
 import {
   assert, deepEqual, dirname, global, json, local, match, Omit, pretty, readJsonFile,  Timer, yaml,
-} from './utils';
+} from 'app/utils';
 
 const log = new Log('xc');
 

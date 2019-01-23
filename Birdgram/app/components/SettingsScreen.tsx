@@ -8,13 +8,13 @@ import SettingsList from 'react-native-settings-list';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 
-import { config } from '../config';
-import { ServerConfig } from '../datatypes';
-import { Log, rich } from '../log';
-import { DEFAULTS, SettingsWrites } from '../settings';
-import { Styles } from '../styles';
-import { StyleSheet } from '../stylesheet';
-import { global, json, pretty, shallowDiffPropsState, yaml, yamlPretty } from '../utils';
+import { config } from 'app/config';
+import { ServerConfig } from 'app/datatypes';
+import { Log, rich } from 'app/log';
+import { DEFAULTS, SettingsWrites } from 'app/settings';
+import { Styles } from 'app/styles';
+import { StyleSheet } from 'app/stylesheet';
+import { global, json, pretty, shallowDiffPropsState, yaml, yamlPretty } from 'app/utils';
 
 const log = new Log('SettingsScreen');
 

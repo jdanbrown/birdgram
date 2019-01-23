@@ -2,7 +2,7 @@
 //  - Usage follows https://github.com/masotime/json-url
 
 // @ts-ignore (No .d.ts for json-url)
-import jsonUrl from '../third-party/json-url/src/main';
+import jsonUrl from 'third-party/json-url/src/main';
 
 export interface Urlpack {
   compress   (json:   any):    Promise<string>;

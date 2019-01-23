@@ -5,9 +5,9 @@ import { Alert, AsyncStorage } from 'react-native';
 import { MemoryRouterProps } from 'react-router';
 import { Route, Router } from 'react-router-native';
 
-import { debug_print, Log, puts, rich } from './log';
-import { Settings } from './settings';
-import { global, into, json, local, pretty, shallowDiffPropsState, typed, yaml } from './utils';
+import { debug_print, Log, puts, rich } from 'app/log';
+import { Settings } from 'app/settings';
+import { global, into, json, local, pretty, shallowDiffPropsState, typed, yaml } from 'app/utils';
 
 const log = new Log('router');
 

@@ -8,11 +8,11 @@ import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
 import Feather from 'react-native-vector-icons/Feather';
 import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-router-native';
 
-import { Log, puts, rich } from '../log';
-import { getOrientation, matchOrientation, Orientation } from '../orientation';
-import { Histories, History, HistoryConsumer, Location, ObserveHistory, RouterWithHistory, TabName } from '../router';
-import { StyleSheet } from '../stylesheet';
-import { json, pretty, shallowDiffPropsState, Style, throw_ } from '../utils';
+import { Log, puts, rich } from 'app/log';
+import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
+import { Histories, History, HistoryConsumer, Location, ObserveHistory, RouterWithHistory, TabName } from 'app/router';
+import { StyleSheet } from 'app/stylesheet';
+import { json, pretty, shallowDiffPropsState, Style, throw_ } from 'app/utils';
 
 const log = new Log('TabRoutes');
 

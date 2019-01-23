@@ -1,6 +1,6 @@
 import _Sound from 'react-native-sound';
 
-import { finallyAsync } from './utils';
+import { finallyAsync } from 'app/utils';
 
 export default class Sound extends _Sound {
 

@@ -3,12 +3,12 @@ import SQLite, { SQLiteDatabase } from 'react-native-sqlite-storage';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
-import { EditRec, matchSource, Rec, SearchRecs, Source, SourceId, UserRec, XCRec } from './datatypes';
-import { Log, puts, rich, tap } from './log';
-import { NativeSearch } from './native/Search';
-import Sound from './sound';
-import { querySql, QuerySql, sqlf } from './sql';
-import { local, typed } from './utils';
+import { EditRec, matchSource, Rec, SearchRecs, Source, SourceId, UserRec, XCRec } from 'app/datatypes';
+import { Log, puts, rich, tap } from 'app/log';
+import { NativeSearch } from 'app/native/Search';
+import Sound from 'app/sound';
+import { querySql, QuerySql, sqlf } from 'app/sql';
+import { local, typed } from 'app/utils';
 
 const log = new Log('DB');
 
