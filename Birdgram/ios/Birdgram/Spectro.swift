@@ -704,13 +704,15 @@ public class Spectro {
 
     // Make editFile to write to (.wav)
     //  - Avoid partial writes: write to a tmp file, then mv to editAudioPath to commit
-    let tmpPath = NSTemporaryDirectory() / UUID().uuidString
+    //  - WARNING Make sure you ".wav" the tmpPath else you'll get a file with .caf format i/o .wav format
+    let tmpPath = NSTemporaryDirectory() / UUID().uuidString + ".wav"
     let editFile = try AVAudioFile(
       forWriting: URL(fileURLWithPath: tmpPath),
       settings:   settings
     )
     Log.debug(String(format: "Spectro.editAudioPathToAudioPath: editFile(prepare): %@", [
       "path":             tmpPath,
+      "settings":         settings,
       "fileFormat":       editFile.fileFormat.settings,
       "processingFormat": editFile.processingFormat.settings,
     ]))

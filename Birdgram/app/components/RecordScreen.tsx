@@ -27,11 +27,11 @@ import { sprintf } from 'sprintf-js';
 import WaveFile from 'wavefile/dist/wavefile';
 const {fs, base64} = RNFB;
 
-import { Geo, GeoCoords } from 'app/components/Geo';
+import { Geo } from 'app/components/Geo';
 import * as Colors from 'app/colors';
 import {
-  DraftEdit, Edit, EditRec, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source,
-  SourceId, UserRec,
+  Creator, DraftEdit, Edit, EditRec, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation,
+  Source, SourceId, UserMetadata, UserRec,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
@@ -44,9 +44,9 @@ import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, Styles } from 'app/styles';
 import {
   assertFalse, basename, catchTry, catchTryAsync, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean,
-  ExpWeightedRate, finallyAsync, global, ifEmpty, Interval, into, json, local, mapNil, mapNull, mapUndefined, match,
-  matchNil, matchNull, matchUndefined, pretty, round, setStateAsync, shallowDiffPropsState, timed, Timer, tryElse,
-  tryElseAsync, vibrateNormal, yaml, yamlPretty, zipSame,
+  ExpWeightedRate, finallyAsync, global, ifEmpty, ifNil, ifNull, ifUndefined, Interval, into, json, local, mapNil,
+  mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined, pretty, round, setStateAsync,
+  shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, vibrateNormal, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from 'third-party/magenta/music/transcription/audio_utils'
 import nj from 'third-party/numjs/dist/numjs.min';
@@ -90,6 +90,7 @@ export interface Props {
 interface State {
   showMoreDebug: boolean;
   recordingState: RecordingState;
+  recordingUserMetadata: UserMetadata | null;
   spectroScale: number;
   follow: boolean;
   denoised: boolean;
@@ -141,6 +142,7 @@ export class RecordScreen extends Component<Props, State> {
   state: State = {
     showMoreDebug: false,
     recordingState: 'stopped',
+    recordingUserMetadata: null,
     // TODO Expose controls like SearchScreen [think through RecordScreen.state vs. Settings vs. SearchScreen.state]
     spectroScale: this.props.f_bins / 80,
     follow: true,
@@ -292,7 +294,9 @@ export class RecordScreen extends Component<Props, State> {
           },
           edit: async ({sourceId}) => {
             // Show editRecording for sourceId
-            const source = Source.parse(sourceId);
+            const source = Source.parse(sourceId, {
+              userMetadata: null, // HACK(cache_user_metadata): Populated by db.loadRec (below), and source isn't used otherwise
+            });
             if (!source) {
               log.warn('updateForLocation: Failed to parse sourceId', rich({sourceId, location: this.props.location}));
             } else {
@@ -468,6 +472,7 @@ export class RecordScreen extends Component<Props, State> {
         var cancel: boolean = false;
 
         // Get geo coords for user rec
+        //  - Do at start i/o stop so user knows up front whether gps is working, since they have no way to add it later
         const coords = this.props.geo.coords;
         if (coords === null) {
           log.info('startRecording: No coords', {coords, geoWarnIfNoCoords: this.props.geoWarnIfNoCoords});
@@ -489,10 +494,20 @@ export class RecordScreen extends Component<Props, State> {
           log.info('startRecording: Cancelled', {coords, geoWarnIfNoCoords: this.props.geoWarnIfNoCoords});
         } else {
 
+          // Initial UserMetadata, as of record time
+          const recordingUserMetadata: UserMetadata = {
+            // Immutable facts
+            creator: Creator.get(),
+            coords,
+            // Mutable user data (initial values)
+            species: {kind: 'unknown'},
+          };
+
           // Reset state
           //  - TODO Dedupe with updateForLocation
           this.setState({
             recordingState: 'recording',
+            recordingUserMetadata,
             spectroChunks: [],
             nSpectroChunks: 0,
             nSamples: 0,
@@ -505,9 +520,7 @@ export class RecordScreen extends Component<Props, State> {
 
           // Start recording
           await NativeSpectro.start({
-            outputPath: await UserRec.newAudioPath('wav', {
-              coords,
-            }),
+            outputPath: await UserRec.newAudioPath('wav'),
             refreshRate: this.props.refreshRate,
           });
 
@@ -525,6 +538,11 @@ export class RecordScreen extends Component<Props, State> {
     logErrorsAsync('stopRecording', async () => { // So we're safe to use as an event handler
       if (this.state.recordingState === 'recording') {
         log.info('stopRecording');
+
+        // Unpack recording state
+        const recordingUserMetadata = ifNull(this.state.recordingUserMetadata, () => {
+          throw `Expected non-null recordingUserMetadata while recording`;
+        });
 
         // State: recording -> saving
         //  - HACK setStateAsync to avoid races (setState->setState->go) [and can't await go]
@@ -544,7 +562,7 @@ export class RecordScreen extends Component<Props, State> {
           log.info('stopRecording: Noop: No audioPath');
           sourceId = null;
         } else {
-          const source = await UserRec.new(audioPath);
+          const source = await UserRec.new(audioPath, recordingUserMetadata);
           sourceId = Source.stringify(source);
         }
 
@@ -552,6 +570,7 @@ export class RecordScreen extends Component<Props, State> {
         //  - HACK setStateAsync to avoid races (setState->go) [and can't await go]
         await setStateAsync(this, {
           recordingState: 'loading-for-edit', // (Else updateForLocation will noop on 'saving')
+          recordingUserMetadata: null,
         });
         this.props.go('record', {
           path: !sourceId ? '/edit' : `/edit/${sourceId}`,
@@ -917,6 +936,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         {/* Go to parent rec */}
         {local(() => {
           const parent = mapNil(this.props.editRecording, ({rec}) => matchRec(rec, {
+            opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for getting .parent
             xc:   rec => null,
             user: rec => null,
             edit: rec => rec.edit.parent,
@@ -1083,10 +1103,21 @@ export async function EditRecording(props: {
 
       // Get a writable spectroCachePath for nonstandard f_bins
       //  - TODO Refactor to simplify
-      const spectroCachePath = Rec.spectroCachePath(Source.parseOrFail(props.rec.source_id), {
-        f_bins: props.f_bins,
-        denoise,
-      });
+      const spectroCachePath = Rec.spectroCachePath(
+        Source.parseOrFail(props.rec.source_id, {
+          userMetadata: null, // HACK(cache_user_metadata): UserSource.metadata not needed for source -> Rec.spectroCachePath
+        }),
+        {
+          f_bins: props.f_bins,
+          denoise,
+        },
+      );
+
+      // FIXME Bottleneck: skip renderAudioPathToSpectroPath + chunkImageFile entirely if we've already completed them once
+      //  - Nontrivial only because they return things to us (single + chunked) that we don't know how to compute on our own...
+      //  - I added a skip within each of the two functions, but there's still too much work happening (e.g. samplesFromAudioPath)
+
+      // Compute spectro
       const single = await NativeSpectro.renderAudioPathToSpectroPath(
         Rec.audioPath(props.rec),
         await ensureParentDir(spectroCachePath),

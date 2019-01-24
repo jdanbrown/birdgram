@@ -39,9 +39,21 @@ interface State {
   saveds: Array<Saved>;
 }
 
-interface Saved {
-  tab:  TabName;
+type Saved =
+  | RecordSaved
+  | SearchSaved; // TODO Populate
+
+interface RecordSaved {
+  tab:    'record';
+  path:   string;
+  source: Source;
+}
+
+// TODO Populate
+interface SearchSaved {
+  tab:  'search';
   path: string;
+  // ...
 }
 
 export class SavedScreen extends PureComponent<Props, State> {
@@ -93,9 +105,10 @@ export class SavedScreen extends PureComponent<Props, State> {
       }))
       .value()
       .slice().reverse() // (Copy b/c reverse mutates)
-      .map<Saved>(source => ({
+      .map<RecordSaved>(source => ({
         tab:  'record',
         path: `/edit/${encodeURIComponent(Source.stringify(source))}`,
+        source,
       }))
     );
 
@@ -204,56 +217,50 @@ export class SavedScreen extends PureComponent<Props, State> {
                         ...material.body1Object,
                       }}>
 
-                        {/* {saved.path} */}
-
                         {/* TODO Dedupe with RecentScreen.render */}
                         {local(() => {
-
-                          // Mock a location from saved.path for *PathParamsFromLocation
-                          //  - TODO Refactor *PathParamsFromLocation so we don't need to mock junk fields
-                          const location = {
-                            pathname: saved.path,               // Used
-                            search:   '',                       // Used
-                            hash:     '',                       // Ignored
-                            key:      undefined,                // Ignored
-                            state:    {timestamp: new Date(0)}, // Ignored
-                          };
-
-                          return match<TabName, string>(saved.tab,
-                            ['record', () => matchRecordPathParams(recordPathParamsFromLocation(location), {
-                              root: () => (
-                                '[ROOT]'
-                              ),
-                              edit: ({sourceId}) => (
-                                SourceId.show(sourceId, {
-                                  species: this.props.xc,
-                                  long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                                })
-                              ),
-                            })],
-                            ['search', () => matchSearchPathParams(searchPathParamsFromLocation(location), {
-                              root: () => (
-                                '[ROOT]' // Shouldn't ever show b/c redirect
-                              ),
-                              random: ({filters, seed}) => (
-                                `Random`
-                              ),
-                              species: ({filters, species}) => (
-                                species === '_BLANK' ? '[BLANK]' :
-                                matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
-                                  undefined: () => `${species} (?)`,
-                                  x:         x  => `${species} (${x.com_name})`,
-                                })
-                              ),
-                              rec: ({filters, sourceId}) => (
-                                SourceId.show(sourceId, {
-                                  species: this.props.xc,
-                                  long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                                })
-                              ),
-                            })],
-                          );
-
+                          switch (saved.tab) {
+                            // TODO Migrate Location (saved.path) -> Source (saved.source) so we can access UserMetadata
+                            //  - UserMetadata is mutable and owned by Source (UserSource), so Location shouldn't contain another copy
+                            case 'record':
+                              return Source.show(saved.source, {
+                                species:      this.props.xc,
+                                long:         true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                userMetadata: null, // XXX(user_metadata): UserMetadata carried by saved.source
+                              });
+                            case 'search':
+                              // Mock a location from saved.path for *PathParamsFromLocation
+                              //  - TODO Refactor *PathParamsFromLocation so we don't need to mock junk fields
+                              const location = {
+                                pathname: saved.path,               // Used
+                                search:   '',                       // Used
+                                hash:     '',                       // Ignored
+                                key:      undefined,                // Ignored
+                                state:    {timestamp: new Date(0)}, // Ignored
+                              };
+                              return matchSearchPathParams(searchPathParamsFromLocation(location), {
+                                root: () => (
+                                  '[ROOT]' // Shouldn't ever show b/c redirect
+                                ),
+                                random: ({filters, seed}) => (
+                                  `Random`
+                                ),
+                                species: ({filters, species}) => (
+                                  species === '_BLANK' ? '[BLANK]' :
+                                  matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+                                    undefined: () => `${species} (?)`,
+                                    x:         x  => `${species} (${x.com_name})`,
+                                  })
+                                ),
+                                rec: ({filters, sourceId}) => (
+                                  SourceId.show(sourceId, {
+                                    species:      this.props.xc,
+                                    long:         true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                    userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
+                                  })
+                                ),
+                              });
+                          }
                         })}
 
                       </Text>

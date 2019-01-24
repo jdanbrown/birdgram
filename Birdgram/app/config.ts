@@ -1,5 +1,4 @@
-// Loaded from .env.* file [https://github.com/luggit/react-native-config]
-import env from 'react-native-config';
+import env from 'react-native-config'; // Loaded from .env.* file [https://github.com/luggit/react-native-config]
 
 // TODO config -> Settings.state [how to share globally?]
 export const config = {

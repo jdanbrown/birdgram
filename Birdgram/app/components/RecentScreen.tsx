@@ -255,8 +255,9 @@ export class RecentScreen extends PureComponent<Props, State> {
                             ),
                             edit: ({sourceId}) => (
                               SourceId.show(sourceId, {
-                                species: this.props.xc,
-                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                species:      this.props.xc,
+                                long:         true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
                               })
                             ),
                           })],
@@ -276,8 +277,9 @@ export class RecentScreen extends PureComponent<Props, State> {
                             ),
                             rec: ({filters, sourceId}) => (
                               SourceId.show(sourceId, {
-                                species: this.props.xc,
-                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                species:      this.props.xc,
+                                long:         true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
                               })
                             ),
                           })],

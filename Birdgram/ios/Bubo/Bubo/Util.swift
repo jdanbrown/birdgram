@@ -86,11 +86,25 @@ public func pathSplitExt(_ path: String) -> (name: String, ext: String) {
   )
 }
 
+public func pathExists(_ path: String) -> Bool {
+  return FileManager.default.fileExists(atPath: path)
+}
+
+public func touchPath(_ path: String) throws {
+  if (!pathExists(path)) {
+    if (!FileManager.default.createFile(atPath: path, contents: Data())) {
+      throw AppError("Failed to touch path[\(path)]")
+    }
+  }
+}
+
+@discardableResult
 public func ensureDir(_ path: String) throws -> String {
   try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
   return path
 }
 
+@discardableResult
 public func ensureParentDir(_ path: String) throws -> String {
   let _ = try ensureDir(pathDirname(path))
   return path

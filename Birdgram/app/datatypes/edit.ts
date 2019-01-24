@@ -8,9 +8,10 @@ import { Source, SourceId, SourceShowOpts } from 'app/datatypes';
 import { debug_print, log, Log, rich } from 'app/log';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
-  JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchNull, matchUndefined, NoKind,
-  Omit, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane, requireSafePath, safeParseInt, safeParseIntOrNull,
-  safePath, showDate, showSuffix, splitFirst, stripExt, throw_, tryElse, typed, unjson,
+  jsonSafeError, JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchNull,
+  matchUndefined, NoKind, Omit, parseDate, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane,
+  requireSafePath, safeParseInt, safeParseIntOrNull, safePath, showDate, showSuffix, splitFirst, stringifyDate,
+  stripExt, throw_, tryElse, typed, unjson,
 } from 'app/utils';
 
 // A (commited) edit, which has a well defined mapping to an edit rec file
@@ -35,34 +36,53 @@ export interface Clip {
 
 // TODO Avoid unbounded O(parents) length for edit sourceId's [already solved for edit rec filenames]
 //  - Add a layer of indirection for async (sync parse -> async load)
-//  - Make it read Edit metadata to populate Edit.parent (from AsyncStorage like EditRec.sourceFromAudioFilename)
+//  - Make it read Edit metadata to populate Edit.parent (from AsyncStorage like EditRec.sourceFromAudioPath)
 export const Edit = {
 
-  // Can't simply json/unjson because it's unsafe for Interval (which needs to JsonSafeNumber)
+  // Various crap to render as url query string i/o json [is this actually worthwhile?]
   stringify: (edit: Edit): string => {
+    const x = Edit.jsonSafe(edit);
     return qsSane.stringify(typed<{[key in keyof Edit]: any}>({
       // HACK parent: Avoid chars that need uri encoding, since something keeps garbling them [router / location?]
-      parent:  base64.encode(edit.parent).replace(/=+$/, ''),
-      created: Source.stringifyDate(edit.created),
-      uniq:    edit.uniq,
-      clips:   mapUndefined(edit.clips, clips => clips.map(clip => Clip.jsonSafe(clip))),
+      parent:  base64.encode(x.parent).replace(/=+$/, ''),
+      created: Source.stringifyDate(parseDate(x.created)), // iso8601 string -> 'YYYYMMDDThhmmssSSS'
+      uniq:    x.uniq,
+      clips:   x.clips,
     }));
   },
-  parse: (x: string): Edit | null => {
+  parse: (s: string): Edit | null => {
     var q: any; // To include in logging (as any | null)
     try {
-      q = qsSane.parse(x);
-      return {
+      q = qsSane.parse(s);
+      return Edit.unjsonSafe({
         // HACK parent: Avoid chars that need uri encoding, since something keeps garbling them [router / location?]
-        parent:  Edit._required(q, 'parent',  (x: string) => /:/.test(x) ? x : base64.decode(x)),
-        created: Edit._required(q, 'created', (x: string) => Source.parseDate(x)),
-        uniq:    Edit._required(q, 'uniq',    (x: string) => x),
-        clips:   Edit._optional(q, 'clips',   (xs: any[]) => xs.map(x => Clip.unjsonSafe(x))),
-      };
+        parent:  /:/.test(q.parent) ? q.parent : base64.decode(q.parent),
+        created: stringifyDate(Source.parseDate(q.created)), // 'YYYYMMDDThhmmssSSS' -> iso8601 string
+        uniq:    q.uniq,
+        clips:   q.clips,
+      });
     } catch (e) {
-      log.warn('Edit.parse: Failed', rich({q, x, e}));
+      log.warn('Edit.parse: Failed', rich({e: jsonSafeError(e), s, q}));
       return null;
     }
+  },
+
+  // Can't simply json/unjson because it's unsafe for Interval (which needs to JsonSafeNumber)
+  jsonSafe: (edit: Edit): any => {
+    return typed<{[key in keyof Edit]: any}>({
+      parent:  edit.parent,
+      created: stringifyDate(edit.created),
+      uniq:    edit.uniq,
+      clips:   mapUndefined(edit.clips, clips => clips.map(clip => Clip.jsonSafe(clip))),
+    });
+  },
+  unjsonSafe: (x: any): Edit => {
+    return {
+      parent:  Edit._required(x, 'parent',  (x: string) => x),
+      created: Edit._required(x, 'created', (x: string) => parseDate(x)),
+      uniq:    Edit._required(x, 'uniq',    (x: string) => x),
+      clips:   Edit._optional(x, 'clips',   (xs: any[]) => xs.map(x => Clip.unjsonSafe(x))),
+    };
   },
 
   show: (edit: Edit, opts: SourceShowOpts): string => {
@@ -84,6 +104,13 @@ export const Edit = {
   _required: <X, Y>(q: any, k: keyof Edit, f: (x: X) => Y): Y             => f(Edit._requireKey(q, k)),
   _requireKey: (q: any, k: keyof Edit): any => ifUndefined(q[k], () => throw_(`Edit: Field '${k}' required: ${json(q)}`)),
 
+  // TODO(user_metadata): Migrate old edit recs so we can kill this v0 code, or keep it (forever) for back compat?
+  // Store Edit in AsyncStorage b/c we can't shove it all into the audio filename
+  //  - TODO(?): Unwind this once we move Edit to audio metadata (tags stored in the file)
+  //    - Else users can't share edit recs (without transmitting AsyncStorage items, which would be anti-simple)
+  //    - Back compat: if no audio metadata but AsyncStorage item exists, write AsyncStorage item to audio metadata
+  //      - This will trigger on each edit rec load
+  //      - And we can ensure it triggers in the share path (once we get there)
   store: async (pathBasename: string, edit: Edit): Promise<void> => {
     const k = `Edit.${pathBasename}`;
     await AsyncStorage.setItem(k, Edit.stringify(edit));

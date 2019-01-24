@@ -13,7 +13,10 @@ const _columns = {
   id: (rec: Rec) => (
     <MetadataText>
       <Hyperlink url={Rec.recUrl(rec)}>
-        {SourceId.show(rec.source_id, {species: null})}
+        {SourceId.show(rec.source_id, {
+          species: null,
+          userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
+        })}
       </Hyperlink>
     </MetadataText>
   ),

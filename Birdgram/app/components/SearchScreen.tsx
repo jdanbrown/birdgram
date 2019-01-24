@@ -387,6 +387,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     return {
       height: this.props.spectroBase.height * this.state._spectroScale,
       width:  this.scrollViewContentWidths.image * matchRec(rec, {
+        opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for simple switching on rec.kind
         xc:   rec => 1,                                                  // Image width ~ 10s
         user: rec => rec.duration_s / this.props.searchRecsMaxDurationS, // Image width ~ duration_s
         edit: rec => rec.duration_s / this.props.searchRecsMaxDurationS, // Image width ~ duration_s
@@ -463,7 +464,10 @@ export class SearchScreen extends PureComponent<Props, State> {
       none:    ()                    => 'none',
       random:  ({filters, seed})     => `random/${seed}`,
       species: ({filters, species})  => species,
-      rec:     ({filters, sourceId}) => SourceId.show(sourceId, {species: null}),
+      rec:     ({filters, sourceId}) => SourceId.show(sourceId, {
+        species: null,
+        userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId [are queryDesc callers important?]
+      }),
     });
   }
 
@@ -608,7 +612,9 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Load query_rec from db
           //  - Bail if sourceId not found (e.g. from persisted history)
-          const source = Source.parse(sourceId);
+          const source = Source.parse(sourceId, {
+            userMetadata: null, // HACK(cache_user_metadata): Populated by db.loadRec (below), and source isn't used otherwise
+          });
           if (!source) {
             log.warn('loadRecsFromQuery: Failed to parse sourceId', rich({sourceId}));
             _setRecs({recs: 'loading'}); // FIXME 'loading'?
@@ -626,6 +632,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           const spectroPath = Rec.spectroPath(query_rec, this.spectroPathOpts);
           if (!await fs.exists(spectroPath)) {
             matchRec(query_rec, {
+              opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for simple switching on rec.kind
               xc:   _ => { throw `loadRecsFromQuery: Missing spectro asset for xc query_rec: ${sourceId}`; },
               user: _ => log.info(`loadRecsFromQuery: Caching spectro for user query_rec: ${sourceId}`),
               edit: _ => log.info(`loadRecsFromQuery: Caching spectro for edit query_rec: ${sourceId}`),
@@ -1060,7 +1067,10 @@ export class SearchScreen extends PureComponent<Props, State> {
       <this.GenericModal>
 
         <this.GenericModalTitle
-          title={`${rec.species}/${SourceId.show(rec.source_id, {species: this.props.xc})}`}
+          title={`${rec.species}/${SourceId.show(rec.source_id, {
+            species: this.props.xc,
+            userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
+          })}`}
         />
 
         {/* Spectro */}
@@ -1080,13 +1090,16 @@ export class SearchScreen extends PureComponent<Props, State> {
           {this.ActionModalButtons({actions: [
             {
               ...defaults,
-              label: `${rec.species}`,
+              label: rec.species,
               iconName: 'search',
               buttonColor: iOSColors.blue,
               onPress: () => this.props.go('search', {path: `/species/${encodeURIComponent(rec.species)}`}),
             }, {
               ...defaults,
-              label: `${SourceId.show(rec.source_id, {species: this.props.xc})}`,
+              label: SourceId.show(rec.source_id, {
+                species: this.props.xc,
+                userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
+              }),
               iconName: 'search',
               buttonColor: iOSColors.blue,
               onPress: () => this.props.go('search', {path: `/rec/${encodeURIComponent(rec.source_id)}`}),
@@ -1099,7 +1112,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           {this.ActionModalButtons({actions: [
             {
               ...defaults,
-              label: `${rec.species}`,
+              label: rec.species,
               iconName: 'x',
               buttonColor: iOSColors.red,
               onPress: () => this.setState((state: State, props: Props) => ({
@@ -1107,7 +1120,10 @@ export class SearchScreen extends PureComponent<Props, State> {
               })),
             }, {
               ...defaults,
-              label: `${SourceId.show(rec.source_id, {species: this.props.xc})}`,
+              label: SourceId.show(rec.source_id, {
+                species: this.props.xc,
+                userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
+              }),
               iconName: 'x',
               buttonColor: iOSColors.red,
               onPress: () => this.setState((state: State, props: Props) => ({

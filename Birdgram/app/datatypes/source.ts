@@ -2,7 +2,7 @@ import _ from 'lodash';
 import moment from 'moment';
 import { sprintf } from 'sprintf-js';
 
-import { Edit, EditRec, UserRec, XCRec } from 'app/datatypes';
+import { Edit, EditRec, UserMetadata, UserRec, UserSpecies, XCRec } from 'app/datatypes';
 import { debug_print, log, Log, rich } from 'app/log';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
@@ -16,16 +16,24 @@ export type SourceId = string;
 export type Source = XCSource | UserSource | EditSource;
 export interface XCSource   { kind: 'xc';   xc_id: number; }
 export interface UserSource { kind: 'user';
+  // TODO(user_metadata): Move {created,uniq} filename->metadata so that user can safely rename files (e.g. share, export/import)
   created:  Date;
   uniq:     string;
   ext:      string;
   filename: string; // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
+  metadata: UserMetadata | null; // TODO(cache_user_metadata): Kill null after moving slow UserRec.metadata -> fast UserSource.metadata
 }
 export interface EditSource { kind: 'edit'; edit: Edit; }
+
+// XXX(cache_user_metadata): Manually thread UserMetadata down from Source.parse callers, until we can kill null UserSource.metadata
+export interface SourceParseOpts {
+  userMetadata: UserMetadata | null;
+}
 
 export interface SourceShowOpts {
   species: XC | null; // Show species if xc sourceId (using XC dep)
   long?: boolean;
+  userMetadata: UserMetadata | null; // XXX(cache_user_metadata)
 }
 
 export const SourceId = {
@@ -44,7 +52,7 @@ export const SourceId = {
   },
 
   show: (sourceId: SourceId, opts: SourceShowOpts): string => {
-    return matchNull(Source.parse(sourceId), {
+    return matchNull(Source.parse(sourceId, _.pick(opts, 'userMetadata')), {
       x:    source => Source.show(source, opts),
       null: ()     => `[Malformed: ${sourceId}]`,
     });
@@ -63,18 +71,18 @@ export const Source = {
     });
   },
 
-  parse: (sourceId: SourceId): Source | null => {
+  parse: (sourceId: SourceId, opts: SourceParseOpts): Source | null => {
     const {kind, ssp} = SourceId.split(sourceId);
     return match<string, Source | null>(kind,
-      ['xc',          () => mapNull(safeParseIntOrNull(ssp), xc_id => typed<XCSource>   ({kind: 'xc',   xc_id}))],
-      ['user',        () => mapNull(UserSource.parse(ssp),   x     => typed<UserSource> ({kind: 'user', ...x}))],
-      ['edit',        () => mapNull(Edit.parse(ssp),         edit  => typed<EditSource> ({kind: 'edit', edit}))],
+      ['xc',          () => mapNull(safeParseIntOrNull(ssp),     xc_id => typed<XCSource>   ({kind: 'xc',   xc_id}))],
+      ['user',        () => mapNull(UserSource.parse(ssp, opts), x     => typed<UserSource> ({kind: 'user', ...x}))],
+      ['edit',        () => mapNull(Edit.parse(ssp),             edit  => typed<EditSource> ({kind: 'edit', edit}))],
       [match.default, () => { throw `Unknown sourceId type: ${sourceId}`; }],
     );
   },
 
-  parseOrFail: (sourceId: SourceId): Source => {
-    return matchNull(Source.parse(sourceId), {
+  parseOrFail: (sourceId: SourceId, opts: SourceParseOpts): Source => {
+    return matchNull(Source.parse(sourceId, opts), {
       null: ()     => { throw `Failed to parse sourceId[${sourceId}]`; },
       x:    source => source,
     });
@@ -89,11 +97,12 @@ export const Source = {
           !xc ? '' : ` (${xc.speciesFromXCID.get(xc_id) || '?'})`,
         ].join('');
       },
-      user: ({created, uniq, ext}) => {
+      user: ({created, uniq, ext, metadata}) => {
         // Ignore uniq (in name=`${date}-${time}-${uniq}`), since seconds resolution should be unique enough for human
         //  - TODO Rethink after rec sharing (e.g. add usernames to avoid collisions)
         return [
           !opts.long ? '' : 'Recording: ',
+          !metadata  ? '' : `[${UserSpecies.show(metadata.species)}] `,
           showDate(created),
         ].join('');
       },
@@ -141,7 +150,7 @@ export const UserSource = {
     return source.filename;
   },
 
-  parse: (ssp: string): NoKind<UserSource> | null => {
+  parse: (ssp: string, opts: SourceParseOpts): NoKind<UserSource> | null => {
     try {
       // Format: 'user-${created}-${uniq}.${ext}'
       //  - Assume uniq has no special chars, and let created + ext match everything outside of '-' and '.'
@@ -157,6 +166,7 @@ export const UserSource = {
         uniq,
         ext,
         filename: ssp, // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
+        metadata: ifNull(opts.userMetadata, () => null), // TODO(cache_user_metadata): Kill null case
       };
     } catch (e) {
       log.warn('UserSource.parse: Failed', rich({ssp, e}));
@@ -193,12 +203,13 @@ export function matchSource<X>(source: Source, cases: {
 
 // Prefer matchSource(source) to avoid having to handle the null case when sourceId fails to parse
 export function matchSourceId<X>(sourceId: SourceId, cases: {
+  opts: SourceParseOpts, // XXX(cache_user_metadata)
   null: (sourceId: SourceId) => X,
   xc:   (source: XCSource)   => X,
   user: (source: UserSource) => X,
   edit: (source: EditSource) => X,
 }): X {
-  return matchNull(Source.parse(sourceId), {
+  return matchNull(Source.parse(sourceId, cases.opts), {
     null: ()     => cases.null(sourceId),
     x:    source => matchSource(source, cases),
   });

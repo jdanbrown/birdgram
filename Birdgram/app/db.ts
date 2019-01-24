@@ -8,7 +8,7 @@ import { Log, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import Sound from 'app/sound';
 import { querySql, QuerySql, sqlf } from 'app/sql';
-import { local, typed } from 'app/utils';
+import { local, matchNull, typed } from 'app/utils';
 
 const log = new Log('DB');
 
@@ -58,14 +58,23 @@ export class DB {
       },
       user: async source => {
 
-        // Predict (and read metadata) from audio file
-        const {f_preds, duration_s} = await this.predsFromAudioFile(source, UserRec)
+        // Load user metadata (from AsyncStorage cache, else from audio file tags)
+        //  - XXX(cache_user_metadata): Simplify to source.metadata after UserSource.metadata is always populated
+        const metadata = await matchNull(source.metadata, {
+          x:    async metadata => metadata,
+          null: async ()       => await UserRec.loadMetadata(UserRec.audioPath(source)),
+        });
+
+        // Predict (and read duration_s) from audio file
+        //  - TODO Push duration_s into proper metadata, for simplicity
+        const {f_preds, duration_s} = await this.predsFromAudioFile(source, UserRec);
 
         // Make UserRec
         return typed<UserRec>({
           // UserRec
           kind:                  'user',
           f_preds,
+          metadata,
           // Rec:bubo
           source_id:             sourceId,
           duration_s,
@@ -95,8 +104,9 @@ export class DB {
       },
       edit: async source => {
 
-        // Predict (and read metadata) from audio file
-        const {f_preds, duration_s} = await this.predsFromAudioFile(source, EditRec)
+        // Predict (and read duration_s) from audio file
+        //  - TODO Push duration_s into proper metadata, for simplicity
+        const {f_preds, duration_s} = await this.predsFromAudioFile(source, EditRec);
 
         // Make EditRec
         return typed<EditRec>({
@@ -108,7 +118,7 @@ export class DB {
           source_id:             sourceId,
           duration_s,
           // Rec:xc (mock)
-          //  - TODO(user_metadata): Read (some of) these from .metadata.json (see EditRec.newAudioPath)
+          //  - TODO(unify_edit_user_recs): Populate these from UserSource.metadata (after move from UserRec.metadata)
           species:               'unknown',
           species_taxon_order:   '_UNK',
           species_com_name:      'unknown',

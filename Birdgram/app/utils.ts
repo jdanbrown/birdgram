@@ -47,6 +47,25 @@ export function typed<X>(x: X): X {
 export function all(...xs: Array<any>): boolean { return xs.every(Boolean); }
 export function any(...xs: Array<any>): boolean { return xs.some(Boolean); }
 
+// Expression form of try-catch-else (else like python, to limit catching scope)
+export function matchError<X, Y>(f: () => X, cases: {
+  x:     (x: X)   => Y,
+  error: (e: any) => Y,
+}): Y {
+  var x: X | null = null;
+  try {
+    x = f();
+  } catch (e) {
+    return cases.error(e);
+  }
+  return cases.x(x);
+}
+
+export function ifError<X>(f: () => X, g: (e: any) => X): X {
+  return matchError(f, {error: g, x: x => x});
+}
+
+// XXX Replace with ifError/matchError
 export function tryElse<Z, X extends Z = Z, Y extends Z = Z>(x: X, f: () => Y): Z {
   try {
     return f();
@@ -55,6 +74,7 @@ export function tryElse<Z, X extends Z = Z, Y extends Z = Z>(x: X, f: () => Y): 
   }
 }
 
+// XXX Replace with ifError/matchError
 export async function tryElseAsync<Z, X extends Z = Z, Y extends Z = Z>(x: X, f: () => Promise<Y>): Promise<Z> {
   try {
     return await f();
@@ -63,6 +83,7 @@ export async function tryElseAsync<Z, X extends Z = Z, Y extends Z = Z>(x: X, f:
   }
 }
 
+// XXX Replace with ifError/matchError
 export function catchTry<X>(
   c: (e: Error) => X,
   f: () => X,
@@ -74,6 +95,7 @@ export function catchTry<X>(
   }
 }
 
+// XXX Replace with ifError/matchError
 export async function catchTryAsync<X>(
   c: (e: Error) => Promise<X>,
   f: () => Promise<X>,
@@ -344,6 +366,17 @@ export type Omit<X, K> = Pick<X, Exclude<keyof X, K>>;
 // stringify / parse / show
 //
 
+export function stringifyDate(d: Date): string {
+  // Stringify local Date -> utc iso8601 string
+  return d.toISOString(); // Renders as utc
+}
+
+// [Maybe simpler to pass around Moment i/o Date?]
+export function parseDate(s: string): Date {
+  // Parse utc iso8601 string -> local Date
+  return moment.utc(s).toDate();
+}
+
 export function showDate(d: Date): string {
   const nowYear = new Date().getFullYear();
   return (d.getFullYear() === nowYear
@@ -470,6 +503,16 @@ export const unjson = JSON.parse;
 global.json   = json;
 global.pretty = pretty;
 global.unjson = unjson;
+
+// HACK What's the idiomatic way to log e.stack? (See callers for example usage)
+export function jsonSafeError(e: Error): {
+  message: string,
+  stack?:  Array<string>,
+} {
+  return {...e,
+    stack: mapUndefined(e.stack, s => s.split('\n')),
+  };
+}
 
 export type JsonSafeNumber = number | 'NaN' | 'Infinity' | '-Infinity';
 
@@ -801,6 +844,10 @@ export function compare<X>(x: X, y: X): number {
 
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
+
+export async function touch(path: string): Promise<void> {
+  await fs.createFile(path, '', 'utf8');
+}
 
 export async function ensureParentDir(path: string): Promise<string> {
   await ensureDir(dirname(path));

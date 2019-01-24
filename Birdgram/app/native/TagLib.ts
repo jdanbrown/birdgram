@@ -24,4 +24,10 @@ export const NativeTagLib = {
     value,
   ),
 
+  audioFiletype: async (
+    audioPath: string,
+  ): Promise<string> => RNTagLib.audioFiletype(
+    audioPath,
+  ),
+
 };

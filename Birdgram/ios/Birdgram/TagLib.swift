@@ -48,6 +48,17 @@ class RNTagLib: RCTEventEmitter, RNProxy {
     }
   }
 
+  @objc func audioFiletype(
+    _ audioPath: String,
+    resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
+  ) -> Void {
+    withPromiseNoProxy(resolve, reject, "audioFiletype") {
+      return try TagLibBirdgram.audioFiletype(
+        audioPath
+      )
+    }
+  }
+
 }
 
 public enum TagLibBirdgram {
@@ -60,12 +71,24 @@ public enum TagLibBirdgram {
   }
 
   public static func writeComment(_ audioPath: String, _ value: String) throws {
-    Log.debug(String(format: "TagLibBirdgram.writeComment: audioPath[%@], value[%@]", audioPath, value.slice(to: 1000))) // XXX Debug
+    // Log.debug(String(format: "TagLibBirdgram.writeComment: audioPath[%@], value[%@]", audioPath, value.slice(to: 1000))) // XXX
     let timer = Timer()
     try TagLib.writeComment(audioPath, value)
     Log.info(String(format: "TagLibBirdgram.writeComment: time[%.3f], audioPath[%@], value[%@]",
       timer.time(), audioPath, value.slice(to: 1000)
     ))
+  }
+
+  // HACK Distinguish .wav vs. .caf to workaround the old accidental .caf files we used to write for edit recs
+  //  - (See EditRec.readMetadata)
+  public static func audioFiletype(_ audioPath: String) throws -> String {
+    guard let f = FileHandle(forReadingAtPath: audioPath) else { throw AppError("File not found: \(audioPath)") }
+    let bytes = Array(f.readData(ofLength: 4))
+    return (
+      bytes == [82, 73,  70,  70] ? "wav" : // "RIFF"
+      bytes == [99, 97, 102, 102] ? "caf" : // "caff"
+      "unknown"
+    )
   }
 
 }

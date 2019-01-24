@@ -67,22 +67,35 @@ public func matrixToImageFile(
   debugTimes.append(("pxB", timer.lap()))
 
   // Pixels -> .png file
-  guard let image = ImageHelper.convertBitmapRGBA8(
-    toUIImage: &pxB,
-    withWidth: Int32(width),
-    withHeight: Int32(height),
-    grayscale: false
-  ) else {
-    throw AppError("Failed to ImageHelper.convertBitmapRGBA8")
+  //  - HACK Skip if file exists (else bottleneck on every RecordScreen load, since we blindly recompute and overwrite)
+  if (pathExists(path)) {
+    Log.debug(String(format: "matrixToImageFile: File exists, skipping write: %@", [
+      "path": path,
+      "width": width,
+      "height": height,
+    ]))
+  } else {
+
+    // Pixels -> .png file
+    guard let image = ImageHelper.convertBitmapRGBA8(
+      toUIImage: &pxB,
+      withWidth: Int32(width),
+      withHeight: Int32(height),
+      grayscale: false
+    ) else {
+      throw AppError("Failed to ImageHelper.convertBitmapRGBA8")
+    }
+    guard let pngData = image.pngData() else { throw AppError("Failed to image.pngData") }
+    try pngData.write(to: URL(fileURLWithPath: path), options: [.atomic])
+    debugTimes.append(("img", timer.lap()))
+
   }
-  guard let pngData = image.pngData() else { throw AppError("Failed to image.pngData") }
-  try pngData.write(to: URL(fileURLWithPath: path))
-  debugTimes.append(("img", timer.lap()))
 
   return (path: path, width: width, height: height)
 
 }
 
+// FIXME [Perf] Bottleneck for moderately-sized recs (e.g. rec >30s), and appears hung to the user for long recs (e.g. rec ~5-10m)
 public func chunkImageFile(
   _ path: String,
   chunkWidth: Int
@@ -93,17 +106,24 @@ public func chunkImageFile(
   ]))
 
   // Load image from path
+  //  - [Perf] ~1ms for image.width[5734], chunkWidth[5]
   guard let image = UIImage(contentsOfFile: path) else { throw AppError("Failed to read UIImage from path: \(path)") }
-
   // Get CGImage from Image
   //  - Use cgImage.{width,height}:Int i/o image.size.{width,height}:CGFloat so we don't have to think about float/int conversion
   guard let cgImage = image.cgImage else { throw AppError("Nil image.cgImage") }
+  // Log.debug(String(format: "chunkImageFile: Loaded: %@", [
+  //   "path": path,
+  //   "chunkWidth": chunkWidth,
+  //   "image": image,
+  // ]))
 
   // Chunk image
+  //  - [Perf] ~32ms for image.width[5734], chunkWidth[5]
+  let chunksDir = "\(path).chunks-chunkWidth=\(chunkWidth)"
   let chunks: Array<(path: String, image: UIImage)> = (
     try stride(from: 0, to: cgImage.width, by: chunkWidth).map { x in
       // WARNING Avoid ':' in ios paths [they map to dir separator, I think?]
-      let path = try ensureParentDir("\(path).chunks" / "\(x)-\(cgImage.width)-\(chunkWidth).\(pathSplitExt(path).ext)")
+      let path = "\(chunksDir)" / "\(x)-\(cgImage.width)-\(chunkWidth).\(pathSplitExt(path).ext)"
       guard let image = image.cropping(to: CGRect(
         x: x,
         y: 0,
@@ -115,14 +135,45 @@ public func chunkImageFile(
       return (path: path, image: image)
     }
   )
+  // Log.debug(String(format: "chunkImageFile: Chunked: %@", [
+  //   "path": path,
+  //   "chunkWidth": chunkWidth,
+  //   "chunksDir": chunksDir,
+  //   "image": image,
+  // ]))
 
   // Write image chunks to files
-  try chunks.forEach { (path, image) in
-    guard let pngData = image.pngData() else { throw AppError("Failed to image.pngData (for outgoing path: \(path))") }
-    try pngData.write(to: URL(fileURLWithPath: path))
+  //  - HACK Skip if done file exists (else bottleneck on every RecordScreen load, since we bindly recompute and overwrite)
+  let chunksDonePath = "\(chunksDir).done"
+  if (pathExists(chunksDonePath)) {
+    Log.debug(String(format: "chunkImageFile: Writes already done, skipping: %@", [
+      "path": path,
+      "chunkWidth": chunkWidth,
+      "chunksDir": chunksDir,
+      "image": image,
+    ]))
+  } else {
+
+    // Write image chunks to files
+    //  - [Perf] ~5500ms for image.width[5734], chunkWidth[5] <- FIXME bottleneck
+    try ensureDir(chunksDir)
+    try chunks.forEach { (path, image) in
+      guard let pngData = image.pngData() else { throw AppError("Failed to image.pngData (for outgoing path: \(path))") }
+      try pngData.write(to: URL(fileURLWithPath: path))
+    }
+    // Log.debug(String(format: "chunkImageFile: Written: %@", [
+    //   "path": path,
+    //   "chunkWidth": chunkWidth,
+    //   "chunksDir": chunksDir,
+    //   "image": image,
+    // ]))
+
+    // Mark done
+    try touchPath(chunksDonePath)
   }
 
   // Return an ImageFile for each chunk
+  //  - [Perf] ~5ms for image.width[5734], chunkWidth[5]
   let imageFiles: Array<ImageFile> = chunks.map { (path, image) in (
     path:   path,
     width:  image.cgImage!.width,
@@ -130,8 +181,9 @@ public func chunkImageFile(
   )}
   Log.info(String(format: "chunkImageFile: Done: %@", [
     "path": path,
-    "image": image,
     "chunkWidth": chunkWidth,
+    "chunksDir": chunksDir,
+    "image": image,
     "imageFiles.count": imageFiles.count,
   ]))
   return imageFiles
