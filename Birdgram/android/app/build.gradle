@@ -140,6 +140,7 @@ android {
 }
 
 dependencies {
+    compile project(':react-native-device-info')
     compile project(':react-native-config')
     compile project(':react-native-audio-record')
     compile project(':react-native-gesture-handler')

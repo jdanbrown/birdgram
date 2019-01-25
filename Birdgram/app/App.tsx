@@ -5,6 +5,7 @@ import {
   ActivityIndicator, Alert, Animated, AsyncStorage, Dimensions, Linking, NativeModules, Platform, SafeAreaView,
   StatusBar, Text, View,
 } from 'react-native';
+import DeviceInfo from 'react-native-device-info';
 import KeepAwake from 'react-native-keep-awake';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
@@ -80,6 +81,7 @@ global.cheerio = cheerio;
 global.Colors = Colors;
 global.config = config;
 global.deepEqual = deepEqual;
+global.DeviceInfo = DeviceInfo;
 global.Dimensions = Dimensions;
 global.Ebird = Ebird;
 global.EditRec = EditRec;

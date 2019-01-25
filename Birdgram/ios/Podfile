@@ -64,12 +64,19 @@ target 'Birdgram' do
   project 'Birdgram.xcodeproj'
   all_pods
 
-  # NOTE react-native-config tried to add this line but I never realized I needed to `pod install`
-  # during the setup, so I ended up doing all the linking stuff myself (I guess), so I later
-  # disabled this to avoid thrash...
+  # HACK Prevent `react-native link` from adding pod deps here
+  # - They typically try to depend on the 'React' pod, which is deprecated and causes problems
+  #   - e.g. https://github.com/react-native-community/react-native-camera/issues/1747
+  #   - e.g. https://github.com/bugsnag/bugsnag-react-native/issues/193
+  # - Workaround: do the link steps manually for each native dep (usually in their README)
+  #
+  # Disabled from `react-native link react-native-config`
   # pod 'react-native-config', :path => '../node_modules/react-native-config'
+  #
+  # Disabled from `react-native link react-native-device-info`
+  # pod 'RNDeviceInfo', :path => '../node_modules/react-native-device-info'
 
-  # # This causes warnings. Commented out for now.
+  # This causes warnings. Commented out for now.
   # target 'BirdgramTests' do
   #   inherit! :search_paths
   # end
