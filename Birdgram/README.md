@@ -129,6 +129,9 @@ android
   - TODO
 
 # Troubleshooting (newest to oldest)
+- `react-native link` fails with `Cannot read property 'buildConfigurationList' of undefined`
+  - Make sure `Birdgram` is the first target in the xcode project
+  - `react-native link` only links the first target: https://github.com/react-native-community/react-native-cli/issues/41
 - Xcode build fails with:
   - `unable to read input file '.../Birdgram.build/Preprocessed-Info.plist': No such file or directory`
   - Solution: retry the build (ugh)
