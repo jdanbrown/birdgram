@@ -2,7 +2,7 @@ import _ from 'lodash';
 import moment from 'moment';
 import { sprintf } from 'sprintf-js';
 
-import { Edit, EditRec, UserMetadata, UserRec, UserSpecies, XCRec } from 'app/datatypes';
+import { DraftEdit, Edit, EditRec, UserMetadata, UserRec, UserSpecies, XCRec } from 'app/datatypes';
 import { debug_print, log, Log, rich } from 'app/log';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
@@ -100,11 +100,21 @@ export const Source = {
       user: ({created, uniq, ext, metadata}) => {
         // Ignore uniq (in name=`${date}-${time}-${uniq}`), since seconds resolution should be unique enough for human
         //  - TODO Rethink after rec sharing (e.g. add usernames to avoid collisions)
-        return [
-          !opts.long ? '' : 'Recording: ',
-          !metadata  ? '' : `[${UserSpecies.show(metadata.species)}] `,
-          showDate(created),
-        ].join('');
+        const parts = (
+          metadata && metadata.edit ? [
+            !metadata  ? '' : `[${UserSpecies.show(metadata.species)}]`,
+            !opts.long ? '' : 'Edit:',
+            Edit.show(metadata.edit, opts),
+          ] : [
+            !metadata  ? '' : `[${UserSpecies.show(metadata.species)}]`,
+            !opts.long ? '' : 'Recording:',
+            showDate(created),
+          ]
+        );
+        return (parts
+          .filter(x => !_.isEmpty(x)) // Exclude null, undefined, '' (and [], {})
+          .join(' ')
+        );
       },
       edit: ({edit}) => {
         return Edit.show(edit, opts);

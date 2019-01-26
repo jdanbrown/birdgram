@@ -17,6 +17,7 @@ import {
 // A (commited) edit, which has a well defined mapping to an edit rec file
 export interface Edit extends DraftEdit {
   parent:  SourceId;
+  // TODO(unify_edit_user_recs): Kill Edit.{created,uniq} since they're redundant with UserSource.{created,uniq}
   created: Date;
   uniq:    string; // Ensure a new filename for each EditRec (so we don't have to think about file collisions / purity)
 }
@@ -28,6 +29,7 @@ export interface DraftEdit {
   clips?: Array<Clip>;
 }
 
+// TODO TODO(unify_edit_user_recs)
 export interface Clip {
   time:  Interval;
   gain?: number; // TODO Unused
@@ -89,8 +91,7 @@ export const Edit = {
     const parts = [
       // Ignore uniq for human
       SourceId.show(edit.parent, opts),
-      // Strip outer '[...]' per clip so we can wrap all clips together in one '[...]'
-      sprintf('[%s]', (edit.clips || []).map(x => Clip.show(x).replace(/^\[|\]$/g, '')).join(',')),
+      DraftEdit.show(edit),
     ];
     return (parts
       .filter(x => !_.isEmpty(x)) // Exclude null, undefined, '' (and [], {})
@@ -130,6 +131,21 @@ export const Edit = {
 
 export const DraftEdit = {
 
+  // Merge edits to avoid O(n) parent chains (see UserRec.newFromEdit)
+  //  - Not commutative: a happens before b (e.g. rec -> a.clips -> b.clips)
+  //  - [Everything we might add to DraftEdit in the future _should_ be monoidal, e.g. gain adj, freq clip]
+  merge: (a: DraftEdit, b: DraftEdit): DraftEdit => {
+    // TODO TODO(unify_edit_user_recs)
+    //  - [Hmm, this will be tedious code...]
+    //  - [But it will let us avoid calling UserRec.loadMetadata() down O(n) parent chains, which is a worthwhile tradeoff]
+    //  - [Or! change the representation to be an Array<DraftEdit> and never bother with a merge operation at all]
+    return a;
+  },
+
+  hasEdits: (edit: DraftEdit): boolean => {
+    return !_(edit).values().every(_.isEmpty);
+  },
+
   // For NativeSpectro.editAudioPathToAudioPath [see HACK there]
   jsonSafe: (draftEdit: DraftEdit): any => {
     return {
@@ -140,8 +156,15 @@ export const DraftEdit = {
   // unjsonSafe: (x: any): DraftEdit => {
   // },
 
-  hasEdits: (edit: DraftEdit): boolean => {
-    return !_(edit).values().every(_.isEmpty);
+  show: (draftEdit: DraftEdit): string => {
+    const parts = [
+      // Strip outer '[...]' per clip so we can wrap all clips together in one '[...]'
+      sprintf('[%s]', (draftEdit.clips || []).map(x => Clip.show(x).replace(/^\[|\]$/g, '')).join(',')),
+    ];
+    return (parts
+      .filter(x => !_.isEmpty(x)) // Exclude null, undefined, '' (and [], {})
+      .join(' ')
+    );
   },
 
 };

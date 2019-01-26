@@ -40,17 +40,7 @@ export interface UserRec extends _RecImpl {
   metadata: UserMetadata;
 }
 
-// TODO(unify_edit_user_recs): Unify edit + user recs
-//  - Why
-//    - User will want to label/share/delete/rename edit recs just like user recs (e.g. clip sp X from Y, label edit as X i/o Y)
-//    - Dealing with two paths everywhere seems too complex
-//    - We've already diverged on what to include in UserMetadata (useful user labels) vs. EditMetadata (just parent.sourceId...)
-//  - When
-//    - Let's fix this before users start creating many edit recs, else we'll have to maintain code paths for back compat
-//  - How
-//    - Add edit.merge(edit) to avoid O(n) reference chains (everything should be monoidal, including future gain adj + freq clip)
-//    - Add UserRec.edit? to subsume EditRec
-//    - Survey the matchRec/matchSource callers to make sure this would jive
+// TODO(unify_edit_user_recs): Kill EditRec/EditSource everywhere! Will require updating lots of matchRec/matchSource callers
 export interface EditRec extends _RecImpl {
   kind:     'edit';
   edit:     Edit;
@@ -65,8 +55,9 @@ export interface UserMetadata {
   //  - NOTE(user_metadata): File metadata already contains {created,uniq} (guaranteed by UserRec.writeMetadata from the start)
   // created: Date;
   // uniq:    string;
-  creator: Creator | null,
-  coords:  GeoCoords | null;
+  edit:    null | Edit,      // null if a new recording, non-null if an edit of another recording (edit.parent)
+  creator: null | Creator,   // null if unknown creator
+  coords:  null | GeoCoords; // null if unknown gps
   // Mutable user data
   species: UserSpecies;
 }
@@ -120,8 +111,26 @@ export const Creator = {
 };
 
 export const UserMetadata = {
+
+  new: (props: {
+    edit:     UserMetadata['edit'],
+    creator?: UserMetadata['creator'],
+    coords:   UserMetadata['coords'],
+    species?: UserMetadata['species'],
+  }): UserMetadata => {
+    return {
+      // Immutable facts
+      edit:    props.edit,
+      creator: ifUndefined(props.creator, () => Creator.get()),
+      coords:  props.coords,
+      // Mutable user data (initial values)
+      species: ifUndefined(props.species, () => typed<UserSpecies>({kind: 'unknown'})),
+    };
+  },
+
   jsonSafe: (metadata: UserMetadata): any => {
     return typed<{[key in keyof UserMetadata]: any}>({
+      edit:    mapNull(metadata.edit,    Edit.jsonSafe),
       creator: mapNull(metadata.creator, Creator.jsonSafe),
       coords:  metadata.coords,
       species: UserSpecies.jsonSafe(metadata.species),
@@ -129,11 +138,13 @@ export const UserMetadata = {
   },
   unjsonSafe: (x: any): UserMetadata => {
     return {
+      edit:    mapNull(x.edit,    Edit.unjsonSafe),
       creator: mapNull(x.creator, Creator.unjsonSafe),
       coords:  x.coords,
       species: UserSpecies.unjsonSafe(x.species),
     };
   },
+
 };
 
 export const UserSpecies = {
@@ -423,6 +434,10 @@ export const UserRec = {
 
   audioDir: Rec.userRecDir,
 
+  // Give user rec files a proper audio file ext, else e.g. ios AKAudioFile(forReading:) fails to infer the filetype
+  //  - Use .wav to match kAudioFormatLinearPCM in NativeSpectro.create
+  audioExt: 'wav',
+
   pathBasename: (source: UserSource): string => {
     return stripExt(source.filename); // e.g. 'user-20190109205640977-336b2bb7'
   },
@@ -448,9 +463,10 @@ export const UserRec = {
   readMetadata: async (audioPath: string): Promise<UserMetadata> => {
     const versionedMetadata = await Rec.readMetadata(audioPath);
     const defaults: UserMetadata = {
-      creator: null,
-      coords:  null,
-      species: {kind: 'unknown'},
+      edit:    null,              // Not an edit of another rec
+      creator: null,              // Unknown creator
+      coords:  null,              // Unknown gps
+      species: {kind: 'unknown'}, // Unknown species
     };
     if (!versionedMetadata) {
       // Noisy (when lots of pre-metadata user recs, e.g. mine)
@@ -541,6 +557,67 @@ export const UserRec = {
     return userSource;
   },
 
+  // (Callers: RecordScreen "Done editing" button)
+  //  - Creates audioPath (via newAudioPath) and file (via editAudioPathToAudioPath)
+  newFromEdit: async (props: {parent: Rec, draftEdit: DraftEdit}): Promise<UserSource> => {
+    const parent  = props.parent;
+    var draftEdit = props.draftEdit;
+
+    // TODO TODO(unify_edit_user_recs): Add logging, then test!
+    // Attach to grandparent (flat) i/o parent (recursive), else we'd have to deal with O(n) parent chains
+    //  - Load parent's UserMetadata, if a user rec
+    //  - If an edit rec, attach to parent's parent with a merged edit
+    //  - Else, attach to parent with our edit
+    const parentEdit: Edit | null = await matchRec(props.parent, {
+      opts: {userMetadata: null}, // HACK(cache_user_metadata): We load UserRec.metadata ourselves, down inside the user case
+      xc:   async (parentRec, parentSource) => null,
+      edit: async (parentRec, parentSource) => parentRec.edit,
+      user: async (parentRec, parentSource) => (await UserRec.loadMetadata(UserRec.audioPath(parentSource))).edit,
+    });
+    if (parentEdit) {
+      draftEdit = DraftEdit.merge(parentEdit, draftEdit);
+    }
+
+    // Make userSource <- metadata <- edit <- (parent, draftEdit)
+    const created  = new Date();
+    const uniq     = chance.hash({length: 8});
+    const metadata = UserMetadata.new({
+      edit: {
+        ...draftEdit,
+        parent: parent.source_id,
+        // TODO(unify_edit_user_recs): Kill Edit.{created,uniq} since they're redundant with UserSource.{created,uniq}
+        created,
+        uniq,
+      },
+      coords: null, // TODO Copy coords from XCRec (.lat,.lng) / UserRec (.metadata.coords)
+      species: {kind: 'unknown'}, // 'unknown' species even if parent is known, e.g. clipping down to an unknown bg species
+    });
+    const userSource = UserSource.new({
+      created,
+      uniq,
+      ext: UserRec.audioExt,
+      metadata,
+    });
+    UserRec.log.info('newFromEdit', rich({userSource}));
+
+    // Edit parent audio file -> edit audio file
+    const audioPath = UserRec.audioPath(userSource);
+    await NativeSpectro.editAudioPathToAudioPath({
+      parentAudioPath: Rec.audioPath(parent),
+      editAudioPath:   await ensureParentDir(audioPath),
+      draftEdit,
+    });
+
+    // Write user metadata
+    //  - Requires audioPath to exist (created above by editAudioPathToAudioPath)
+    await UserRec.writeMetadata(audioPath, metadata);
+
+    // Notify listeners that a new UserRec was created (e.g. SavedScreen)
+    Rec.emitter.emit('user', userSource);
+
+    return userSource;
+  },
+
   // (Callers: Rec.listAudioSources, UserRec.new)
   sourceFromAudioPath: async (audioPath: string): Promise<UserSource | null> => {
     // Load user metadata (from AsyncStorage cache, else from audio file tags)
@@ -565,6 +642,7 @@ export const UserRec = {
 
 };
 
+// TODO(unify_edit_user_recs): Kill EditRec/EditSource everywhere! Will require updating lots of matchRec/matchSource callers
 export const EditRec = {
 
   log: new Log('EditRec'),
@@ -680,7 +758,6 @@ export const EditRec = {
   newAudioPath: async (edit: Edit): Promise<string> => {
 
     // Create audioPath
-    const source: EditSource = {kind: 'edit', edit};
     const audioPath = EditRec.audioPath({kind: 'edit', edit});
 
     // Ensure parent dir for caller

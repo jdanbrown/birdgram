@@ -30,8 +30,8 @@ const {fs, base64} = RNFB;
 import { Geo } from 'app/components/Geo';
 import * as Colors from 'app/colors';
 import {
-  Creator, DraftEdit, Edit, EditRec, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation,
-  Source, SourceId, UserMetadata, UserRec,
+  DraftEdit, Edit, EditRec, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source,
+  SourceId, UserMetadata, UserRec,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
@@ -495,13 +495,10 @@ export class RecordScreen extends Component<Props, State> {
         } else {
 
           // Initial UserMetadata, as of record time
-          const recordingUserMetadata: UserMetadata = {
-            // Immutable facts
-            creator: Creator.get(),
+          const recordingUserMetadata = UserMetadata.new({
+            edit: null, // Not an edit of another rec
             coords,
-            // Mutable user data (initial values)
-            species: {kind: 'unknown'},
-          };
+          });
 
           // Reset state
           //  - TODO Dedupe with updateForLocation
@@ -1021,11 +1018,12 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           // Done editing: save and show edit rec
           <RectButton style={styles.bottomControlsButton} onPress={async () => {
             if (this.props.editRecording) {
-              const editSource = await EditRec.new({
+              // const source = await EditRec.new({ // XXX(unify_edit_user_recs): Switch EditRec.new -> UserRec.newFromEdit
+              const source = await UserRec.newFromEdit({
                 parent:    this.props.editRecording.rec,
                 draftEdit: this.props.draftEdit,
               });
-              this.props.go('record', {path: `/edit/${encodeURIComponent(Source.stringify(editSource))}`});
+              this.props.go('record', {path: `/edit/${encodeURIComponent(Source.stringify(source))}`});
             }
           }}>
             <Feather style={styles.bottomControlsButtonIcon}
