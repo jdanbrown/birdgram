@@ -8,7 +8,7 @@ if [ $# -gt 1 ]; then
   xcode_build_dir="$1"; shift
 else
   # HACK Hardcoded framework deps path from Xcode build (Build -> click any Product/*.framework -> copy path)
-  xcode_build_dir='/Users/danb/Library/Developer/Xcode/DerivedData/Birdgram-higoicbsnkwebceboubdaasypfhd/Build/Products/Debug'
+  xcode_build_dir='/Users/danb/Library/Developer/Xcode/DerivedData/Birdgram-crcmaddvypkegedhvlchebphcjpr/Build/Products/Debug'
 fi
 
 if [ ! -d "$xcode_build_dir" ]; then
