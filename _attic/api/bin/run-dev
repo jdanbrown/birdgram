@@ -1,8 +1,0 @@
-#!/bin/bash -eux
-
-bin="`dirname "$0"`"
-
-export CONFIG_YAML=config-dev.yaml
-export FLASK_DEBUG=true # Can't get DEBUG:True to work from config
-
-exec "$bin"/_run-flask "$@"

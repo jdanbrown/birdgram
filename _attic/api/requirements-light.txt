@@ -1,2 +1,0 @@
-# Reqs that might change often and hopefully don't take long to build and push
-git+https://github.com/jdanbrown/potoo.git@172b508
