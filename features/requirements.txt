@@ -1,5 +1,5 @@
 # XXX This worked with `pip install`, but doesn't work with `conda env`. Have to manually `pip install -e .` instead.
-# -e /Users/danb/bubo/features
+# -e /Users/danb/birdgram/model
 
 # TODO Reconcile local vs. github
 # -e /Users/danb/hack/potoo

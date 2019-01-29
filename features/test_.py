@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from cache import cache_control
-from constants import birdgram_ios_tests_data_dir
+from constants import mobile_ios_tests_data_dir
 from json_ import json_dump_path
 from util import ensure_parent_dir
 
@@ -11,7 +11,7 @@ from util import ensure_parent_dir
 def test_for_swift(name):
     """
     Generate test data for swift tests
-    - Examples in Birdgram/ios/Tests/*.ipynb
+    - Examples in mobile/ios/Tests/*.ipynb
     """
     # Disable cache for tests
     with cache_control(enabled=False):
@@ -24,5 +24,5 @@ def test_for_swift(name):
         except Dump as dump:
             json_dump_path(
                 obj=dump.kwargs,
-                path=ensure_parent_dir(str(Path(birdgram_ios_tests_data_dir) / name) + '.json'),
+                path=ensure_parent_dir(str(Path(mobile_ios_tests_data_dir) / name) + '.json'),
             )

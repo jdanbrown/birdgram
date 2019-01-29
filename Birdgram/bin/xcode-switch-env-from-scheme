@@ -17,9 +17,9 @@ export SCHEME_SUFFIX="$(echo "$SCHEME_NAME" | cut -d' ' -f2-)"
 
 # Generate .env <- .env.shared + .env.$SCHEME_SUFFIX
 # - TODO Dedupe with ios/bin/fastlane-env
-env_shared_path="$BIRDGRAM_DIR/.env.shared";         if [ ! -e "$env_shared_path" ]; then die "Env not found: $env_shared_path"; fi
-env_scheme_path="$BIRDGRAM_DIR/.env.$SCHEME_SUFFIX"; if [ ! -e "$env_scheme_path" ]; then die "Env not found: $env_scheme_path"; fi
-env_path="$BIRDGRAM_DIR/.env"
+env_shared_path="$MOBILE_DIR/.env.shared";         if [ ! -e "$env_shared_path" ]; then die "Env not found: $env_shared_path"; fi
+env_scheme_path="$MOBILE_DIR/.env.$SCHEME_SUFFIX"; if [ ! -e "$env_scheme_path" ]; then die "Env not found: $env_scheme_path"; fi
+env_path="$MOBILE_DIR/.env"
 (
   set -x
   echo "# From file[`basename "$env_shared_path"`]" | sed 's/^/++ /'
@@ -51,7 +51,7 @@ env_path="$BIRDGRAM_DIR/.env"
 (
   source "$env_path"
   tmp="`mktemp`"
-  pbxproj="$BIRDGRAM_DIR/ios/Birdgram.xcodeproj/project.pbxproj"
+  pbxproj="$MOBILE_DIR/ios/Birdgram.xcodeproj/project.pbxproj"
   perl -pe >"$tmp" <"$pbxproj" '
     s/(\bPRODUCT_BUNDLE_IDENTIFIER\s*=\s*"app\.birdgram\.)(birdgram-[^."]+)([^"]*";)/\1'"$APP_BUNDLE_ID_NAME"'\3/g;
   '
@@ -65,7 +65,7 @@ env_path="$BIRDGRAM_DIR/.env"
 (
   source "$env_path"
   tmp="`mktemp`"
-  pbxproj="$BIRDGRAM_DIR/ios/Birdgram.xcodeproj/project.pbxproj"
+  pbxproj="$MOBILE_DIR/ios/Birdgram.xcodeproj/project.pbxproj"
   perl -pe >"$tmp" <"$pbxproj" '
     s {
       (\bPROVISIONING_PROFILE_SPECIFIER\s*=\s*"match\s+)

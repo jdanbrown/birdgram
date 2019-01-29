@@ -88,8 +88,8 @@ RUN apt-get update \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
-# TODO Make a new /app, or reuse the /Users/danb/hack/bubo/features that we'll mount during `docker run`?
-# - Maybe it's harmless to make a new /app? And let /Users/danb/hack/bubo/features only be used for data/ interactions?
+# TODO Make a new /app, or reuse the /Users/danb/hack/birdgram/model that we'll mount during `docker run`?
+# - Maybe it's harmless to make a new /app? And let /Users/danb/hack/birdgram/model only be used for data/ interactions?
 WORKDIR /app
 
 # Install mergerfs

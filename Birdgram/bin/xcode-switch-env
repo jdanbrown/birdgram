@@ -7,7 +7,7 @@ set -o pipefail
 # - For https://github.com/luggit/react-native-config
 
 # Export for callees
-export BIRDGRAM_DIR="$SRCROOT/.."
+export MOBILE_DIR="$SRCROOT/.."
 
 # Bust cache
 # - Force Info.plist to be recomputed from .env (via xcode INFOPLIST_PREPROCESS, from react-native-config README)
@@ -15,11 +15,11 @@ rm -f "$CONFIGURATION_TEMP_DIR/Birdgram.build/Preprocessed-Info.plist"
 
 # Read $SCHEME_NAME from bin/xcode-pre-actions
 # - (b/c xcode exposes $SCHEME_NAME during pre-actions but not build)
-source "$BIRDGRAM_DIR/.env.SCHEME_NAME"
+source "$MOBILE_DIR/.env.SCHEME_NAME"
 
 # Build .env from $SCHEME_NAME
 # - (cf. ios/bin/fastlane-env)
-"$BIRDGRAM_DIR"/bin/xcode-switch-env-from-scheme
+"$MOBILE_DIR"/bin/xcode-switch-env-from-scheme
 
 # Run BuildDotenvConfig.ruby
 # - [Why did we have to do this manually?]
@@ -51,9 +51,9 @@ fi
 
 # HACK Generate LaunchScreen.xib from LaunchScreen.template.xib
 # - So we can do __RN_CONFIG_* var substitution, like with Info.plist
-cat "$BIRDGRAM_DIR"/ios/Birdgram/Base.lproj/LaunchScreen.template.xib \
+cat "$MOBILE_DIR"/ios/Birdgram/Base.lproj/LaunchScreen.template.xib \
   | perl -pe "$(cat "$INFOPLIST_PREFIX_HEADER" | perl -pe 's/^#define ([^ ]+)\s+(.*)$/s#\\b\1\\b#\2#g;/g')" \
-  >"$BIRDGRAM_DIR"/ios/Birdgram/Base.lproj/LaunchScreen.xib
+  >"$MOBILE_DIR"/ios/Birdgram/Base.lproj/LaunchScreen.xib
 
 # HACK HACK Fix cocoapods MACH_O_TYPE: "Static Library" -> "Dynamic Library"
 # - Else error at the end of app publish (after the slooow Archive step)

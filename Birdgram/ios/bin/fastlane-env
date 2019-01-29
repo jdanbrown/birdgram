@@ -14,7 +14,7 @@ export CONFIGURATION="${CONFIGURATION:-Release}"
 export SCHEME_SUFFIX="$1"; shift
 
 # HACK Mimic xcode (select scheme -> Build -> Target switch-env)
-export BIRDGRAM_DIR="$dir/.."
+export MOBILE_DIR="$dir/.."
 export SCHEME_PREFIX="${SCHEME_PREFIX:-"$PROJECT_NAME"}"
 export SCHEME_NAME="$SCHEME_PREFIX $SCHEME_SUFFIX"
 
@@ -26,12 +26,12 @@ export CODE_SIGN_IDENTITY='iPhone Distribution' # [Necessary? xcode does want 'i
 # Build .env from $SCHEME_NAME
 # - (cf. bin/xcode-switch-env)
 echo "SCHEME_NAME='$SCHEME_NAME' bin/xcode-switch-env-from-scheme"
-"$BIRDGRAM_DIR"/bin/xcode-switch-env-from-scheme
+"$MOBILE_DIR"/bin/xcode-switch-env-from-scheme
 
 # NOTE `source` i/o `fastlane --env=...` because the latter only supports a limited amount of shell in .env files
 # - https://docs.fastlane.tools/best-practices/keys#dotenv
 # - https://github.com/bkeepers/dotenv -- very limited approximation to real shell substitutions (empirically)
-source "$BIRDGRAM_DIR"/.env
+source "$MOBILE_DIR"/.env
 
 # Run fastlane
 exec "$bin"/fastlane "$@"

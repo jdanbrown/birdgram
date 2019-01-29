@@ -152,7 +152,7 @@ android
   - Clean (cmd-shift-k) and rebuild [https://stackoverflow.com/a/33502910/397334]
 - To add an SPM project (Package.swift) that doesn't have an *.xcodeproj
   - (e.g. SwiftNpy: https://github.com/qoncept/swift-npy)
-  - `git clone` into Birdgram/ios/ dir
+  - `git clone` into ios/ dir
   - `swift package generate-xcodeproj` inside the cloned repo to generate the *.xcodeproj
   - HACK Fix `import SwiftNpy` -> "missing required module Cminimap"
     - Critical help here: https://bugs.swift.org/browse/SR-4972

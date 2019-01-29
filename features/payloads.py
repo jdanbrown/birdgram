@@ -391,7 +391,7 @@ def df_cache_hybrid(
 
             # Write file: models/search.json
             #   - HACK Get search from sg.search
-            #   - HACK Tight coupling: structure follows Birdgram/ios/Bubo/Bubo/py/model.swift:Search and its callees
+            #   - HACK Tight coupling: structure follows mobile/ios/Bubo/Bubo/py/model.swift:Search and its callees
             #   - HACK HACK HACK Make it go, leave lots of gross code here to clean up later
             with log_time_context(f'Mobile: Write {rel(mobile_models_search_path)}',
                 lambda: naturalsize_path(mobile_models_search_path),

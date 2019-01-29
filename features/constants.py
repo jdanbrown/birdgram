@@ -6,8 +6,9 @@ gs_bucket = 'bubo-data'
 gs_data_dir = f'gs://{gs_bucket}/v0/data'  # Mirror of data_dir in gs
 
 # TODO Find a cleaner way to do this
+#   - [No memory of why these need to be absolute... :/]
 _maybe_code_dirs = [
-    '/Users/danb/hack/bubo/features',  # Local dev (osx)
+    '/Users/danb/hack/birdgram/model',  # Local dev (osx)
     '/app',  # Remote deploy (docker/linux)
 ]
 for _maybe_code_dir in _maybe_code_dirs:
@@ -30,9 +31,9 @@ uploads_dir = f'{data_dir}/uploads'
 uploads_recs_dir = f'{uploads_dir}/recs'
 #   - data/cache/
 cache_audio_dir = f'{cache_dir}/audio'
-#   - Birdgram/
-birdgram_dir = f'{code_dir}/../Birdgram'
-birdgram_ios_tests_data_dir = f'{birdgram_dir}/ios/Tests/data'
+#   - mobile/
+mobile_dir = f'{code_dir}/../mobile'
+mobile_ios_tests_data_dir = f'{mobile_dir}/ios/Tests/data'
 
 standard_sample_rate_hz = 22050  # Can resolve 11025Hz (by Nyquist), which most/all birds are below
 default_log_ylim_min_hz = 512  # Most/all birds are above 512Hz (but make sure to clip noise below 512Hz)
