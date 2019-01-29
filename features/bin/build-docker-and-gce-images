@@ -25,8 +25,7 @@ set -o pipefail
 # Constants
 bin="`dirname "$0"`"
 bin="`"$bin"/normpath "$bin"`"
-bubo_dir="`"$bin"/normpath "$bin/../.."`"
-bubo_features_dir="`"$bin"/normpath "$bubo_dir/features"`"
+code_dir="`"$bin"/normpath "$bin/.."`"
 
 # Parse args
 docopts -h 'usage:' : x -h >/dev/null 2>/dev/null || { echo 'ERROR: docopts needs `pip install docopt==0.6.2`'; exit 1; }
@@ -113,7 +112,7 @@ fi
 banner 'Disk space (pre-build)'
 show_cmd "$bin"/gcloud-run --reuse="$instance" --no-container 'df -h'
 
-# rsync bubo/features/
+# rsync code dir
 # - Capture dev state for build, instead of requiring user to git commit/push
 # - -FF to use .rsync-filter to exclude files
 # - Mimic git otherwise
@@ -121,7 +120,7 @@ show_cmd "$bin"/gcloud-run --reuse="$instance" --no-container 'df -h'
 #   - --prume-empty-dirs: Don't copy empty dirs
 banner 'rsync-ing dev code'
 show_cmd time "$bin"/rsync-vm -azv --delete -FF --links --prune-empty-dirs \
-  "$bubo_features_dir"/ "$instance":"$build_dir"/
+  "$code_dir"/ "$instance":"$build_dir"/
 
 # docker build, with all the gnarly supporting stuff to make it happen
 # - `with_gcr` uses a container with gcloud to auth docker to our gcr registry (gcr.io/bubo-1)
