@@ -15,7 +15,7 @@ import {
 } from 'app/utils';
 
 // A (commited) edit, which maps to a user rec file (contained within UserRec.metadata.edit)
-export interface Edit_v2 {
+export interface Edit {
   parent: SourceId;         // A non-edit rec (don't allow O(n) parent chains)
   edits:  Array<DraftEdit>; // The full sequence of edits from .parent (editing an edit rec preserved .parent and extends .edits)
 }
@@ -33,23 +33,23 @@ export interface Clip {
   // Room to grow: freq filter, airbrush, ...
 }
 
-export const Edit_v2 = {
+export const Edit = {
 
   // Can't simply json/unjson because it's unsafe for Interval (which needs to JsonSafeNumber)
-  jsonSafe: (edit: Edit_v2): any => {
-    return typed<{[key in keyof Edit_v2]: any}>({
+  jsonSafe: (edit: Edit): any => {
+    return typed<{[key in keyof Edit]: any}>({
       parent: edit.parent,
       edits:  edit.edits.map(draftEdit => DraftEdit.jsonSafe(draftEdit)),
     });
   },
-  unjsonSafe: (x: any): Edit_v2 => {
+  unjsonSafe: (x: any): Edit => {
     return {
-      parent: Edit_v2._required(x, 'parent', (x: string) => x),
-      edits:  Edit_v2._required(x, 'edits',  (xs: any[]) => xs.map(x => DraftEdit.unjsonSafe(x))),
+      parent: Edit._required(x, 'parent', (x: string) => x),
+      edits:  Edit._required(x, 'edits',  (xs: any[]) => xs.map(x => DraftEdit.unjsonSafe(x))),
     };
   },
 
-  show: (edit: Edit_v2, opts: SourceShowOpts): string => {
+  show: (edit: Edit, opts: SourceShowOpts): string => {
     const parts = [
       SourceId.show(edit.parent, opts),
       ...edit.edits.map(x => DraftEdit.show(x)),
@@ -62,9 +62,9 @@ export const Edit_v2 = {
 
   // Parse results of qsSane.parse
   //  - TODO Add runtime type checks for X [how?] so we fail when q[k] isn't an X
-  _optional: <X, Y>(q: any, k: keyof Edit_v2, f: (x: X) => Y): Y | undefined => mapUndefined(q[k], x => f(x)),
-  _required: <X, Y>(q: any, k: keyof Edit_v2, f: (x: X) => Y): Y             => f(Edit_v2._requireKey(q, k)),
-  _requireKey: (q: any, k: keyof Edit_v2): any => ifUndefined(q[k], () => throw_(`Edit_v2: Field '${k}' required: ${json(q)}`)),
+  _optional: <X, Y>(q: any, k: keyof Edit, f: (x: X) => Y): Y | undefined => mapUndefined(q[k], x => f(x)),
+  _required: <X, Y>(q: any, k: keyof Edit, f: (x: X) => Y): Y             => f(Edit._requireKey(q, k)),
+  _requireKey: (q: any, k: keyof Edit): any => ifUndefined(q[k], () => throw_(`Edit: Field '${k}' required: ${json(q)}`)),
 
 };
 

@@ -8,7 +8,7 @@ const {fs} = RNFB;
 import { GeoCoords } from 'app/components/Geo';
 import { config } from 'app/config';
 import {
-  DraftEdit, Edit_v2, matchSourceId, SearchRecs, Source, SourceId, SourceParseOpts, Species, UserSource, XCSource,
+  DraftEdit, Edit, matchSourceId, SearchRecs, Source, SourceId, SourceParseOpts, Species, UserSource, XCSource,
 } from 'app/datatypes';
 import { debug_print, Log, rich } from 'app/log';
 import { NativeSpectro } from 'app/native/Spectro';
@@ -45,7 +45,7 @@ export interface UserMetadata {
   //  - NOTE(user_metadata): File metadata already contains {created,uniq} (guaranteed by UserRec.writeMetadata from the start)
   // created: Date;
   // uniq:    string;
-  edit:    null | Edit_v2,   // null if a new recording, non-null if an edit of another recording (edit.parent)
+  edit:    null | Edit,      // null if a new recording, non-null if an edit of another recording (edit.parent)
   creator: null | Creator,   // null if unknown creator
   coords:  null | GeoCoords; // null if unknown gps
   // Mutable user data
@@ -115,7 +115,7 @@ export const UserMetadata = {
 
   jsonSafe: (metadata: UserMetadata): any => {
     return typed<{[key in keyof UserMetadata]: any}>({
-      edit:    mapNull(metadata.edit,    Edit_v2.jsonSafe),
+      edit:    mapNull(metadata.edit,    Edit.jsonSafe),
       creator: mapNull(metadata.creator, Creator.jsonSafe),
       coords:  metadata.coords,
       species: UserSpecies.jsonSafe(metadata.species),
@@ -123,7 +123,7 @@ export const UserMetadata = {
   },
   unjsonSafe: (x: any): UserMetadata => {
     return {
-      edit:    mapNull(x.edit,    Edit_v2.unjsonSafe),
+      edit:    mapNull(x.edit,    Edit.unjsonSafe),
       creator: mapNull(x.creator, Creator.unjsonSafe),
       coords:  x.coords,
       species: UserSpecies.unjsonSafe(x.species),
@@ -539,10 +539,10 @@ export const UserRec = {
     //  - Load parent's UserMetadata, if a user rec
     //  - If an edit rec, attach to parent's parent with a merged edit [XXX(unify_edit_user_recs)]
     //  - Else, attach to parent with our edit
-    const parentEdit: null | Edit_v2 = await matchRec(props.parent, {
+    const parentEdit: null | Edit = await matchRec(props.parent, {
       opts: {userMetadata: null}, // HACK(cache_user_metadata): Don't need source.metadata b/c already have parentRec.metadata
       xc:   async (parentRec, parentSource) => null,
-      user: async (parentRec, parentSource) => parentRec.metadata.edit, // null | Edit_v2
+      user: async (parentRec, parentSource) => parentRec.metadata.edit, // null | Edit
     });
     const edit = matchNull(parentEdit, {
       null: () => ({
