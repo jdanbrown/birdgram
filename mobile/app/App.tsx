@@ -207,6 +207,11 @@ export default class App extends PureComponent<Props, State> {
     global.App = this; // XXX Debug
     await log.timedAsync('componentDidMount [total]', async () => {
 
+      // Back compat: migrate old-style {user-recs-v0,edits-v0}/ dirs to new-style Recordings/ dir
+      //  - XXX(unify_edit_user_recs): After all (three) active users have migrated
+      if (await fs.isDir(Rec.old_editDir))    await fs.mv(Rec.old_editDir, Rec.trash_editDir); // edits-v0/     -> _trash_edits-v0/
+      if (await fs.isDir(Rec.old_userRecDir)) await fs.mv(Rec.old_userRecDir, Rec.userRecDir); // user-recs-v0/ -> Recordings/
+
       // Load/create histories
       const histories = (
         await log.timedAsync(`Load histories`, async () => {
