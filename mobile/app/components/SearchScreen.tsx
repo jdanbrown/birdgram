@@ -34,9 +34,8 @@ import {
 import { TabBarStyle } from 'app/components/TabRoutes';
 import { config } from 'app/config';
 import {
-  EditRec, ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams,
-  searchPathParamsFromLocation, SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesMetadata, SpectroPathOpts,
-  UserRec, XCRec,
+  ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams, searchPathParamsFromLocation,
+  SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesMetadata, SpectroPathOpts, UserRec, XCRec,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
@@ -414,7 +413,6 @@ export class SearchScreen extends PureComponent<Props, State> {
         opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for simple switching on rec.kind
         xc:   rec => 1,                                                  // Image width ~ 10s
         user: rec => rec.duration_s / this.props.searchRecsMaxDurationS, // Image width ~ duration_s
-        edit: rec => rec.duration_s / this.props.searchRecsMaxDurationS, // Image width ~ duration_s
       }),
     };
   }
@@ -663,7 +661,6 @@ export class SearchScreen extends PureComponent<Props, State> {
               opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for simple switching on rec.kind
               xc:   _ => { throw `loadRecsFromQuery: Missing spectro asset for xc query_rec: ${sourceId}`; },
               user: _ => log.info(`loadRecsFromQuery: Caching spectro for user query_rec: ${sourceId}`),
-              edit: _ => log.info(`loadRecsFromQuery: Caching spectro for edit query_rec: ${sourceId}`),
             });
             await NativeSpectro.renderAudioPathToSpectroPath(
               Rec.audioPath(query_rec),

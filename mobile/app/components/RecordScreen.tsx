@@ -30,8 +30,8 @@ const {fs, base64} = RNFB;
 import { Geo } from 'app/components/Geo';
 import * as Colors from 'app/colors';
 import {
-  DraftEdit, Edit, EditRec, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source,
-  SourceId, UserMetadata, UserRec,
+  DraftEdit, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source, SourceId,
+  UserMetadata, UserRec,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
@@ -948,7 +948,6 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
             opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for getting .parent
             xc:   rec => null,
             user: rec => mapNull(rec.metadata.edit, edit => edit.parent),
-            edit: rec => rec.edit.parent,
           }));
           return (
             <RectButton style={styles.bottomControlsButton} onPress={() => {
@@ -1030,7 +1029,6 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           // Done editing: save and show edit rec
           <RectButton style={styles.bottomControlsButton} onPress={async () => {
             if (this.props.editRecording) {
-              // const source = await EditRec.new({ // XXX(unify_edit_user_recs): Switch EditRec.new -> UserRec.newFromEdit
               const source = await UserRec.newFromEdit({
                 parent:    this.props.editRecording.rec,
                 draftEdit: this.props.draftEdit,

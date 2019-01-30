@@ -9,7 +9,7 @@ import { human, iOSColors, material, materialColors, systemWeights } from 'react
 import Feather from 'react-native-vector-icons/Feather';
 
 import {
-  EditRec, matchRecordPathParams, matchSearchPathParams, matchSource, recordPathParamsFromLocation, Rec,
+  matchRecordPathParams, matchSearchPathParams, matchSource, recordPathParamsFromLocation, Rec,
   searchPathParamsFromLocation, Source, SourceId, UserRec, XCRec,
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
@@ -72,8 +72,8 @@ export class SavedScreen extends PureComponent<Props, State> {
   componentDidMount = async () => {
     log.info('componentDidMount');
 
-    // Reload saveds when a new user/edit recs is created
-    ['user', 'edit'].forEach(k => Rec.emitter.addListener(k, async (source: Source) => {
+    // Reload saveds when a new user rec is created
+    ['user'].forEach(k => Rec.emitter.addListener(k, async (source: Source) => {
       log.info('Rec.emitter.listener', {source});
       await this.loadSavedsFromFs();
     }));
@@ -85,23 +85,20 @@ export class SavedScreen extends PureComponent<Props, State> {
   loadSavedsFromFs = async () => {
     log.info('loadSavedsFromFs');
 
-    // Load user/edit recs
-    //  - Current representation of "saved" is all user/edit recs in the fs
+    // Load user recs
+    //  - Current representation of "saved" is all user recs in the fs
     //  - TODO Add a delete/unsave button so user can clean up unwanted recs
     const userRecSources = await UserRec.listAudioSources();
-    // const editSources    = await EditRec.listAudioSources(); // XXX(unify_edit_user_recs)
 
     // Order saveds
     const saveds = (
       _<Source[][]>([
         userRecSources,
-        // editSources, // XXX(unify_edit_user_recs)
       ])
       .flatten()
       .sortBy(x => matchSource(x, {
         xc:   source => throw_(`Impossible xc case: ${x}`),
         user: source => source.created,
-        edit: source => source.edit.created,
       }))
       .value()
       .slice().reverse() // (Copy b/c reverse mutates)

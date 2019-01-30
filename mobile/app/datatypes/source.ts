@@ -2,7 +2,7 @@ import _ from 'lodash';
 import moment from 'moment';
 import { sprintf } from 'sprintf-js';
 
-import { DraftEdit, Edit_v2, Edit, EditRec, UserMetadata, UserRec, UserSpecies, XCRec } from 'app/datatypes';
+import { DraftEdit, Edit_v2, UserMetadata, UserRec, UserSpecies, XCRec } from 'app/datatypes';
 import { debug_print, log, Log, rich } from 'app/log';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
@@ -13,7 +13,7 @@ import {
 import { XC } from 'app/xc';
 
 export type SourceId = string;
-export type Source = XCSource | UserSource | EditSource;
+export type Source = XCSource | UserSource;
 export interface XCSource   { kind: 'xc';   xc_id: number; }
 export interface UserSource { kind: 'user';
   // TODO(user_metadata): Move {created,uniq} filename->metadata so that user can safely rename files (e.g. share, export/import)
@@ -21,9 +21,10 @@ export interface UserSource { kind: 'user';
   uniq:     string;
   ext:      string;
   filename: string; // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
-  metadata: UserMetadata | null; // TODO(cache_user_metadata): Kill null after moving slow UserRec.metadata -> fast UserSource.metadata
+  // TODO(cache_user_metadata): Kill null after moving slow UserRec.metadata -> fast UserSource.metadata
+  //  - See example load/store code in UserSource (from old EditRec)
+  metadata: UserMetadata | null;
 }
-export interface EditSource { kind: 'edit'; edit: Edit; }
 
 // XXX(cache_user_metadata): Manually thread UserMetadata down from Source.parse callers, until we can kill null UserSource.metadata
 export interface SourceParseOpts {
@@ -67,7 +68,6 @@ export const Source = {
     return matchSource(source, {
       xc:   ({xc_id}) => `xc:${xc_id}`,
       user: source    => `user:${UserSource.stringify(source)}`,
-      edit: ({edit})  => `edit:${Edit.stringify(edit)}`, // Ensure can nest safely (e.g. edits of edits)
     });
   },
 
@@ -76,7 +76,6 @@ export const Source = {
     return match<string, Source | null>(kind,
       ['xc',          () => mapNull(safeParseIntOrNull(ssp),     xc_id => typed<XCSource>   ({kind: 'xc',   xc_id}))],
       ['user',        () => mapNull(UserSource.parse(ssp, opts), x     => typed<UserSource> ({kind: 'user', ...x}))],
-      ['edit',        () => mapNull(Edit.parse(ssp),             edit  => typed<EditSource> ({kind: 'edit', edit}))],
       [match.default, () => { throw `Unknown sourceId type: ${sourceId}`; }],
     );
   },
@@ -116,9 +115,6 @@ export const Source = {
           .join(' ')
         );
       },
-      edit: ({edit}) => {
-        return Edit.show(edit, opts);
-      },
     });
   },
 
@@ -146,7 +142,6 @@ export const Source = {
       matchSource(source, {
         xc:   source => XCRec.pathBasename(source),
         user: source => UserRec.pathBasename(source),
-        edit: source => EditRec.pathBasename(source),
       }),
     );
   },
@@ -197,17 +192,31 @@ export const UserSource = {
     return `user-${Source.stringifyDate(source.created)}-${source.uniq}.${source.ext}`;
   },
 
+  // TODO(cache_user_metadata): Reference code for AsyncStorage, preserved from old EditRec (before unifying user/edit recs)
+  // store: async (pathBasename: string, edit: Edit): Promise<void> => {
+  //   const k = `Edit.${pathBasename}`;
+  //   await AsyncStorage.setItem(k, Edit.stringify(edit));
+  // },
+  // load: async (pathBasename: string): Promise<Edit | null> => {
+  //   const k = `Edit.${pathBasename}`;
+  //   const s = await AsyncStorage.getItem(k);
+  //   if (s === null) {
+  //     log.warn('Edit.load: Key not found', rich({k}));
+  //     return null;
+  //   } else {
+  //     return Edit.parse(s);
+  //   }
+  // },
+
 };
 
 export function matchSource<X>(source: Source, cases: {
   xc:   (source: XCSource)   => X,
   user: (source: UserSource) => X,
-  edit: (source: EditSource) => X,
 }): X {
   switch(source.kind) {
     case 'xc':   return cases.xc   (source);
     case 'user': return cases.user (source);
-    case 'edit': return cases.edit (source);
   }
 }
 
@@ -217,7 +226,6 @@ export function matchSourceId<X>(sourceId: SourceId, cases: {
   null: (sourceId: SourceId) => X,
   xc:   (source: XCSource)   => X,
   user: (source: UserSource) => X,
-  edit: (source: EditSource) => X,
 }): X {
   return matchNull(Source.parse(sourceId, cases.opts), {
     null: ()     => cases.null(sourceId),

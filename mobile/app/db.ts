@@ -3,7 +3,7 @@ import SQLite, { SQLiteDatabase } from 'react-native-sqlite-storage';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
-import { EditRec, matchSource, Rec, SearchRecs, Source, SourceId, UserRec, XCRec } from 'app/datatypes';
+import { matchSource, Rec, SearchRecs, Source, SourceId, UserRec, XCRec } from 'app/datatypes';
 import { Log, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import Sound from 'app/sound';
@@ -111,45 +111,6 @@ export class DB {
           });
 
         }
-
-      },
-      edit: async source => {
-
-        // Predict (and read duration_s) from audio file
-        //  - TODO Push duration_s into proper metadata, for simplicity
-        const {f_preds, duration_s} = await this.predsFromAudioFile(source, EditRec);
-
-        // Make EditRec
-        return typed<EditRec>({
-          // EditRec
-          kind:                  'edit',
-          edit:                  source.edit,
-          f_preds,
-          // Rec:bubo
-          source_id:             sourceId,
-          duration_s,
-          // Rec:xc (mock)
-          //  - TODO(unify_edit_user_recs): Populate these from UserSource.metadata (after move from UserRec.metadata)
-          species:               'unknown',
-          species_taxon_order:   '_UNK',
-          species_com_name:      'unknown',
-          species_sci_name:      'unknown',
-          species_species_group: 'unknown',
-          species_family:        'unknown',
-          species_order:         'unknown',
-          recs_for_sp:           -1,
-          quality:               'no score',
-          date:                  '',
-          month_day:             '',
-          year:                  -1,
-          place:                 '',
-          place_only:            '',
-          state:                 '',
-          state_only:            '',
-          recordist:             '',
-          license_type:          '',
-          remarks:               '',
-        });
 
       },
     });

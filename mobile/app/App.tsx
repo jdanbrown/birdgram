@@ -26,7 +26,7 @@ import { TabRoutes, TabLink } from 'app/components/TabRoutes';
 import * as Colors from 'app/colors';
 import { config } from 'app/config';
 import {
-  EditRec, MetadataSpecies, Models, ModelsSearch, Rec, SearchRecs, ServerConfig, UserRec, XCRec,
+  MetadataSpecies, Models, ModelsSearch, Rec, SearchRecs, ServerConfig, UserRec, XCRec,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
@@ -84,7 +84,6 @@ global.deepEqual = deepEqual;
 global.DeviceInfo = DeviceInfo;
 global.Dimensions = Dimensions;
 global.Ebird = Ebird;
-global.EditRec = EditRec;
 global.Geo = Geo;
 global.geolocation = geolocation;
 global.Linking = Linking;

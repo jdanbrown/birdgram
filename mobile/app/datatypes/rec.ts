@@ -8,8 +8,7 @@ const {fs} = RNFB;
 import { GeoCoords } from 'app/components/Geo';
 import { config } from 'app/config';
 import {
-  DraftEdit, Edit_v2, Edit, EditSource, matchSourceId, SearchRecs, Source, SourceId, SourceParseOpts, Species,
-  UserSource, XCSource,
+  DraftEdit, Edit_v2, matchSourceId, SearchRecs, Source, SourceId, SourceParseOpts, Species, UserSource, XCSource,
 } from 'app/datatypes';
 import { debug_print, Log, rich } from 'app/log';
 import { NativeSpectro } from 'app/native/Spectro';
@@ -24,7 +23,7 @@ import {
 } from 'app/utils';
 
 // TODO How to prevent callers from constructing a Rec i/o one of the subtypes? [Maybe classes with constructors?]
-export type Rec = XCRec | UserRec | EditRec;
+export type Rec = XCRec | UserRec;
 
 export interface XCRec extends _RecImpl {
   kind:  'xc';
@@ -38,15 +37,6 @@ export interface UserRec extends _RecImpl {
   //  - UserRec.metadata: slow load from audio file tags (primary storage)
   //  - UserSource.metadata: fast (-er, still async) load from AsyncStorage cache (derived storage, disposable) of audio file tags
   metadata: UserMetadata;
-}
-
-// TODO(unify_edit_user_recs): Kill EditRec/EditSource everywhere! Will require updating lots of matchRec/matchSource callers
-export interface EditRec extends _RecImpl {
-  kind:     'edit';
-  edit:     Edit;
-  // parent:   Rec;  // Require consumers to load the parent Rec, else we risk O(parents) work to load an edit rec
-  f_preds:  Array<number>;
-  // TODO(unify_edit_user_recs): Unify edit + user recs so we don't have to add another kind of metadata.species labeling for edit recs
 }
 
 export interface UserMetadata {
@@ -74,11 +64,6 @@ export type UserSpecies = // TODO Make proper ADT with matchUserSpecies
   | {kind: 'unknown'}
   | {kind: 'maybe', species: Array<Species>} // Not yet used
   | {kind: 'known', species: Species};
-
-// XXX(unify_edit_user_recs): Kill this after unifying edit + user recs (and add .edit to UserMetadata)
-export interface EditMetadata {
-  edit: Edit;
-}
 
 export const Creator = {
 
@@ -163,19 +148,6 @@ export const UserSpecies = {
 
 };
 
-export const EditMetadata = {
-  jsonSafe: (metadata: EditMetadata): any => {
-    return typed<{[key in keyof EditMetadata]: any}>({
-      edit: Edit.jsonSafe(metadata.edit),
-    });
-  },
-  unjsonSafe: (x: any): EditMetadata => {
-    return {
-      edit: Edit.unjsonSafe(x.edit),
-    };
-  },
-};
-
 export interface _RecImpl {
 
   // bubo
@@ -224,7 +196,6 @@ export function matchRec<X>(rec: Rec, cases: {
   opts: SourceParseOpts, // XXX(cache_user_metadata)
   xc:   (rec: XCRec,   source: XCSource)   => X,
   user: (rec: UserRec, source: UserSource) => X,
-  edit: (rec: EditRec, source: EditSource) => X,
 }): X {
   // HACK Switch on rec.source_id until we refactor all Rec constructors to include .kind
   return matchSourceId(rec.source_id, {
@@ -232,7 +203,6 @@ export function matchRec<X>(rec: Rec, cases: {
     null: sourceId => { throw `matchRec: No Rec should have an invalid sourceId: ${sourceId}`; },
     xc:   source   => cases.xc   (rec as XCRec,   source),
     user: source   => cases.user (rec as UserRec, source),
-    edit: source   => cases.edit (rec as EditRec, source),
   });
 }
 
@@ -268,7 +238,6 @@ export const Rec = {
     opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for audioPath
     xc:   (rec, source) => XCRec.audioPath(rec),
     user: (rec, source) => UserRec.audioPath(source),
-    edit: (rec, source) => EditRec.audioPath(source),
   }),
 
   spectroPath: (
@@ -278,7 +247,6 @@ export const Rec = {
     opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for spectroPath
     xc:   (rec, source) => XCRec.spectroPath(rec),
     user: (rec, source) => UserRec.spectroPath(source, opts),
-    edit: (rec, source) => EditRec.spectroPath(source, opts),
   }),
 
   // A writable spectroCachePath for nonstandard f_bins/denoise
@@ -328,7 +296,6 @@ export const Rec = {
       opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for f_preds
       xc:   rec => rec as unknown as Rec_f_preds,                               // Expose .f_preds_* from sqlite
       user: rec => _.fromPairs(rec.f_preds.map((p, i) => [`f_preds_${i}`, p])), // Materialize {f_preds_*:p} from .f_preds
-      edit: rec => _.fromPairs(rec.f_preds.map((p, i) => [`f_preds_${i}`, p])), // Materialize {f_preds_*:p} from .f_preds
     });
   },
 
@@ -352,8 +319,7 @@ export const Rec = {
     return matchRec(rec, {
       opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for recUrl
       xc:   rec => XCRec.recUrl(rec),
-      user: rec => null,
-      edit: rec => null, // TODO(unify_edit_user_recs): Revisit where to get parent url after unifying user + edit recs
+      user: rec => null, // TODO Get url from parent, for edit recs
     });
   },
 
@@ -577,7 +543,6 @@ export const UserRec = {
       opts: {userMetadata: null}, // HACK(cache_user_metadata): Don't need source.metadata b/c already have parentRec.metadata
       xc:   async (parentRec, parentSource) => null,
       user: async (parentRec, parentSource) => parentRec.metadata.edit, // null | Edit_v2
-      edit: async (parentRec, parentSource) => Edit.to_v2(parentRec.edit), // XXX(unify_edit_user_recs)
     });
     const edit = matchNull(parentEdit, {
       null: () => ({
@@ -645,190 +610,5 @@ export const UserRec = {
   listAudioSources:   async (): Promise<Array<UserSource>> => Rec.listAudioSources   (UserRec),
   listAudioPaths:     async (): Promise<Array<string>>     => Rec.listAudioPaths     (UserRec.audioDir),
   listAudioFilenames: async (): Promise<Array<string>>     => Rec.listAudioFilenames (UserRec.audioDir),
-
-};
-
-// TODO(unify_edit_user_recs): Kill EditRec/EditSource everywhere! Will require updating lots of matchRec/matchSource callers
-export const EditRec = {
-
-  log: new Log('EditRec'),
-
-  audioDir: Rec.old_editDir,
-
-  // Give edit rec files a proper audio file ext, else e.g. ios AKAudioFile(forReading:) fails to infer the filetype
-  //  - Use .wav to match kAudioFormatLinearPCM in NativeSpectro.editAudioPathToAudioPath
-  audioExt: 'wav',
-
-  // Problem: filename/path limits are very small, so we can't represent all Edit fields in an EditRec filename
-  //  - Solution: omit .parent from filenames and store in AsyncStorage, keyed by Edit.uniq
-  //  - e.g. ios: NAME_MAX=255 (max bytes in filename), PATH_MAX=1024 (max bytes in path)
-  //    - https://github.com/theos/sdks/blob/2236ceb/iPhoneOS11.2.sdk/usr/include/sys/syslimits.h
-  pathBasename: (source: EditSource): string => {
-    const {edit} = source;
-    return `edit-${Source.stringifyDate(edit.created)}-${edit.uniq}`; // e.g. 'edit-20190108011526401-d892e4be'
-  },
-
-  audioPath: (source: EditSource): string => {
-    const pathBasename = Source.pathBasename(source);
-    return `${EditRec.audioDir}/${pathBasename}.${EditRec.audioExt}`;
-  },
-
-  spectroPath: (source: EditSource, opts: SpectroPathOpts): string => {
-    return Rec.spectroCachePath(source, opts);
-  },
-
-  // Load edit metadata
-  //  - TODO(cache_user_metadata): Add cache read/write (currently just a passthru to readMetadata)
-  //    1. Try reading from cache (AsyncStorage)
-  //    2. Else readMetadata (from audio file tags) and write to cache (AsyncStorage)
-  loadMetadata: async (audioPath: string): Promise<EditMetadata | null> => {
-    return EditRec.readMetadata(audioPath);
-  },
-
-  // Read edit metadata, falling back to (and upgrading) old versions for back compat
-  //  - v1: Read from audio file tags
-  //  - v0: Read from AsyncStorage
-  readMetadata: async (audioPath: string): Promise<EditMetadata | null> => {
-
-    // HACK All edit files named 'edit-' i/o 'editv1-' were accidentally .caf i/o .wav. Don't try to Rec.readMetadata on
-    // them, else you'll get errors (b/c taglib doesn't like .caf).
-    const isCaf = 'caf' === await NativeTagLib.audioFiletype(audioPath)
-    if (isCaf) {
-      EditRec.log.info('readMetadata: XXX Old .caf i/o .wav edit rec: Ignoring v1 tags, skipping v0->v1 upgrade', pretty({audioPath}));
-    }
-
-    var metadata: EditMetadata | null = null;
-    if (!isCaf && metadata === null) {
-      metadata = await EditRec._readMetadata_v1(audioPath);
-    }
-    if (metadata === null) {
-      metadata = await EditRec._readMetadata_v0(audioPath);
-      if (!isCaf && metadata !== null) {
-        EditRec.log.info('readMetadata: Upgrading old stored metadata v0->v1 (AsyncStorage->tags)', {audioPath, metadata});
-        EditRec.writeMetadata(audioPath, metadata);
-      }
-    }
-    if (metadata === null) {
-      // Shouldn't normally happen, but be robust
-      EditRec.log.warn('readMetadata: No metadata found for any of versions[v1,v0], returning null', {audioPath});
-    }
-
-    return metadata;
-  },
-
-  // Read edit metadata from audio file tags
-  _readMetadata_v1: async (audioPath: string): Promise<EditMetadata | null> => {
-    const versionedMetadata = await Rec.readMetadata(audioPath);
-    if (!versionedMetadata) {
-      // Noisy (when lots of pre-metadata edit recs, e.g. mine)
-      // EditRec.log.warn('_readMetadata_v1: No metadata (in tags), returning null', pretty({audioPath, versionedMetadata}));
-      return null;
-    } else {
-      const {version, metadata} = versionedMetadata;
-      if (version === 1) {
-        return ifError(() => EditMetadata.unjsonSafe(metadata), e => {
-          EditRec.log.warn('_readMetadata_v1: Invalid metadata (in tags), returning null', pretty({
-            e: jsonSafeError(e), audioPath, versionedMetadata,
-          }));
-          return null;
-        });
-      } else {
-        throw `EditRec.readMetadata: Unknown version[${version}] for metadata[${metadata}]`;
-      }
-    }
-  },
-
-  // Read edit metadata from AsyncStorage
-  _readMetadata_v0: async (audioPath: string): Promise<EditMetadata | null> => {
-    const filename = basename(audioPath);
-    const ext = extname(filename).replace(/^\./, '');
-    if (ext != EditRec.audioExt) throw `Expected ext[${EditRec.audioExt}], got ext[${ext}] in filename[${filename}]`;
-    const pathBasename = basename(filename, `.${ext}`);
-    return mapNull(
-      await Edit.load(pathBasename),
-      edit => ({edit}), // EditMetadata = {edit: Edit}
-    );
-  },
-
-  // Write edit metadata to audio file tags
-  //  - TODO(cache_user_metadata): Invalidate/update cache (AsyncStorage)
-  writeMetadata: async (audioPath: string, metadata: EditMetadata): Promise<void> => {
-    await Rec.writeMetadata(audioPath, {
-      version: 1,
-      metadata: EditMetadata.jsonSafe(metadata),
-    });
-  },
-
-  // (Callers: EditRec.new)
-  //  - Generate audioPath but don't create the file (will be created by EditRec.new)
-  newAudioPath: async (edit: Edit): Promise<string> => {
-
-    // Create audioPath
-    const audioPath = EditRec.audioPath({kind: 'edit', edit});
-
-    // Ensure parent dir for caller
-    await ensureParentDir(audioPath);
-
-    // Done
-    EditRec.log.info('newAudioPath', rich({audioPath, edit}));
-    return audioPath;
-
-  },
-
-  // (Callers: RecordScreen "Done editing" button)
-  //  - Creates audioPath (via newAudioPath) and file (via editAudioPathToAudioPath)
-  new: async (props: {parent: Rec, draftEdit: DraftEdit}): Promise<EditSource> => {
-    const {parent, draftEdit} = props;
-
-    // Make editSource <- edit <- (parent, draftEdit)
-    const edit = {
-      ...draftEdit,
-      parent:  parent.source_id,
-      created: new Date(),
-      uniq:    chance.hash({length: 8}),
-    };
-    const editSource: EditSource = {
-      kind: 'edit',
-      edit,
-    };
-
-    // Edit parent audio file -> edit audio file
-    const parentAudioPath = Rec.audioPath(parent);
-    const editAudioPath   = await EditRec.newAudioPath(edit);
-    await NativeSpectro.editAudioPathToAudioPath({
-      parentAudioPath,
-      editAudioPath,
-      draftEdit: typed<DraftEdit>(edit),
-    });
-
-    // Write edit metadata
-    //  - Requires editAudioPath to exist (created above by editAudioPathToAudioPath)
-    const metadata = typed<EditMetadata>({
-      edit,
-    });
-    await EditRec.writeMetadata(editAudioPath, metadata);
-
-    // Notify listeners that a new EditRec was created (e.g. SavedScreen)
-    Rec.emitter.emit('edit', editSource);
-
-    return editSource;
-  },
-
-  // (Callers: Rec.listAudioSources)
-  sourceFromAudioPath: async (audioPath: string): Promise<EditSource | null> => {
-    // Load edit metadata (from AsyncStorage cache, else from audio file tags)
-    const metadata: EditMetadata | null = await EditRec.loadMetadata(audioPath);
-    // Construct EditSource from EditMetadata
-    //  - XXX(unify_edit_user_recs): Simplify
-    return mapNull(metadata, ({edit}) => typed<EditSource>({
-      kind: 'edit',
-      edit,
-    }));
-  },
-
-  // Wrap Rec.listAudio*
-  listAudioSources:   async (): Promise<Array<EditSource>> => Rec.listAudioSources   (EditRec),
-  listAudioPaths:     async (): Promise<Array<string>>     => Rec.listAudioPaths     (EditRec.audioDir),
-  listAudioFilenames: async (): Promise<Array<string>>     => Rec.listAudioFilenames (EditRec.audioDir),
 
 };
