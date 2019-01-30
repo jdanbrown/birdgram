@@ -14,7 +14,8 @@ import {
   stripExt, throw_, tryElse, typed, unjson,
 } from 'app/utils';
 
-// A (commited) edit, which has a well defined mapping to an edit rec file
+// XXX(unify_edit_user_recs)
+// A (commited) edit, which maps to an edit rec file
 export interface Edit extends DraftEdit {
   parent:  SourceId;
   // TODO(unify_edit_user_recs): Kill Edit.{created,uniq} since they're redundant with UserSource.{created,uniq}
@@ -22,24 +23,72 @@ export interface Edit extends DraftEdit {
   uniq:    string; // Ensure a new filename for each EditRec (so we don't have to think about file collisions / purity)
 }
 
-// A draft edit, which isn't yet associated with any edit rec file
+// A (commited) edit, which maps to a user rec file
+export interface Edit_v2 {
+  parent: SourceId;         // A non-edit rec (don't allow O(n) parent chains)
+  edits:  Array<DraftEdit>; // The full sequence of edits from .parent (editing an edit rec preserved .parent and extends .edits)
+}
+
+// A draft edit, which isn't yet associated with any user rec file
 //  - Produced by RecordScreen (UX for creating edits from existing recs)
 //  - Consumed by NativeSpectro (Spectro.swift:Spectro.editAudioPathToAudioPath)
 export interface DraftEdit {
   clips?: Array<Clip>;
 }
 
-// TODO TODO(unify_edit_user_recs)
 export interface Clip {
   time:  Interval;
   gain?: number; // TODO Unused
   // Room to grow: freq filter, airbrush, ...
 }
 
+export const Edit_v2 = {
+
+  // Can't simply json/unjson because it's unsafe for Interval (which needs to JsonSafeNumber)
+  jsonSafe: (edit: Edit_v2): any => {
+    return typed<{[key in keyof Edit_v2]: any}>({
+      parent: edit.parent,
+      edits:  edit.edits.map(draftEdit => DraftEdit.jsonSafe(draftEdit)),
+    });
+  },
+  unjsonSafe: (x: any): Edit_v2 => {
+    return {
+      parent: Edit_v2._required(x, 'parent', (x: string) => x),
+      edits:  Edit_v2._required(x, 'edits',  (xs: any[]) => xs.map(x => DraftEdit.unjsonSafe(x))),
+    };
+  },
+
+  show: (edit: Edit_v2, opts: SourceShowOpts): string => {
+    const parts = [
+      SourceId.show(edit.parent, opts),
+      ...edit.edits.map(x => DraftEdit.show(x)),
+    ];
+    return (parts
+      .filter(x => !_.isEmpty(x)) // Exclude null, undefined, '' (and [], {})
+      .join(' ')
+    );
+  },
+
+  // Parse results of qsSane.parse
+  //  - TODO Add runtime type checks for X [how?] so we fail when q[k] isn't an X
+  _optional: <X, Y>(q: any, k: keyof Edit_v2, f: (x: X) => Y): Y | undefined => mapUndefined(q[k], x => f(x)),
+  _required: <X, Y>(q: any, k: keyof Edit_v2, f: (x: X) => Y): Y             => f(Edit_v2._requireKey(q, k)),
+  _requireKey: (q: any, k: keyof Edit_v2): any => ifUndefined(q[k], () => throw_(`Edit_v2: Field '${k}' required: ${json(q)}`)),
+
+};
+
 // TODO Avoid unbounded O(parents) length for edit sourceId's [already solved for edit rec filenames]
 //  - Add a layer of indirection for async (sync parse -> async load)
 //  - Make it read Edit metadata to populate Edit.parent (from AsyncStorage like EditRec.sourceFromAudioPath)
 export const Edit = {
+
+  // XXX(unify_edit_user_recs)
+  to_v2: (edit: Edit): Edit_v2 => {
+    return {
+      parent: edit.parent,
+      edits:  [{clips: edit.clips}],
+    };
+  },
 
   // Various crap to render as url query string i/o json [is this actually worthwhile?]
   stringify: (edit: Edit): string => {
@@ -131,17 +180,6 @@ export const Edit = {
 
 export const DraftEdit = {
 
-  // Merge edits to avoid O(n) parent chains (see UserRec.newFromEdit)
-  //  - Not commutative: a happens before b (e.g. rec -> a.clips -> b.clips)
-  //  - [Everything we might add to DraftEdit in the future _should_ be monoidal, e.g. gain adj, freq clip]
-  merge: (a: DraftEdit, b: DraftEdit): DraftEdit => {
-    // TODO TODO(unify_edit_user_recs)
-    //  - [Hmm, this will be tedious code...]
-    //  - [But it will let us avoid calling UserRec.loadMetadata() down O(n) parent chains, which is a worthwhile tradeoff]
-    //  - [Or! change the representation to be an Array<DraftEdit> and never bother with a merge operation at all]
-    return a;
-  },
-
   hasEdits: (edit: DraftEdit): boolean => {
     return !_(edit).values().every(_.isEmpty);
   },
@@ -152,9 +190,11 @@ export const DraftEdit = {
       clips: mapUndefined(draftEdit.clips, xs => xs.map(x => Clip.jsonSafe(x))),
     };
   },
-  // TODO When needed
-  // unjsonSafe: (x: any): DraftEdit => {
-  // },
+  unjsonSafe: (x: any): DraftEdit => {
+    return {
+      clips: mapUndefined(x.clips, xs => xs.map((x: any) => Clip.unjsonSafe(x))),
+    };
+  },
 
   show: (draftEdit: DraftEdit): string => {
     const parts = [

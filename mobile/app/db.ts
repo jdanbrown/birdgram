@@ -39,10 +39,11 @@ export class DB {
   // Wrap: db.querySql = querySql(db.sqlite)
   query: QuerySql = querySql(this.sqlite);
 
-  loadRec = async (source: Source): Promise<Rec> => {
+  // Returns null if audio file for source doesn't exist (e.g. user deleted a user rec, or xc dataset changed)
+  loadRec = async (source: Source): Promise<Rec | null> => {
     log.info('loadRec', {source});
     const sourceId = Source.stringify(source);
-    return await matchSource<Promise<Rec>>(source, {
+    return await matchSource<Promise<Rec | null>>(source, {
       xc: async source => {
 
         // Read xc rec from db search_recs (includes f_preds as cols)
@@ -50,56 +51,66 @@ export class DB {
           select *
           from search_recs
           where source_id = ${sourceId}
+          limit 1
         `)(async results => {
-          const [rec] = results.rows.raw();
-          return rec; // TODO XCRec
+          const rows = results.rows.raw();
+          // Return null if no rows found (e.g. xc dataset changed)
+          return rows.length === 0 ? null : rows[0]; // TODO Return XCRec i/o Rec
         });
 
       },
       user: async source => {
 
-        // Load user metadata (from AsyncStorage cache, else from audio file tags)
-        //  - XXX(cache_user_metadata): Simplify to source.metadata after UserSource.metadata is always populated
-        const metadata = await matchNull(source.metadata, {
-          x:    async metadata => metadata,
-          null: async ()       => await UserRec.loadMetadata(UserRec.audioPath(source)),
-        });
+        // Return null if user audioPath not found (e.g. user deleted a user rec)
+        const audioPath = UserRec.audioPath(source);
+        if (!await fs.exists(audioPath)) {
+          return null;
+        } else {
 
-        // Predict (and read duration_s) from audio file
-        //  - TODO Push duration_s into proper metadata, for simplicity
-        const {f_preds, duration_s} = await this.predsFromAudioFile(source, UserRec);
+          // Load user metadata (from AsyncStorage cache, else from audio file tags)
+          //  - XXX(cache_user_metadata): Simplify to source.metadata after UserSource.metadata is always populated
+          const metadata = await matchNull(source.metadata, {
+            x:    async metadata => metadata,
+            null: async ()       => await UserRec.loadMetadata(audioPath),
+          });
 
-        // Make UserRec
-        return typed<UserRec>({
-          // UserRec
-          kind:                  'user',
-          f_preds,
-          metadata,
-          // Rec:bubo
-          source_id:             sourceId,
-          duration_s,
-          // Rec:xc (mock)
-          //  - TODO Push these fields into XCRec and update consumers to supply 'unknown' values for user/edit recs
-          species:               'unknown',
-          species_taxon_order:   '_UNK',
-          species_com_name:      'unknown',
-          species_sci_name:      'unknown',
-          species_species_group: 'unknown',
-          species_family:        'unknown',
-          species_order:         'unknown',
-          recs_for_sp:           -1,
-          quality:               'no score',
-          date:                  '',
-          month_day:             '',
-          year:                  -1,
-          place:                 '',
-          place_only:            '',
-          state:                 '',
-          state_only:            '',
-          recordist:             '',
-          license_type:          '',
-          remarks:               '',
-        });
+          // Predict (and read duration_s) from audio file
+          //  - TODO Push duration_s into proper metadata, for simplicity
+          const {f_preds, duration_s} = await this.predsFromAudioFile(source, UserRec);
+
+          // Make UserRec
+          return typed<UserRec>({
+            // UserRec
+            kind:                  'user',
+            f_preds,
+            metadata,
+            // Rec:bubo
+            source_id:             sourceId,
+            duration_s,
+            // Rec:xc (mock)
+            //  - TODO Push these fields into XCRec and update consumers to supply 'unknown' values for user/edit recs
+            species:               'unknown',
+            species_taxon_order:   '_UNK',
+            species_com_name:      'unknown',
+            species_sci_name:      'unknown',
+            species_species_group: 'unknown',
+            species_family:        'unknown',
+            species_order:         'unknown',
+            recs_for_sp:           -1,
+            quality:               'no score',
+            date:                  '',
+            month_day:             '',
+            year:                  -1,
+            place:                 '',
+            place_only:            '',
+            state:                 '',
+            state_only:            '',
+            recordist:             '',
+            license_type:          '',
+            remarks:               '',
+          });
+
+        }
 
       },
       edit: async source => {

@@ -270,9 +270,10 @@ export class SettingsScreen extends PureComponent<Props, State> {
               // js code even though your Debug app has the latest js code. UGH.
               ['__DEV__']: __DEV__,
               app: {
-                name:    `${config.env.APP_NAME}`,
-                bundle:  `${config.env.APP_BUNDLE_ID}`,
-                version: `${config.env.APP_VERSION} (${config.env.APP_VERSION_BUILD})`,
+                name:      `${config.env.APP_NAME}`,
+                bundle:    `${config.env.APP_BUNDLE_ID}`,
+                version:   `${config.env.APP_VERSION} (${config.env.APP_VERSION_BUILD})`,
+                buildDate: `${config.env.BUILD_DATE}`,
               },
               config: _.omit(config, 'env'),
               // TODO Very tall, show somewhere less disruptive (e.g. a sub-page within Settings)

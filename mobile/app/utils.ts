@@ -505,12 +505,16 @@ global.pretty = pretty;
 global.unjson = unjson;
 
 // HACK What's the idiomatic way to log e.stack? (See callers for example usage)
-export function jsonSafeError(e: Error): {
-  message: string,
+export function jsonSafeError(e: any): {
+  message: any,
   stack?:  Array<string>,
 } {
-  return {...e,
+  return _.has(e, 'message') ? {
+    ...e,
     stack: mapUndefined(e.stack, s => s.split('\n')),
+  } : {
+    message: e,
+    stack:   undefined,
   };
 }
 

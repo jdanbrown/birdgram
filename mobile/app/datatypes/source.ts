@@ -2,7 +2,7 @@ import _ from 'lodash';
 import moment from 'moment';
 import { sprintf } from 'sprintf-js';
 
-import { DraftEdit, Edit, EditRec, UserMetadata, UserRec, UserSpecies, XCRec } from 'app/datatypes';
+import { DraftEdit, Edit_v2, Edit, EditRec, UserMetadata, UserRec, UserSpecies, XCRec } from 'app/datatypes';
 import { debug_print, log, Log, rich } from 'app/log';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
@@ -104,7 +104,7 @@ export const Source = {
           metadata && metadata.edit ? [
             !metadata  ? '' : `[${UserSpecies.show(metadata.species)}]`,
             !opts.long ? '' : 'Edit:',
-            Edit.show(metadata.edit, opts),
+            Edit_v2.show(metadata.edit, opts),
           ] : [
             !metadata  ? '' : `[${UserSpecies.show(metadata.species)}]`,
             !opts.long ? '' : 'Recording:',

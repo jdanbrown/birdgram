@@ -89,13 +89,13 @@ export class SavedScreen extends PureComponent<Props, State> {
     //  - Current representation of "saved" is all user/edit recs in the fs
     //  - TODO Add a delete/unsave button so user can clean up unwanted recs
     const userRecSources = await UserRec.listAudioSources();
-    const editSources    = await EditRec.listAudioSources();
+    // const editSources    = await EditRec.listAudioSources(); // XXX(unify_edit_user_recs)
 
     // Order saveds
     const saveds = (
       _<Source[][]>([
         userRecSources,
-        editSources,
+        // editSources, // XXX(unify_edit_user_recs)
       ])
       .flatten()
       .sortBy(x => matchSource(x, {

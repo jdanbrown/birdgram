@@ -8,8 +8,8 @@ const {fs} = RNFB;
 import { GeoCoords } from 'app/components/Geo';
 import { config } from 'app/config';
 import {
-  DraftEdit, Edit, EditSource, matchSourceId, SearchRecs, Source, SourceId, SourceParseOpts, Species, UserSource,
-  XCSource,
+  DraftEdit, Edit_v2, Edit, EditSource, matchSourceId, SearchRecs, Source, SourceId, SourceParseOpts, Species,
+  UserSource, XCSource,
 } from 'app/datatypes';
 import { debug_print, Log, rich } from 'app/log';
 import { NativeSpectro } from 'app/native/Spectro';
@@ -55,7 +55,7 @@ export interface UserMetadata {
   //  - NOTE(user_metadata): File metadata already contains {created,uniq} (guaranteed by UserRec.writeMetadata from the start)
   // created: Date;
   // uniq:    string;
-  edit:    null | Edit,      // null if a new recording, non-null if an edit of another recording (edit.parent)
+  edit:    null | Edit_v2,   // null if a new recording, non-null if an edit of another recording (edit.parent)
   creator: null | Creator,   // null if unknown creator
   coords:  null | GeoCoords; // null if unknown gps
   // Mutable user data
@@ -130,7 +130,7 @@ export const UserMetadata = {
 
   jsonSafe: (metadata: UserMetadata): any => {
     return typed<{[key in keyof UserMetadata]: any}>({
-      edit:    mapNull(metadata.edit,    Edit.jsonSafe),
+      edit:    mapNull(metadata.edit,    Edit_v2.jsonSafe),
       creator: mapNull(metadata.creator, Creator.jsonSafe),
       coords:  metadata.coords,
       species: UserSpecies.jsonSafe(metadata.species),
@@ -138,7 +138,7 @@ export const UserMetadata = {
   },
   unjsonSafe: (x: any): UserMetadata => {
     return {
-      edit:    mapNull(x.edit,    Edit.unjsonSafe),
+      edit:    mapNull(x.edit,    Edit_v2.unjsonSafe),
       creator: mapNull(x.creator, Creator.unjsonSafe),
       coords:  x.coords,
       species: UserSpecies.unjsonSafe(x.species),
@@ -563,39 +563,39 @@ export const UserRec = {
     const parent  = props.parent;
     var draftEdit = props.draftEdit;
 
-    // TODO TODO(unify_edit_user_recs): Add logging, then test!
     // Attach to grandparent (flat) i/o parent (recursive), else we'd have to deal with O(n) parent chains
     //  - Load parent's UserMetadata, if a user rec
-    //  - If an edit rec, attach to parent's parent with a merged edit
+    //  - If an edit rec, attach to parent's parent with a merged edit [XXX(unify_edit_user_recs)]
     //  - Else, attach to parent with our edit
-    const parentEdit: Edit | null = await matchRec(props.parent, {
-      opts: {userMetadata: null}, // HACK(cache_user_metadata): We load UserRec.metadata ourselves, down inside the user case
+    const parentEdit: null | Edit_v2 = await matchRec(props.parent, {
+      opts: {userMetadata: null}, // HACK(cache_user_metadata): Don't need source.metadata b/c already have parentRec.metadata
       xc:   async (parentRec, parentSource) => null,
-      edit: async (parentRec, parentSource) => parentRec.edit,
-      user: async (parentRec, parentSource) => (await UserRec.loadMetadata(UserRec.audioPath(parentSource))).edit,
+      user: async (parentRec, parentSource) => parentRec.metadata.edit, // null | Edit_v2
+      edit: async (parentRec, parentSource) => Edit.to_v2(parentRec.edit), // XXX(unify_edit_user_recs)
     });
-    if (parentEdit) {
-      draftEdit = DraftEdit.merge(parentEdit, draftEdit);
-    }
-
-    // Make userSource <- metadata <- edit <- (parent, draftEdit)
-    const created  = new Date();
-    const uniq     = chance.hash({length: 8});
-    const metadata = UserMetadata.new({
-      edit: {
-        ...draftEdit,
+    const edit = matchNull(parentEdit, {
+      null: () => ({
+        // Make a new edit rec rooted at parent (which isn't already an edit rec, by construction)
         parent: parent.source_id,
-        // TODO(unify_edit_user_recs): Kill Edit.{created,uniq} since they're redundant with UserSource.{created,uniq}
-        created,
-        uniq,
-      },
+        edits:  [draftEdit],
+      }),
+      x: parentEdit => ({
+        // Preserve parent's parent, adding draftEdit to its edits
+        parent: parentEdit.parent,
+        edits:  [...parentEdit.edits, draftEdit],
+      }),
+    });
+
+    // Make userSource <- metadata <- edit
+    const metadata = UserMetadata.new({
+      edit,
       coords: null, // TODO Copy coords from XCRec (.lat,.lng) / UserRec (.metadata.coords)
       species: {kind: 'unknown'}, // 'unknown' species even if parent is known, e.g. clipping down to an unknown bg species
     });
     const userSource = UserSource.new({
-      created,
-      uniq,
-      ext: UserRec.audioExt,
+      created: new Date(),
+      uniq:    chance.hash({length: 8}),
+      ext:     UserRec.audioExt,
       metadata,
     });
     UserRec.log.info('newFromEdit', rich({userSource}));

@@ -160,7 +160,7 @@ interface State {
   n_per_sp: number; // For rec queries
   excludeSpecies: Array<string>;
   excludeRecIds: Array<string>;
-  recs: 'loading' | Array<Rec>;
+  recs: StateRecs;
   recsQueryInProgress?: Query,
   recsQueryShown?: Query;
   recsQueryTime?: number;
@@ -174,6 +174,18 @@ interface State {
   playingCurrentTime?: number;
   _spectroScale: number; // Sync from/to Settings (1/3)
 };
+
+type StateRecs = 'loading' | 'notfound' | Array<Rec>;
+
+function matchStateRecs<X>(recs: StateRecs, cases: {
+  loading:  (x: 'loading')  => X,
+  notfound: (x: 'notfound') => X,
+  recs:     (x: Array<Rec>) => X,
+}): X {
+  if (recs === 'loading')  return cases.loading(recs);
+  if (recs === 'notfound') return cases.notfound(recs);
+  else                     return cases.recs(recs);
+}
 
 export class SearchScreen extends PureComponent<Props, State> {
 
@@ -221,8 +233,20 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   // Getters for state
   get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
-  get recsOrEmpty(): Array<Rec> { return this.state.recs === 'loading' ? [] : this.state.recs; }
-  get query_rec(): null | Rec { return this.recsOrEmpty[0] || null; }
+  get recsOrEmpty(): Array<Rec> {
+    return matchStateRecs(this.state.recs, {
+      loading:  ()   => [],
+      notfound: ()   => [],
+      recs:     recs => recs,
+    });
+  }
+  get query_rec(): null | Rec {
+    return matchStateRecs(this.state.recs, {
+      loading:  ()   => null,
+      notfound: ()   => null,
+      recs:     recs => recs[0] || null, // null if empty recs
+    });
+  }
 
   // Private attrs
   soundsCache: Map<SourceId, Promise<Sound> | Sound> = new Map();
@@ -512,8 +536,12 @@ export class SearchScreen extends PureComponent<Props, State> {
       //  - TODO Waiting on: https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
 
       const timer = new Timer();
-      const _setRecs = ({recs}: {recs: 'loading' | Array<Rec>}): void => {
-        log.info(`loadRecsFromQuery: state.recs = ${recs === 'loading' ? recs : `(${recs.length} recs)`}`);
+      const _setRecs = ({recs}: {recs: StateRecs}): void => {
+        log.info(`loadRecsFromQuery: state.recs = ${matchStateRecs(recs, {
+          loading:  x    => x,
+          notfound: x    => x,
+          recs:     recs => `(${recs.length} recs)`,
+        })}`);
         this.setState({
           recs,
           recsQueryShown: this.query,
@@ -534,8 +562,8 @@ export class SearchScreen extends PureComponent<Props, State> {
       await matchQuery(this.query, {
 
         none: async () => {
-          log.info(`loadRecsFromQuery: Got QueryNone, staying in 'loading'...`);
-          _setRecs({recs: 'loading'});
+          log.info(`loadRecsFromQuery: QueryNone -> 'notfound'...`);
+          _setRecs({recs: 'notfound'});
         },
 
         // TODO Weight species uniformly (e.g. select random species, then select random recs)
@@ -621,9 +649,9 @@ export class SearchScreen extends PureComponent<Props, State> {
             return;
           }
           const query_rec = await this.props.db.loadRec(source);
-          if (!query_rec) {
-            log.warn('loadRecsFromQuery: sourceId not found', rich({sourceId}));
-            _setRecs({recs: 'loading'}); // FIXME 'loading'?
+          if (query_rec === null) {
+            // query_rec not found (e.g. user deleted a user rec, or xc dataset changed)
+            _setRecs({recs: 'notfound'});
             return;
           }
 
@@ -1826,17 +1854,28 @@ export class SearchScreen extends PureComponent<Props, State> {
 
             {/* Rec rows */}
             <View style={{flex: 1}}>
-              {matchEmpty<Array<Rec>, ReactNode>(this.recsOrEmpty, {
-                empty: recs => (
-                  <View style={[Styles.center, {padding: 30,
-                    width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
-                  }]}>
-                    <Text style={material.subheading}>
-                      No results
-                    </Text>
-                  </View>
-                ),
-                nonEmpty: recs => recs.map((rec, recIndex) => [
+              {this.state.recs === 'notfound' ? (
+
+                <View style={[Styles.center, {padding: 30,
+                  width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
+                }]}>
+                  <Text style={material.subheading}>
+                    Recording not found
+                  </Text>
+                </View>
+
+              ) : _.isEqual(this.state.recs, []) ? (
+
+                <View style={[Styles.center, {padding: 30,
+                  width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
+                }]}>
+                  <Text style={material.subheading}>
+                    No results
+                  </Text>
+                </View>
+
+              ) : (
+                this.state.recs.map((rec, recIndex) => [
 
                   // Rec row (with editing buttons)
                   <Animated.View
@@ -2002,8 +2041,8 @@ export class SearchScreen extends PureComponent<Props, State> {
 
                   </Animated.View>
 
-                ]),
-              })}
+                ])
+              )}
             </View>
 
             {/* Footer */}
@@ -2049,7 +2088,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         <this.DebugView>
           <this.DebugText>queryDesc: {this.queryDesc}</this.DebugText>
           <this.DebugText>
-            Recs: {this.state.recs === 'loading'
+            Recs: {typeof this.state.recs === 'string'
               ? `.../${this.state.totalRecs || '?'}`
               : `${this.state.recs.length}/${this.state.totalRecs || '?'} (${sprintf('%.3f', this.state.recsQueryTime)}s)`
             }

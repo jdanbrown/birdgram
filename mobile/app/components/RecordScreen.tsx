@@ -300,14 +300,15 @@ export class RecordScreen extends Component<Props, State> {
             if (!source) {
               log.warn('updateForLocation: Failed to parse sourceId', rich({sourceId, location: this.props.location}));
             } else {
-              const editRecording = await EditRecording({
-                rec: await this.props.db.loadRec(source),
+              const rec = await this.props.db.loadRec(source); // null if audio file not found
+              const editRecording = await mapNull(rec, async rec => await EditRecording({
+                rec,
                 f_bins: this.props.f_bins,
                 doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
-              });
+              }));
               this.setState({
                 recordingState: 'stopped',
-                editRecording,
+                editRecording, // null if audio file not found
               });
             }
           },
@@ -364,15 +365,26 @@ export class RecordScreen extends Component<Props, State> {
           >
             {/* Condition on !editRecording so that the transition from recording->stop->rendered is gapless */}
             {!this.state.editRecording ? (
+              this.state.recordingState === 'stopped' ? (
 
-              // Recording in progress: streaming spectro chunks
-              <WrappedSpectroImages
-                spectros={this.state.spectroChunks}
-                spectroScale={this.state.spectroScale}
-                showDebug={this.props.showDebug}
-                showMoreDebug={this.state.showMoreDebug}
-              />
+                // editRecording not found (e.g. user deleted a user rec, or xc dataset changed)
+                <View style={[Styles.center, Styles.fill, {padding: 30}]}>
+                  <Text style={material.subheading}>
+                    Recording not found
+                  </Text>
+                </View>
 
+              ) : (
+
+                // Recording in progress: streaming spectro chunks
+                <WrappedSpectroImages
+                  spectros={this.state.spectroChunks}
+                  spectroScale={this.state.spectroScale}
+                  showDebug={this.props.showDebug}
+                  showMoreDebug={this.state.showMoreDebug}
+                />
+
+              )
             ) : (
 
               // Done recording: recorded spectro (chunks computed in stopRecording)
@@ -935,7 +947,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           const parent = mapNil(this.props.editRecording, ({rec}) => matchRec(rec, {
             opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for getting .parent
             xc:   rec => null,
-            user: rec => null,
+            user: rec => mapNull(rec.metadata.edit, edit => edit.parent),
             edit: rec => rec.edit.parent,
           }));
           return (
