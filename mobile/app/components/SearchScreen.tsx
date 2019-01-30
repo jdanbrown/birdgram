@@ -638,6 +638,11 @@ export class SearchScreen extends PureComponent<Props, State> {
 
           // Load query_rec from db
           //  - Bail if sourceId not found (e.g. from persisted history)
+          if (SourceId.isOldStyleEdit(sourceId)) {
+            // Treat old-style edit recs (from history) like query_rec not found
+            _setRecs({recs: 'notfound'});
+            return;
+          }
           const source = Source.parse(sourceId, {
             userMetadata: null, // HACK(cache_user_metadata): Populated by db.loadRec (below), and source isn't used otherwise
           });

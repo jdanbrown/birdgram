@@ -294,23 +294,30 @@ export class RecordScreen extends Component<Props, State> {
           },
           edit: async ({sourceId}) => {
             // Show editRecording for sourceId
-            const source = Source.parse(sourceId, {
-              userMetadata: null, // HACK(cache_user_metadata): Populated by db.loadRec (below), and source isn't used otherwise
-            });
-            if (!source) {
-              log.warn('updateForLocation: Failed to parse sourceId', rich({sourceId, location: this.props.location}));
+            var editRecording: null | EditRecording; // null if audio file not found
+            if (SourceId.isOldStyleEdit(sourceId)) {
+              // Treat old-style edit recs (from history) like audio file not found
+              editRecording = null;
             } else {
-              const rec = await this.props.db.loadRec(source); // null if audio file not found
-              const editRecording = await mapNull(rec, async rec => await EditRecording({
-                rec,
-                f_bins: this.props.f_bins,
-                doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
-              }));
-              this.setState({
-                recordingState: 'stopped',
-                editRecording, // null if audio file not found
+              const source = Source.parse(sourceId, {
+                userMetadata: null, // HACK(cache_user_metadata): Populated by db.loadRec (below), and source isn't used otherwise
               });
+              if (!source) {
+                log.warn('updateForLocation: Failed to parse sourceId', rich({sourceId, location: this.props.location}));
+                editRecording = null; // Treat like audio file not found (else stuck on loading spinner)
+              } else {
+                const rec = await this.props.db.loadRec(source); // null if audio file not found
+                editRecording = await mapNull(rec, async rec => await EditRecording({
+                  rec,
+                  f_bins: this.props.f_bins,
+                  doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
+                }));
+              }
             }
+            this.setState({
+              recordingState: 'stopped',
+              editRecording, // null if audio file not found
+            });
           },
         });
 

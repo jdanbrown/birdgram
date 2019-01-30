@@ -71,6 +71,7 @@ export class SavedScreen extends PureComponent<Props, State> {
 
   componentDidMount = async () => {
     log.info('componentDidMount');
+    global.SavedScreen = this; // XXX Debug
 
     // Reload saveds when a new user rec is created
     ['user'].forEach(k => Rec.emitter.addListener(k, async (source: Source) => {

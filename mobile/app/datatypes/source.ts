@@ -53,10 +53,18 @@ export const SourceId = {
   },
 
   show: (sourceId: SourceId, opts: SourceShowOpts): string => {
-    return matchNull(Source.parse(sourceId, _.pick(opts, 'userMetadata')), {
-      x:    source => Source.show(source, opts),
-      null: ()     => `[Malformed: ${sourceId}]`,
-    });
+    if (SourceId.isOldStyleEdit(sourceId)) {
+      return `[Deprecated old-style edit rec]`;
+    } else {
+      return matchNull(Source.parse(sourceId, _.pick(opts, 'userMetadata')), {
+        x:    source => Source.show(source, opts),
+        null: ()     => `[Malformed: ${sourceId}]`,
+      });
+    }
+  },
+
+  isOldStyleEdit: (sourceId: SourceId): boolean => {
+    return sourceId.startsWith('edit:');
   },
 
 };
@@ -76,6 +84,7 @@ export const Source = {
     return match<string, Source | null>(kind,
       ['xc',          () => mapNull(safeParseIntOrNull(ssp),     xc_id => typed<XCSource>   ({kind: 'xc',   xc_id}))],
       ['user',        () => mapNull(UserSource.parse(ssp, opts), x     => typed<UserSource> ({kind: 'user', ...x}))],
+      ['edit',        () => null], // Back compat with old-style edit recs (EditSource, EditRec)
       [match.default, () => { throw `Unknown sourceId type: ${sourceId}`; }],
     );
   },
