@@ -5,7 +5,7 @@ import { StyleProp, Text, TextStyle, View } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { CCIcon, Hyperlink, LicenseTypeIcons } from 'app/components/Misc';
-import { matchRec, Rec, SourceId, UserRec, XCRec } from 'app/datatypes';
+import { matchRec, Rec, Source, UserRec, XCRec } from 'app/datatypes';
 import { match, throw_ } from 'app/utils';
 
 const _columns = {
@@ -13,9 +13,8 @@ const _columns = {
   id: (rec: Rec) => (
     <MetadataText>
       <Hyperlink url={Rec.recUrl(rec)}>
-        {SourceId.show(rec.source_id, {
+        {Source.show(Rec.source(rec), {
           species: null,
-          userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
         })}
       </Hyperlink>
     </MetadataText>

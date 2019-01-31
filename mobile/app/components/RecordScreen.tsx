@@ -299,11 +299,10 @@ export class RecordScreen extends Component<Props, State> {
               // Treat old-style edit recs (from history) like audio file not found
               editRecording = null;
             } else {
-              const source = Source.parse(sourceId, {
-                userMetadata: null, // HACK(cache_user_metadata): Populated by db.loadRec (below), and source isn't used otherwise
-              });
+              const source = await Source.load(sourceId);
               if (!source) {
-                log.warn('updateForLocation: Failed to parse sourceId', rich({sourceId, location: this.props.location}));
+                // Noisy for not found (e.g. user deleted a user rec, or xc dataset changed)
+                // log.warn('updateForLocation: Failed to load sourceId', rich({sourceId, location: this.props.location}));
                 editRecording = null; // Treat like audio file not found (else stuck on loading spinner)
               } else {
                 const rec = await this.props.db.loadRec(source); // null if audio file not found
@@ -952,9 +951,8 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         {/* Go to parent rec */}
         {local(() => {
           const parent = mapNil(this.props.editRecording, ({rec}) => matchRec(rec, {
-            opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for getting .parent
             xc:   rec => null,
-            user: rec => mapNull(rec.metadata.edit, edit => edit.parent),
+            user: rec => mapNull(rec.source.metadata.edit, edit => edit.parent),
           }));
           return (
             <RectButton style={styles.bottomControlsButton} onPress={() => {
@@ -1118,15 +1116,10 @@ export async function EditRecording(props: {
 
       // Get a writable spectroCachePath for nonstandard f_bins
       //  - TODO Refactor to simplify
-      const spectroCachePath = Rec.spectroCachePath(
-        Source.parseOrFail(props.rec.source_id, {
-          userMetadata: null, // HACK(cache_user_metadata): UserSource.metadata not needed for source -> Rec.spectroCachePath
-        }),
-        {
-          f_bins: props.f_bins,
-          denoise,
-        },
-      );
+      const spectroCachePath = Rec.spectroCachePath(Rec.source(props.rec), {
+        f_bins: props.f_bins,
+        denoise,
+      });
 
       // FIXME Bottleneck: skip renderAudioPathToSpectroPath + chunkImageFile entirely if we've already completed them once
       //  - Nontrivial only because they return things to us (single + chunked) that we don't know how to compute on our own...

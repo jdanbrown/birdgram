@@ -61,6 +61,20 @@ export function matchError<X, Y>(f: () => X, cases: {
   return cases.x(x);
 }
 
+// Expression form of try-catch-else (else like python, to limit catching scope)
+export async function matchErrorAsync<X, Y>(f: () => Promise<X>, cases: {
+  x:     (x: X)   => Promise<Y>,
+  error: (e: any) => Promise<Y>,
+}): Promise<Y> {
+  var x: X | null = null;
+  try {
+    x = await f();
+  } catch (e) {
+    return await cases.error(e);
+  }
+  return await cases.x(x);
+}
+
 export function ifError<X>(f: () => X, g: (e: any) => X): X {
   return matchError(f, {error: g, x: x => x});
 }

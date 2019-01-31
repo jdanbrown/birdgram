@@ -4,7 +4,7 @@ import RNFB from 'rn-fetch-blob';
 import { sprintf } from 'sprintf-js';
 const {base64} = RNFB;
 
-import { Source, SourceId, SourceShowOpts } from 'app/datatypes';
+import { Source, SourceId, SourceShowOpts, UserMetadata } from 'app/datatypes';
 import { debug_print, log, Log, rich } from 'app/log';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
@@ -51,7 +51,13 @@ export const Edit = {
 
   show: (edit: Edit, opts: SourceShowOpts): string => {
     const parts = [
-      SourceId.show(edit.parent, opts),
+      // TODO Can we avoid using SourceId.show? We're the last remaining caller, and I'd love to kill it...
+      SourceId.show(edit.parent, local(() => {
+        assert(!SourceId.isOldStyleEdit(edit.parent), () => `edit.parent should never be an edit: ${edit.parent}`);
+        return {...opts,
+          userMetadata: null as unknown as UserMetadata, // HACK Safe b/c edit.parent isn't an edit
+        };
+      })),
       ...edit.edits.map(x => DraftEdit.show(x)),
     ];
     return (parts
@@ -101,12 +107,8 @@ export const DraftEdit = {
 
 export const Clip = {
 
-  stringify: (clip: Clip): string => {
-    return json(Clip.jsonSafe(clip));
-  },
-  parse: (x: string): Clip => {
-    return Clip.unjsonSafe(unjson(x));
-  },
+  stringify: (clip: Clip): string => json(Clip.jsonSafe(clip)),
+  parse:     (x: string): Clip    => Clip.unjsonSafe(unjson(x)),
 
   jsonSafe: (clip: Clip): any => {
     return {

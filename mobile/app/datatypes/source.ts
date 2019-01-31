@@ -1,14 +1,19 @@
 import _ from 'lodash';
 import moment from 'moment';
+import { AsyncStorage } from 'react-native';
+import DeviceInfo from 'react-native-device-info';
 import { sprintf } from 'sprintf-js';
 
-import { DraftEdit, Edit, UserMetadata, UserRec, UserSpecies, XCRec } from 'app/datatypes';
+import { GeoCoords } from 'app/components/Geo';
+import { config } from 'app/config';
+import { DraftEdit, Edit, Species, UserRec, XCRec } from 'app/datatypes';
 import { debug_print, log, Log, rich } from 'app/log';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
-  JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchNull, matchUndefined, NoKind,
-  Omit, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane, requireSafePath, safeParseInt, safeParseIntOrNull,
-  safePath, showDate, showSuffix, splitFirst, stripExt, throw_, tryElse, typed, unjson,
+  JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchError, matchErrorAsync,
+  matchNull, matchUndefined, Omit, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane, requireSafePath,
+  safeParseInt, safeParseIntOrNull, safePath, showDate, showSuffix, splitFirst, stripExt, throw_, tryElse, typed,
+  unjson,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -16,25 +21,148 @@ export type SourceId = string;
 export type Source = XCSource | UserSource;
 export interface XCSource   { kind: 'xc';   xc_id: number; }
 export interface UserSource { kind: 'user';
-  // TODO(user_metadata): Move {created,uniq} filename->metadata so that user can safely rename files (e.g. share, export/import)
+  // TODO(cache_user_metadata): Move {created,uniq} filename->metadata so that user can safely rename files (e.g. share, export/import)
   created:  Date;
   uniq:     string;
   ext:      string;
   filename: string; // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
-  // TODO(cache_user_metadata): Kill null after moving slow UserRec.metadata -> fast UserSource.metadata
-  //  - See example load/store code in UserSource (from old EditRec)
-  metadata: UserMetadata | null;
+  metadata: UserMetadata;
 }
 
-// XXX(cache_user_metadata): Manually thread UserMetadata down from Source.parse callers, until we can kill null UserSource.metadata
-export interface SourceParseOpts {
-  userMetadata: UserMetadata | null;
+export interface UserMetadata {
+  // Immutable facts (captured at record time)
+  //  - TODO(cache_user_metadata): Move {created,uniq} filename->metadata so that user can safely rename files (e.g. share, export/import)
+  //  - NOTE(cache_user_metadata): File metadata already contains {created,uniq} (guaranteed by UserRec.writeMetadata from the start)
+  // created: Date;
+  // uniq:    string;
+  edit:    null | Edit,      // null if a new recording, non-null if an edit of another recording (edit.parent)
+  creator: null | Creator,   // null if unknown creator
+  coords:  null | GeoCoords; // null if unknown gps
+  // Mutable user data
+  species: UserSpecies;
 }
+
+export interface Creator {
+  // username:        string, // TODO(share_recs): Let users enter a short username to display i/o their deviceName
+  deviceName:      string,
+  appBundleId:     string,
+  appVersion:      string,
+  appVersionBuild: string,
+}
+
+export type UserSpecies = // TODO Make proper ADT with matchUserSpecies
+  | {kind: 'unknown'}
+  | {kind: 'maybe', species: Array<Species>} // Not yet used
+  | {kind: 'known', species: Species};
+
+export const Creator = {
+
+  get: (): Creator => {
+    return {
+      deviceName:      DeviceInfo.getDeviceName(),
+      appBundleId:     config.env.APP_BUNDLE_ID,
+      appVersion:      config.env.APP_VERSION,
+      appVersionBuild: config.env.APP_VERSION_BUILD,
+    };
+  },
+
+  jsonSafe: (creator: Creator): any => {
+    return typed<{[key in keyof Creator]: any}>({
+      deviceName:      creator.deviceName,
+      appBundleId:     creator.appBundleId,
+      appVersion:      creator.appVersion,
+      appVersionBuild: creator.appVersionBuild,
+    });
+  },
+  unjsonSafe: (x: any): Creator => {
+    return {
+      deviceName:      x.deviceName,
+      appBundleId:     x.appBundleId,
+      appVersion:      x.appVersion,
+      appVersionBuild: x.appVersionBuild,
+    };
+  },
+
+};
+
+export const UserMetadata = {
+
+  new: (props: {
+    edit:     UserMetadata['edit'],
+    creator?: UserMetadata['creator'],
+    coords:   UserMetadata['coords'],
+    species?: UserMetadata['species'],
+  }): UserMetadata => {
+    return {
+      // Immutable facts
+      edit:    props.edit,
+      creator: ifUndefined(props.creator, () => Creator.get()),
+      coords:  props.coords,
+      // Mutable user data (initial values)
+      species: ifUndefined(props.species, () => typed<UserSpecies>({kind: 'unknown'})),
+    };
+  },
+
+  stringify: (metadata: UserMetadata): string => json(UserMetadata.jsonSafe(metadata)),
+  parse:     (x: string): UserMetadata        => UserMetadata.unjsonSafe(unjson(x)),
+
+  jsonSafe: (metadata: UserMetadata): any => {
+    return typed<{[key in keyof UserMetadata]: any}>({
+      edit:    mapNull(metadata.edit,    Edit.jsonSafe),
+      creator: mapNull(metadata.creator, Creator.jsonSafe),
+      coords:  metadata.coords,
+      species: UserSpecies.jsonSafe(metadata.species),
+    });
+  },
+  unjsonSafe: (x: any): UserMetadata => {
+    return {
+      edit:    mapNull(x.edit,    Edit.unjsonSafe),
+      creator: mapNull(x.creator, Creator.unjsonSafe),
+      coords:  x.coords,
+      species: UserSpecies.unjsonSafe(x.species),
+    };
+  },
+
+  // TODO(cache_user_metadata): Groundwork for caching readMetadata calls (which we might not ever need to do)
+  // store: async (name: string, metadata: UserMetadata): Promise<void> => {
+  //   const k = `${UserMetadata._storePrefix}.${name}`;
+  //   await AsyncStorage.setItem(k, UserMetadata.stringify(metadata));
+  // },
+  // load: async (name: string): Promise<UserMetadata | null> => {
+  //   const k = `${UserMetadata._storePrefix}.${name}`;
+  //   return mapNull(
+  //     await AsyncStorage.getItem(k), // null if key not found
+  //     s => UserMetadata.parse(s),
+  //   );
+  // },
+  // _storePrefix: 'UserMetadata.cache',
+
+};
+
+export const UserSpecies = {
+
+  // TODO How to do typesafe downcast? This unjsonSafe leaks arbitrary errors
+  jsonSafe:   (x: UserSpecies): any         => x,
+  unjsonSafe: (x: any):         UserSpecies => x as UserSpecies, // HACK Type
+
+  show: (userSpecies: UserSpecies): string => {
+    switch (userSpecies.kind) {
+      case 'unknown': return '?';
+      case 'maybe':   return `${userSpecies.species.join('/')}?`;
+      case 'known':   return userSpecies.species;
+    }
+  },
+
+};
 
 export interface SourceShowOpts {
   species: XC | null; // Show species if xc sourceId (using XC dep)
   long?: boolean;
-  userMetadata: UserMetadata | null; // XXX(cache_user_metadata)
+}
+
+// TODO(cache_user_metadata): Can we kill this? UserSource.metadata is no longer nullable
+export interface HasUserMetadata {
+  userMetadata: UserMetadata;
 }
 
 export const SourceId = {
@@ -52,7 +180,8 @@ export const SourceId = {
     return SourceId.split(sourceId).ssp;
   },
 
-  show: (sourceId: SourceId, opts: SourceShowOpts): string => {
+  // TODO Can we get rid of this? Last remaining caller is Edit.show...
+  show: (sourceId: SourceId, opts: SourceShowOpts & HasUserMetadata): string => {
     if (SourceId.isOldStyleEdit(sourceId)) {
       return `[Deprecated old-style edit rec]`;
     } else {
@@ -79,19 +208,33 @@ export const Source = {
     });
   },
 
-  parse: (sourceId: SourceId, opts: SourceParseOpts): Source | null => {
+  // TODO De-dupe parse/load
+  // Sync variant of load that takes userMetadata from caller
+  parse: (sourceId: SourceId, opts: HasUserMetadata): Source | null => {
     const {kind, ssp} = SourceId.split(sourceId);
     return match<string, Source | null>(kind,
-      ['xc',          () => mapNull(safeParseIntOrNull(ssp),     xc_id => typed<XCSource>   ({kind: 'xc',   xc_id}))],
-      ['user',        () => mapNull(UserSource.parse(ssp, opts), x     => typed<UserSource> ({kind: 'user', ...x}))],
+      ['xc',          () => XCSource.parse(ssp)],
+      ['user',        () => UserSource.parse(ssp, opts)],
       ['edit',        () => null], // Back compat with old-style edit recs (EditSource, EditRec)
-      [match.default, () => { throw `Unknown sourceId type: ${sourceId}`; }],
+      [match.default, () => { throw `Source.parse: Unknown sourceId type: ${sourceId}`; }],
     );
   },
 
-  parseOrFail: (sourceId: SourceId, opts: SourceParseOpts): Source => {
+  // TODO De-dupe parse/load
+  // Async variant of parse that loads userMetadata
+  load: async (sourceId: SourceId): Promise<Source | null> => {
+    const {kind, ssp} = SourceId.split(sourceId);
+    return await match<string, Promise<Source | null>>(kind,
+      ['xc',          async () => XCSource.parse(ssp)],
+      ['user',        async () => await UserSource.load(ssp)],
+      ['edit',        async () => null], // Back compat with old-style edit recs (EditSource, EditRec)
+      [match.default, async () => { throw `Source.load: Unknown sourceId type: ${sourceId}`; }],
+    );
+  },
+
+  parseOrFail: (sourceId: SourceId, opts: HasUserMetadata): Source => {
     return matchNull(Source.parse(sourceId, opts), {
-      null: ()     => { throw `Failed to parse sourceId[${sourceId}]`; },
+      null: ()     => { throw `Source.parseOrFail: Failed to parse sourceId[${sourceId}]`; },
       x:    source => source,
     });
   },
@@ -157,14 +300,33 @@ export const Source = {
 
 };
 
+export const XCSource = {
+
+  parse: (ssp: string): XCSource | null => {
+    return mapNull(safeParseIntOrNull(ssp), xc_id => typed<XCSource>({
+      kind: 'xc',
+      xc_id,
+    }));
+  },
+
+};
+
 export const UserSource = {
 
-  stringify: (source: NoKind<UserSource>): string => {
+  stringify: (source: UserSource): string => {
     // Return preserved filename so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
     return source.filename;
   },
 
-  parse: (ssp: string, opts: SourceParseOpts): NoKind<UserSource> | null => {
+  // Sync variant of load that takes userMetadata from caller
+  parse: (ssp: string, opts: HasUserMetadata): UserSource | null => {
+    return mapNull(UserSource._parse(ssp), x => ({...x,
+      metadata: opts.userMetadata,
+    }));
+  },
+
+  // (Callers: parse, UserRec.writeMetadata)
+  _parse: (ssp: string): Omit<UserSource, 'metadata'> | null => {
     try {
       // Format: 'user-${created}-${uniq}.${ext}'
       //  - Assume uniq has no special chars, and let created + ext match everything outside of '-' and '.'
@@ -176,16 +338,40 @@ export const UserSource = {
       if (!uniq)    throw `UserSource.parse: Invalid uniq[${uniq}]`;
       if (!ext)     throw `UserSource.parse: Invalid ext[${created}]`;
       return {
-        created: Source.parseDate(created),
+        kind:     'user',
+        created:  Source.parseDate(created),
         uniq,
         ext,
         filename: ssp, // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
-        metadata: ifNull(opts.userMetadata, () => null), // TODO(cache_user_metadata): Kill null case
       };
     } catch (e) {
-      log.warn('UserSource.parse: Failed', rich({ssp, e}));
+      log.warn('UserSource._parse: Failed', rich({ssp, e}));
       return null;
     }
+  },
+
+  // Async variant of parse that loads userMetadata
+  load: async (ssp: string): Promise<UserSource | null> => {
+    return await mapNull(
+      UserSource.parse(ssp, {
+        userMetadata: null as unknown as UserMetadata, // HACK Safe b/c unused in UserRec.audioPath
+      }),
+      async sourceNoMetadata => {
+        const audioPath = UserRec.audioPath(sourceNoMetadata);
+        return await matchErrorAsync(async () => await UserRec.loadMetadata(audioPath), {
+          x: async metadata => ({
+            ...sourceNoMetadata,
+            metadata,
+          }),
+          error: async e => {
+            // Disabled logging: very noisy for source not found (e.g. user deleted a user rec, or xc dataset changed)
+            //  - Rely on the caller to warn/error as appropriate
+            // log.debug('UserSource.load: Failed to loadMetadata, returning null', rich({ssp, audioPath, e})); // XXX Debug
+            return null;
+          },
+        });
+      },
+    );
   },
 
   new: (source: Omit<UserSource, 'kind' | 'filename'>): UserSource => {
@@ -201,22 +387,6 @@ export const UserSource = {
     return `user-${Source.stringifyDate(source.created)}-${source.uniq}.${source.ext}`;
   },
 
-  // TODO(cache_user_metadata): Reference code for AsyncStorage, preserved from old EditRec (before unifying user/edit recs)
-  // store: async (pathBasename: string, edit: Edit): Promise<void> => {
-  //   const k = `Edit.${pathBasename}`;
-  //   await AsyncStorage.setItem(k, Edit.stringify(edit));
-  // },
-  // load: async (pathBasename: string): Promise<Edit | null> => {
-  //   const k = `Edit.${pathBasename}`;
-  //   const s = await AsyncStorage.getItem(k);
-  //   if (s === null) {
-  //     log.warn('Edit.load: Key not found', rich({k}));
-  //     return null;
-  //   } else {
-  //     return Edit.parse(s);
-  //   }
-  // },
-
 };
 
 export function matchSource<X>(source: Source, cases: {
@@ -227,17 +397,4 @@ export function matchSource<X>(source: Source, cases: {
     case 'xc':   return cases.xc   (source);
     case 'user': return cases.user (source);
   }
-}
-
-// Prefer matchSource(source) to avoid having to handle the null case when sourceId fails to parse
-export function matchSourceId<X>(sourceId: SourceId, cases: {
-  opts: SourceParseOpts, // XXX(cache_user_metadata)
-  null: (sourceId: SourceId) => X,
-  xc:   (source: XCSource)   => X,
-  user: (source: UserSource) => X,
-}): X {
-  return matchNull(Source.parse(sourceId, cases.opts), {
-    null: ()     => cases.null(sourceId),
-    x:    source => matchSource(source, cases),
-  });
 }

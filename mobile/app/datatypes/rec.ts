@@ -1,14 +1,10 @@
 import { EventEmitter } from 'fbemitter';
 import _ from 'lodash';
-import { AsyncStorage } from 'react-native';
-import DeviceInfo from 'react-native-device-info';
 import RNFB from 'rn-fetch-blob';
 const {fs} = RNFB;
 
-import { GeoCoords } from 'app/components/Geo';
-import { config } from 'app/config';
 import {
-  DraftEdit, Edit, matchSourceId, SearchRecs, Source, SourceId, SourceParseOpts, Species, UserSource, XCSource,
+  DraftEdit, Edit, HasUserMetadata, SearchRecs, Source, SourceId, UserMetadata, UserSource, XCSource,
 } from 'app/datatypes';
 import { debug_print, Log, rich } from 'app/log';
 import { NativeSpectro } from 'app/native/Spectro';
@@ -26,127 +22,16 @@ import {
 export type Rec = XCRec | UserRec;
 
 export interface XCRec extends _RecImpl {
-  kind:  'xc';
-  xc_id: number;
+  // kind:   'xc';     // TODO Requires new-ing our own XCRec objects i/o (unsafely) casting them from sqlite rows
+  xc_id:  number;
+  // source: XCSource; // TODO Requires new-ing our own XCRec objects i/o (unsafely) casting them from sqlite rows
 }
 
 export interface UserRec extends _RecImpl {
-  kind:     'user';
-  f_preds:  Array<number>;
-  // TODO(cache_user_metadata): Move slow UserRec.metadata -> fast UserSource.metadata
-  //  - UserRec.metadata: slow load from audio file tags (primary storage)
-  //  - UserSource.metadata: fast (-er, still async) load from AsyncStorage cache (derived storage, disposable) of audio file tags
-  metadata: UserMetadata;
+  kind:    'user';
+  f_preds: Array<number>;
+  source:  UserSource
 }
-
-export interface UserMetadata {
-  // Immutable facts (captured at record time)
-  //  - TODO(user_metadata): Move {created,uniq} filename->metadata so that user can safely rename files (e.g. share, export/import)
-  //  - NOTE(user_metadata): File metadata already contains {created,uniq} (guaranteed by UserRec.writeMetadata from the start)
-  // created: Date;
-  // uniq:    string;
-  edit:    null | Edit,      // null if a new recording, non-null if an edit of another recording (edit.parent)
-  creator: null | Creator,   // null if unknown creator
-  coords:  null | GeoCoords; // null if unknown gps
-  // Mutable user data
-  species: UserSpecies;
-}
-
-export interface Creator {
-  // username:        string, // TODO(share_recs): Let users enter a short username to display i/o their deviceName
-  deviceName:      string,
-  appBundleId:     string,
-  appVersion:      string,
-  appVersionBuild: string,
-}
-
-export type UserSpecies = // TODO Make proper ADT with matchUserSpecies
-  | {kind: 'unknown'}
-  | {kind: 'maybe', species: Array<Species>} // Not yet used
-  | {kind: 'known', species: Species};
-
-export const Creator = {
-
-  get: (): Creator => {
-    return {
-      deviceName:      DeviceInfo.getDeviceName(),
-      appBundleId:     config.env.APP_BUNDLE_ID,
-      appVersion:      config.env.APP_VERSION,
-      appVersionBuild: config.env.APP_VERSION_BUILD,
-    };
-  },
-
-  jsonSafe: (creator: Creator): any => {
-    return typed<{[key in keyof Creator]: any}>({
-      deviceName:      creator.deviceName,
-      appBundleId:     creator.appBundleId,
-      appVersion:      creator.appVersion,
-      appVersionBuild: creator.appVersionBuild,
-    });
-  },
-  unjsonSafe: (x: any): Creator => {
-    return {
-      deviceName:      x.deviceName,
-      appBundleId:     x.appBundleId,
-      appVersion:      x.appVersion,
-      appVersionBuild: x.appVersionBuild,
-    };
-  },
-
-};
-
-export const UserMetadata = {
-
-  new: (props: {
-    edit:     UserMetadata['edit'],
-    creator?: UserMetadata['creator'],
-    coords:   UserMetadata['coords'],
-    species?: UserMetadata['species'],
-  }): UserMetadata => {
-    return {
-      // Immutable facts
-      edit:    props.edit,
-      creator: ifUndefined(props.creator, () => Creator.get()),
-      coords:  props.coords,
-      // Mutable user data (initial values)
-      species: ifUndefined(props.species, () => typed<UserSpecies>({kind: 'unknown'})),
-    };
-  },
-
-  jsonSafe: (metadata: UserMetadata): any => {
-    return typed<{[key in keyof UserMetadata]: any}>({
-      edit:    mapNull(metadata.edit,    Edit.jsonSafe),
-      creator: mapNull(metadata.creator, Creator.jsonSafe),
-      coords:  metadata.coords,
-      species: UserSpecies.jsonSafe(metadata.species),
-    });
-  },
-  unjsonSafe: (x: any): UserMetadata => {
-    return {
-      edit:    mapNull(x.edit,    Edit.unjsonSafe),
-      creator: mapNull(x.creator, Creator.unjsonSafe),
-      coords:  x.coords,
-      species: UserSpecies.unjsonSafe(x.species),
-    };
-  },
-
-};
-
-export const UserSpecies = {
-
-  // TODO How to do typesafe downcast? This unjsonSafe leaks arbitrary errors
-  jsonSafe:   (x: UserSpecies): any         => x,
-  unjsonSafe: (x: any):         UserSpecies => x as UserSpecies, // HACK Type
-
-  show: (userSpecies: UserSpecies): string => {
-    switch (userSpecies.kind) {
-      case 'unknown': return '?';
-      case 'maybe':   return `${userSpecies.species.join('/')}?`;
-      case 'known':   return userSpecies.species;
-    }
-  },
-
-};
 
 export interface _RecImpl {
 
@@ -193,17 +78,19 @@ export const Quality = {
 };
 
 export function matchRec<X>(rec: Rec, cases: {
-  opts: SourceParseOpts, // XXX(cache_user_metadata)
-  xc:   (rec: XCRec,   source: XCSource)   => X,
-  user: (rec: UserRec, source: UserSource) => X,
+  xc:   (rec: XCRec, source: XCSource) => X, // TODO Remove source after we add XCRec.source
+  user: (rec: UserRec)                 => X,
 }): X {
-  // HACK Switch on rec.source_id until we refactor all Rec constructors to include .kind
-  return matchSourceId(rec.source_id, {
-    opts: cases.opts,
-    null: sourceId => { throw `matchRec: No Rec should have an invalid sourceId: ${sourceId}`; },
-    xc:   source   => cases.xc   (rec as XCRec,   source),
-    user: source   => cases.user (rec as UserRec, source),
-  });
+  // TODO Clean up (default: -> case 'xc':) after we add XCRec.kind
+  switch (_.get(rec, 'kind')) {
+    case 'user': return cases.user(rec as UserRec); // HACK Type (safe)
+    default:     return cases.xc(
+      rec as XCRec,   // HACK Type (mostly safe?)
+      Source.parseOrFail(rec.source_id, {
+        userMetadata: null as unknown as UserMetadata // HACK Safe b/c unused for xc sourceId
+      }) as XCSource, // HACK Type (not really safe)
+    );
+  }
 }
 
 export interface Rec_f_preds {
@@ -234,19 +121,25 @@ export const Rec = {
   // Events
   emitter: new EventEmitter(),
 
+  // XXX Simplify Rec.source(rec) -> rec.source after we add XCRec.source
+  source: (rec: Rec): Source => {
+    return matchRec<Source>(rec, {
+      xc:   (rec, source) => source,
+      user: rec           => rec.source,
+    });
+  },
+
   audioPath: (rec: Rec): string => matchRec(rec, {
-    opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for audioPath
-    xc:   (rec, source) => XCRec.audioPath(rec),
-    user: (rec, source) => UserRec.audioPath(source),
+    xc:   rec => XCRec.audioPath(rec),
+    user: rec => UserRec.audioPath(rec.source),
   }),
 
   spectroPath: (
     rec:  Rec,
     opts: SpectroPathOpts, // Ignored for xc rec [TODO Clean up]
   ): string => matchRec(rec, {
-    opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for spectroPath
-    xc:   (rec, source) => XCRec.spectroPath(rec),
-    user: (rec, source) => UserRec.spectroPath(source, opts),
+    xc:   rec => XCRec.spectroPath(rec),
+    user: rec => UserRec.spectroPath(rec.source, opts),
   }),
 
   // A writable spectroCachePath for nonstandard f_bins/denoise
@@ -293,7 +186,6 @@ export const Rec = {
 
   f_preds: (rec: Rec): Rec_f_preds => {
     return matchRec(rec, {
-      opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for f_preds
       xc:   rec => rec as unknown as Rec_f_preds,                               // Expose .f_preds_* from sqlite
       user: rec => _.fromPairs(rec.f_preds.map((p, i) => [`f_preds_${i}`, p])), // Materialize {f_preds_*:p} from .f_preds
     });
@@ -317,7 +209,6 @@ export const Rec = {
 
   recUrl: (rec: Rec): string | null => {
     return matchRec(rec, {
-      opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for recUrl
       xc:   rec => XCRec.recUrl(rec),
       user: rec => null, // TODO Get url from parent, for edit recs
     });
@@ -340,36 +231,6 @@ export const Rec = {
       const {zoom} = opts;
       return `https://www.google.com/maps/place/${lat},${lng}/@${lat},${lng},${zoom}z`;
     }
-  },
-
-  listAudioSources: async <FileSource>(_FileRec: {
-    audioDir:            string,
-    sourceFromAudioPath: (path: string) => Promise<FileSource | null>,
-  }): Promise<Array<FileSource>> => {
-    return _.flatten(await Promise.all(
-      (await Rec.listAudioPaths(_FileRec.audioDir)).map(async audioPath => {
-        const source = await _FileRec.sourceFromAudioPath(audioPath);
-        if (!source) {
-          Rec.log.warn("listAudioSources: Dropping: Failed to parse sourceId", pretty({audioPath}));
-          return [];
-        } else {
-          return [source];
-        }
-      })
-    ));
-  },
-
-  listAudioPaths: async (dir: string): Promise<Array<string>> => {
-    return (await Rec.listAudioFilenames(dir)).map(x => `${dir}/${x}`);
-  },
-
-  listAudioFilenames: async (dir: string): Promise<Array<string>> => {
-    const excludes = [/\.metadata\.json$/]; // Back compat
-    return (
-      (await fs.ls(await ensureDir(dir)))
-      .filter(x => !_.some(excludes, exclude => exclude.test(x)))
-      .sort()
-    );
   },
 
 };
@@ -424,10 +285,15 @@ export const UserRec = {
   },
 
   // Load user metadata
-  //  - TODO(cache_user_metadata): Add cache read/write (currently just a passthru to readMetadata)
+  //  - TODO(cache_user_metadata): Add cache read/write/invalidate (currently just a passthru to readMetadata)
   //    1. Try reading from cache (AsyncStorage)
   //    2. Else readMetadata (from audio file tags) and write to cache (AsyncStorage)
+  //    -  Add invalidation logic in writeMetadata
   loadMetadata: async (audioPath: string): Promise<UserMetadata> => {
+    // TODO(cache_user_metadata): Measure perf prior to caching -- the complexity/perf tradeoffs aren't a clear win
+    //  - Complexity: AsyncStorage will fail >6mb on android [https://github.com/facebook/react-native/issues/3387]
+    //  - Perf: is AsyncStorage actually faster than cache files? [https://facebook.github.io/react-native/docs/asyncstorage]
+    //  - Perf: and are cache files actually faster than reading the tags from the audio files?
     return UserRec.readMetadata(audioPath);
   },
 
@@ -464,14 +330,13 @@ export const UserRec = {
   // Write user metadata to audio file tags
   //  - TODO(cache_user_metadata): Invalidate/update cache (AsyncStorage)
   writeMetadata: async (audioPath: string, metadata: UserMetadata): Promise<void> => {
-    // HACK(user_metadata): Parse {created,uniq} from filename so we can store it with the file metadata
+    // TODO(cache_user_metadata): Parse {created,uniq} from filename so we can store it with the file metadata
     //  - This lets us avoid having to deal with back compat later, since all versions of stored file metadata include {created,uniq}
     //  - Kill this after we move {created,uniq} filename->metadata
-    await matchNull(await UserRec._sourceFromAudioPath(audioPath, {
-      userMetadata: null, // ...
-    }), {
+    const {ssp} = SourceId.split(UserRec.sourceIdFromAudioPath(audioPath));
+    await matchNull(await UserSource._parse(ssp), {
       null: async () => {
-        UserRec.log.error('writeMetadata: Failed to _sourceFromAudioPath, not writing tags', pretty({audioPath, metadata}));
+        UserRec.log.error('writeMetadata: Invalid user sourceId, not writing tags', pretty({audioPath, ssp, metadata}));
       },
       x: async ({created, uniq}) => {
         await Rec.writeMetadata(audioPath, {
@@ -491,13 +356,12 @@ export const UserRec = {
   newAudioPath: async (ext: string): Promise<string> => {
 
     // Create audioPath
-    const source = UserSource.new({
+    const audioPath = UserRec.audioPath(UserSource.new({
       created: new Date(),
       uniq:    chance.hash({length: 8}), // Long enough to be unique across users
       ext,
-      metadata: null, // TODO(cache_user_metadata): Populate after moving slow UserRec.metadata -> fast UserSource.metadata
-    });
-    const audioPath = UserRec.audioPath(source);
+      metadata: null as unknown as UserMetadata, // HACK Safe b/c not used by UserRec.audioPath
+    }));
 
     // Ensure parent dir for caller
     await ensureParentDir(audioPath);
@@ -518,7 +382,7 @@ export const UserRec = {
 
     // Make UserSource
     const userSource = await UserRec.sourceFromAudioPath(audioPath);
-    if (!userSource) throw `stopRecording: audioPath from Nativespectro.stop() should parse to source: ${audioPath}`;
+    if (!userSource) throw `stopRecording: audioPath from Nativespectro.stop() should load to a source: ${audioPath}`;
 
     // Log (before notify)
     UserRec.log.info('new', rich({audioPath, metadata, userSource}));
@@ -537,12 +401,10 @@ export const UserRec = {
 
     // Attach to grandparent (flat) i/o parent (recursive), else we'd have to deal with O(n) parent chains
     //  - Load parent's UserMetadata, if a user rec
-    //  - If an edit rec, attach to parent's parent with a merged edit [XXX(unify_edit_user_recs)]
     //  - Else, attach to parent with our edit
     const parentEdit: null | Edit = await matchRec(props.parent, {
-      opts: {userMetadata: null}, // HACK(cache_user_metadata): Don't need source.metadata b/c already have parentRec.metadata
-      xc:   async (parentRec, parentSource) => null,
-      user: async (parentRec, parentSource) => parentRec.metadata.edit, // null | Edit
+      xc:   async parentRec => null,
+      user: async parentRec => parentRec.source.metadata.edit, // null | Edit
     });
     const edit = matchNull(parentEdit, {
       null: () => ({
@@ -589,26 +451,47 @@ export const UserRec = {
     return userSource;
   },
 
-  // (Callers: Rec.listAudioSources, UserRec.new)
+  // (Callers: listAudioSources, UserRec.new)
   sourceFromAudioPath: async (audioPath: string): Promise<UserSource | null> => {
-    // Load user metadata (from AsyncStorage cache, else from audio file tags)
-    const metadata = await UserRec.loadMetadata(audioPath);
-    // Construct UserSource from (filename, UserMetadata)
-    return UserRec._sourceFromAudioPath(audioPath, {userMetadata: metadata});
+    const {ssp} = SourceId.split(UserRec.sourceIdFromAudioPath(audioPath));
+    return await UserSource.load(ssp);
   },
 
-  // Split out for writeMetadata
-  _sourceFromAudioPath: async (audioPath: string, opts: SourceParseOpts): Promise<UserSource | null> => {
+  // (Callers: sourceFromAudioPath, UserRec.writeMetadata)
+  sourceIdFromAudioPath: (audioPath: string): SourceId => {
     const filename = basename(audioPath);
-    return mapNull(
-      Source.parse(`user:${filename}`, opts),
-      x => x as UserSource, // HACK Type
+    const ssp      = filename;
+    return `user:${ssp}`;
+  },
+
+  // (Callers: SavedScreen.loadSavedsFromFs)
+  listAudioSources: async (): Promise<Array<UserSource>> => {
+    return _.flatten(await Promise.all(
+      (await UserRec.listAudioPaths(UserRec.audioDir)).map(async audioPath => {
+        const source = await UserRec.sourceFromAudioPath(audioPath);
+        if (!source) {
+          UserRec.log.info('listAudioSources: Source not found, dropping', pretty({audioPath}));
+          return [];
+        } else {
+          return [source];
+        }
+      })
+    ));
+  },
+
+  // (Callers: listAudioSources)
+  listAudioPaths: async (dir: string): Promise<Array<string>> => {
+    return (await UserRec.listAudioFilenames(dir)).map(x => `${dir}/${x}`);
+  },
+
+  // (Callers: listAudioPaths)
+  listAudioFilenames: async (dir: string): Promise<Array<string>> => {
+    const excludes = [/\.metadata\.json$/]; // Back compat
+    return (
+      (await fs.ls(await ensureDir(dir)))
+      .filter(x => !_.some(excludes, exclude => exclude.test(x)))
+      .sort()
     );
   },
-
-  // Wrap Rec.listAudio*
-  listAudioSources:   async (): Promise<Array<UserSource>> => Rec.listAudioSources   (UserRec),
-  listAudioPaths:     async (): Promise<Array<string>>     => Rec.listAudioPaths     (UserRec.audioDir),
-  listAudioFilenames: async (): Promise<Array<string>>     => Rec.listAudioFilenames (UserRec.audioDir),
 
 };

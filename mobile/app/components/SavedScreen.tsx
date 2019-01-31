@@ -8,13 +8,14 @@ import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 
+import { matchQuery, Query } from 'app/components/SearchScreen';
 import {
   matchRecordPathParams, matchSearchPathParams, matchSource, recordPathParamsFromLocation, Rec,
   searchPathParamsFromLocation, Source, SourceId, UserRec, XCRec,
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
 import { debug_print, Log, puts, rich } from 'app/log';
-import { Go, TabName } from 'app/router';
+import { Go, Location, TabName } from 'app/router';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
@@ -39,21 +40,26 @@ interface State {
   saveds: Array<Saved>;
 }
 
-type Saved =
-  | RecordSaved
-  | SearchSaved; // TODO Populate
-
+type Saved = RecordSaved | SearchSaved;
 interface RecordSaved {
-  tab:    'record';
-  path:   string;
-  source: Source;
+  tab:      'record';
+  location: Location;
+  source:   Source;
+}
+interface SearchSaved { // TODO Unused; ready and waiting for saves from SearchScreen
+  tab:      'search';
+  location: Location;
+  query:    Query;
 }
 
-// TODO Populate
-interface SearchSaved {
-  tab:  'search';
-  path: string;
-  // ...
+export function matchSaved<X>(saved: Saved, cases: {
+  record: (saved: RecordSaved) => X,
+  search: (saved: SearchSaved) => X,
+}): X {
+  switch(saved.tab) {
+    case 'record': return cases.record(saved);
+    case 'search': return cases.search(saved);
+  }
 }
 
 export class SavedScreen extends PureComponent<Props, State> {
@@ -76,9 +82,11 @@ export class SavedScreen extends PureComponent<Props, State> {
     // Reload saveds when a new user rec is created
     ['user'].forEach(k => Rec.emitter.addListener(k, async (source: Source) => {
       log.info('Rec.emitter.listener', {source});
-      await this.loadSavedsFromFs();
+      this.addSaved(this.recordSavedFromSource(source));
     }));
 
+    // Load initial saveds from user recs on fs
+    //  - TODO Load SearchSaved's from somewhere too
     await this.loadSavedsFromFs();
 
   }
@@ -89,6 +97,7 @@ export class SavedScreen extends PureComponent<Props, State> {
     // Load user recs
     //  - Current representation of "saved" is all user recs in the fs
     //  - TODO Add a delete/unsave button so user can clean up unwanted recs
+    //  - TODO(cache_user_metadata): Perf: limit num results to avoid unbounded readMetadata operations
     const userRecSources = await UserRec.listAudioSources();
 
     // Order saveds
@@ -103,11 +112,7 @@ export class SavedScreen extends PureComponent<Props, State> {
       }))
       .value()
       .slice().reverse() // (Copy b/c reverse mutates)
-      .map<RecordSaved>(source => ({
-        tab:  'record',
-        path: `/edit/${encodeURIComponent(Source.stringify(source))}`,
-        source,
-      }))
+      .map<RecordSaved>(source => this.recordSavedFromSource(source))
     );
 
     this.setState({
@@ -116,6 +121,32 @@ export class SavedScreen extends PureComponent<Props, State> {
     });
 
   }
+
+  addSaved = (saved: Saved) => {
+    this.setState((state, props) => ({
+      saveds: [saved, ...state.saveds], // Most recent first
+    }));
+  }
+
+  recordSavedFromSource = (source: Source): RecordSaved => {
+    return {
+      tab: 'record',
+      location: {
+        pathname: `/edit/${encodeURIComponent(Source.stringify(source))}`,
+        // HACK Dummy fields, we only ever use location.pathname (in onPress -> this.props.go)
+        search:   '',
+        hash:     '',
+        key:      undefined,
+        state:    {timestamp: new Date(0)},
+      },
+      source,
+    };
+  }
+
+  // TODO
+  // searchSavedFromSource = (source: Source): SearchSaved => {
+  //   ...
+  // }
 
   componentWillUnmount = async () => {
     log.info('componentWillUnmount');
@@ -186,7 +217,7 @@ export class SavedScreen extends PureComponent<Props, State> {
               renderItem={({item: saved, index}) => (
                 <RectButton
                   onPress={() => {
-                    this.props.go(saved.tab, {path: saved.path});
+                    this.props.go(saved.tab, {path: saved.location.pathname});
                   }}
                 >
                   <View style={{
@@ -216,49 +247,32 @@ export class SavedScreen extends PureComponent<Props, State> {
                       }}>
 
                         {/* TODO Dedupe with RecentScreen.render */}
-                        {local(() => {
-                          switch (saved.tab) {
-                            // TODO Migrate Location (saved.path) -> Source (saved.source) so we can access UserMetadata
-                            //  - UserMetadata is mutable and owned by Source (UserSource), so Location shouldn't contain another copy
-                            case 'record':
-                              return Source.show(saved.source, {
-                                species:      this.props.xc,
-                                long:         true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                                userMetadata: null, // XXX(user_metadata): UserMetadata carried by saved.source
-                              });
-                            case 'search':
-                              // Mock a location from saved.path for *PathParamsFromLocation
-                              //  - TODO Refactor *PathParamsFromLocation so we don't need to mock junk fields
-                              const location = {
-                                pathname: saved.path,               // Used
-                                search:   '',                       // Used
-                                hash:     '',                       // Ignored
-                                key:      undefined,                // Ignored
-                                state:    {timestamp: new Date(0)}, // Ignored
-                              };
-                              return matchSearchPathParams(searchPathParamsFromLocation(location), {
-                                root: () => (
-                                  '[ROOT]' // Shouldn't ever show b/c redirect
-                                ),
-                                random: ({filters, seed}) => (
-                                  `Random`
-                                ),
-                                species: ({filters, species}) => (
-                                  species === '_BLANK' ? '[BLANK]' :
-                                  matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
-                                    undefined: () => `${species} (?)`,
-                                    x:         x  => `${species} (${x.com_name})`,
-                                  })
-                                ),
-                                rec: ({filters, sourceId}) => (
-                                  SourceId.show(sourceId, {
-                                    species:      this.props.xc,
-                                    long:         true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                                    userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
-                                  })
-                                ),
-                              });
-                          }
+                        {matchSaved(saved, {
+                          record: saved => Source.show(saved.source, {
+                            species: this.props.xc,
+                            long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                          }),
+                          search: saved => matchQuery(saved.query, {
+                            none: () => (
+                              '[None]' // [Does this ever happen?]
+                            ),
+                            random: ({filters, seed}) => (
+                              `Random`
+                            ),
+                            species: ({filters, species}) => (
+                              species === '_BLANK' ? '[BLANK]' :
+                              matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+                                undefined: () => `${species} (?)`,
+                                x:         x  => `${species} (${x.com_name})`,
+                              })
+                            ),
+                            rec: ({filters, source}) => (
+                              Source.show(source, {
+                                species: this.props.xc,
+                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                              })
+                            ),
+                          }),
                         })}
 
                       </Text>

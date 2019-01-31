@@ -8,8 +8,9 @@ import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 
+import { matchQuery, Query } from 'app/components/SearchScreen';
 import {
-  matchRecordPathParams, matchSearchPathParams, recordPathParamsFromLocation, searchPathParamsFromLocation, SourceId,
+  matchRecordPathParams, matchSearchPathParams, recordPathParamsFromLocation, searchPathParamsFromLocation, Source,
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
 import { debug_print, Log, rich, puts, tap } from 'app/log';
@@ -18,8 +19,8 @@ import { Settings } from 'app/settings';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
-  enumerate, global, into, json, local, mapNil, mapNull, mapUndefined, match, matchUndefined, mergeArraysWith,
-  objectKeysTyped, pretty, shallowDiffPropsState, showDate, throw_, typed, yaml,
+  enumerate, global, into, json, local, mapNil, mapNull, mapUndefined, match, matchNull, matchUndefined,
+  mergeArraysWith, objectKeysTyped, pretty, shallowDiffPropsState, showDate, throw_, typed, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -60,9 +61,94 @@ interface State {
   tabLocations: {[key in CapturedTabName]: Location}, // Track as state to avoid having to .forceUpdate()
 }
 
-interface Recent {
-  tab:      CapturedTabName;
+// interface Recent {
+//   tab:      CapturedTabName;
+//   location: Location;
+// }
+
+type Recent = RecordRecent | SearchRecent;
+interface RecordRecent {
+  tab:        'record';
+  location:   Location;
+  recordPath: RecordPath;
+}
+interface SearchRecent {
+  tab:      'search';
   location: Location;
+  query:    Query;
+}
+
+export function matchRecent<X>(recent: Recent, cases: {
+  record: (recent: RecordRecent) => X,
+  search: (recent: SearchRecent) => X,
+}): X {
+  switch(recent.tab) {
+    case 'record': return cases.record(recent);
+    case 'search': return cases.search(recent);
+  }
+}
+
+const Recent = {
+  // null means source not found
+  fromLocation: async (tab: CapturedTabName, location: Location): Promise<null | Recent> => {
+    switch(tab) {
+      case 'record': return await RecordRecent.fromLocation(location);
+      case 'search': return await SearchRecent.fromLocation(location);
+    }
+  },
+};
+
+const RecordRecent = {
+  // null means source not found
+  fromLocation: async (location: Location): Promise<null | RecordRecent> => {
+    return await matchRecordPathParams<Promise<null | RecordRecent>>(recordPathParamsFromLocation(location), {
+      root: async () => {
+        return {
+          tab: 'record',
+          location,
+          recordPath: {kind: 'root'},
+        };
+      },
+      edit: async ({sourceId}) => {
+        const source = await Source.load(sourceId);
+        if (source === null) return null; // Not found: source
+        return {
+          tab: 'record',
+          location,
+          recordPath: {kind: 'edit', source},
+        };
+      },
+    });
+  },
+};
+
+const SearchRecent = {
+  // null means source (for query) not found
+  fromLocation: async (location: Location): Promise<null | SearchRecent> => {
+    const query = await Query.loadFromLocation(location);
+    if (query === null) return null; // Not found: source (for query)
+    return {
+      tab: 'search',
+      location,
+      query,
+    };
+  },
+};
+
+// TODO Integrate into RecordScreen (like Query for SearchScreen)
+//  - Should also subsume `editRecording: null | EditRecording` in RecordScreen.State
+//  - But EditRecording is very rich and will need to remain separate from RecordPath
+export type RecordPath = RecordPathRoot | RecordPathEdit;
+export interface RecordPathRoot {kind: 'root'};
+export interface RecordPathEdit {kind: 'edit', source: Source};
+export function matchRecordPath<X>(recordPath: RecordPath, cases: {
+  root: (recordPath: RecordPathRoot) => X,
+  edit: (recordPath: RecordPathEdit) => X,
+}): X {
+  switch(recordPath.kind) {
+    case 'root': return cases.root(recordPath);
+    case 'edit': return cases.edit(recordPath);
+  }
 }
 
 export class RecentScreen extends PureComponent<Props, State> {
@@ -90,25 +176,33 @@ export class RecentScreen extends PureComponent<Props, State> {
     this.addRecents(
       mergeArraysWith( // [TODO Why did I mergeArraysWith i/o just _.sortBy?]
         recent => locationStateOrEmpty(recent.location.state).timestamp || new Date(),
-        ...capturedTabs.map(tab =>
-          this.props.histories[tab].entries
-          .map(location => ({tab, location}))
+        ...(await Promise.all(capturedTabs.map(async tab => (
+          _.flatten(await Promise.all(
+            this.props.histories[tab].entries
+            .map(async location => matchNull(await Recent.fromLocation(tab, location), {
+              x:    recent => [recent],
+              null: ()     => {
+                log.info(`histories[${tab}].entries: Source not found, ignoring`, rich(location));
+                return [];
+              },
+            }))
+          ))
           .slice().reverse() // Reverse without mutating
-        ),
+        )))),
       ),
     );
     capturedTabs.forEach(tab => {
-      this.props.histories[tab].listen((location, action) => {
+      this.props.histories[tab].listen(async (location, action) => {
         // Add to history unless POP, which happens on history.go*, which happens from RecentScreen
         //  - Actions reference
         //    - PUSH:    history.push
         //    - REPLACE: history.replace
         //    - POP:     history.go*
         if (action !== 'POP') {
-          this.addRecents([{
-            tab,
-            location,
-          }]);
+          matchNull(await Recent.fromLocation(tab, location), {
+            null: ()     => log.info(`histories[${tab}].listen: Source not found, ignoring`, rich(location)),
+            x:    recent => this.addRecents([recent]),
+          })
         }
         // Update tabLocations on each route change
         this.setTabLocations();
@@ -248,22 +342,17 @@ export class RecentScreen extends PureComponent<Props, State> {
                       }}>
 
                         {/* TODO Dedupe with SavedScreen.render */}
-                        {match<CapturedTabName, string>(recent.tab,
-                          ['record', () => matchRecordPathParams(recordPathParamsFromLocation(recent.location), {
-                            root: () => (
-                              '[ROOT]' // TODO When does this show? How should it display?
-                            ),
-                            edit: ({sourceId}) => (
-                              SourceId.show(sourceId, {
-                                species:      this.props.xc,
-                                long:         true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                                userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
-                              })
-                            ),
-                          })],
-                          ['search', () => matchSearchPathParams(searchPathParamsFromLocation(recent.location), {
-                            root: () => (
-                              '[ROOT]' // Shouldn't ever show b/c redirect
+                        {matchRecent(recent, {
+                          record: recent => matchRecordPath(recent.recordPath, {
+                            root: ()         => '[Root]',
+                            edit: ({source}) => Source.show(source, {
+                              species: this.props.xc,
+                              long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                            }),
+                          }),
+                          search: recent => matchQuery(recent.query, {
+                            none: () => (
+                              '[None]' // [Does this ever happen?]
                             ),
                             random: ({filters, seed}) => (
                               `Random`
@@ -275,15 +364,14 @@ export class RecentScreen extends PureComponent<Props, State> {
                                 x:         x  => `${species} (${x.com_name})`,
                               })
                             ),
-                            rec: ({filters, sourceId}) => (
-                              SourceId.show(sourceId, {
-                                species:      this.props.xc,
-                                long:         true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                                userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
+                            rec: ({filters, source}) => (
+                              Source.show(source, {
+                                species: this.props.xc,
+                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
                               })
                             ),
-                          })],
-                        )}
+                          }),
+                        })}
 
                       </Text>
                       <Text style={material.caption}>

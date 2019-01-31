@@ -67,13 +67,6 @@ export class DB {
           return null;
         } else {
 
-          // Load user metadata (from AsyncStorage cache, else from audio file tags)
-          //  - XXX(cache_user_metadata): Simplify to source.metadata after UserSource.metadata is always populated
-          const metadata = await matchNull(source.metadata, {
-            x:    async metadata => metadata,
-            null: async ()       => await UserRec.loadMetadata(audioPath),
-          });
-
           // Predict (and read duration_s) from audio file
           //  - TODO Push duration_s into proper metadata, for simplicity
           const {f_preds, duration_s} = await this.predsFromAudioFile(source, UserRec);
@@ -83,7 +76,7 @@ export class DB {
             // UserRec
             kind:                  'user',
             f_preds,
-            metadata,
+            source,
             // Rec:bubo
             source_id:             sourceId,
             duration_s,

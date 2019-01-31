@@ -50,8 +50,8 @@ import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
   all, any, assert, chance, Clamp, deepEqual, Dim, ensureParentDir, finallyAsync, getOrSet, global, json, mapMapValues,
-  match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round,
-  shallowDiffPropsState, Style, throw_, Timer, yaml, yamlPretty, zipSame,
+  mapNull, match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString,
+  round, shallowDiffPropsState, Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -65,12 +65,13 @@ interface ScrollViewState {
   // (More fields available in NativeScrollEvent)
 }
 
-type Query = QueryNone | QueryRandom | QuerySpecies | QueryRec;
-type QueryNone    = {kind: 'none'}; // e.g. so we can show nothing on redirect from '/'
-type QueryRandom  = {kind: 'random',  filters: Filters, seed: number};
-type QuerySpecies = {kind: 'species', filters: Filters, species: string};
-type QueryRec     = {kind: 'rec',     filters: Filters, sourceId: SourceId};
-function matchQuery<X>(query: Query, cases: {
+// (Callers: RecentScreen, SavedScreen)
+export type Query = QueryNone | QueryRandom | QuerySpecies | QueryRec;
+export type QueryNone    = {kind: 'none'}; // e.g. so we can show nothing on redirect from '/'
+export type QueryRandom  = {kind: 'random',  filters: Filters, seed: number};
+export type QuerySpecies = {kind: 'species', filters: Filters, species: string};
+export type QueryRec     = {kind: 'rec',     filters: Filters, source: Source};
+export function matchQuery<X>(query: Query, cases: {
   none:    (query: QueryNone)    => X,
   random:  (query: QueryRandom)  => X,
   species: (query: QuerySpecies) => X,
@@ -83,6 +84,32 @@ function matchQuery<X>(query: Query, cases: {
     case 'rec':     return cases.rec(query);
   }
 }
+
+export const Query = {
+
+  // null if source not found
+  //  - (Callers: updateForLocation, RecentScreen, SavedScreen)
+  loadFromLocation: async (location: Location): Promise<Query | null> => {
+    return await matchSearchPathParams<Promise<Query | null>>(searchPathParamsFromLocation(location), {
+      root:    async ()                    => ({kind: 'species', filters: {}, species: ''}),
+      random:  async ({filters, seed})     => ({kind: 'random',  filters, seed}),
+      species: async ({filters, species})  => ({kind: 'species', filters, species}),
+      rec:     async ({filters, sourceId}) => {
+        if (SourceId.isOldStyleEdit(sourceId)) {
+          return null; // Treat old-style edit recs (e.g. from history) like source not found
+        } else {
+          // Load source
+          //  - Propagate null from Source.load as source not found (e.g. user deleted a user rec, or xc dataset changed)
+          return mapNull(
+            await Source.load(sourceId),
+            source => typed<QueryRec>({kind: 'rec', filters, source}),
+          );
+        }
+      },
+    });
+  },
+
+};
 
 // TODO(put_all_query_state_in_location)
 export interface Filters {
@@ -149,6 +176,7 @@ interface State {
   showHelp: boolean;
   totalRecs?: number;
   f_preds_cols?: Array<string>;
+  query: null | Query;
   refreshQuery: boolean; // TODO(put_all_query_state_in_location)
   // TODO Persist filters with settings
   //  - Top-level fields instead of nested object so we can use state merging when updating them in isolation
@@ -160,8 +188,6 @@ interface State {
   excludeSpecies: Array<string>;
   excludeRecIds: Array<string>;
   recs: StateRecs;
-  recsQueryInProgress?: Query,
-  recsQueryShown?: Query;
   recsQueryTime?: number;
   sourceIdForActionModal?: SourceId;
   playing?: {
@@ -207,6 +233,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     scrollViewState:  this._scrollViewState,
     showGenericModal: null,
     showHelp:         false,
+    query:            null,
     refreshQuery:     false,
     filterQuality:    ['A', 'B'],
     n_recs:           this.props.default_n_recs,
@@ -218,14 +245,8 @@ export class SearchScreen extends PureComponent<Props, State> {
     _spectroScale:    this.props.spectroScale, // Sync from/to Settings (2/3)
   };
 
-  // Getters for prevProps
-  _pathParams = (props?: Props): SearchPathParams => {
-    return searchPathParamsFromLocation((props || this.props).location);
-  }
-
   // Getters for props
-  get pathParams      (): SearchPathParams { return this._pathParams(); }
-  get spectroPathOpts (): SpectroPathOpts  { return {
+  get spectroPathOpts(): SpectroPathOpts { return {
     f_bins:  this.props.f_bins, // Higher res for user recs, ignored for xc recs (which are all f_bins=40)
     denoise: true,              // For predict (like Bubo/py/model.swift:Features.denoise=true)
   }}
@@ -330,10 +351,8 @@ export class SearchScreen extends PureComponent<Props, State> {
       });
     });
 
-    // Query recs (from navParams.species)
-    //  - TODO Adopt updateForLocation() pattern (like RecordScreen)
-    // log.debug('componentDidMount: loadRecsFromQuery()');
-    await this.loadRecsFromQuery();
+    // Show this.props.location
+    await this.updateForLocation(null);
 
   }
 
@@ -365,9 +384,9 @@ export class SearchScreen extends PureComponent<Props, State> {
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
 
-    // Reset view state if query changed
+    // Reset view state if location changed
     //  - TODO Pass props.key to reset _all_ state? [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
-    if (!deepEqual(this.query, this._query(prevProps))) {
+    if (!deepEqual(this.props.location, prevProps.location)) {
       log.info('componentDidUpdate: Reset view state');
       this.setState({
         filterQueryText: undefined,
@@ -390,11 +409,8 @@ export class SearchScreen extends PureComponent<Props, State> {
       noawait(this.props.settings.set('spectroScale', this.state._spectroScale));
     }
 
-    // Query recs (from updated navParams.species)
-    //  - (Will noop if deepEqual(query, state.recsQueryShown))
-    //  - TODO Adopt updateForLocation() pattern (like RecordScreen)
-    // log.debug('componentDidUpdate: loadRecsFromQuery()');
-    await this.loadRecsFromQuery();
+    // Show this.props.location
+    await this.updateForLocation(prevProps.location);
 
   }
 
@@ -410,7 +426,6 @@ export class SearchScreen extends PureComponent<Props, State> {
     return {
       height: this.props.spectroBase.height * this.state._spectroScale,
       width:  this.scrollViewContentWidths.image * matchRec(rec, {
-        opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for simple switching on rec.kind
         xc:   rec => 1,                                                  // Image width ~ 10s
         user: rec => rec.duration_s / this.props.searchRecsMaxDurationS, // Image width ~ duration_s
       }),
@@ -470,82 +485,77 @@ export class SearchScreen extends PureComponent<Props, State> {
     }));
   }
 
-  get query(): Query { return this._query(); }
-  _query = (props?: Props): Query => {
-    return matchSearchPathParams<Query>(this._pathParams(props), {
-      root:    ()                    => ({kind: 'species', filters: {}, species: ''}),
-      random:  ({filters, seed})     => ({kind: 'random',  filters, seed}),
-      species: ({filters, species})  => ({kind: 'species', filters, species}),
-      rec:     ({filters, sourceId}) => ({kind: 'rec',     filters, sourceId}),
-    });
-    // We ignore state.filterQueryText b/c TextInput.onSubmitEditing -> history.push -> navParams.species
-  };
-
   get queryDesc(): string {
-    return matchQuery(this.query, {
-      none:    ()                    => 'none',
-      random:  ({filters, seed})     => `random/${seed}`,
-      species: ({filters, species})  => species,
-      rec:     ({filters, sourceId}) => SourceId.show(sourceId, {
-        species: null,
-        userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId [are queryDesc callers important?]
+    return matchNull(this.state.query, {
+      null: ()    => '...',
+      x:    query => matchQuery(query, {
+        none:    ()                   => 'none',
+        random:  ({filters, seed})    => `random/${seed}`,
+        species: ({filters, species}) => species,
+        rec:     ({filters, source})  => Source.show(source, {
+          species: this.props.xc,
+        }),
       }),
     });
   }
 
-  loadRecsFromQuery = async () => {
+  updateForLocation = async (prevLocation: null | Location) => {
+    log.debug('updateForLocation', () => rich({
+      prevLocation,
+      ..._.pick(this.props, 'location'),
+      ..._.pick(this.state, ['refreshQuery', 'f_preds_cols']),
+    }));
     if (
+      // TODO(put_all_query_state_in_location): Refresh on place change
+      //  - Simple starting approach: PlacesScreen emit('place') -> SearchScreen setState({refreshQuery: true})
       (
-        // Noop if we don't know f_preds_cols yet (assume we'll be called again)
-        !this.state.f_preds_cols ||
-        // Noop if this.query is already shown
-        deepEqual(this.query, this.state.recsQueryShown) ||
-        // Noop if this.query is already in progress
-        deepEqual(this.query, this.state.recsQueryInProgress) ||
-        // Noop if this.query isn't valid
-        matchQuery(this.query, {
-          none:    ()                    => false,
-          random:  ({filters, seed})     => false,
-          species: ({filters, species})  => species  === '',
-          rec:     ({filters, sourceId}) => sourceId === '',
-        })
-      ) && (
-        // But don't noop if filters/limits have changed
+        // Don't noop if force refresh (triggered when filters/limits change)
         //  - XXX(put_all_query_state_in_location)
         !this.state.refreshQuery
+      ) && (
+        // Noop if location didn't change
+        this.props.location === prevLocation ||
+        // Noop if we don't know f_preds_cols yet (assume we'll be called again once we do)
+        !this.state.f_preds_cols
       )
-      // TODO(put_all_query_state_in_location): Refresh on place change
     ) {
-      log.info('loadRecsFromQuery: Skipping');
+      log.info('updateForLocation: Skipping');
     } else {
-      log.info('loadRecsFromQuery', () => pretty({query: this.query}));
+      const timer = new Timer();
 
       // Set loading state
       //  - TODO Fade previous recs instead of showing a blank screen while loading
-      log.info("loadRecsFromQuery: state.recs = 'loading'");
+      log.info("updateForLocation: state.recs = 'loading'");
       this.setState({
+        query: null,
         recs: 'loading',
-        recsQueryInProgress: this.query,
         refreshQuery: false,
       });
       await this.releaseSounds(); // (Safe to do after clearing state.recs, since it uses this.soundsCache)
 
-      // Can't use window functions until sqlite ≥3.25.x
-      //  - TODO Waiting on: https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
+      // Load location -> query
+      //  - We ignore state.filterQueryText b/c TextInput.onSubmitEditing -> history.push -> navParams.species
+      const query = await Query.loadFromLocation(this.props.location);
+      log.info('updateForLocation: Query', () => pretty({query}));
 
-      const timer = new Timer();
+      // Prepare exit behavior
       const _setRecs = ({recs}: {recs: StateRecs}): void => {
-        log.info(`loadRecsFromQuery: state.recs = ${matchStateRecs(recs, {
+        log.info(`updateForLocation: state.recs = ${matchStateRecs(recs, {
           loading:  x    => x,
           notfound: x    => x,
           recs:     recs => `(${recs.length} recs)`,
         })}`);
         this.setState({
+          query,
           recs,
-          recsQueryShown: this.query,
           recsQueryTime: timer.time(),
         });
       };
+
+      // Handle /rec/:sourceId not found (e.g. user deleted a user rec, or xc dataset changed)
+      if (query === null) {
+        return _setRecs({recs: 'notfound'});
+      }
 
       // Global filters
       //  - TODO(put_all_query_state_in_location)
@@ -557,18 +567,19 @@ export class SearchScreen extends PureComponent<Props, State> {
         x:    place => sqlf`and ${SQL.raw(table)}.species in (${place.species})`,
       });
 
-      await matchQuery(this.query, {
+      // TODO Factor these big matchQuery cases into functions, for readability
+      return _setRecs(await matchQuery<Promise<{recs: StateRecs}>>(query, {
 
         none: async () => {
-          log.info(`loadRecsFromQuery: QueryNone -> 'notfound'...`);
-          _setRecs({recs: 'notfound'});
+          log.info(`updateForLocation: QueryNone -> 'notfound'...`);
+          return {recs: 'notfound'};
         },
 
         // TODO Weight species uniformly (e.g. select random species, then select random recs)
         // TODO Get deterministic results from seed [how? sqlite doesn't support random(seed) or hash()]
         random: async ({filters, seed}) => {
-          log.info(`loadRecsFromQuery: Querying random recs`, {seed});
-          await this.props.db.query<XCRec>(sqlf`
+          log.info(`updateForLocation: Querying random recs`, {seed});
+          return await this.props.db.query<XCRec>(sqlf`
             select *
             from (
               select
@@ -587,13 +598,13 @@ export class SearchScreen extends PureComponent<Props, State> {
               source_id desc
           `)(async results => {
             const recs = results.rows.raw();
-            _setRecs({recs});
+            return {recs};
           });
         },
 
         species: async ({filters, species}) => {
-          log.info('loadRecsFromQuery: Querying recs for species', {species});
-          await this.props.db.query<XCRec>(sqlf`
+          log.info('updateForLocation: Querying recs for species', {species});
+          return await this.props.db.query<XCRec>(sqlf`
             select *
             from (
               select
@@ -613,15 +624,15 @@ export class SearchScreen extends PureComponent<Props, State> {
               source_id desc
           `)(async results => {
             const recs = results.rows.raw();
-            _setRecs({recs});
+            return {recs};
           });
         },
 
-        rec: async ({filters, sourceId}) => {
-          log.info('loadRecsFromQuery: Loading recs for query_rec', {sourceId});
+        rec: async ({filters, source}) => {
+          log.info('updateForLocation: Loading recs for query_rec', {source});
 
           // Compute top n_per_sp recs per species by d_pc (cosine_distance)
-          //  - TODO Replace with window functions after sqlite upgrade
+          //  - TODO Replace with window functions after sqlite ≥3.25.x
           //    - https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
           //  - Alternative approach w/o window functions:
           //    - Query query_rec from db.search_recs
@@ -637,25 +648,10 @@ export class SearchScreen extends PureComponent<Props, State> {
           const n_recs       = n_sp * n_per_sp + 1;
 
           // Load query_rec from db
-          //  - Bail if sourceId not found (e.g. from persisted history)
-          if (SourceId.isOldStyleEdit(sourceId)) {
-            // Treat old-style edit recs (from history) like query_rec not found
-            _setRecs({recs: 'notfound'});
-            return;
-          }
-          const source = Source.parse(sourceId, {
-            userMetadata: null, // HACK(cache_user_metadata): Populated by db.loadRec (below), and source isn't used otherwise
-          });
-          if (!source) {
-            log.warn('loadRecsFromQuery: Failed to parse sourceId', rich({sourceId}));
-            _setRecs({recs: 'loading'}); // FIXME 'loading'?
-            return;
-          }
           const query_rec = await this.props.db.loadRec(source);
           if (query_rec === null) {
             // query_rec not found (e.g. user deleted a user rec, or xc dataset changed)
-            _setRecs({recs: 'notfound'});
-            return;
+            return {recs: 'notfound'};
           }
 
           // Ensure spectro exists
@@ -663,9 +659,8 @@ export class SearchScreen extends PureComponent<Props, State> {
           const spectroPath = Rec.spectroPath(query_rec, this.spectroPathOpts);
           if (!await fs.exists(spectroPath)) {
             matchRec(query_rec, {
-              opts: {userMetadata: null}, // XXX(cache_user_metadata): Not used for simple switching on rec.kind
-              xc:   _ => { throw `loadRecsFromQuery: Missing spectro asset for xc query_rec: ${sourceId}`; },
-              user: _ => log.info(`loadRecsFromQuery: Caching spectro for user query_rec: ${sourceId}`),
+              xc:   _ => { throw `updateForLocation: Missing spectro asset for xc query_rec: ${query_rec.source_id}`; },
+              user: _ => log.info(`updateForLocation: Caching spectro for user query_rec: ${query_rec.source_id}`),
             });
             await NativeSpectro.renderAudioPathToSpectroPath(
               Rec.audioPath(query_rec),
@@ -732,12 +727,12 @@ export class SearchScreen extends PureComponent<Props, State> {
                 S.*,
                 ${SQL.raw(sqlCosineDist)} as d_pc
               from search_recs S
-                left join (select * from search_recs where source_id = ${sourceId}) Q on true -- Only 1 row in Q
+                left join (select * from search_recs where source_id = ${query_rec.source_id}) Q on true -- Only 1 row in Q
               where true
                 and S.species = ${species}
                 ${SQL.raw(placeFilter('S'))} -- Empty subquery for species outside of placeFilter
                 ${SQL.raw(qualityFilter('S'))}
-                and S.source_id != ${sourceId} -- Exclude query_rec from results
+                and S.source_id != ${query_rec.source_id} -- Exclude query_rec from results
               order by
                 d_pc asc
               limit ${n_per_sp}
@@ -759,21 +754,21 @@ export class SearchScreen extends PureComponent<Props, State> {
           `;
 
           // Run query
-          log.info('loadRecsFromQuery: Querying recs for query_rec', {sourceId});
-          await this.props.db.query<XCRec>(sql, {
+          log.info('updateForLocation: Querying recs for query_rec', rich({query_rec}));
+          return await this.props.db.query<XCRec>(sql, {
             // logTruncate: null, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
 
             // HACK Inject query_rec as first result so it's visible at top
             //  - TODO Replace this with a proper display of query_rec at the top
-            _setRecs({recs: [query_rec, ...recs]});
+            return {recs: [query_rec, ...recs]};
 
           });
 
         },
 
-      });
+      }));
 
     }
   }
@@ -1097,9 +1092,8 @@ export class SearchScreen extends PureComponent<Props, State> {
       <this.GenericModal>
 
         <this.GenericModalTitle
-          title={`${rec.species}/${SourceId.show(rec.source_id, {
+          title={`${rec.species}/${Source.show(Rec.source(rec), {
             species: this.props.xc,
-            userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
           })}`}
         />
 
@@ -1126,9 +1120,8 @@ export class SearchScreen extends PureComponent<Props, State> {
               onPress: () => this.props.go('search', {path: `/species/${encodeURIComponent(rec.species)}`}),
             }, {
               ...defaults,
-              label: SourceId.show(rec.source_id, {
+              label: Source.show(Rec.source(rec), {
                 species: this.props.xc,
-                userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
               }),
               iconName: 'search',
               buttonColor: iOSColors.blue,
@@ -1150,9 +1143,8 @@ export class SearchScreen extends PureComponent<Props, State> {
               })),
             }, {
               ...defaults,
-              label: SourceId.show(rec.source_id, {
+              label: Source.show(Rec.source(rec), {
                 species: this.props.xc,
-                userMetadata: null, // TODO(cache_user_metadata): Needs real Source i/o SourceId
               }),
               iconName: 'x',
               buttonColor: iOSColors.red,
@@ -1237,7 +1229,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             onPress: () => {},
           }, {
             ...defaults,
-            label: `Save to list (${SourceId.show(rec.source_id, {species: this.props.xc})})`,
+            label: `Save to list (${Source.show(Rec.source(rec), {species: this.props.xc})})`,
             iconName: 'bookmark',
             buttonColor: iOSColors.orange,
             onPress: () => {},
