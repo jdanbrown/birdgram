@@ -5,7 +5,7 @@ import { DB } from 'app/db';
 import { Log, rich } from 'app/log';
 import { sqlf } from 'app/sql';
 import {
-  assert, deepEqual, dirname, global, json, local, match, Omit, pretty, readJsonFile,  Timer, yaml,
+  assert, dirname, global, json, local, match, Omit, pretty, readJsonFile, Timer, yaml,
 } from 'app/utils';
 
 const log = new Log('xc');

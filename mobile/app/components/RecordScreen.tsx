@@ -43,10 +43,10 @@ import Sound from 'app/sound';
 import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, Styles } from 'app/styles';
 import {
-  assertFalse, basename, catchTry, catchTryAsync, chance, deepEqual, Dim, ensureParentDir, ExpWeightedMean,
-  ExpWeightedRate, finallyAsync, global, ifEmpty, ifNil, ifNull, ifUndefined, Interval, into, json, local, mapNil,
-  mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined, pretty, round, setStateAsync,
-  shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, vibrateNormal, yaml, yamlPretty, zipSame,
+  assertFalse, basename, catchTry, catchTryAsync, chance, Dim, ensureParentDir, ExpWeightedMean, ExpWeightedRate,
+  fastIsEqual, finallyAsync, global, ifEmpty, ifNil, ifNull, ifUndefined, Interval, into, json, local, mapNil, mapNull,
+  mapUndefined, match, matchNil, matchNull, matchUndefined, pretty, round, setStateAsync, shallowDiffPropsState, timed,
+  Timer, tryElse, tryElseAsync, vibrateNormal, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from 'third-party/magenta/music/transcription/audio_utils'
 import nj from 'third-party/numjs/dist/numjs.min';

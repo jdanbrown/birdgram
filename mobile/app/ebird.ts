@@ -6,7 +6,7 @@ import { MetadataSpecies, Species, SpeciesCode, SpeciesMetadata } from 'app/data
 import { Log, rich } from 'app/log';
 import { NativeHttp } from 'app/native/Http';
 import {
-  assert, deepEqual, dirname, global, json, match, Omit, pretty, readJsonFile,  Timer, yaml,
+  assert, dirname, global, json, match, Omit, pretty, readJsonFile, Timer, yaml,
 } from 'app/utils';
 
 const log = new Log('ebird');

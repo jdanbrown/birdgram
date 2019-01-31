@@ -662,7 +662,8 @@ export function setStateAsync<P, S, K extends keyof S>(
 }
 
 // Typesafe wrapper around react-fast-compare
-export function deepEqual<X, Y extends X>(x: X, y: Y | null | undefined): boolean {
+//  - Notes vs. _.isEqual: https://formidable.com/blog/2018/introducing-react-fast-compare/
+export function fastIsEqual<X, Y extends X>(x: X, y: Y | null | undefined): boolean {
   return reactFastCompare(x, y);
 }
 

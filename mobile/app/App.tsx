@@ -45,7 +45,7 @@ import { querySql } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { urlpack } from 'app/urlpack';
 import {
-  assert, deepEqual, dirname, global, Interval, json, local, match, matchNil, Omit, pretty, qsSane, readJsonFile,
+  assert, dirname, fastIsEqual, global, Interval, json, local, match, matchNil, Omit, pretty, qsSane, readJsonFile,
   shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
@@ -80,10 +80,10 @@ global.AsyncStorage = AsyncStorage;
 global.cheerio = cheerio;
 global.Colors = Colors;
 global.config = config;
-global.deepEqual = deepEqual;
 global.DeviceInfo = DeviceInfo;
 global.Dimensions = Dimensions;
 global.Ebird = Ebird;
+global.fastIsEqual = fastIsEqual;
 global.Geo = Geo;
 global.geolocation = geolocation;
 global.Linking = Linking;

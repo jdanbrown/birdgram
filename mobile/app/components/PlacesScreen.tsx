@@ -12,7 +12,7 @@ import { Go, Histories, History, Location } from 'app/router';
 import { SettingsWrites } from 'app/settings';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
-import { deepEqual, global, json, matchNull, pretty, shallowDiffPropsState, yaml } from 'app/utils';
+import { fastIsEqual, global, json, matchNull, pretty, shallowDiffPropsState, yaml } from 'app/utils';
 
 const log = new Log('PlacesScreen');
 
@@ -105,7 +105,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
                 <View style={{
                   flex: 1,
                   flexDirection: 'column',
-                  backgroundColor: deepEqual(place, this.props.place) ? iOSColors.lightGray : iOSColors.white,
+                  backgroundColor: fastIsEqual(place, this.props.place) ? iOSColors.lightGray : iOSColors.white,
                   padding: 5,
                   // Bottom border on all items, top border on first item
                   borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',

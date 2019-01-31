@@ -49,9 +49,9 @@ import { SQL, sqlf } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
-  all, any, assert, chance, Clamp, deepEqual, Dim, ensureParentDir, finallyAsync, getOrSet, global, json, mapMapValues,
-  mapNull, match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString,
-  round, shallowDiffPropsState, Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
+  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, json,
+  mapMapValues, mapNull, match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty,
+  QueryString, round, shallowDiffPropsState, Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -386,7 +386,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
     // Reset view state if location changed
     //  - TODO Pass props.key to reset _all_ state? [https://reactjs.org/blog/2018/06/07/you-probably-dont-need-derived-state.html#recap]
-    if (!deepEqual(this.props.location, prevProps.location)) {
+    if (!fastIsEqual(this.props.location, prevProps.location)) {
       log.info('componentDidUpdate: Reset view state');
       this.setState({
         filterQueryText: undefined,
@@ -514,7 +514,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         !this.state.refreshQuery
       ) && (
         // Noop if location didn't change
-        this.props.location === prevLocation ||
+        fastIsEqual(this.props.location, prevLocation) ||
         // Noop if we don't know f_preds_cols yet (assume we'll be called again once we do)
         !this.state.f_preds_cols
       )
@@ -1858,7 +1858,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                   </Text>
                 </View>
 
-              ) : _.isEqual(this.state.recs, []) ? (
+              ) : fastIsEqual(this.state.recs, []) ? (
 
                 <View style={[Styles.center, {padding: 30,
                   width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
