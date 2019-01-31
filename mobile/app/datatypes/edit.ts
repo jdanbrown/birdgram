@@ -16,7 +16,7 @@ import {
 
 // A (commited) edit, which maps to a user rec file (contained within UserRec.metadata.edit)
 export interface Edit {
-  parent: SourceId;         // A non-edit rec (don't allow O(n) parent chains)
+  parent: Source;           // A non-edit rec (don't allow O(n) parent chains)
   edits:  Array<DraftEdit>; // The full sequence of edits from .parent (editing an edit rec preserved .parent and extends .edits)
 }
 
@@ -38,26 +38,20 @@ export const Edit = {
   // Can't simply json/unjson because it's unsafe for Interval (which needs to JsonSafeNumber)
   jsonSafe: (edit: Edit): any => {
     return typed<{[key in keyof Edit]: any}>({
-      parent: edit.parent,
+      parent: Source.jsonSafe(edit.parent),
       edits:  edit.edits.map(draftEdit => DraftEdit.jsonSafe(draftEdit)),
     });
   },
   unjsonSafe: (x: any): Edit => {
     return {
-      parent: Edit._required(x, 'parent', (x: string) => x),
+      parent: Edit._required(x, 'parent', (x: any)    => Source.unjsonSafe(x)),
       edits:  Edit._required(x, 'edits',  (xs: any[]) => xs.map(x => DraftEdit.unjsonSafe(x))),
     };
   },
 
   show: (edit: Edit, opts: SourceShowOpts): string => {
     const parts = [
-      // TODO Can we avoid using SourceId.show? We're the last remaining caller, and I'd love to kill it...
-      SourceId.show(edit.parent, local(() => {
-        assert(!SourceId.isOldStyleEdit(edit.parent), () => `edit.parent should never be an edit: ${edit.parent}`);
-        return {...opts,
-          userMetadata: null as unknown as UserMetadata, // HACK Safe b/c edit.parent isn't an edit
-        };
-      })),
+      Source.show(edit.parent, opts),
       ...edit.edits.map(x => DraftEdit.show(x)),
     ];
     return (parts

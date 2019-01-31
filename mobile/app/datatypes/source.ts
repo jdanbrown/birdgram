@@ -11,9 +11,9 @@ import { debug_print, log, Log, rich } from 'app/log';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
   JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchError, matchErrorAsync,
-  matchNull, matchUndefined, Omit, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane, requireSafePath,
-  safeParseInt, safeParseIntOrNull, safePath, showDate, showSuffix, splitFirst, stripExt, throw_, tryElse, typed,
-  unjson,
+  matchNull, matchUndefined, Omit, parseDate, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane,
+  requireSafePath, safeParseInt, safeParseIntOrNull, safePath, showDate, showSuffix, splitFirst, stringifyDate,
+  stripExt, throw_, tryElse, typed, unjson,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -21,25 +21,23 @@ export type SourceId = string;
 export type Source = XCSource | UserSource;
 export interface XCSource   { kind: 'xc';   xc_id: number; }
 export interface UserSource { kind: 'user';
-  // TODO(cache_user_metadata): Move {created,uniq} filename->metadata so that user can safely rename files (e.g. share, export/import)
-  created:  Date;
-  uniq:     string;
-  ext:      string;
+  // Keep all logical/semantic props in metadata (e.g. created, uniq) and surface only physical props here (e.g. filename, ext)
+  //  - This is important to allow users to safely rename files (e.g. for sharing, export/import)
   filename: string; // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
+  ext:      string;
   metadata: UserMetadata;
 }
 
 export interface UserMetadata {
   // Immutable facts (captured at record time)
-  //  - TODO(cache_user_metadata): Move {created,uniq} filename->metadata so that user can safely rename files (e.g. share, export/import)
-  //  - NOTE(cache_user_metadata): File metadata already contains {created,uniq} (guaranteed by UserRec.writeMetadata from the start)
-  // created: Date;
-  // uniq:    string;
+  created: Date;
+  uniq:    string;
   edit:    null | Edit,      // null if a new recording, non-null if an edit of another recording (edit.parent)
   creator: null | Creator,   // null if unknown creator
   coords:  null | GeoCoords; // null if unknown gps
   // Mutable user data
   species: UserSpecies;
+  // comment: null | string; // TODO
 }
 
 export interface Creator {
@@ -88,6 +86,8 @@ export const Creator = {
 export const UserMetadata = {
 
   new: (props: {
+    created:  UserMetadata['created'],
+    uniq:     UserMetadata['uniq'],
     edit:     UserMetadata['edit'],
     creator?: UserMetadata['creator'],
     coords:   UserMetadata['coords'],
@@ -95,6 +95,8 @@ export const UserMetadata = {
   }): UserMetadata => {
     return {
       // Immutable facts
+      created: props.created,
+      uniq:    props.uniq,
       edit:    props.edit,
       creator: ifUndefined(props.creator, () => Creator.get()),
       coords:  props.coords,
@@ -108,6 +110,8 @@ export const UserMetadata = {
 
   jsonSafe: (metadata: UserMetadata): any => {
     return typed<{[key in keyof UserMetadata]: any}>({
+      created: stringifyDate(metadata.created),
+      uniq:    metadata.uniq,
       edit:    mapNull(metadata.edit,    Edit.jsonSafe),
       creator: mapNull(metadata.creator, Creator.jsonSafe),
       coords:  metadata.coords,
@@ -116,6 +120,8 @@ export const UserMetadata = {
   },
   unjsonSafe: (x: any): UserMetadata => {
     return {
+      created: parseDate(x.created),
+      uniq:    x.uniq,
       edit:    mapNull(x.edit,    Edit.unjsonSafe),
       creator: mapNull(x.creator, Creator.unjsonSafe),
       coords:  x.coords,
@@ -123,7 +129,7 @@ export const UserMetadata = {
     };
   },
 
-  // TODO(cache_user_metadata): Groundwork for caching readMetadata calls (which we might not ever need to do)
+  // TODO(cache_user_metadata): Groundwork for caching readMetadata calls (which we might never do -- see UserRec.loadMetadata)
   // store: async (name: string, metadata: UserMetadata): Promise<void> => {
   //   const k = `${UserMetadata._storePrefix}.${name}`;
   //   await AsyncStorage.setItem(k, UserMetadata.stringify(metadata));
@@ -160,7 +166,8 @@ export interface SourceShowOpts {
   long?: boolean;
 }
 
-// TODO(cache_user_metadata): Can we kill this? UserSource.metadata is no longer nullable
+// HACK Thread UserMetadata down through gnarly call stacks
+//  - e.g. UserSource.load, which is the most legit remaining usage
 export interface HasUserMetadata {
   userMetadata: UserMetadata;
 }
@@ -176,22 +183,6 @@ export const SourceId = {
     return {kind, ssp};
   },
 
-  stripType: (sourceId: SourceId): string => {
-    return SourceId.split(sourceId).ssp;
-  },
-
-  // TODO Can we get rid of this? Last remaining caller is Edit.show...
-  show: (sourceId: SourceId, opts: SourceShowOpts & HasUserMetadata): string => {
-    if (SourceId.isOldStyleEdit(sourceId)) {
-      return `[Deprecated old-style edit rec]`;
-    } else {
-      return matchNull(Source.parse(sourceId, _.pick(opts, 'userMetadata')), {
-        x:    source => Source.show(source, opts),
-        null: ()     => `[Malformed: ${sourceId}]`,
-      });
-    }
-  },
-
   isOldStyleEdit: (sourceId: SourceId): boolean => {
     return sourceId.startsWith('edit:');
   },
@@ -199,6 +190,36 @@ export const SourceId = {
 };
 
 export const Source = {
+
+  jsonSafe: (source: Source): any => {
+    return matchSource<Source>(source, {
+      xc: source => typed<{[key in keyof XCSource]: any}>({
+        kind:  source.kind,  // string
+        xc_id: source.xc_id, // number
+      }),
+      user: source => typed<{[key in keyof UserSource]: any}>({
+        kind:     source.kind,     // string
+        filename: source.filename, // string
+        ext:      source.ext,      // string
+        metadata: UserMetadata.jsonSafe(source.metadata),
+      }),
+    });
+  },
+  unjsonSafe: (x: any): Source => {
+    switch (x.kind) {
+      case 'xc': return {
+        kind:  x.kind,  // string
+        xc_id: x.xc_id, // number
+      };
+      case 'user': return {
+        kind:     x.kind,     // string
+        filename: x.filename, // string
+        ext:      x.ext,      // string
+        metadata: UserMetadata.unjsonSafe(x.metadata),
+      };
+      default: throw `Source.unjsonSafe: Unexpected kind[${x.kind}], in: ${json(x)}`;
+    }
+  },
 
   // NOTE Preserve {kind:'xc',xc_id} -> `xc:${xc_id}` to stay consistent with db payload (see util.py:rec_to_source_id)
   stringify: (source: Source): SourceId => {
@@ -248,8 +269,8 @@ export const Source = {
           !xc ? '' : ` (${xc.speciesFromXCID.get(xc_id) || '?'})`,
         ].join('');
       },
-      user: ({created, uniq, ext, metadata}) => {
-        // Ignore uniq (in name=`${date}-${time}-${uniq}`), since seconds resolution should be unique enough for human
+      user: ({ext, metadata}) => {
+        // Don't show uniq since seconds resolution should be unique enough for human
         //  - TODO Rethink after rec sharing (e.g. add usernames to avoid collisions)
         const parts = (
           metadata && metadata.edit ? [
@@ -259,7 +280,7 @@ export const Source = {
           ] : [
             !metadata  ? '' : `[${UserSpecies.show(metadata.species)}]`,
             !opts.long ? '' : 'Recording:',
-            showDate(created),
+            showDate(metadata.created),
           ]
         );
         return (parts
@@ -320,58 +341,78 @@ export const UserSource = {
 
   // Sync variant of load that takes userMetadata from caller
   parse: (ssp: string, opts: HasUserMetadata): UserSource | null => {
-    return mapNull(UserSource._parse(ssp), x => ({...x,
-      metadata: opts.userMetadata,
-    }));
+    return matchError(() => UserSource._parseFilenameExt(ssp), {
+      error: e => {
+        log.warn('UserSource.parse: Failed', rich({ssp, e}));
+        return null;
+      },
+      x: ({ext, filename}) => typed<UserSource>({
+        kind: 'user',
+        ext,
+        filename,
+        metadata: opts.userMetadata,
+      }),
+    });
   },
 
-  // (Callers: parse, UserRec.writeMetadata)
-  _parse: (ssp: string): Omit<UserSource, 'metadata'> | null => {
-    try {
-      // Format: 'user-${created}-${uniq}.${ext}'
-      //  - Assume uniq has no special chars, and let created + ext match everything outside of '-' and '.'
-      //  - And make 'user-' optional for back compat [TODO(edit_rec): Test if this is actually required for Saved/Recents to load]
-      const match = ssp.match(/^(?:user-)?(.+)-([^-.]+)\.(.+)$/);
-      if (!match)   throw `UserSource.parse: Invalid ssp[${ssp}]`;
-      const [_, created, uniq, ext] = match;
-      if (!created) throw `UserSource.parse: Invalid created[${created}]`;
-      if (!uniq)    throw `UserSource.parse: Invalid uniq[${uniq}]`;
-      if (!ext)     throw `UserSource.parse: Invalid ext[${created}]`;
-      return {
-        kind:     'user',
-        created:  Source.parseDate(created),
-        uniq,
-        ext,
-        filename: ssp, // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
-      };
-    } catch (e) {
-      log.warn('UserSource._parse: Failed', rich({ssp, e}));
-      return null;
-    }
+  // To allow file renames, all you can rely on are {filename,ext}
+  //  - (Callers: parse)
+  _parseFilenameExt: (ssp: string): Pick<UserSource, 'filename' | 'ext'> => {
+    // Format: '${filename}.${ext}'
+    const match = ssp.match(/^.+\.([^.]+)$/);
+    if (!match) throw `UserSource.parse: Invalid ssp[${ssp}]`;
+    const [_, ext] = match;
+    if (!ext) throw `UserSource.parse: Invalid ext[${ext}]`;
+    return {
+      filename: ssp, // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
+      ext,
+    };
+  },
+
+  // You can also try to parse {created,uniq}, but you can't rely on them
+  //  - (Callers: parse, UserRec.readMetadata)
+  _maybeParseCreatedUniq: (ssp: string): {
+    kind:     UserSource['kind'],
+    filename: UserSource['filename'],
+    ext:      UserSource['ext'],
+    created:  UserMetadata['created'],
+    uniq:     UserMetadata['uniq'],
+  } => {
+    // Format: 'user-${created}-${uniq}.${ext}'
+    //  - Assume uniq has no special chars, and let created + ext match everything outside of '-' and '.'
+    //  - And make 'user-' optional for back compat [TODO(edit_rec): Test if this is actually required for Saved/Recents to load]
+    const match = ssp.match(/^(?:user-)?(.+)-([^-.]+)\.([^.]+)$/);
+    if (!match)   throw `UserSource.parse: Invalid ssp[${ssp}]`;
+    const [_, created, uniq, ext] = match;
+    if (!created) throw `UserSource.parse: Invalid created[${created}]`;
+    if (!uniq)    throw `UserSource.parse: Invalid uniq[${uniq}]`;
+    if (!ext)     throw `UserSource.parse: Invalid ext[${ext}]`;
+    return {
+      // UserSource props
+      kind: 'user',
+      ext,
+      filename: ssp, // Preserve so we can roundtrip outdated filename formats (e.g. saved user recs from old code versions)
+      // UserMetadata props
+      created: Source.parseDate(created),
+      uniq,
+    };
   },
 
   // Async variant of parse that loads userMetadata
   load: async (ssp: string): Promise<UserSource | null> => {
-    return await mapNull(
-      UserSource.parse(ssp, {
-        userMetadata: null as unknown as UserMetadata, // HACK Safe b/c unused in UserRec.audioPath
+    const audioPath = UserRec._audioPathFromSsp(ssp);
+    return await matchErrorAsync(async () => await UserRec.loadMetadata(audioPath), {
+      x: async metadata => matchNull(UserSource.parse(ssp, {userMetadata: metadata}), {
+        x:    source => source,
+        null: ()     => null, // (UserSource.parse already logs, so we just return null silently)
       }),
-      async sourceNoMetadata => {
-        const audioPath = UserRec.audioPath(sourceNoMetadata);
-        return await matchErrorAsync(async () => await UserRec.loadMetadata(audioPath), {
-          x: async metadata => ({
-            ...sourceNoMetadata,
-            metadata,
-          }),
-          error: async e => {
-            // Disabled logging: very noisy for source not found (e.g. user deleted a user rec, or xc dataset changed)
-            //  - Rely on the caller to warn/error as appropriate
-            // log.debug('UserSource.load: Failed to loadMetadata, returning null', rich({ssp, audioPath, e})); // XXX Debug
-            return null;
-          },
-        });
+      error: async e => {
+        // Disabled logging: very noisy for source not found (e.g. user deleted a user rec, or xc dataset changed)
+        //  - Rely on the caller to warn/error as appropriate
+        // log.debug('UserSource.load: Failed to loadMetadata, returning null', rich({ssp, audioPath, e})); // XXX Debug
+        return null;
       },
-    );
+    });
   },
 
   new: (source: Omit<UserSource, 'kind' | 'filename'>): UserSource => {
@@ -384,7 +425,7 @@ export const UserSource = {
 
   _newFilename: (source: Omit<UserSource, 'kind' | 'filename'>): string => {
     // Generate filename from UserSource metadata
-    return `user-${Source.stringifyDate(source.created)}-${source.uniq}.${source.ext}`;
+    return `user-${Source.stringifyDate(source.metadata.created)}-${source.metadata.uniq}.${source.ext}`;
   },
 
 };

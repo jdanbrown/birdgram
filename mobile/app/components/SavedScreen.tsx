@@ -108,7 +108,7 @@ export class SavedScreen extends PureComponent<Props, State> {
       .flatten()
       .sortBy(x => matchSource(x, {
         xc:   source => throw_(`Impossible xc case: ${x}`),
-        user: source => source.created,
+        user: source => source.metadata.created,
       }))
       .value()
       .slice().reverse() // (Copy b/c reverse mutates)

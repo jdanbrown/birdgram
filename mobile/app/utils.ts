@@ -380,14 +380,14 @@ export type Omit<X, K> = Pick<X, Exclude<keyof X, K>>;
 // stringify / parse / show
 //
 
+// Stringify local Date -> utc iso8601 string
 export function stringifyDate(d: Date): string {
-  // Stringify local Date -> utc iso8601 string
   return d.toISOString(); // Renders as utc
 }
 
-// [Maybe simpler to pass around Moment i/o Date?]
+// Parse utc iso8601 string -> local Date
+//  - [Maybe simpler to pass around Moment i/o Date?]
 export function parseDate(s: string): Date {
-  // Parse utc iso8601 string -> local Date
   return moment.utc(s).toDate();
 }
 
@@ -855,6 +855,20 @@ export const qsSane = {
 export function compare<X>(x: X, y: X): number {
   return x < y ? -1 : x > y ? 1 : 0;
 }
+
+//
+// crypto
+//
+
+// TODO Install looks gnarly, punting for now...
+//  - https://github.com/tradle/react-native-crypto
+//  - https://github.com/tradle/react-native-crypto#install
+//  - https://stackoverflow.com/questions/29836434/requiring-unknown-module-crypto-in-react-native-environment
+//  - https://stackoverflow.com/questions/45301900/howto-patch-shim-crypto-getrandomvalues-for-react-native
+// import crypto from 'crypto';
+// export function sha1hex(s: string): string {
+//   return crypto.createHash('sha1').update(s).digest('hex');
+// }
 
 //
 // fs (via rn-fetch-blob)

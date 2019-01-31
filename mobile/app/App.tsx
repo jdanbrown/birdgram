@@ -45,8 +45,8 @@ import { querySql } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { urlpack } from 'app/urlpack';
 import {
-  assert, deepEqual, dirname, global, Interval, json, match, matchNil, Omit, pretty, qsSane, readJsonFile, shallowDiff,
-  shallowDiffPropsState, Style, Timer, yaml,
+  assert, deepEqual, dirname, global, Interval, json, local, match, matchNil, Omit, pretty, qsSane, readJsonFile,
+  shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 

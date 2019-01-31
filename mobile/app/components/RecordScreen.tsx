@@ -31,7 +31,7 @@ import { Geo } from 'app/components/Geo';
 import * as Colors from 'app/colors';
 import {
   DraftEdit, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source, SourceId,
-  UserMetadata, UserRec,
+  UserMetadata, UserRec, UserSource,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
@@ -514,9 +514,18 @@ export class RecordScreen extends Component<Props, State> {
 
           // Initial UserMetadata, as of record time
           const recordingUserMetadata = UserMetadata.new({
-            edit: null, // Not an edit of another rec
+            created: new Date(),
+            uniq:    chance.hash({length: 8}), // Long enough to be unique across users
+            edit:    null, // Not an edit of another rec
             coords,
           });
+
+          // Make audioPath
+          const source = UserSource.new({
+            ext:      'wav',
+            metadata: recordingUserMetadata,
+          });
+          const audioPath = UserRec.audioPath(source);
 
           // Reset state
           //  - TODO Dedupe with updateForLocation
@@ -535,7 +544,7 @@ export class RecordScreen extends Component<Props, State> {
 
           // Start recording
           await NativeSpectro.start({
-            outputPath: await UserRec.newAudioPath('wav'),
+            outputPath:  await ensureParentDir(audioPath),
             refreshRate: this.props.refreshRate,
           });
 
@@ -950,14 +959,14 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
         {/* Go to parent rec */}
         {local(() => {
-          const parent = mapNil(this.props.editRecording, ({rec}) => matchRec(rec, {
+          const parent: null | Source = mapNull(this.props.editRecording, ({rec}) => matchRec(rec, {
             xc:   rec => null,
             user: rec => mapNull(rec.source.metadata.edit, edit => edit.parent),
           }));
           return (
             <RectButton style={styles.bottomControlsButton} onPress={() => {
               if (parent) {
-                this.props.go('record', {path: `/edit/${encodeURIComponent(parent)}`});
+                this.props.go('record', {path: `/edit/${encodeURIComponent(Source.stringify(parent))}`});
               }
             }}>
               <Feather style={[styles.bottomControlsButtonIcon, {
