@@ -7,7 +7,7 @@ import { Route, Router } from 'react-router-native';
 
 import { debug_print, Log, puts, rich } from 'app/log';
 import { Settings } from 'app/settings';
-import { global, into, json, local, Nil, pretty, shallowDiffPropsState, typed, yaml } from 'app/utils';
+import { global, into, json, local, mapNull, Nil, pretty, shallowDiffPropsState, typed, yaml } from 'app/utils';
 
 const log = new Log('router');
 
@@ -74,11 +74,26 @@ export interface LocationState {
 //  - Current usage
 //    - RecentScreen was comparing like: x.key === y.key
 //    - SavedScreen builds mock locations from just a pathname, where both .key and even .state are meaningless
-export function locationPathIsEqual(x: Nil<Location>, y: Nil<Location>): boolean {
-  return _.get(x, 'pathname') === _.get(y, 'pathname');
+export function locationKeyIsEqual(
+  x: Nil<Pick<Location, 'key'>>,
+  y: Nil<Pick<Location, 'key'>>,
+): boolean {
+  return (
+    _.get(x, 'key') ===
+    _.get(y, 'key')
+  );
 }
-export function locationKeyIsEqual(x: Nil<Location>, y: Nil<Location>): boolean {
-  return _.get(x, 'key') === _.get(y, 'key');
+export function locationPathIsEqual(
+  x: Nil<Pick<Location, 'pathname'>>,
+  y: Nil<Pick<Location, 'pathname'>>,
+): boolean {
+  return (
+    // HACK decodeURIComponent b/c something in history/react-router messes up uri encodings (YOU HAD ONE JOB)
+    //  - x === '/edit/user:user-20180101-abcdef'   <- wrong, mangled after going through History/Location/router
+    //  - y === '/edit/user%3Auser-20180101-abcdef' <- right, via encodeURIComponent in e.g. SavedScreen.recordSavedFromSource
+    mapNull(_.get(x, 'pathname', null), decodeURIComponent) ===
+    mapNull(_.get(y, 'pathname', null), decodeURIComponent)
+  );
 }
 
 export function locationStateOrEmpty(state?: LocationState): LocationState | {[key in keyof LocationState]: null} {
@@ -131,6 +146,20 @@ export interface Histories extends TabHistories {
 
 export type TabName = keyof TabHistories;
 export type HistoryName = keyof Histories;
+
+export type TabLocations<K extends string = TabName> = {[key in K]: Location};
+export function getTabLocations(histories: TabHistories): TabLocations {
+  return {
+    record:   histories.record.location,
+    search:   histories.search.location,
+    recent:   histories.recent.location,
+    saved:    histories.saved.location,
+    places:   histories.places.location,
+    settings: histories.settings.location,
+    help:     histories.help.location,
+    // tabs:    histories.tabs.location, // Omit .tabs (else we'd trigger componentDidUpdate on each tab switch)
+  };
+}
 
 // Prefix keys in AsyncStorage
 const _prefix = 'router_v3.'; // Bump version to wipe out storage on incompat code changes

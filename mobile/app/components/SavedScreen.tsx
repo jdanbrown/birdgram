@@ -15,24 +15,34 @@ import {
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
 import { debug_print, Log, puts, rich } from 'app/log';
-import { Go, Location, TabName } from 'app/router';
+import { Go, Location, locationKeyIsEqual, locationPathIsEqual, TabLocations, TabName } from 'app/router';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
   global, into, json, local, mapNil, mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined, mergeArraysWith,
-  shallowDiffPropsState, showDate, throw_, typed, yaml,
+  pretty, shallowDiffPropsState, showDate, throw_, typed, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
 const log = new Log('SavedScreen');
 
+const tabProps = {
+  record: {
+    color: iOSColors.pink,
+  },
+  search: {
+    color: iOSColors.blue,
+  },
+};
+
 interface Props {
   // App globals
-  go:         Go;
-  xc:         XC;
-  ebird:      Ebird;
+  go:           Go;
+  tabLocations: TabLocations;
+  xc:           XC;
+  ebird:        Ebird;
   // RecentScreen
-  iconForTab: {[key in TabName]: string};
+  iconForTab:   {[key in TabName]: string};
 }
 
 interface State {
@@ -61,6 +71,20 @@ export function matchSaved<X>(saved: Saved, cases: {
     case 'search': return cases.search(saved);
   }
 }
+
+const Saved = {
+
+  isOpenInTab: (saved: Saved, tabLocations: TabLocations): boolean => {
+    return Saved.locationIsEqual(saved.location, tabLocations[saved.tab]);
+  },
+
+  // Compare by path i/o key
+  //  - Saved.location doesn't always have .key, and unlike RecentScreen we only have each path once
+  locationIsEqual: (x?: Location, y?: Location): boolean => {
+    return locationPathIsEqual(x, y);
+  },
+
+};
 
 export class SavedScreen extends PureComponent<Props, State> {
 
@@ -225,6 +249,11 @@ export class SavedScreen extends PureComponent<Props, State> {
                     flex: 1,
                     flexDirection: 'row',
                     padding: 5,
+                    // Highlight active location per tab
+                    backgroundColor: (Saved.isOpenInTab(saved, this.props.tabLocations)
+                      ? `${tabProps[saved.tab].color}22`
+                      : undefined
+                    ),
                     // Bottom border on all items, top border on first item
                     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
                     ...(index != 0 ? {} : {

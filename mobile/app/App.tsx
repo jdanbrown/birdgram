@@ -37,8 +37,8 @@ import { NativeSpectro } from 'app/native/Spectro';
 import { NativeTagLib } from 'app/native/TagLib';
 import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import {
-  createDefaultHistories, Go, GoTo, Histories, HistoryConsumer, loadHistories, ObserveHistory, RouterWithHistory,
-  saveHistories, TabHistories, TabName,
+  createDefaultHistories, getTabLocations, Go, GoTo, Histories, HistoryConsumer, loadHistories, locationPathIsEqual,
+  ObserveHistory, RouterWithHistory, saveHistories, TabHistories, TabLocations, TabName,
 } from 'app/router';
 import { Settings, SettingsProxy, SettingsWrites } from 'app/settings';
 import { querySql } from 'app/sql';
@@ -152,7 +152,8 @@ interface State {
   orientation: 'portrait' | 'landscape';
   loading: boolean;
   // Loaded async (e.g. from fs, storage)
-  histories?: Histories;
+  histories?: Histories;       // FIXME Why doesn't TabRoutes trigger componentDidUpdate on sub-components when .histories changes?
+  tabLocations?: TabLocations; // HACK Track separately from .histories so sub-components can get componentDidUpdate's
   serverConfig?: ServerConfig;
   metadataSpecies?: MetadataSpecies;
   xc?: XC;
@@ -235,11 +236,24 @@ export default class App extends PureComponent<Props, State> {
               // Save all histories (on any history change)
               saveHistories(histories);
 
+              // Update tabLocations (on any history change)
+              this.setState((state, props) => {
+                if (!state.histories) return null;
+                const tabLocations = getTabLocations(state.histories);
+                if (fastIsEqual(tabLocations, state.tabLocations)) return null;
+                return {
+                  tabLocations,
+                };
+              });
+
             });
           });
           return histories;
         })
       );
+
+      // Set initial tabLocations
+      const tabLocations = getTabLocations(histories);
 
       // Load settings (async) on app startup
       const settings = (
@@ -317,6 +331,7 @@ export default class App extends PureComponent<Props, State> {
       this.setState({
         loading: false,
         histories,
+        tabLocations,
         serverConfig,
         metadataSpecies,
         xc,
@@ -465,14 +480,15 @@ export default class App extends PureComponent<Props, State> {
                           render: props => (
                             <RecentScreen {...props}
                               // App globals
-                              go         = {this.go}
-                              xc         = {this.state.xc!}
-                              ebird      = {this.state.ebird!}
+                              go           = {this.go}
+                              tabLocations = {this.state.tabLocations!}
+                              xc           = {this.state.xc!}
+                              ebird        = {this.state.ebird!}
                               // Settings
-                              showDebug  = {this.state.settings!.showDebug}
-                              maxHistory = {this.state.settings!.maxHistory}
+                              showDebug    = {this.state.settings!.showDebug}
+                              maxHistory   = {this.state.settings!.maxHistory}
                               // RecentScreen
-                              iconForTab = {this.props.iconForTab}
+                              iconForTab   = {this.props.iconForTab}
                             />
                           ),
                         }, {
@@ -481,11 +497,12 @@ export default class App extends PureComponent<Props, State> {
                           render: props => (
                             <SavedScreen {...props}
                               // App globals
-                              go         = {this.go}
-                              xc         = {this.state.xc!}
-                              ebird      = {this.state.ebird!}
+                              go           = {this.go}
+                              tabLocations = {this.state.tabLocations!}
+                              xc           = {this.state.xc!}
+                              ebird        = {this.state.ebird!}
                               // SavedScreen
-                              iconForTab = {this.props.iconForTab}
+                              iconForTab   = {this.props.iconForTab}
                             />
                           ),
                         }, {
@@ -585,7 +602,8 @@ export default class App extends PureComponent<Props, State> {
       history.index = history.length - 1;
       // Dedupe contiguous history.entries: don't push if .pathname isn't changing
       //  - NOTE .state isn't compared; it should be determined by .pathname (modulo important, e.g. timestamp isn't)
-      if (to.path === history.entries[history.index].pathname) {
+      //  - NOTE Compare using locationPathIsEqual b/c === on .pathname isn't reliable (see locationPathIsEqual)
+      if (locationPathIsEqual({pathname: to.path}, history.entries[history.index])) {
         // log.debug('go: Dedupe', {to, historyLocation: history.location}); // XXX Debug
       } else {
         // log.debug('go: Push', {to, historyLocation: history.location}); // XXX Debug

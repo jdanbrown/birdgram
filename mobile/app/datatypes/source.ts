@@ -274,12 +274,12 @@ export const Source = {
         //  - TODO Rethink after rec sharing (e.g. add usernames to avoid collisions)
         const parts = (
           metadata && metadata.edit ? [
-            !metadata  ? '' : `[${UserSpecies.show(metadata.species)}]`,
-            !opts.long ? '' : 'Edit:',
+            !opts.long || !metadata ? '' : `[${UserSpecies.show(metadata.species)}]`,
+            !opts.long              ? '' : 'Edit:',
             Edit.show(metadata.edit, opts),
           ] : [
-            !metadata  ? '' : `[${UserSpecies.show(metadata.species)}]`,
-            !opts.long ? '' : 'Recording:',
+            !opts.long || !metadata ? '' : `[${UserSpecies.show(metadata.species)}]`,
+            !opts.long              ? '' : 'Recording:',
             showDate(metadata.created),
           ]
         );

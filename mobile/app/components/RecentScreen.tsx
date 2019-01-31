@@ -16,7 +16,7 @@ import { Ebird } from 'app/ebird';
 import { debug_print, Log, rich, puts, tap } from 'app/log';
 import {
   Go, Histories, History, Location, locationKeyIsEqual, locationPathIsEqual, locationStateOrEmpty, tabHistoriesKeys,
-  TabName,
+  TabLocations, TabName,
 } from 'app/router';
 import { Settings } from 'app/settings';
 import { Styles } from 'app/styles';
@@ -45,26 +45,24 @@ const capturedTabs: Array<CapturedTabName> = [
 
 interface Props {
   // App globals
-  location:   Location;
-  history:    History;
-  histories:  Histories;
-  go:         Go;
-  xc:         XC;
-  ebird:      Ebird;
+  location:     Location;
+  history:      History;
+  histories:    Histories;
+  go:           Go;
+  tabLocations: TabLocations<CapturedTabName>;
+  xc:           XC;
+  ebird:        Ebird;
   // Settings
-  showDebug:  boolean;
-  maxHistory: number;
+  showDebug:    boolean;
+  maxHistory:   number;
   // RecentScreen
-  iconForTab: {[key in CapturedTabName]: string};
+  iconForTab:   {[key in CapturedTabName]: string};
 }
 
 interface State {
-  status:       'ready' | 'loading';
-  recents:      Array<Recent>;
-  tabLocations: TabLocations; // Track as state to avoid having to .forceUpdate()
+  status:  'ready' | 'loading';
+  recents: Array<Recent>;
 }
-
-type TabLocations = {[key in CapturedTabName]: Location};
 
 type Recent = RecordRecent | SearchRecent;
 interface RecordRecent {
@@ -90,7 +88,7 @@ export function matchRecent<X>(recent: Recent, cases: {
 
 const Recent = {
 
-  isOpenInTab: (recent: Recent, tabLocations: TabLocations): boolean => {
+  isOpenInTab: (recent: Recent, tabLocations: TabLocations<CapturedTabName>): boolean => {
     return Recent.locationIsEqual(recent.location, tabLocations[recent.tab]);
   },
 
@@ -169,9 +167,8 @@ export class RecentScreen extends PureComponent<Props, State> {
   };
 
   state: State = {
-    status:       'loading',
-    recents:      [],
-    tabLocations: _.mapValues(this.props.histories, x => x.location),
+    status:  'loading',
+    recents: [],
   };
 
   // Refs
@@ -216,26 +213,18 @@ export class RecentScreen extends PureComponent<Props, State> {
             x:    recent => this.addRecents([recent]),
           })
         }
-        // Update tabLocations on each route change
-        this.setTabLocations();
       });
     });
 
-    // Update tabLocations once after adding listeners in case any changed in the interim
-    this.setTabLocations();
+    this.setState((state, props) => ({
+      status: 'ready',
+    }));
 
   }
 
   addRecents = (recents: Array<Recent>) => {
     this.setState((state, props) => ({
       recents: [...recents, ...state.recents].slice(0, this.props.maxHistory), // Most recent first (reverse of history.entries)
-    }));
-  }
-
-  setTabLocations = () => {
-    this.setState((state, props) => ({
-      status:       'ready',
-      tabLocations: _.mapValues(props.histories, x => x.location),
     }));
   }
 
@@ -323,7 +312,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                     flexDirection: 'row',
                     // backgroundColor: iOSColors.white,
                     // Highlight active location per tab
-                    backgroundColor: (Recent.isOpenInTab(recent, this.state.tabLocations)
+                    backgroundColor: (Recent.isOpenInTab(recent, this.props.tabLocations)
                       ? `${capturedTabProps[recent.tab].color}22`
                       : undefined
                     ),
@@ -338,7 +327,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                     <Feather style={{
                       ...material.titleObject,
                       // Highlight active location per tab
-                      color: (Recent.isOpenInTab(recent, this.state.tabLocations)
+                      color: (Recent.isOpenInTab(recent, this.props.tabLocations)
                         ? capturedTabProps[recent.tab].color
                         : iOSColors.gray
                       )
