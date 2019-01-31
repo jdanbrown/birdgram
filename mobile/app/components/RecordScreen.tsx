@@ -37,7 +37,7 @@ import { DB } from 'app/db';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import { ImageFile, NativeSpectro, NativeSpectroStats } from 'app/native/Spectro';
-import { Go, Location } from 'app/router';
+import { Go, Location, locationKeyIsEqual, locationPathIsEqual } from 'app/router';
 import { SettingsWrites } from 'app/settings';
 import Sound from 'app/sound';
 import { StyleSheet } from 'app/stylesheet';
@@ -253,7 +253,7 @@ export class RecordScreen extends Component<Props, State> {
   }
 
   updateForLocation = async (prevLocation: null | Location) => {
-    if (this.props.location !== prevLocation) {
+    if (!locationPathIsEqual(this.props.location, prevLocation)) {
       if (![
         'stopped',          // Safe: no recording in progress
         'loading-for-edit', // Safe: no recording in progress [else we drop transitions on go->go races]

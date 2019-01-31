@@ -14,7 +14,10 @@ import {
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
 import { debug_print, Log, rich, puts, tap } from 'app/log';
-import { Go, Histories, History, Location, locationStateOrEmpty, tabHistoriesKeys, TabName } from 'app/router';
+import {
+  Go, Histories, History, Location, locationKeyIsEqual, locationPathIsEqual, locationStateOrEmpty, tabHistoriesKeys,
+  TabName,
+} from 'app/router';
 import { Settings } from 'app/settings';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
@@ -58,13 +61,10 @@ interface Props {
 interface State {
   status:       'ready' | 'loading';
   recents:      Array<Recent>;
-  tabLocations: {[key in CapturedTabName]: Location}, // Track as state to avoid having to .forceUpdate()
+  tabLocations: TabLocations; // Track as state to avoid having to .forceUpdate()
 }
 
-// interface Recent {
-//   tab:      CapturedTabName;
-//   location: Location;
-// }
+type TabLocations = {[key in CapturedTabName]: Location};
 
 type Recent = RecordRecent | SearchRecent;
 interface RecordRecent {
@@ -89,6 +89,17 @@ export function matchRecent<X>(recent: Recent, cases: {
 }
 
 const Recent = {
+
+  isOpenInTab: (recent: Recent, tabLocations: TabLocations): boolean => {
+    return Recent.locationIsEqual(recent.location, tabLocations[recent.tab]);
+  },
+
+  // Compare by key i/o path
+  //  - Want to show the user _where_ in history.entries they are, e.g. to reflect forward/back operations
+  locationIsEqual: (x?: Location, y?: Location): boolean => {
+    return locationKeyIsEqual(x, y);
+  },
+
   // null means source not found
   fromLocation: async (tab: CapturedTabName, location: Location): Promise<null | Recent> => {
     switch(tab) {
@@ -96,6 +107,7 @@ const Recent = {
       case 'search': return await SearchRecent.fromLocation(location);
     }
   },
+
 };
 
 const RecordRecent = {
@@ -301,7 +313,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                     this.props.go(recent.tab, {
                       index: _.findIndex(
                         this.props.histories[recent.tab].entries,
-                        x => x.key === recent.location.key,
+                        x => Recent.locationIsEqual(x, recent.location),
                       )!,
                     });
                   }}
@@ -311,7 +323,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                     flexDirection: 'row',
                     // backgroundColor: iOSColors.white,
                     // Highlight active location per tab
-                    backgroundColor: (recent.location.key === this.state.tabLocations[recent.tab].key
+                    backgroundColor: (Recent.isOpenInTab(recent, this.state.tabLocations)
                       ? `${capturedTabProps[recent.tab].color}22`
                       : undefined
                     ),
@@ -326,7 +338,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                     <Feather style={{
                       ...material.titleObject,
                       // Highlight active location per tab
-                      color: (recent.location.key === this.state.tabLocations[recent.tab].key
+                      color: (Recent.isOpenInTab(recent, this.state.tabLocations)
                         ? capturedTabProps[recent.tab].color
                         : iOSColors.gray
                       )

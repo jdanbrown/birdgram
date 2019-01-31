@@ -373,6 +373,7 @@ global.str   = (x: any) => x.toString(); // e.g. for nj.array, which have a not 
 // Typescript
 //
 
+export type Nil<X>     = X | null | undefined;
 export type NoKind<X>  = Omit<X, 'kind'>; // For ADTs
 export type Omit<X, K> = Pick<X, Exclude<keyof X, K>>;
 

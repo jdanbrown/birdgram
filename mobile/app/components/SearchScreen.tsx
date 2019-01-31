@@ -42,7 +42,7 @@ import { Ebird } from 'app/ebird';
 import { Log, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import { NativeSpectro } from 'app/native/Spectro';
-import { Go, History, Location } from 'app/router';
+import { Go, History, Location, locationKeyIsEqual, locationPathIsEqual } from 'app/router';
 import { SettingsWrites } from 'app/settings';
 import Sound from 'app/sound';
 import { SQL, sqlf } from 'app/sql';
@@ -501,10 +501,10 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   updateForLocation = async (prevProps: null | Props, prevState: null | State) => {
     log.debug('updateForLocation', () => rich({
-      ..._.pick(this.props, 'location'),
-      ..._.pick(this.state, ['refreshQuery', 'f_preds_cols']),
-      prevProps,
-      prevState,
+      props:     _.pick(this.props, ['location', 'place']),
+      prevProps: _.pick(prevProps,  ['location', 'place']),
+      state:     _.pick(this.state, ['refreshQuery', 'f_preds_cols']),
+      prevState: _.pick(prevState,  []),
     }));
     if (
       !(
@@ -515,7 +515,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         !fastIsEqual(this.props.place, _.get(prevProps, 'place'))
       ) && (
         // Noop if location didn't change
-        fastIsEqual(this.props.location, _.get(prevProps, 'location')) ||
+        locationPathIsEqual(this.props.location, _.get(prevProps, 'location')) ||
         // Noop if we don't know f_preds_cols yet (assume we'll be called again once we do)
         !this.state.f_preds_cols
       )

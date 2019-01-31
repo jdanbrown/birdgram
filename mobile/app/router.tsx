@@ -7,7 +7,7 @@ import { Route, Router } from 'react-router-native';
 
 import { debug_print, Log, puts, rich } from 'app/log';
 import { Settings } from 'app/settings';
-import { global, into, json, local, pretty, shallowDiffPropsState, typed, yaml } from 'app/utils';
+import { global, into, json, local, Nil, pretty, shallowDiffPropsState, typed, yaml } from 'app/utils';
 
 const log = new Log('router');
 
@@ -62,6 +62,23 @@ export type Location = _history.Location<LocationState | undefined>;
 export type History  = _history.MemoryHistory<LocationState | undefined>;
 export interface LocationState {
   timestamp: Date;
+}
+
+// TODO(location_equality): How should Location equality work?
+//  - Current expectations
+//    - .pathname -- determines identity (eg. it embeds a SourceId)
+//    - .state    -- determined by .pathname (but difficult/infeasible to compute from .pathname)
+//    - .search   -- unused and ignored (prefer one of .pathname/.state)
+//    - .hash     -- unused and ignored (prefer one of .pathname/.state)
+//    - .key      -- unused and ignored [TODO But is it treated specially by react-router? e.g. to determine equality?]
+//  - Current usage
+//    - RecentScreen was comparing like: x.key === y.key
+//    - SavedScreen builds mock locations from just a pathname, where both .key and even .state are meaningless
+export function locationPathIsEqual(x: Nil<Location>, y: Nil<Location>): boolean {
+  return _.get(x, 'pathname') === _.get(y, 'pathname');
+}
+export function locationKeyIsEqual(x: Nil<Location>, y: Nil<Location>): boolean {
+  return _.get(x, 'key') === _.get(y, 'key');
 }
 
 export function locationStateOrEmpty(state?: LocationState): LocationState | {[key in keyof LocationState]: null} {

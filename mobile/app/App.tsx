@@ -30,7 +30,7 @@ import {
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
-import { Log, rich } from 'app/log';
+import { debug_print, Log, puts, rich } from 'app/log';
 import { NativeHttp } from 'app/native/Http';
 import { NativeSearch } from 'app/native/Search';
 import { NativeSpectro } from 'app/native/Spectro';
@@ -583,9 +583,16 @@ export default class App extends PureComponent<Props, State> {
       //  - HACK Mutate history.index i/o calling history.go() to avoid an unnecessary update
       //    - Ref: https://github.com/ReactTraining/history/blob/v4.7.2/modules/createMemoryHistory.js#L61
       history.index = history.length - 1;
-      history.push(to.path, {
-        timestamp: new Date(),
-      });
+      // Dedupe contiguous history.entries: don't push if .pathname isn't changing
+      //  - NOTE .state isn't compared; it should be determined by .pathname (modulo important, e.g. timestamp isn't)
+      if (to.path === history.entries[history.index].pathname) {
+        // log.debug('go: Dedupe', {to, historyLocation: history.location}); // XXX Debug
+      } else {
+        // log.debug('go: Push', {to, historyLocation: history.location}); // XXX Debug
+        history.push(to.path, {
+          timestamp: new Date(),
+        });
+      }
     } else if (to.index !== undefined) {
       history.go(to.index - history.index);
     }
