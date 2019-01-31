@@ -352,7 +352,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     });
 
     // Show this.props.location
-    await this.updateForLocation(null);
+    await this.updateForLocation(null, null);
 
   }
 
@@ -410,7 +410,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     }
 
     // Show this.props.location
-    await this.updateForLocation(prevProps.location);
+    await this.updateForLocation(prevProps, prevState);
 
   }
 
@@ -499,22 +499,23 @@ export class SearchScreen extends PureComponent<Props, State> {
     });
   }
 
-  updateForLocation = async (prevLocation: null | Location) => {
+  updateForLocation = async (prevProps: null | Props, prevState: null | State) => {
     log.debug('updateForLocation', () => rich({
-      prevLocation,
       ..._.pick(this.props, 'location'),
       ..._.pick(this.state, ['refreshQuery', 'f_preds_cols']),
+      prevProps,
+      prevState,
     }));
     if (
-      // TODO(put_all_query_state_in_location): Refresh on place change
-      //  - Simple starting approach: PlacesScreen emit('place') -> SearchScreen setState({refreshQuery: true})
-      (
-        // Don't noop if force refresh (triggered when filters/limits change)
-        //  - XXX(put_all_query_state_in_location)
-        !this.state.refreshQuery
+      !(
+        // Don't noop if any filters/limits changed [XXX(put_all_query_state_in_location)]
+        //  - Use refreshQuery as a proxy for various filters/limits changing
+        this.state.refreshQuery ||
+        //  - And test other filters/limits here
+        !fastIsEqual(this.props.place, _.get(prevProps, 'place'))
       ) && (
         // Noop if location didn't change
-        fastIsEqual(this.props.location, prevLocation) ||
+        fastIsEqual(this.props.location, _.get(prevProps, 'location')) ||
         // Noop if we don't know f_preds_cols yet (assume we'll be called again once we do)
         !this.state.f_preds_cols
       )
