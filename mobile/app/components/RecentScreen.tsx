@@ -242,7 +242,8 @@ export class RecentScreen extends PureComponent<Props, State> {
         flex: 1,
       }}>
 
-        <TouchableWithoutFeedback onPress={() => mapNull(this.flatListRef.current, x => x.scrollToOffset({offset: 0}))}>
+        {/* NOTE BaseButton b/c TouchableWithoutFeedback wouldn't trigger onPress during FlatList scroll animation */}
+        <BaseButton onPress={() => mapNull(this.flatListRef.current, x => x.scrollToOffset({offset: 0}))}>
           <View style={{
             borderBottomWidth: 1,
             borderColor: iOSColors.midGray,
@@ -256,7 +257,7 @@ export class RecentScreen extends PureComponent<Props, State> {
               History
             </Text>
           </View>
-        </TouchableWithoutFeedback>
+        </BaseButton>
 
         <View style={{
           flex: 1,
