@@ -277,7 +277,7 @@ export class RecentScreen extends PureComponent<Props, State> {
 
           {/* TODO SectionList with dates (recent.timestamp) as section headers */}
           {this.state.status === 'ready' && (
-            <FlatList <Recent>
+            <FlatList
               ref={this.flatListRef}
               style={{
                 ...Styles.fill,
@@ -287,7 +287,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                 bottom: -1, // Hide bottom elem border under top border of tab bar
               }}
               initialNumToRender={20} // Enough to fill one screen (and not much more)
-              data={this.state.recents}
+              data={typed<Recent[]>(this.state.recents)}
               keyExtractor={(recent, index) => `${index}`}
               ListEmptyComponent={(
                 <View style={[Styles.center, {padding: 30}]}>

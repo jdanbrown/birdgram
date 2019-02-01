@@ -1,18 +1,24 @@
 import _ from 'lodash';
+import moment from 'moment';
 import React, { PureComponent } from 'react';
-import { Dimensions, FlatList, Image, Platform, SectionList, Text, View, WebView } from 'react-native';
+import {
+  Dimensions, FlatList, Image, Platform, SectionList, Text, TextProps, View, ViewProps, WebView,
+} from 'react-native';
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
+import { Geo, GeoCoords, GeoError } from 'app/components/Geo';
 import { matchSearchPathParams, MetadataSpecies, Place, Species } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
 import { Log, rich } from 'app/log';
 import { Go, Histories, History, Location } from 'app/router';
 import { SettingsWrites } from 'app/settings';
-import { Styles } from 'app/styles';
+import { normalizeStyle, Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
-import { fastIsEqual, global, json, matchNull, pretty, shallowDiffPropsState, yaml } from 'app/utils';
+import {
+  fastIsEqual, global, json, mapNull, matchNull, pretty, shallowDiffPropsState, typed, yaml, yamlPretty,
+} from 'app/utils';
 
 const log = new Log('PlacesScreen');
 
@@ -24,14 +30,18 @@ interface Props {
   go:              Go;
   metadataSpecies: MetadataSpecies;
   ebird:           Ebird;
+  geo:             Geo;
   // Settings
   settings:        SettingsWrites;
   showDebug:       boolean;
-  place:           null | Place;
+  place:           Place | null;
   places:          Array<Place>;
 }
 
 interface State {
+  // For debugging gps
+  lastSeenGeoCoords: GeoCoords | null;
+  lastSeenGeoError:  GeoError  | null;
 }
 
 export class PlacesScreen extends PureComponent<Props, State> {
@@ -40,11 +50,24 @@ export class PlacesScreen extends PureComponent<Props, State> {
   };
 
   state: State = {
+    lastSeenGeoCoords: null,
+    lastSeenGeoError:  null,
   };
 
   componentDidMount = async () => {
-    log.info('componentDidMount');
+    log.info('componentDidMount', {
+      geo: this.props.geo, // XXX Debug: Why is this.props.geo sometimes null? (via this.geoRef.current! in App)
+    });
     global.PlacesScreen = this; // XXX Debug
+
+    // Subscribe to geo updates + grab initial geo
+    //  - Subscribe before grab, to avoid missing events
+    this.props.geo.emitter.addListener('coords', (coords: GeoCoords) => this.setState({lastSeenGeoCoords: coords}));
+    this.props.geo.emitter.addListener('error',  (error:  GeoError)  => this.setState({lastSeenGeoError:  error}));
+    this.setState({
+      lastSeenGeoCoords: this.props.geo.coords,
+    });
+
   }
 
   componentWillUnmount = async () => {
@@ -81,7 +104,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
           // backgroundColor: iOSColors.customGray,
         }}>
 
-          <FlatList <null | Place>
+          <FlatList
             style={{
               ...Styles.fill,
             }}
@@ -89,7 +112,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
               top:    -1, // Hide top elem border under bottom border of title bar
               bottom: -1, // Hide bottom elem border under top border of tab bar
             }}
-            data={[null, ...this.props.places]}
+            data={typed<Array<Place | null>>([null, ...this.props.places])}
             keyExtractor={(place, index) => `${index}`}
             ListEmptyComponent={(
               <View style={[Styles.center, {padding: 30}]}>
@@ -149,9 +172,43 @@ export class PlacesScreen extends PureComponent<Props, State> {
 
         </View>
 
+        {/* Debug info */}
+        <this.DebugView style={{
+          width: '100%',
+        }}>
+          <this.DebugText>
+            {yamlPretty({
+              lastSeenGeoCoords: mapNull(this.state.lastSeenGeoCoords, coords => ({
+                ...coords,
+                timestampStr: mapNull(coords, x => moment(x.timestamp).toISOString(true)), // true for local i/o utc
+              })),
+              lastSeenGeoError: this.state.lastSeenGeoError,
+            })}
+          </this.DebugText>
+        </this.DebugView>
+
       </View>
     );
   }
+
+  // Debug components
+  //  - [Tried and gave up once to make well-typed generic version of these (DebugFoo = addStyle(Foo, ...) = withProps(Foo, ...))]
+  DebugView = (props: ViewProps & {children: any}) => (
+    !this.props.showDebug ? null : (
+      <View {...{
+        ...props,
+        style: [Styles.debugView, ...normalizeStyle(props.style)],
+      }}/>
+    )
+  );
+  DebugText = (props: TextProps & {children: any}) => (
+    !this.props.showDebug ? null : (
+      <Text {...{
+        ...props,
+        style: [Styles.debugText, ...normalizeStyle(props.style)],
+      }}/>
+    )
+  );
 
 }
 

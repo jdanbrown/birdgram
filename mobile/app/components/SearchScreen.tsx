@@ -965,13 +965,13 @@ export class SearchScreen extends PureComponent<Props, State> {
     return (
       <this.GenericModal>
         {/* TODO(browse_species): Add title with place name */}
-        <FlatList <SpeciesMetadata>
+        <FlatList
           style={{
             flex: 1,
             height: '100%',
             width: 300, // HACK(browse_species): ~95%
           }}
-          data={_.sortBy(
+          data={typed<SpeciesMetadata[]>(_.sortBy(
             matchNull(this.props.place, {
               null: () => [],
               x: ({species}) => _.flatMap(species, x => (
@@ -982,7 +982,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               )),
             }),
             x => parseFloat(x.taxon_order),
-          )}
+          ))}
           keyExtractor={x => x.shorthand}
           renderItem={({item: speciesMetadata, index}) => (
             <RectButton

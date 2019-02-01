@@ -45,8 +45,8 @@ import { querySql } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { urlpack } from 'app/urlpack';
 import {
-  assert, dirname, fastIsEqual, global, Interval, json, local, match, matchNil, Omit, pretty, qsSane, readJsonFile,
-  shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
+  assert, dirname, fastIsEqual, global, Interval, json, local, mapNull, match, matchNil, Omit, pretty, qsSane,
+  readJsonFile, shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -162,6 +162,7 @@ interface State {
   settings?: Settings;
   settingsWrites?: SettingsWrites;
   db?: DB;
+  geo?: Geo;
   appContext?: AppContext;
 }
 
@@ -198,9 +199,6 @@ export default class App extends PureComponent<Props, State> {
     orientation: getOrientation(),
     loading: true,
   };
-
-  // Refs
-  geoRef: RefObject<Geo> = React.createRef();
 
   componentDidMount = async () => {
     log.info('componentDidMount');
@@ -305,6 +303,13 @@ export default class App extends PureComponent<Props, State> {
         }))
       );
 
+      // Track geo coords (while app is running)
+      //  - TODO(geo_reload): Trigger reload when settings.geoHighAccuracy changes (used to be a react component)
+      const geo = new Geo({
+        enableHighAccuracy: settings.geoHighAccuracy,
+      });
+      geo.start();
+
       // Load native models (async) on app startup
       //  - TODO(refactor_native_deps) Refactor so that all native singletons are created together at App init, so deps can be passed in
       //    - Search is currently created at App init [here]
@@ -339,6 +344,7 @@ export default class App extends PureComponent<Props, State> {
         modelsSearch,
         settings,
         settingsWrites,
+        geo,
         db,
         appContext,
       });
@@ -385,12 +391,6 @@ export default class App extends PureComponent<Props, State> {
               {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
               <StatusBar hidden />
 
-              {/* Track geo coords (while app is running) */}
-              <Geo
-                ref={this.geoRef}
-                enableHighAccuracy={this.state.settings!.geoHighAccuracy}
-              />
-
               {/* Top-level tab router (nested stacks will have their own router) */}
               <RouterWithHistory history={this.state.histories!.tabs}>
                 <View style={styles.fill}>
@@ -427,8 +427,7 @@ export default class App extends PureComponent<Props, State> {
                               // App globals
                               modelsSearch            = {this.state.modelsSearch!}
                               go                      = {this.go}
-                              geo                     = {this.geoRef.current!}              // Pull (no update on change)
-                              // geoCoords            = {this.geoRef.current!.state.coords} // Push (update on change)
+                              geo                     = {this.state.geo!}
                               // Settings
                               settings                = {this.state.settingsWrites!}
                               db                      = {this.state.db!}
@@ -514,6 +513,7 @@ export default class App extends PureComponent<Props, State> {
                               go                      = {this.go}
                               metadataSpecies         = {this.state.metadataSpecies!}
                               ebird                   = {this.state.ebird!}
+                              geo                     = {this.state.geo!}
                               // Settings
                               settings                = {this.state.settingsWrites!}
                               showDebug               = {this.state.settings!.showDebug}

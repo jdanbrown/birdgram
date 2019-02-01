@@ -220,7 +220,7 @@ export class SavedScreen extends PureComponent<Props, State> {
 
           {/* TODO SectionList with dates [of what?] as section headers */}
           {this.state.status === 'ready' && (
-            <FlatList <Saved>
+            <FlatList
               ref={this.flatListRef}
               style={{
                 ...Styles.fill,
@@ -230,7 +230,7 @@ export class SavedScreen extends PureComponent<Props, State> {
                 bottom: -1, // Hide bottom elem border under top border of tab bar
               }}
               initialNumToRender={20} // Enough to fill one screen (and not much more)
-              data={this.state.saveds} // TODO
+              data={typed<Saved[]>(this.state.saveds)}
               keyExtractor={(saved, index) => `${index}`}
               ListEmptyComponent={(
                 <View style={[Styles.center, {padding: 30}]}>

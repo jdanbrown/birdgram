@@ -123,7 +123,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
 
             <SettingsList.Item
               id='geoHighAccuracy'
-              title='geoHighAccuracy'
+              title='geoHighAccuracy (requires app restart)'
               hasNavArrow={false}
               hasSwitch={true}
               switchState={this.props.geoHighAccuracy}

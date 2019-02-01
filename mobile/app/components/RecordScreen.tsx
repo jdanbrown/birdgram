@@ -27,11 +27,11 @@ import { sprintf } from 'sprintf-js';
 import WaveFile from 'wavefile/dist/wavefile';
 const {fs, base64} = RNFB;
 
-import { Geo } from 'app/components/Geo';
+import { Geo, GeoCoords } from 'app/components/Geo';
 import * as Colors from 'app/colors';
 import {
-  DraftEdit, matchRec, matchRecordPathParams, ModelsSearch, Rec, recordPathParamsFromLocation, Source, SourceId,
-  UserMetadata, UserRec, UserSource,
+  DraftEdit, matchRec, matchRecordPathParams, matchSource, ModelsSearch, Rec, recordPathParamsFromLocation, Source,
+  SourceId, UserMetadata, UserRec, UserSource,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
@@ -443,6 +443,15 @@ export class RecordScreen extends Component<Props, State> {
             spectro: {}
             {this.state.nSpectroWidth} w × {this.props.f_bins} h ({this.state.spectroChunks.length} images)
           </this.DebugText>
+          <this.DebugText>
+            {yamlPretty({
+              editRecording: mapNull(this.state.editRecording, ({rec}) => matchSource<{}>(Rec.source(rec), {
+                // HACK Get coords on the debug screen (add more fields later)
+                xc:   source => ({coords: null}),
+                user: source => ({coords: source.metadata.coords}),
+              })),
+            })}
+          </this.DebugText>
           {this.state.showMoreDebug && (
             <this.DebugText>
               native: {json(this._nativeStats)}
@@ -453,6 +462,7 @@ export class RecordScreen extends Component<Props, State> {
         {/* Controls bar */}
         <ControlsBar
           go={this.props.go}
+          geo={this.props.geo}
           showDebug={this.props.showDebug}
           showMoreDebug={this.state.showMoreDebug}
           recordingState={this.state.recordingState}
@@ -889,6 +899,7 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
 // Split out control buttons as component else excessive updates cause render bottleneck
 export interface ControlsBarProps {
   go:                Props["go"];
+  geo:               Props["geo"];
   showDebug:         Props["showDebug"];
   showMoreDebug:     State["showMoreDebug"];
   recordingState:    State["recordingState"];
@@ -1072,16 +1083,6 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
         )}
 
-        {this.props.showDebug && (
-          // Toggle showMoreDebug
-          <RectButton style={styles.bottomControlsButton} onPress={() => {
-            this.props.setStateProxy.setState((state, props) => ({showMoreDebug: !state.showMoreDebug}))
-          }}>
-            <Feather name='terminal' style={[styles.bottomControlsButtonIcon, {
-              color: this.props.showMoreDebug ? iOSColors.blue : iOSColors.black,
-            }]}/>
-          </RectButton>
-        )}
         {!this.props.editRecording ? (
           // Toggle follow
           <RectButton style={styles.bottomControlsButton} onPress={() => {
@@ -1099,6 +1100,29 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
             {/* 'eye' / 'zap' / 'sun' */}
             <Feather name='eye' style={[styles.bottomControlsButtonIcon, {
               color: this.props.denoised ? iOSColors.blue : iOSColors.black,
+            }]}/>
+          </RectButton>
+        )}
+
+        {/* XXX Debug gps */}
+        {/* {this.props.showDebug && (
+          // Manually refresh geo.coords
+          <RectButton style={styles.bottomControlsButton} onPress={async () => {
+            debug_print('[geo] getCurrentCoords...');
+            const coords = await this.props.geo.getCurrentCoords();
+            debug_print('[geo] getCurrentCoords', pretty({coords}));
+          }}>
+            <Feather name='at-sign' style={[styles.bottomControlsButtonIcon, {color: iOSColors.black}]}/>
+          </RectButton>
+        )} */}
+
+        {this.props.showDebug && (
+          // Toggle showMoreDebug
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
+            this.props.setStateProxy.setState((state, props) => ({showMoreDebug: !state.showMoreDebug}))
+          }}>
+            <Feather name='terminal' style={[styles.bottomControlsButtonIcon, {
+              color: this.props.showMoreDebug ? iOSColors.blue : iOSColors.black,
             }]}/>
           </RectButton>
         )}
