@@ -3,7 +3,7 @@
 import _ from 'lodash';
 import memoizeOne from 'memoize-one';
 import React, { Component, ComponentClass, PureComponent, ReactNode } from 'React';
-import { Dimensions, Platform, Text, TouchableWithoutFeedback, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Platform, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
 import Feather from 'react-native-vector-icons/Feather';
 import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-router-native';
@@ -12,7 +12,9 @@ import { Log, puts, rich } from 'app/log';
 import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import { Histories, History, HistoryConsumer, Location, ObserveHistory, RouterWithHistory, TabName } from 'app/router';
 import { StyleSheet } from 'app/stylesheet';
-import { json, pretty, shallowDiffPropsState, Style, throw_ } from 'app/utils';
+import {
+  ifUndefined, json, pretty, ix, shallowDiffPropsState, Style, throw_, typed, yaml, yamlPretty,
+} from 'app/utils';
 
 const log = new Log('TabRoutes');
 
@@ -20,14 +22,17 @@ const log = new Log('TabRoutes');
 // TabRoutes
 //
 
-export interface TabRoutesProps {
-  defaultPath?: string;
+export interface Props {
+  tabLocation: Location; // Location to select tab (for the global tab router)
   histories: Histories;
   routes: Array<TabRoute>;
+  defaultPath: string;
+  priorityTabs: Array<TabRouteKey>;
 }
 
-export interface TabRoutesState {
+export interface State {
   orientation: 'portrait' | 'landscape';
+  shouldLoad: {[key in TabRouteKey]?: boolean}; // For lazy load
 }
 
 export interface TabRoute {
@@ -47,107 +52,141 @@ export interface TabRouteRoute {
 
 export interface TabRouteProps {
   key: TabRouteKey;
-  location: Location;
+  location: Location; // Location to select view within tab (one per each tab's router)
   history: History;
   histories: Histories;
 }
 
 export type TabRouteKey = TabName;
 
-export class TabRoutes extends PureComponent<TabRoutesProps, TabRoutesState> {
+export class TabRoutes extends PureComponent<Props, State> {
 
-  // WARNING O(n_tabs^2) on each render, but should be harmless for small n_tabs (e.g. ~5)
-  routeByKey = (key: TabRouteKey): TabRoute | undefined => {
-    return _.find(this.props.routes, route => route.key === key);
-  }
-
-  state = {
+  state: State = {
     orientation: getOrientation(),
+    shouldLoad: {},
   };
+
+  // Getters for props/state
+  routeByKey = (tab: TabRouteKey): TabRoute => this._routeByKey(this.props.routes)(tab);
+  _routeByKey: (routes: Array<TabRoute>) => (tab: TabRouteKey) => TabRoute = (
+    memoizeOne((routes: Array<TabRoute>) => {
+      const m = new Map(routes.map<[TabRouteKey, TabRoute]>(route => [route.key, route]));
+      return (tab: TabRouteKey) => m.get(tab) || throw_(`Unknown tab: ${tab}`);
+    })
+  );
 
   componentDidMount = async () => {
     log.info('componentDidMount');
+    this.updateLoaded();
   }
 
   componentWillUnmount = async () => {
     log.info('componentWillUnmount');
   }
 
-  componentDidUpdate = async (prevProps: TabRoutesProps, prevState: TabRoutesState) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+    this.updateLoaded();
+  }
+
+  // Update which tabs have been loaded, for lazy load
+  updateLoaded = () => {
+    this.setState((state, props) => {
+      const {key} = this.matchedRoute(props.routes, props.tabLocation);
+      if (state.shouldLoad[key]) {
+        // Tab already loaded -> noop
+        return null;
+      } else if (!_.isEmpty(props.priorityTabs) && !props.priorityTabs.includes(key)) {
+        log.info('updateLoaded: Loading non-priority tab -> loading all tabs', {key});
+        return {shouldLoad: _.fromPairs(props.routes.map(route => [route.key, true]))};
+      } else {
+        log.info('updateLoaded: Loading tab', {key});
+        return {shouldLoad: {...state.shouldLoad, [key]: true}};
+      }
+    });
   }
 
   render = () => {
     log.info('render');
     return (
-      <Route children={({location}) => (
-        <View style={{flex: 1}}>
+      <View style={{flex: 1}}>
 
-          {/* NOTE Don't use Switch, else pager+screen components get unmounted/remounted on redir */}
-          {/*   - This is because Switch only renders matching Route's, and unrendered components get unmounted */}
-          {/* <Switch> */}
+        {/* NOTE Don't use Switch, else pager+screen components get unmounted/remounted on redir */}
+        {/*   - This is because Switch only renders matching Route's, and unrendered components get unmounted */}
+        {/* <Switch> */}
 
-          <Route exact path='/' component={this.RedirectToDefaultPath} />
+        <Route exact path='/' component={this.RedirectToDefaultPath} />
 
-          {/* NOTE Don't warn on unknown route, else we'd warn on every redirect (because we can't use Switch -- see above) */}
-          {/* {this.matchedRouteIndex(location) === -1 && (
-            <Warn msg={`No route for location (${pretty(location)})`}>
-              <this.RedirectToDefaultPath/>
-            </Warn>
-          )} */}
+        {/* NOTE Don't warn on unknown route, else we'd warn on every redirect (because we can't use Switch -- see above) */}
+        {/* {this.matchedRouteIndex(this.props.routes, this.props.tabLocation) === -1 && (
+          <Warn msg={`No route for tabLocation[${yaml(this.props.tabLocation)}]`}>
+            <this.RedirectToDefaultPath/>
+          </Warn>
+        )} */}
 
-          {/* Tabs + pager */}
-          {/* FIXME Pager sometimes doesn't update to navigationState.index: */}
-          {/* - Repro: quickly: Toggle 'Show debug info' -> Saved -> Recent -> observe Recent tab is blue but pager shows Saved screen */}
-          <TabView
-            tabBarPosition='bottom'
-            swipeEnabled={false}
-            animationEnabled={false}
-            onIndexChange={i => {}} // Noop: index tracked implicitly through location
-            navigationState={{
-              index: this.matchedRouteIndex(location),
-              routes: this.props.routes.map(route => ({
-                key: route.key,
-                label: route.label,
-                iconName: route.iconName,
-              })),
-            }}
-            initialLayout={{
-              width: Dimensions.get('window').width,
-              height: 0,
-            }}
-            renderScene={({
-              // SceneRendererProps [more fields in here]
-              layout, // {height, width, measured}
-              // Scene<T extends {key: string}>
-              route, // T
-              focused,
-              index,
-            }) => {
-              return (
-                <RouterWithHistory history={this.props.histories[route.key]}>
-                  <HistoryConsumer children={({location, history}) => (
-                    this.routeByKey(route.key)!.render({
-                      key: route.key,
-                      location: location,
-                      history: history,
-                      histories: this.props.histories,
+        {/* Tabs + pager */}
+        {/* FIXME Pager sometimes doesn't update to navigationState.index: */}
+        {/* - Repro: quickly: Toggle 'Show debug info' -> Saved -> Recent -> observe Recent tab is blue but pager shows Saved screen */}
+        <TabView
+          tabBarPosition='bottom'
+          swipeEnabled={false}
+          animationEnabled={false}
+          onIndexChange={index => {}} // WARNING Ignored b/c <TabBar/> would call it, but we override it in renderTabBar
+          navigationState={{
+            index: this.matchedRouteIndex(this.props.routes, this.props.tabLocation),
+            routes: this.props.routes.map(route => ({
+              key: route.key,
+              label: route.label,
+              iconName: route.iconName,
+            })),
+          }}
+          initialLayout={{
+            width: Dimensions.get('window').width,
+            height: 0,
+          }}
+          // renderPager={...} // To customize the pager (e.g. override props)
+          renderTabBar={this.TabBarLikeIOS}
+          renderScene={({
+            // SceneRendererProps [more fields in here]
+            layout, // {height, width, measured}
+            // Scene<T extends {key: string}>
+            route, // T
+            focused,
+            index,
+          }) => {
+            // log.debug('renderScene', json({tabLocation: this.props.tabLocation, index, focused, route: route.key})); // XXX Debug
+            return (
+              <RouterWithHistory history={this.props.histories[route.key]}>
+                <HistoryConsumer children={({location, history}) => (
+                  // Lazy load: don't render a tab until we navigate to it
+                  //  - The primary motivation here is to make launch app -> RecordScreen as fast as possible
+                  !this.state.shouldLoad[route.key] ? (
+                    // Loading spinner
+                    <View style={{flex: 1, justifyContent: 'center'}}>
+                      <ActivityIndicator size='large' />
+                    </View>
+                  ) : (
+                    // Render tab
+                    this.routeByKey(route.key).render({
+                      key:         route.key,
+                      // tabLocation: ...    // Location to select tab [XXX Omit, else all screens render on tab change]
+                      location:    location, // Location to select view within tab
+                      history:     history,
+                      histories:   this.props.histories,
                     })
-                  )}/>
-                </RouterWithHistory>
-              );
-            }}
-            renderTabBar={this.TabBarLikeIOS}
-            // renderPager={...} // To customize the pager (e.g. override props)
-          />
+                  )
+                )}/>
+              </RouterWithHistory>
+            );
+          }}
+        />
 
-        </View>
-      )} />
+      </View>
     );
   }
 
   RedirectToDefaultPath = () => (
-    <Redirect to={this.props.defaultPath || this.props.routes[0].route.path} />
+    <Redirect to={this.props.defaultPath} />
   );
 
   // Instead of TabView's default material-style TabBar
@@ -184,22 +223,21 @@ export class TabRoutes extends PureComponent<TabRoutesProps, TabRoutesState> {
     });
   }
 
-  matchedRouteIndex = (location: Location): number => {
-    return _.findIndex(this.props.routes, route => routeMatchesLocation(route.route, location));
+  matchedRoute = (routes: Array<TabRoute>, tabLocation: Location): TabRoute => {
+    return ix(routes, this.matchedRouteIndex(routes, tabLocation)) || (
+      throw_(`TabRoutes.matchedRoute: No routes for tabLocation[${json(tabLocation)}]`)
+    )
   }
 
-  iconNameForTab = (tab: TabRouteKey): string => this._iconNameForTab(this.props.routes)(tab);
-  _iconNameForTab: (routes: Array<TabRoute>) => (tab: TabRouteKey) => string = (
-    memoizeOne((routes: Array<TabRoute>) => {
-      const m = new Map(routes.map<[TabRouteKey, string]>(x => [x.key, x.iconName]));
-      return (tab: TabRouteKey) => m.get(tab) || throw_(`Unknown tab: ${tab}`);
-    })
-  );
+  // NOTE O(n), but n is very small (~5 tabs)
+  matchedRouteIndex = (routes: Array<TabRoute>, tabLocation: Location): number => {
+    return _.findIndex(routes, route => routeMatchesLocation(route.route, tabLocation));
+  }
 
 }
 
-export function routeMatchesLocation(route: TabRouteRoute, location: Location): boolean {
-  return !!matchPath(location.pathname, route);
+export function routeMatchesLocation(route: TabRouteRoute, tabLocation: Location): boolean {
+  return !!matchPath(tabLocation.pathname, route);
 }
 
 // TODO How to fix type to accept no children?

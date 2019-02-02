@@ -22,7 +22,7 @@ import { RecordScreen } from 'app/components/RecordScreen';
 import { SavedScreen } from 'app/components/SavedScreen';
 import { SearchScreen } from 'app/components/SearchScreen';
 import { SettingsScreen } from 'app/components/SettingsScreen';
-import { TabRoutes, TabLink } from 'app/components/TabRoutes';
+import { TabRoute, TabRouteKey, TabRoutes, TabLink } from 'app/components/TabRoutes';
 import * as Colors from 'app/colors';
 import { config } from 'app/config';
 import {
@@ -144,7 +144,6 @@ interface Props {
   sampleRate: number;
   channels: number;
   bitsPerSample: number;
-  iconForTab: {[key in TabName]: string};
 }
 
 interface State {
@@ -175,6 +174,17 @@ const AppContext = React.createContext(
   undefined as unknown as AppContext,
 );
 
+const iconForTab: {[key in TabName]: string} = {
+  record:   'activity',
+  search:   'search',
+  // recent:   'list',
+  recent:   'clock',
+  saved:    'bookmark',
+  places:   'map-pin',
+  settings: 'settings',
+  help:     'help-circle',
+};
+
 export default class App extends PureComponent<Props, State> {
 
   // Many of these are hardcoded to match Bubo/Models.swift:Features (which is in turn hardcoded to match py Features config)
@@ -182,16 +192,6 @@ export default class App extends PureComponent<Props, State> {
     sampleRate:    22050,
     channels:      1,
     bitsPerSample: 16,
-    iconForTab:    {
-      record:   'activity',
-      search:   'search',
-      // recent:   'list',
-      recent:   'clock',
-      saved:    'bookmark',
-      places:   'map-pin',
-      settings: 'settings',
-      help:     'help-circle',
-    },
   };
 
   state: State = {
@@ -415,148 +415,15 @@ export default class App extends PureComponent<Props, State> {
                   {/* Tabs + screen pager */}
                   {/* - NOTE Avoid history.location [https://reacttraining.com/react-router/native/api/history/history-is-mutable] */}
                   <HistoryConsumer children={({location: locationTabs, history: historyTabs}) => (
-                    <TabRoutes
-                      defaultPath='/help'
-                      histories={this.state.histories!}
-                      routes={[
-                        {
-                          key: 'record', route: {path: '/record'},
-                          label: 'Record', iconName: this.props.iconForTab['record'],
-                          render: props => (
-                            <RecordScreen {...props}
-                              // App globals
-                              modelsSearch            = {this.state.modelsSearch!}
-                              go                      = {this.go}
-                              geo                     = {this.state.geo!}
-                              // Settings
-                              settings                = {this.state.settingsWrites!}
-                              db                      = {this.state.db!}
-                              showDebug               = {this.state.settings!.showDebug}
-                              refreshRate             = {this.state.settings!.refreshRate}
-                              doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}
-                              spectroChunkLimit       = {this.state.settings!.spectroChunkLimit}
-                              geoWarnIfNoCoords       = {this.state.settings!.geoWarnIfNoCoords}
-                              // RecordScreen
-                              f_bins                  = {this.state.settings!.f_bins}
-                              sampleRate              = {this.props.sampleRate}
-                              channels                = {this.props.channels}
-                              bitsPerSample           = {this.props.bitsPerSample}
-                            />
-                          ),
-                        }, {
-                          key: 'search', route: {path: '/search'},
-                          label: 'Search', iconName: this.props.iconForTab['search'],
-                          render: props => (
-                            <SearchScreen {...props}
-                              // App globals
-                              serverConfig            = {this.state.serverConfig!}
-                              modelsSearch            = {this.state.modelsSearch!}
-                              go                      = {this.go}
-                              xc                      = {this.state.xc!}
-                              ebird                   = {this.state.ebird!}
-                              // Settings
-                              settings                = {this.state.settingsWrites!}
-                              db                      = {this.state.db!}
-                              showDebug               = {this.state.settings!.showDebug}
-                              showMetadataLeft        = {this.state.settings!.showMetadataLeft}
-                              showMetadataBelow       = {this.state.settings!.showMetadataBelow}
-                              metadataColumnsLeft     = {this.state.settings!.metadataColumnsLeft}
-                              metadataColumnsBelow    = {this.state.settings!.metadataColumnsBelow}
-                              editing                 = {this.state.settings!.editing}
-                              seekOnPlay              = {this.state.settings!.seekOnPlay}
-                              playingProgressEnable   = {this.state.settings!.playingProgressEnable}
-                              playingProgressInterval = {this.state.settings!.playingProgressInterval}
-                              spectroScale            = {this.state.settings!.spectroScale}
-                              place                   = {this.state.settings!.place}
-                              places                  = {this.state.settings!.places}
-                              // SearchScreen
-                              f_bins                  = {this.state.settings!.f_bins}
-                            />
-                          ),
-                        }, {
-                          key: 'recent', route: {path: '/recent'},
-                          label: 'Recent', iconName: this.props.iconForTab['recent'],
-                          render: props => (
-                            <RecentScreen {...props}
-                              // App globals
-                              go           = {this.go}
-                              tabLocations = {this.state.tabLocations!}
-                              xc           = {this.state.xc!}
-                              ebird        = {this.state.ebird!}
-                              // Settings
-                              showDebug    = {this.state.settings!.showDebug}
-                              maxHistory   = {this.state.settings!.maxHistory}
-                              // RecentScreen
-                              iconForTab   = {this.props.iconForTab}
-                            />
-                          ),
-                        }, {
-                          key: 'saved', route: {path: '/saved'},
-                          label: 'Saved', iconName: this.props.iconForTab['saved'],
-                          render: props => (
-                            <SavedScreen {...props}
-                              // App globals
-                              go           = {this.go}
-                              tabLocations = {this.state.tabLocations!}
-                              xc           = {this.state.xc!}
-                              ebird        = {this.state.ebird!}
-                              // SavedScreen
-                              iconForTab   = {this.props.iconForTab}
-                            />
-                          ),
-                        }, {
-                          key: 'places', route: {path: '/places'},
-                          label: 'Places', iconName: this.props.iconForTab['places'],
-                          render: props => (
-                            <PlacesScreen {...props}
-                              // App globals
-                              go                      = {this.go}
-                              metadataSpecies         = {this.state.metadataSpecies!}
-                              ebird                   = {this.state.ebird!}
-                              geo                     = {this.state.geo!}
-                              // Settings
-                              settings                = {this.state.settingsWrites!}
-                              showDebug               = {this.state.settings!.showDebug}
-                              place                   = {this.state.settings!.place}
-                              places                  = {this.state.settings!.places}
-                            />
-                          ),
-                        }, {
-                          key: 'settings', route: {path: '/settings'},
-                          label: 'Settings', iconName: this.props.iconForTab['settings'],
-                          render: props => (
-                            <SettingsScreen {...props}
-                              // Settings
-                              serverConfig            = {this.state.serverConfig!}
-                              settings                = {this.state.settingsWrites!}
-                              // Global
-                              showDebug               = {this.state.settings!.showDebug}
-                              allowUploads            = {this.state.settings!.allowUploads}
-                              geoHighAccuracy         = {this.state.settings!.geoHighAccuracy}
-                              geoWarnIfNoCoords       = {this.state.settings!.geoWarnIfNoCoords}
-                              maxHistory              = {this.state.settings!.maxHistory}
-                              f_bins                  = {this.state.settings!.f_bins}
-                              // RecordScreen
-                              refreshRate             = {this.state.settings!.refreshRate}
-                              doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}
-                              spectroChunkLimit       = {this.state.settings!.spectroChunkLimit}
-                              // SearchScreen
-                              playingProgressEnable   = {this.state.settings!.playingProgressEnable}
-                              playingProgressInterval = {this.state.settings!.playingProgressInterval}
-                            />
-                          ),
-                        }, {
-                          key: 'help', route: {path: '/help'},
-                          label: 'Help', iconName: this.props.iconForTab['help'],
-                          render: props => (
-                            <HelpScreen {...props}
-                              // App globals
-                              go = {this.go}
-                            />
-                          ),
-                        },
-                      ]}
-                    />
+                    <Route children={({location}) => (
+                      <TabRoutes
+                        tabLocation={location}
+                        histories={this.state.histories!}
+                        routes={this.makeRoutes()}
+                        defaultPath={this.defaultPath}
+                        priorityTabs={this.priorityTabs}
+                      />
+                    )}/>
                   )}/>
 
                   {/* [Examples of] Global redirects */}
@@ -583,6 +450,140 @@ export default class App extends PureComponent<Props, State> {
 
     );
   }
+
+  defaultPath:  string             = '/help';    // Which tab to open on first app launch
+  priorityTabs: Array<TabRouteKey> = ['record']; // If one of these tabs opens at launch, lazy-load other tabs
+  makeRoutes = (): Array<TabRoute> => [          // Must be a function, else screens won't update on App props/state change
+    {
+      key: 'record', route: {path: '/record'}, label: 'Record', iconName: iconForTab['record'],
+      render: props => (
+        <RecordScreen {...props}
+          // App globals
+          modelsSearch            = {this.state.modelsSearch!}
+          go                      = {this.go}
+          geo                     = {this.state.geo!}
+          // Settings
+          settings                = {this.state.settingsWrites!}
+          db                      = {this.state.db!}
+          showDebug               = {this.state.settings!.showDebug}
+          refreshRate             = {this.state.settings!.refreshRate}
+          doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}
+          spectroChunkLimit       = {this.state.settings!.spectroChunkLimit}
+          geoWarnIfNoCoords       = {this.state.settings!.geoWarnIfNoCoords}
+          // RecordScreen
+          f_bins                  = {this.state.settings!.f_bins}
+          sampleRate              = {this.props.sampleRate}
+          channels                = {this.props.channels}
+          bitsPerSample           = {this.props.bitsPerSample}
+        />
+      ),
+    }, {
+      key: 'search', route: {path: '/search'}, label: 'Search', iconName: iconForTab['search'],
+      render: props => (
+        <SearchScreen {...props}
+          // App globals
+          serverConfig            = {this.state.serverConfig!}
+          modelsSearch            = {this.state.modelsSearch!}
+          go                      = {this.go}
+          xc                      = {this.state.xc!}
+          ebird                   = {this.state.ebird!}
+          // Settings
+          settings                = {this.state.settingsWrites!}
+          db                      = {this.state.db!}
+          showDebug               = {this.state.settings!.showDebug}
+          showMetadataLeft        = {this.state.settings!.showMetadataLeft}
+          showMetadataBelow       = {this.state.settings!.showMetadataBelow}
+          metadataColumnsLeft     = {this.state.settings!.metadataColumnsLeft}
+          metadataColumnsBelow    = {this.state.settings!.metadataColumnsBelow}
+          editing                 = {this.state.settings!.editing}
+          seekOnPlay              = {this.state.settings!.seekOnPlay}
+          playingProgressEnable   = {this.state.settings!.playingProgressEnable}
+          playingProgressInterval = {this.state.settings!.playingProgressInterval}
+          spectroScale            = {this.state.settings!.spectroScale}
+          place                   = {this.state.settings!.place}
+          places                  = {this.state.settings!.places}
+          // SearchScreen
+          f_bins                  = {this.state.settings!.f_bins}
+        />
+      ),
+    }, {
+      key: 'recent', route: {path: '/recent'}, label: 'Recent', iconName: iconForTab['recent'],
+      render: props => (
+        <RecentScreen {...props}
+          // App globals
+          go                      = {this.go}
+          tabLocations            = {this.state.tabLocations!}
+          xc                      = {this.state.xc!}
+          ebird                   = {this.state.ebird!}
+          // Settings
+          showDebug               = {this.state.settings!.showDebug}
+          maxHistory              = {this.state.settings!.maxHistory}
+          // RecentScreen
+          iconForTab              = {iconForTab}
+        />
+      ),
+    }, {
+      key: 'saved', route: {path: '/saved'}, label: 'Saved', iconName: iconForTab['saved'],
+      render: props => (
+        <SavedScreen {...props}
+          // App globals
+          go                      = {this.go}
+          tabLocations            = {this.state.tabLocations!}
+          xc                      = {this.state.xc!}
+          ebird                   = {this.state.ebird!}
+          // SavedScreen
+          iconForTab              = {iconForTab}
+        />
+      ),
+    }, {
+      key: 'places', route: {path: '/places'}, label: 'Places', iconName: iconForTab['places'],
+      render: props => (
+        <PlacesScreen {...props}
+          // App globals
+          go                      = {this.go}
+          metadataSpecies         = {this.state.metadataSpecies!}
+          ebird                   = {this.state.ebird!}
+          geo                     = {this.state.geo!}
+          // Settings
+          settings                = {this.state.settingsWrites!}
+          showDebug               = {this.state.settings!.showDebug}
+          place                   = {this.state.settings!.place}
+          places                  = {this.state.settings!.places}
+        />
+      ),
+    }, {
+      key: 'settings', route: {path: '/settings'}, label: 'Settings', iconName: iconForTab['settings'],
+      render: props => (
+        <SettingsScreen {...props}
+          // Settings
+          serverConfig            = {this.state.serverConfig!}
+          settings                = {this.state.settingsWrites!}
+          // Global
+          showDebug               = {this.state.settings!.showDebug}
+          allowUploads            = {this.state.settings!.allowUploads}
+          geoHighAccuracy         = {this.state.settings!.geoHighAccuracy}
+          geoWarnIfNoCoords       = {this.state.settings!.geoWarnIfNoCoords}
+          maxHistory              = {this.state.settings!.maxHistory}
+          f_bins                  = {this.state.settings!.f_bins}
+          // RecordScreen
+          refreshRate             = {this.state.settings!.refreshRate}
+          doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}
+          spectroChunkLimit       = {this.state.settings!.spectroChunkLimit}
+          // SearchScreen
+          playingProgressEnable   = {this.state.settings!.playingProgressEnable}
+          playingProgressInterval = {this.state.settings!.playingProgressInterval}
+        />
+      ),
+    }, {
+      key: 'help', route: {path: '/help'}, label: 'Help', iconName: iconForTab['help'],
+      render: props => (
+        <HelpScreen {...props}
+          // App globals
+          go = {this.go}
+        />
+      ),
+    },
+  ];
 
   onLayout = () => {
     // log.info('onLayout');

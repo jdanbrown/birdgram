@@ -47,6 +47,12 @@ export function typed<X>(x: X): X {
 export function all(...xs: Array<any>): boolean { return xs.every(Boolean); }
 export function any(...xs: Array<any>): boolean { return xs.some(Boolean); }
 
+// Typesafe variant of unsafe array indexing: `xs[i]: X`
+//  - https://github.com/Microsoft/TypeScript/issues/13778
+export function ix<X>(xs: X[], i: number): X | undefined {
+  return xs[i] as X | undefined;
+}
+
 // Expression form of try-catch-else (else like python, to limit catching scope)
 export function matchError<X, Y>(f: () => X, cases: {
   x:     (x: X)   => Y,
