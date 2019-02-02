@@ -250,6 +250,12 @@ export function mapMapEntries<K, V, L, U>(map: Map<K, V>, f: (k: K, v: V) => [L,
   return new Map(Array.from(map).map<[L, U]>(([k, v]) => f(k, v)));
 }
 
+export function mapPop<K, V>(map: Map<K, V>, k: K): V | undefined {
+  const v = map.get(k);
+  map.delete(k);
+  return v;
+}
+
 export function enumerate<X>(xs: Array<X>): Array<{x: X, i: number}> {
   return xs.map((x, i) => ({x, i}));
 }

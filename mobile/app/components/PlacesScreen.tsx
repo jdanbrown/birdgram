@@ -1,3 +1,4 @@
+import { EventSubscription } from 'fbemitter';
 import _ from 'lodash';
 import moment from 'moment';
 import React, { PureComponent } from 'react';
@@ -17,7 +18,8 @@ import { SettingsWrites } from 'app/settings';
 import { normalizeStyle, Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
-  fastIsEqual, global, json, mapNull, matchNull, pretty, shallowDiffPropsState, typed, yaml, yamlPretty,
+  fastIsEqual, global, json, mapNull, mapPop, mapUndefined, matchNull, pretty, shallowDiffPropsState, typed, yaml,
+  yamlPretty,
 } from 'app/utils';
 
 const log = new Log('PlacesScreen');
@@ -54,28 +56,59 @@ export class PlacesScreen extends PureComponent<Props, State> {
     lastSeenGeoError:  null,
   };
 
+  // Listeners
+  _listeners: Map<string, EventSubscription> = new Map();
+
   componentDidMount = async () => {
     log.info('componentDidMount', {
       geo: this.props.geo, // XXX Debug: Why is this.props.geo sometimes null? (via this.geoRef.current! in App)
     });
     global.PlacesScreen = this; // XXX Debug
 
-    // Subscribe to geo updates + grab initial geo
-    //  - Subscribe before grab, to avoid missing events
-    this.props.geo.emitter.addListener('coords', (coords: GeoCoords) => this.setState({lastSeenGeoCoords: coords}));
-    this.props.geo.emitter.addListener('error',  (error:  GeoError)  => this.setState({lastSeenGeoError:  error}));
-    this.setState({
-      lastSeenGeoCoords: this.props.geo.coords,
-    });
+    this.updateGeoListeners();
 
   }
 
   componentWillUnmount = async () => {
     log.info('componentWillUnmount');
+
+    // Unregister listeners
+    this._listeners.forEach((listener, k) => listener.remove());
+
   }
 
   componentDidUpdate = async (prevProps: Props, prevState: State) => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+
+    this.updateGeoListeners();
+
+  }
+
+  updateGeoListeners = () => {
+    // Listen only if showDebug, else we'd continually re-render (e.g. while others tabs are focused) as geo updates over time
+    //  - (We only use geo coords for DebugText)
+    if (!this.props.showDebug) {
+
+      // Unregister listeners
+      mapUndefined(this._listeners.get('coords'), listener => listener.remove());
+      mapUndefined(this._listeners.get('error'),  listener => listener.remove());
+
+    } else {
+
+      // Listen for geo updates
+      this._listeners.set('coords', this.props.geo.emitter.addListener('coords', (coords: GeoCoords) => {
+        this.setState({lastSeenGeoCoords: coords});
+      }));
+      this._listeners.set('error', this.props.geo.emitter.addListener('error', (error: GeoError) => {
+        this.setState({lastSeenGeoError:  error});
+      }));
+
+      // Grab initial geo (after listening, to ensure no gaps)
+      this.setState({
+        lastSeenGeoCoords: this.props.geo.coords,
+      });
+
+    }
   }
 
   render = () => {
