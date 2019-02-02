@@ -403,13 +403,7 @@ export default class App extends PureComponent<Props, State> {
                   {/* - TODO(nav_router): Do Linking.openURL('birdgram-us://open/search/species/HOWR') twice -> /search/search/HOWR */}
                   <DeepLinking
                     prefix='birdgram-us://open'
-                    onUrl={({path}) => {
-                      const match = matchPath(path, '/:tab/:tabPath*');
-                      if (match) {
-                        const {tab, tabPath} = match.params as {tab: TabName, tabPath: string};
-                        this.go(tab, {path: '/' + (tabPath || '')}); // (Leading '/' for absolute i/o relative)
-                      }
-                    }}
+                    onUrl={this.onDeepLinkingUrl}
                   />
 
                   {/* Tabs + screen pager */}
@@ -590,6 +584,14 @@ export default class App extends PureComponent<Props, State> {
     this.setState({
       orientation: getOrientation(),
     });
+  }
+
+  onDeepLinkingUrl = ({path}: {path: string}) => {
+    const match = matchPath(path, '/:tab/:tabPath*');
+    if (match) {
+      const {tab, tabPath} = match.params as {tab: TabName, tabPath: string};
+      this.go(tab, {path: '/' + (tabPath || '')}); // (Leading '/' for absolute i/o relative)
+    }
   }
 
   go = (tab: TabName, to: GoTo) => {
