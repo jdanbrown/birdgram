@@ -1108,9 +1108,9 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         {/* {this.props.showDebug && (
           // Manually refresh geo.coords
           <RectButton style={styles.bottomControlsButton} onPress={async () => {
-            debug_print('[geo] getCurrentCoords...');
+            log.debug('[geo] getCurrentCoords...');
             const coords = await this.props.geo.getCurrentCoords();
-            debug_print('[geo] getCurrentCoords', pretty({coords}));
+            log.debug('[geo] getCurrentCoords', pretty({coords}));
           }}>
             <Feather name='at-sign' style={[styles.bottomControlsButtonIcon, {color: iOSColors.black}]}/>
           </RectButton>
