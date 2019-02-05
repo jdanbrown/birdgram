@@ -11,6 +11,7 @@ import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-rout
 import { Log, puts, rich } from 'app/log';
 import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import { Histories, History, HistoryConsumer, Location, ObserveHistory, RouterWithHistory, TabName } from 'app/router';
+import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
   ifUndefined, json, pretty, ix, shallowDiffPropsState, Style, throw_, typed, yaml, yamlPretty,
@@ -310,9 +311,9 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#f7f7f7', // Default background color in iOS 10
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(0,0,0,.3)',
+    backgroundColor: Styles.tabBar.backgroundColor,
+    borderTopWidth: Styles.tabBar.borderTopWidth,
+    borderTopColor: Styles.tabBar.borderTopColor,
   },
   tabBarPortrait: {
     height: TabBarStyle.portraitHeight,

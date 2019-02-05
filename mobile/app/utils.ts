@@ -416,6 +416,24 @@ export function showDate(d: Date): string {
   );
 }
 
+export function showDateNoTime(d: Date): string {
+  const nowYear = new Date().getFullYear();
+  return (d.getFullYear() === nowYear
+    ? moment(d).format('ddd MMM D')      // e.g. 'Thu Jan 10'
+    : moment(d).format('ddd MMM D (Y)')  // e.g. 'Thu Jan 10 (2019)'
+    // : moment(d).format('Y ddd MMM D') // e.g. '2019 Thu Jan 10'
+    // ? moment(d).format('ddd M/D')     // e.g. 'Thu 1/10'
+    // : moment(d).format('ddd Y/M/D')   // e.g. 'Thu 2019/1/10'
+  );
+}
+
+export function showTime(d: Date): string {
+  return (
+    moment(d).format('h:mma')       // e.g. '5:39pm'
+    // moment(d).format('h:mm:ssa') // e.g. '5:39:49pm'
+  );
+}
+
 export function showSuffix<X>(sep: string, x: X | undefined, show: (x: X) => string): string {
   return mapEmpty(mapUndefined(x, show) || '', s => sep + s);
 }

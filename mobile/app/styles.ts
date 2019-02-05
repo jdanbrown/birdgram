@@ -1,6 +1,8 @@
 import { TextProps, ViewProps } from 'react-native'
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
+import { StyleSheet } from 'app/stylesheet';
+
 // Generic styles
 //  - TODO How to put in a StyleSheet.create without losing type info?
 //    - Forced into ViewStyle | TextStyle | ImageStyle, which is too lossy for e.g. TopControlsButtonProps / Feather (icon)
@@ -22,6 +24,13 @@ export const Styles = {
   flipHorizontal: {transform: [{scaleX: -1}]},
   flipVertical:   {transform: [{scaleY: -1}]},
   flipBoth:       {transform: [{scaleX: -1}, {scaleY: -1}]},
+
+  // For TabRoutes, and reused by others (e.g. screen headers)
+  tabBar: {
+    backgroundColor: '#f7f7f7', // Default background color in iOS 10
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,.3)',
+  },
 
   // Debug styles
   debug: {

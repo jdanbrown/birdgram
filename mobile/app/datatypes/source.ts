@@ -164,6 +164,7 @@ export const UserSpecies = {
 export interface SourceShowOpts {
   species: XC | null; // Show species if xc sourceId (using XC dep)
   long?: boolean;
+  showDate?: (d: Date) => string; // Default: showDate
 }
 
 // HACK Thread UserMetadata down through gnarly call stacks
@@ -280,7 +281,7 @@ export const Source = {
           ] : [
             !opts.long || !metadata ? '' : `[${UserSpecies.show(metadata.species)}]`,
             !opts.long              ? '' : 'Recording:',
-            showDate(metadata.created),
+            (opts.showDate || showDate)(metadata.created),
           ]
         );
         return (parts

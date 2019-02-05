@@ -1769,6 +1769,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         {this.state.recs !== 'loading' && (
           <ScrollView
             // @ts-ignore [Why doesn't this typecheck?]
+            //  - FIXME Oops, should this have been updated to a ScrollView i/o SectionList?
             ref={this.scrollViewRef as RefObject<Component<SectionListStatic<Rec>, any, any>>}
 
             // Scroll/zoom
