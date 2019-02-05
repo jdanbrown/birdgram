@@ -168,7 +168,7 @@ export class SavedScreen extends PureComponent<Props, State> {
         key:      undefined,
         state:    {
           timestamp: matchSource(source, {
-            xc:   source => new Date(3000), // Put xc at the top [TODO Add Saved.created:timestamp]
+            xc:   source => new Date('3000'), // Put xc at the top [TODO Add Saved.created:timestamp]
             user: source => source.metadata.created,
           }),
         },
@@ -198,7 +198,7 @@ export class SavedScreen extends PureComponent<Props, State> {
     const sections: Array<Section> = (
       _(this.state.saveds)
       .groupBy(saved => showDateNoTime(_.get(saved.location.state, 'timestamp',
-        new Date(3000), // Put weird/unexpected stuff at the top so it's visible
+        new Date('3000'), // Put weird/unexpected stuff at the top so it's visible
       )))
       .entries().map(([k, saveds]) => ({title: k, data: saveds}))
       .value()

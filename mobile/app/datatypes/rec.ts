@@ -319,7 +319,7 @@ export const UserRec = {
         }),
         // And if the filename isn't our standard format (e.g. renamed by user), then provide sane defaults for the defaults
         error: () => ({
-          created: new Date(0),
+          created: new Date('1970'),
           uniq:    basename(audioPath),
           // uniq: sha1hex(basename(audioPath)), // TODO Useful? If so, add react-native-crypto (see utils.ts)
         }),

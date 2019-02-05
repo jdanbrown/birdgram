@@ -249,7 +249,7 @@ export class RecentScreen extends PureComponent<Props, State> {
     const sections: Array<Section> = (
       _(this.state.recents)
       .groupBy(recent => showDateNoTime(_.get(recent.location.state, 'timestamp',
-        new Date(3000), // Put weird/unexpected stuff at the top so it's visible
+        new Date('3000'), // Put weird/unexpected stuff at the top so it's visible
       )))
       .entries().map(([k, recents]) => ({title: k, data: recents}))
       .value()
