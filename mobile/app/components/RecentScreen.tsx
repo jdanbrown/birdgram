@@ -1,7 +1,8 @@
 import _ from 'lodash';
 import React, { RefObject, PureComponent } from 'react';
 import {
-  ActivityIndicator, Dimensions, FlatList, Image, Platform, SectionList, Text, TouchableWithoutFeedback, View, WebView,
+  ActivityIndicator, Dimensions, FlatList, Image, LayoutChangeEvent, Platform, SectionList, SectionListData, Text,
+  TouchableWithoutFeedback, View, WebView,
 } from 'react-native';
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
@@ -23,7 +24,8 @@ import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
   enumerate, global, into, json, local, mapNil, mapNull, mapUndefined, match, matchNull, matchUndefined,
-  mergeArraysWith, objectKeysTyped, pretty, shallowDiffPropsState, showDate, throw_, typed, yaml,
+  mergeArraysWith, objectKeysTyped, pretty, shallowDiffPropsState, showDate, showDateNoTime, showTime, throw_, typed,
+  yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -172,7 +174,10 @@ export class RecentScreen extends PureComponent<Props, State> {
   };
 
   // Refs
-  flatListRef: RefObject<FlatList<Recent>> = React.createRef();
+  sectionListRef: RefObject<SectionList<Recent>> = React.createRef();
+
+  // State
+  _firstSectionHeaderHeight: number = 0; // For SectionList.scrollToLocation({viewOffset})
 
   componentDidMount = async () => {
     log.info('componentDidMount');
@@ -238,16 +243,43 @@ export class RecentScreen extends PureComponent<Props, State> {
 
   render = () => {
     log.info('render');
+
+    // Precompute sections so we can figure out various indexes
+    type Section = SectionListData<Recent>;
+    const sections: Array<Section> = (
+      _(this.state.recents)
+      .groupBy(recent => showDateNoTime(_.get(recent.location.state, 'timestamp',
+        new Date(3000), // Put weird/unexpected stuff at the top so it's visible
+      )))
+      .entries().map(([k, recents]) => ({title: k, data: recents}))
+      .value()
+    );
+    const firstSection   = _.head(sections);
+    const lastSection    = _.last(sections);
+    const isFirstSection = (section: Section) => firstSection && section.title === firstSection.title;
+    const isLastSection  = (section: Section) => lastSection  && section.title === lastSection.title;
+    const isLastItem     = (section: Section, index: number) => isLastSection(section) && index === section.data.length - 1;
+
     return (
       <View style={{
         flex: 1,
       }}>
 
         {/* NOTE BaseButton b/c TouchableWithoutFeedback wouldn't trigger onPress during FlatList scroll animation */}
-        <BaseButton onPress={() => mapNull(this.flatListRef.current, x => x.scrollToOffset({offset: 0}))}>
+        <BaseButton onPress={() => {
+          mapNull(this.sectionListRef.current, sectionList => { // Avoid transient nulls [why do they happen?]
+            if (sectionList.scrollToLocation) { // (Why typed as undefined? I think only for old versions of react-native?)
+              sectionList.scrollToLocation({
+                sectionIndex: 0, itemIndex: 0,              // First section, first item
+                viewOffset: this._firstSectionHeaderHeight, // Else first item covered by first section header
+              });
+            }
+          });
+        }}>
           <View style={{
-            borderBottomWidth: 1,
-            borderColor: iOSColors.midGray,
+            backgroundColor:   Styles.tabBar.backgroundColor,
+            borderBottomWidth: Styles.tabBar.borderTopWidth,
+            borderBottomColor: Styles.tabBar.borderTopColor,
           }}>
             <Text style={{
               alignSelf: 'center',
@@ -262,7 +294,6 @@ export class RecentScreen extends PureComponent<Props, State> {
 
         <View style={{
           flex: 1,
-          // backgroundColor: iOSColors.customGray,
         }}>
 
           {/* Loading spinner */}
@@ -277,8 +308,8 @@ export class RecentScreen extends PureComponent<Props, State> {
 
           {/* TODO SectionList with dates (recent.timestamp) as section headers */}
           {this.state.status === 'ready' && (
-            <FlatList
-              ref={this.flatListRef}
+            <SectionList
+              ref={this.sectionListRef as any} // HACK Is typing for SectionList busted? Can't make it work
               style={{
                 ...Styles.fill,
               }}
@@ -287,7 +318,24 @@ export class RecentScreen extends PureComponent<Props, State> {
                 bottom: -1, // Hide bottom elem border under top border of tab bar
               }}
               initialNumToRender={20} // Enough to fill one screen (and not much more)
-              data={typed<Recent[]>(this.state.recents)}
+              sections={sections}
+              renderSectionHeader={({section}) => (
+                <View
+                  style={[Styles.fill, {
+                    backgroundColor:   iOSColors.lightGray,
+                    paddingHorizontal: 5,
+                    paddingTop:        2,
+                    paddingBottom:     2,
+                  }]}
+                  // For SectionList.scrollToLocation({viewOffset})
+                  onLayout={!isFirstSection(section) ? undefined : this.onFirstSectionHeaderLayout}
+                >
+                  <Text style={{
+                    fontWeight: 'bold',
+                    color:      '#444444',
+                  }}>{section.title}</Text>
+                </View>
+              )}
               keyExtractor={(recent, index) => `${index}`}
               ListEmptyComponent={(
                 <View style={[Styles.center, {padding: 30}]}>
@@ -296,7 +344,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                   </Text>
                 </View>
               )}
-              renderItem={({item: recent, index}) => (
+              renderItem={({item: recent, index, section}: {item: Recent, index: number, section: Section}) => (
                 <RectButton
                   onPress={() => {
                     this.props.go(recent.tab, {
@@ -310,19 +358,22 @@ export class RecentScreen extends PureComponent<Props, State> {
                   <View style={{
                     flex: 1,
                     flexDirection: 'row',
-                    // backgroundColor: iOSColors.white,
+                    ...Styles.center,
+                    padding: 5,
                     // Highlight active location per tab
                     backgroundColor: (Recent.isOpenInTab(recent, this.props.tabLocations)
                       ? `${capturedTabProps[recent.tab].color}22`
                       : undefined
                     ),
-                    padding: 5,
-                    // Bottom border on all items, top border on first item
-                    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
-                    ...(index != 0 ? {} : {
-                      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'black',
+                    // Vertical borders
+                    //  - Internal borders: top border on non-first items per section
+                    //  - Plus bottom border on last item of last section
+                    borderTopWidth: 1,
+                    borderTopColor: iOSColors.lightGray,
+                    ...(!isLastItem(section, index) ? {} : {
+                      borderBottomWidth: 1,
+                      borderBottomColor: iOSColors.lightGray,
                     }),
-                    ...Styles.center,
                   }}>
                     <Feather style={{
                       ...material.titleObject,
@@ -390,6 +441,11 @@ export class RecentScreen extends PureComponent<Props, State> {
 
       </View>
     );
+  }
+
+  onFirstSectionHeaderLayout = async (event: LayoutChangeEvent) => {
+    const {nativeEvent: {layout: {x, y, width, height}}} = event; // Unpack SyntheticEvent (before async)
+    this._firstSectionHeaderHeight = height;
   }
 
 }
