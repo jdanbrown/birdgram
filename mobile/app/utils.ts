@@ -407,8 +407,10 @@ export function parseDate(s: string): Date {
 export function showDate(d: Date): string {
   const nowYear = new Date().getFullYear();
   return (d.getFullYear() === nowYear
-    ? moment(d).format('ddd M/D h:mma')           // e.g. 'Thu 1/10 5:39pm'
-    : moment(d).format('ddd Y/M/D h:mma')         // e.g. 'Thu 2019/1/10 5:39pm'
+    ? moment(d).format('ddd MMM D h:mma')         // e.g. 'Thu Jan 10 5:39pm'
+    : moment(d).format('ddd MMM D h:mma (Y)')     // e.g. 'Thu Jan 10 5:39pm (2019)'
+    // ? moment(d).format('ddd M/D h:mma')        // e.g. 'Thu 1/10 5:39pm'
+    // : moment(d).format('ddd Y/M/D h:mma')      // e.g. 'Thu 2019/1/10 5:39pm'
     // ? moment(d).format('ddd M/D h:mm:ssa')     // e.g. 'Thu 1/10 5:39:49pm'
     // : moment(d).format('ddd Y/M/D h:mm:ssa')   // e.g. 'Thu 2019/1/10 5:39:49pm'
     // ? moment(d).format('ddd MMM D h:mm:ssa')   // e.g. 'Thu Jan 10 5:39:49pm'

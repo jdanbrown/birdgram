@@ -399,8 +399,9 @@ export class RecentScreen extends PureComponent<Props, State> {
                           record: recent => matchRecordPath(recent.recordPath, {
                             root: ()         => '[Root]',
                             edit: ({source}) => Source.show(source, {
-                              species: this.props.xc,
-                              long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                              species:  this.props.xc,
+                              long:     true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                              // showDate: showTime, // TODO showTime if section date === item date
                             }),
                           }),
                           search: recent => matchQuery(recent.query, {
@@ -419,8 +420,9 @@ export class RecentScreen extends PureComponent<Props, State> {
                             ),
                             rec: ({filters, source}) => (
                               Source.show(source, {
-                                species: this.props.xc,
-                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                species:  this.props.xc,
+                                long:     true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                // showDate: showTime, // TODO showTime if section date === item date
                               })
                             ),
                           }),
@@ -428,7 +430,7 @@ export class RecentScreen extends PureComponent<Props, State> {
 
                       </Text>
                       <Text style={material.caption}>
-                        {mapNull(locationStateOrEmpty(recent.location.state).timestamp, showDate)}
+                        {mapNull(locationStateOrEmpty(recent.location.state).timestamp, showTime)}
                       </Text>
                     </View>
                   </View>
