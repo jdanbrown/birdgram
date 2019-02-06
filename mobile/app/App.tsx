@@ -161,6 +161,7 @@ interface State {
   settings?: Settings;
   settingsWrites?: SettingsWrites;
   db?: DB;
+  nSpecies?: number;
   geo?: Geo;
   appContext?: AppContext;
 }
@@ -272,6 +273,18 @@ export default class App extends PureComponent<Props, State> {
       // Load db (async) on app startup
       const db = await DB.newAsync();
 
+      // Count species (from db)
+      //  - TODO Write this into a payload .json so we don't have to spend the ~100ms[?] querying it
+      const nSpecies: number = await log.timedAsync('select count(distinct species)', async () => {
+        return await db.query<{n: number}>(`
+          select count(distinct species) as n
+          from search_recs
+        `)(async results => {
+          const [{n}] = results.rows.raw();
+          return n;
+        });
+      });
+
       // Load serverConfig (async) on app startup
       const serverConfigPath = `${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`;
       const serverConfig = (
@@ -346,6 +359,7 @@ export default class App extends PureComponent<Props, State> {
         settingsWrites,
         geo,
         db,
+        nSpecies,
         appContext,
       });
 
