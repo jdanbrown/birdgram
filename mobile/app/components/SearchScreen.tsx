@@ -232,8 +232,8 @@ export class SearchScreen extends PureComponent<Props, State> {
   state: State = {
     scrollViewKey:    '',
     scrollViewState:  this._scrollViewState,
-    // showGenericModal: null, // TODO(family_list): Restore
-    showGenericModal: () => this.BrowseModal(),
+    showGenericModal: null, // TODO(family_list): Restore
+    // showGenericModal: () => this.BrowseModal(), // XXX(family_list): Dev
     showHelp:         false,
     query:            null,
     refreshQuery:     false,
@@ -2133,17 +2133,39 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
   render = () => {
     // this.log.info('render'); // Debug
 
+    // TODO(family_list): Perf: Lift/memoize redundant computation
+    //  - TODO(family_list): Lift tokenize(searchFilter) out
+    //  - TODO(family_list): Memoize stuff
+    const matchesSearchFilter = (searchFilter: string, metadata: SpeciesMetadata): boolean => {
+      const ks: Array<keyof SpeciesMetadata> = [
+        'shorthand',
+        'sci_name',
+        'com_name',
+        'species_code',
+        'species_group',
+        'family',
+        'order',
+      ];
+      const tokenize = (v: string): string[] => v.toLowerCase().split(/[^a-z]+/).filter(x => !!x);
+      const ss = tokenize(searchFilter);
+      const vs = _.flatMap(ks, k => tokenize(metadata[k]));
+      return _.every(ss, s => _.some(vs, v => v.includes(s)));
+    };
+
     // Precompute sections so we can figure out various indexes
     type Section = SectionListData<SpeciesMetadata>;
     const data = typed<SpeciesMetadata[]>(_.sortBy(
       matchNull(this.props.place, {
         null: () => [],
-        x: place => _.flatMap(place.species, species => (
-          matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+        x: place => (
+          _(place.species)
+          .flatMap(species => matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
             undefined: () => [],
             x:         m  => [m],
-          })
-        )),
+          }))
+          .filter(m => matchesSearchFilter(this.state.searchFilter, m))
+          .value()
+        ),
       }),
       m => parseFloat(m.taxon_order),
     ));
@@ -2196,12 +2218,9 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
         {/* Search bar */}
         <SearchBar
           // Listeners
-          onSearchChange={(searchFilter: string) => {
-            debug_print('SearchBar.onSearchChange', {searchFilter});
-            this.setState({
-              searchFilter,
-            });
-          }}
+          onSearchChange={searchFilter => this.setState({
+            searchFilter,
+          })}
           // Style
           height={30}
           padding={0}
@@ -2218,8 +2237,6 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
           alwaysShowBackButton={true}
           iconBackName='md-search'
           onBackPress={() => {}}
-          // Disable close button
-          iconCloseComponent={(<View/>)}
           // TextInputProps
           inputProps={{
             autoCorrect:                   false,
@@ -2228,6 +2245,9 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
             placeholder:                   'Species',
             returnKeyType:                 'done',
           }}
+          // TODO Prevent dismissing keyboard on X button, so that it only clears the input
+          iconCloseComponent={(<View/>)} // Disable close button [TODO Nope, keep so we can easily clear text]
+          // onClose={() => this.setState({searchFilter: ''})} // FIXME Why doesn't this work?
         />
 
         {/* SectionList */}
