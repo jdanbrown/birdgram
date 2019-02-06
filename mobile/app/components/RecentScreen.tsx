@@ -401,7 +401,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                             edit: ({source}) => Source.show(source, {
                               species:  this.props.xc,
                               long:     true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                              // showDate: showTime, // TODO showTime if section date === item date
+                              showDate: x => showDate(x).replace(`${section.title} `, ''), // HACK showTime if date = section date
                             }),
                           }),
                           search: recent => matchQuery(recent.query, {
@@ -422,7 +422,7 @@ export class RecentScreen extends PureComponent<Props, State> {
                               Source.show(source, {
                                 species:  this.props.xc,
                                 long:     true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                                // showDate: showTime, // TODO showTime if section date === item date
+                                showDate: x => showDate(x).replace(`${section.title} `, ''), // HACK showTime if date = section date
                               })
                             ),
                           }),
