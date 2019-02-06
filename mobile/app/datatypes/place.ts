@@ -1,4 +1,24 @@
-export const Places = {
+import jsonStableStringify from 'json-stable-stringify';
+import _ from 'lodash';
+
+import { Species } from 'app/datatypes';
+import { BarchartProps } from 'app/ebird';
+
+export interface Place {
+  name:    string;
+  props:   BarchartProps;
+  species: Array<Species>;
+}
+
+export const Place = {
+
+  id: ({props}: Place): string => {
+    return jsonStableStringify(props); // A bit verbose in our locations, but simple and sound
+  },
+
+  find: (id: string, places: Array<Place>): Place | undefined => {
+    return _.find(places, place => id === Place.id(place))
+  },
 
   countryCodeFromName: {
     'United States': 'US',

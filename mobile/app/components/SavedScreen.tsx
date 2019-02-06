@@ -200,7 +200,7 @@ export class SavedScreen extends PureComponent<Props, State> {
       .groupBy(saved => showDateNoTime(_.get(saved.location.state, 'timestamp',
         new Date('3000'), // Put weird/unexpected stuff at the top so it's visible
       )))
-      .entries().map(([k, saveds]) => ({title: k, data: saveds}))
+      .entries().map(([title, data]) => ({title, data}))
       .value()
     );
     const firstSection   = _.head(sections);
@@ -268,6 +268,14 @@ export class SavedScreen extends PureComponent<Props, State> {
               }}
               initialNumToRender={20} // Enough to fill one screen (and not much more)
               sections={sections}
+              keyExtractor={(saved, index) => `${index}`}
+              ListEmptyComponent={(
+                <View style={[Styles.center, {padding: 30}]}>
+                  <Text style={material.subheading}>
+                    No saved items
+                  </Text>
+                </View>
+              )}
               renderSectionHeader={({section}) => (
                 <View
                   style={[Styles.fill, {
@@ -283,14 +291,6 @@ export class SavedScreen extends PureComponent<Props, State> {
                     fontWeight: 'bold',
                     color:      '#444444',
                   }}>{section.title}</Text>
-                </View>
-              )}
-              keyExtractor={(saved, index) => `${index}`}
-              ListEmptyComponent={(
-                <View style={[Styles.center, {padding: 30}]}>
-                  <Text style={material.subheading}>
-                    No saved items
-                  </Text>
                 </View>
               )}
               renderItem={({item: saved, index, section}: {item: Saved, index: number, section: Section}) => (

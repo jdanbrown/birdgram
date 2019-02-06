@@ -4,12 +4,11 @@ import RNFB from 'rn-fetch-blob';
 const {fs} = RNFB;
 
 import {
-  DraftEdit, Edit, matchSource, SearchRecs, Source, SourceId, UserMetadata, UserSource, XCSource,
+  DraftEdit, Edit, matchSource, Place, SearchRecs, Source, SourceId, UserMetadata, UserSource, XCSource,
 } from 'app/datatypes';
 import { debug_print, Log, rich } from 'app/log';
 import { NativeSpectro } from 'app/native/Spectro';
 import { NativeTagLib } from 'app/native/TagLib';
-import { Places } from 'app/places';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifError, ifNil, ifNull, ifUndefined, json,
   jsonSafeError, JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchError, matchNull,
@@ -200,8 +199,8 @@ export const Rec = {
   },
   placePartAbbrev: (part: string): string => {
     const ret = (
-      Places.countryCodeFromName[part] ||
-      Places.stateCodeFromName[part] ||
+      Place.countryCodeFromName[part] ||
+      Place.stateCodeFromName[part] ||
       part
     );
     return ret;

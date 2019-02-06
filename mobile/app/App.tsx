@@ -552,6 +552,7 @@ export default class App extends PureComponent<Props, State> {
           metadataSpecies         = {this.state.metadataSpecies!}
           ebird                   = {this.state.ebird!}
           geo                     = {this.state.geo!}
+          nSpecies                = {this.state.nSpecies!}
           // Settings
           settings                = {this.state.settingsWrites!}
           showDebug               = {this.state.settings!.showDebug}

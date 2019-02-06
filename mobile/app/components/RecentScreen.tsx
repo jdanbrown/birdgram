@@ -251,7 +251,7 @@ export class RecentScreen extends PureComponent<Props, State> {
       .groupBy(recent => showDateNoTime(_.get(recent.location.state, 'timestamp',
         new Date('3000'), // Put weird/unexpected stuff at the top so it's visible
       )))
-      .entries().map(([k, recents]) => ({title: k, data: recents}))
+      .entries().map(([title, data]) => ({title, data}))
       .value()
     );
     const firstSection   = _.head(sections);
@@ -319,6 +319,14 @@ export class RecentScreen extends PureComponent<Props, State> {
               }}
               initialNumToRender={20} // Enough to fill one screen (and not much more)
               sections={sections}
+              keyExtractor={(recent, index) => `${index}`}
+              ListEmptyComponent={(
+                <View style={[Styles.center, {padding: 30}]}>
+                  <Text style={material.subheading}>
+                    No history yet
+                  </Text>
+                </View>
+              )}
               renderSectionHeader={({section}) => (
                 <View
                   style={[Styles.fill, {
@@ -334,14 +342,6 @@ export class RecentScreen extends PureComponent<Props, State> {
                     fontWeight: 'bold',
                     color:      '#444444',
                   }}>{section.title}</Text>
-                </View>
-              )}
-              keyExtractor={(recent, index) => `${index}`}
-              ListEmptyComponent={(
-                <View style={[Styles.center, {padding: 30}]}>
-                  <Text style={material.subheading}>
-                    No history yet
-                  </Text>
                 </View>
               )}
               renderItem={({item: recent, index, section}: {item: Recent, index: number, section: Section}) => (

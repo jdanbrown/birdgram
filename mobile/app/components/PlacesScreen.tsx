@@ -9,6 +9,7 @@ import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-h
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
+import { config } from 'app/config';
 import { Geo, GeoCoords, GeoError } from 'app/components/Geo';
 import { matchSearchPathParams, MetadataSpecies, Place, Species } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
@@ -33,6 +34,7 @@ interface Props {
   metadataSpecies: MetadataSpecies;
   ebird:           Ebird;
   geo:             Geo;
+  nSpecies:        number;
   // Settings
   settings:        SettingsWrites;
   showDebug:       boolean;
@@ -177,10 +179,10 @@ export class PlacesScreen extends PureComponent<Props, State> {
                           All species (no place filter)
                         </Text>
                         <Text style={material.caption}>
+                          {config.env.APP_NAME}
                         </Text>
                         <Text style={material.caption}>
-                          {/* TODO Move db up to App (from SearchScreen) so we can show total species count here */}
-                          {/*   - this.props.metadataSpecies is all ebird species (i.e. 10k), which isn't what we want */}
+                          {this.props.nSpecies} species
                         </Text>
                       </View>
                     ),

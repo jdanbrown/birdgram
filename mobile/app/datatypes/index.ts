@@ -1,4 +1,3 @@
-import jsonStableStringify from 'json-stable-stringify';
 import _ from 'lodash';
 import queryString from 'query-string';
 import { matchPath } from 'react-router-native';
@@ -6,10 +5,9 @@ import RNFB from 'rn-fetch-blob';
 const {fs} = RNFB;
 
 import { Filters } from 'app/components/SearchScreen';
+import { Place } from 'app/datatypes/place';
 import { SourceId } from 'app/datatypes/source';
-import { BarchartProps } from 'app/ebird';
 import { debug_print, log, Log, rich } from 'app/log';
-import { Places } from 'app/places';
 import { Location } from 'app/router';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
@@ -19,6 +17,7 @@ import {
 } from 'app/utils';
 
 export * from 'app/datatypes/edit';
+export * from 'app/datatypes/place';
 export * from 'app/datatypes/rec';
 export * from 'app/datatypes/source';
 
@@ -119,28 +118,6 @@ export interface SpeciesMetadata {
   species_group:  string;
   family:         string;
   order:          string;
-};
-
-//
-// Places (= lists of species)
-//
-
-export interface Place {
-  name:    string;
-  props:   BarchartProps;
-  species: Array<Species>;
-}
-
-export const Place = {
-
-  id: ({props}: Place): string => {
-    return jsonStableStringify(props); // A bit verbose in our locations, but simple and sound
-  },
-
-  find: (id: string, places: Array<Place>): Place | undefined => {
-    return _.find(places, place => id === Place.id(place))
-  },
-
 };
 
 //

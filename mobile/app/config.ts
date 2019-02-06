@@ -3,7 +3,7 @@ import env from 'react-native-config'; // Loaded from .env.* file [https://githu
 // TODO config -> Settings.state [how to share globally?]
 export const config = {
 
-  // Merge .env into top level
+  // Add keys from .env (file)
   //  - .env keys should all be uppercase by convention (like env vars)
   env,
 

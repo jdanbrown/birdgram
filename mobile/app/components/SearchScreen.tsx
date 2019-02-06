@@ -4,7 +4,7 @@ import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import RN, {
   ActivityIndicator, Animated, Dimensions, FlatList, FlexStyle, GestureResponderEvent, Image, ImageStyle, Keyboard,
   KeyboardAvoidingView, LayoutChangeEvent, Modal, Platform, RegisteredStyle, ScrollView, SectionList, SectionListData,
-  SectionListStatic, StyleProp, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
+  StyleProp, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
 } from 'react-native';
 import ActionSheet from 'react-native-actionsheet'; // [Must `import ActionSheet` i/o `import { ActionSheet }`, else barf]
 import FastImage from 'react-native-fast-image';
@@ -39,7 +39,7 @@ import {
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
-import { Log, puts, rich, tap } from 'app/log';
+import { debug_print, Log, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import { NativeSpectro } from 'app/native/Spectro';
 import { Go, History, Location, locationKeyIsEqual, locationPathIsEqual } from 'app/router';
@@ -231,7 +231,8 @@ export class SearchScreen extends PureComponent<Props, State> {
   state: State = {
     scrollViewKey:    '',
     scrollViewState:  this._scrollViewState,
-    showGenericModal: null,
+    // showGenericModal: null, // TODO(family_list): Restore
+    showGenericModal: () => this.BrowseModal(),
     showHelp:         false,
     query:            null,
     refreshQuery:     false,
@@ -275,7 +276,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   // sortActionSheet: RefObject<ActionSheet> = React.createRef();
 
   // Refs
-  scrollViewRef: RefObject<SectionListStatic<Rec>> = React.createRef();
+  scrollViewRef: RefObject<ScrollView> = React.createRef();
 
   // Avoid constructor
   //  - "If you don't initialize state and you don't bind methods, you don't need to implement a constructor"
@@ -963,52 +964,13 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   BrowseModal = () => {
     return (
-      <this.GenericModal>
-        {/* TODO(browse_species): Add title with place name */}
-        <FlatList
-          style={{
-            flex: 1,
-            height: '100%',
-            width: 300, // HACK(browse_species): ~95%
-          }}
-          data={typed<SpeciesMetadata[]>(_.sortBy(
-            matchNull(this.props.place, {
-              null: () => [],
-              x: ({species}) => _.flatMap(species, x => (
-                matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(x), {
-                  undefined: () => [],
-                  x:         x  => [x],
-                })
-              )),
-            }),
-            x => parseFloat(x.taxon_order),
-          ))}
-          keyExtractor={x => x.shorthand}
-          renderItem={({item: speciesMetadata, index}) => (
-            <RectButton
-              style={{
-                width: '100%',
-                paddingVertical: 3,
-              }}
-              onPress={() => {
-                this.setState({
-                  showGenericModal: null, // Dismiss modal
-                });
-                // Show species
-                this.props.go('search', {path: `/species/${encodeURIComponent(speciesMetadata.shorthand)}`});
-              }}
-            >
-              {/* TODO(browse_species): Better formatting */}
-              <Text style={[material.captionObject, {color: 'black'}]}>
-                {speciesMetadata.com_name}
-              </Text>
-              <Text style={[material.captionObject, {fontSize: 8}]}>
-                {speciesMetadata.species_group}
-              </Text>
-            </RectButton>
-          )}
-        />
-      </this.GenericModal>
+      <BrowseModal
+        go={this.props.go}
+        ebird={this.props.ebird}
+        place={this.props.place}
+        GenericModal={this.GenericModal}
+        GenericModalTitle={this.GenericModalTitle}
+      />
     );
   }
 
@@ -1328,7 +1290,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         help='Browse'
         iconProps={{name: 'list'}}
         onPress={() => this.setState({
-          showGenericModal: () => this.BrowseModal()
+          showGenericModal: () => this.BrowseModal(),
         })}
       />
       {/* Filters */}
@@ -1577,6 +1539,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   );
 
   GenericModal = (props: {
+    style?: ViewStyle,
     children: ReactNode,
     // onDismiss?: () => void, // TODO Add this [requires more coupling with ActionModalButtons, which also does dismiss]
   }) => (
@@ -1595,6 +1558,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       <View style={{
         backgroundColor: iOSColors.white,
         padding: 15,
+        ...props.style,
       }}>
         {/* TODO When keyboard shown and tap is outside of modal, don't dismiss modal along with keyboard */}
         <KeyboardDismissingView>
@@ -1606,16 +1570,21 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   GenericModalTitle = (props: {
     title: string,
-    style?: TextStyle,
+    viewStyle?: ViewStyle,
+    textStyle?: TextStyle,
   }) => (
-    <Text style={{
-      alignSelf: 'center', // (horizontal)
-      marginBottom: 5,
-      ...material.titleObject,
-      ...props.style,
+    <View style={{
+      ...props.viewStyle,
     }}>
-      {props.title}
-    </Text>
+      <Text style={{
+        alignSelf: 'center', // (horizontal)
+        marginBottom: 5,
+        ...material.titleObject,
+        ...props.textStyle,
+      }}>
+        {props.title}
+      </Text>
+    </View>
   );
 
   ActionModal = (props: {
@@ -1632,7 +1601,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     }>,
   }) => (
     <this.GenericModal>
-      <this.GenericModalTitle style={props.titleStyle} title={props.title} />
+      <this.GenericModalTitle textStyle={props.titleStyle} title={props.title} />
       {this.ActionModalButtons({actions: props.actions})}
     </this.GenericModal>
   );
@@ -1768,9 +1737,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         {/* - We use ScrollView instead of manual gestures (react-native-gesture-handler) to avoid _lots_ of opaque animation bugs */}
         {this.state.recs !== 'loading' && (
           <ScrollView
-            // @ts-ignore [Why doesn't this typecheck?]
-            //  - FIXME Oops, should this have been updated to a ScrollView i/o SectionList?
-            ref={this.scrollViewRef as RefObject<Component<SectionListStatic<Rec>, any, any>>}
+            ref={this.scrollViewRef}
 
             // Scroll/zoom
             //  - Force re-layout on zoom change, else bad things (that I don't understand)
@@ -2123,30 +2090,220 @@ export class SearchScreen extends PureComponent<Props, State> {
 
 }
 
-// TODO Why is this slow to respond after keyboard shows? -- adding logging to find the bottleneck
+interface BrowseModalProps {
+  go:                Props['go'];
+  ebird:             Props['ebird'];
+  place:             Props['place'];
+  GenericModal:      SearchScreen['GenericModal'];
+  GenericModalTitle: SearchScreen['GenericModalTitle'];
+}
+
+interface BrowseModalState {
+}
+
+export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalState> {
+
+  log = new Log('BrowseModal');
+
+  state = {
+  };
+
+  // Getters
+  GenericModal      = this.props.GenericModal;
+  GenericModalTitle = this.props.GenericModalTitle;
+
+  // Refs
+  sectionListRef: RefObject<SectionList<Rec>> = React.createRef();
+
+  // State
+  _firstSectionHeaderHeight: number = 0; // For SectionList.scrollToLocation({viewOffset})
+
+  componentDidMount = () => {
+    this.log.info('componentDidMount');
+  };
+
+  componentWillUnmount = () => {
+    this.log.info('componentWillUnmount');
+  };
+
+  componentDidUpdate = (prevProps: BrowseModalProps, prevState: BrowseModalState) => {
+    this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+  };
+
+  render = () => {
+    // this.log.info('render'); // Debug
+
+    // Precompute sections so we can figure out various indexes
+    type Section = SectionListData<SpeciesMetadata>;
+    const data = typed<SpeciesMetadata[]>(_.sortBy(
+      matchNull(this.props.place, {
+        null: () => [],
+        x: place => _.flatMap(place.species, species => (
+          matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+            undefined: () => [],
+            x:         m  => [m],
+          })
+        )),
+      }),
+      m => parseFloat(m.taxon_order),
+    ));
+    const sections: Array<Section> = (
+      _(data)
+      .groupBy(m => m.species_group)
+      .entries().map(([title, data]) => ({title, data}))
+      .value()
+    );
+    const firstSection   = _.head(sections);
+    const lastSection    = _.last(sections);
+    const isFirstSection = (section: Section) => firstSection && section.title === firstSection.title;
+    const isLastSection  = (section: Section) => lastSection  && section.title === lastSection.title;
+    const isLastItem     = (section: Section, index: number) => isLastSection(section) && index === section.data.length - 1;
+
+    return (
+      <this.GenericModal style={{
+        padding: 0, // HACK Undo padding:15 in GenericModal (helpful for other modals, but not us)
+      }}>
+        <BaseButton onPress={() => {
+          mapNull(this.sectionListRef.current, sectionList => { // Avoid transient nulls [why do they happen?]
+            if (sectionList.scrollToLocation) { // (Why typed as undefined? I think only for old versions of react-native?)
+              sectionList.scrollToLocation({
+                sectionIndex: 0, itemIndex: 0,              // First section, first item
+                viewOffset: this._firstSectionHeaderHeight, // Else first item covered by first section header
+              });
+            }
+          });
+        }}>
+          <this.GenericModalTitle
+            viewStyle={{
+              justifyContent:    'center', // (Horizontal)
+              backgroundColor:   Styles.tabBar.backgroundColor,
+              borderBottomWidth: Styles.tabBar.borderTopWidth,
+              borderBottomColor: Styles.tabBar.borderTopColor,
+            }}
+            textStyle={{
+              ...material.body2Object,
+              marginBottom: 0, // HACK Undo marginBottom:5 in GenericModalTitle
+            }}
+            title={matchNull(this.props.place, {
+              x:    place => `${place.name} (${place.species.length} species)`,
+              null: ()    => '(No place selected)',
+            })}
+          />
+        </BaseButton>
+        <SectionList
+          ref={this.sectionListRef as any} // HACK Is typing for SectionList busted? Can't make it work
+          style={{
+            flex: 1,
+            height: '100%',
+            width: 300, // HACK(browse_species): ~95%
+            // paddingHorizontal: 10, // HACK Redo padding:15 in GenericModal (undone above)
+          }}
+          sections={sections}
+          // Disable lazy loading, else fast scrolling down hits a lot of partial bottoms before the real bottom
+          initialNumToRender={data.length}
+          maxToRenderPerBatch={data.length}
+          keyExtractor={x => x.shorthand}
+          ListEmptyComponent={(
+            <View style={[Styles.center, {padding: 30}]}>
+              <Text style={material.subheading}>
+                No species
+              </Text>
+            </View>
+          )}
+          renderSectionHeader={({section}) => (
+            <View
+              style={[Styles.fill, {
+                backgroundColor:   iOSColors.lightGray,
+                paddingHorizontal: 5,
+                paddingTop:        2,
+                paddingBottom:     2,
+              }]}
+              // For SectionList.scrollToLocation({viewOffset})
+              onLayout={!isFirstSection(section) ? undefined : this.onFirstSectionHeaderLayout}
+            >
+              <Text style={{
+                ...material.captionObject,
+                fontWeight: 'bold',
+                color:      '#444444',
+              }}>{section.title}</Text>
+            </View>
+          )}
+          renderItem={({item: speciesMetadata, index, section}) => (
+            <RectButton
+              style={{
+                width: '100%',
+                paddingVertical: 3,
+                paddingHorizontal: 5, // HACK Redo padding:15 in GenericModal (undone above)
+              }}
+              onPress={() => {
+                this.setState({
+                  showGenericModal: null, // Dismiss modal
+                });
+                // Show species
+                this.props.go('search', {path: `/species/${encodeURIComponent(speciesMetadata.shorthand)}`});
+              }}
+            >
+              {/* TODO(browse_species): Better formatting */}
+              <Text style={[material.captionObject, {color: 'black'}]}>
+                {speciesMetadata.com_name}
+              </Text>
+              <Text style={[material.captionObject, {fontSize: 10}]}>
+                {speciesMetadata.sci_name}
+              </Text>
+            </RectButton>
+          )}
+        />
+      </this.GenericModal>
+    );
+
+  };
+
+  onFirstSectionHeaderLayout = async (event: LayoutChangeEvent) => {
+    const {nativeEvent: {layout: {x, y, width, height}}} = event; // Unpack SyntheticEvent (before async)
+    this._firstSectionHeaderHeight = height;
+  }
+
+}
+
+interface KeyboardDismissingViewProps extends RN.ViewProps {
+}
+
 interface KeyboardDismissingViewState {
   isKeyboardShown: boolean;
 }
-export class KeyboardDismissingView extends PureComponent<RN.ViewProps, KeyboardDismissingViewState> {
+
+// TODO Why is this slow to respond after keyboard shows? -- adding logging to find the bottleneck
+export class KeyboardDismissingView extends PureComponent<KeyboardDismissingViewProps, KeyboardDismissingViewState> {
+
   log = new Log('KeyboardDismissingView');
+
   state = {
     isKeyboardShown: false,
   };
+
+  // State
   _keyboardDidShowListener?: {remove: () => void};
   _keyboardDidHideListener?: {remove: () => void};
+
   componentDidMount = () => {
+    this.log.info('componentDidMount');
     this._keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', this.keyboardDidShow);
     this._keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', this.keyboardDidHide);
   };
+
   componentWillUnmount = () => {
+    this.log.info('componentWillUnmount');
     this._keyboardDidShowListener!.remove();
     this._keyboardDidHideListener!.remove();
   };
-  componentDidUpdate = (prevProps: RN.ViewProps, prevState: KeyboardDismissingViewState) => {
+
+  componentDidUpdate = (prevProps: KeyboardDismissingViewProps, prevState: KeyboardDismissingViewState) => {
     this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   };
+
   keyboardDidShow = () => this.setState({isKeyboardShown: true});
   keyboardDidHide = () => this.setState({isKeyboardShown: false});
+
   render = () => (
     <TapGestureHandler
       enabled={this.state.isKeyboardShown}
@@ -2157,6 +2314,7 @@ export class KeyboardDismissingView extends PureComponent<RN.ViewProps, Keyboard
       <Animated.View {...this.props} />
     </TapGestureHandler>
   );
+
 }
 
 // XXX
