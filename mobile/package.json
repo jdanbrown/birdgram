@@ -49,6 +49,7 @@
     "react-native-fast-image": "^5.0.10",
     "react-native-gesture-handler": "^1.0.8",
     "react-native-keep-awake": "^3.1.0",
+    "react-native-material-design-searchbar": "^1.8.0",
     "react-native-microphone-stream": "git://github.com/chadsmith/react-native-microphone-stream.git#4cca1e7",
     "react-native-permissions": "^1.1.1",
     "react-native-settings-list": "^1.8.0",

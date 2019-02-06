@@ -15,6 +15,7 @@ import {
   // FlatList, ScrollView, Slider, Switch, TextInput, // TODO Needed?
 } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
+import SearchBar from 'react-native-material-design-searchbar'
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { IconProps } from 'react-native-vector-icons/Icon';
 import timer from 'react-native-timer';
@@ -965,11 +966,10 @@ export class SearchScreen extends PureComponent<Props, State> {
   BrowseModal = () => {
     return (
       <BrowseModal
+        parent={this}
         go={this.props.go}
         ebird={this.props.ebird}
         place={this.props.place}
-        GenericModal={this.GenericModal}
-        GenericModalTitle={this.GenericModalTitle}
       />
     );
   }
@@ -2091,14 +2091,14 @@ export class SearchScreen extends PureComponent<Props, State> {
 }
 
 interface BrowseModalProps {
-  go:                Props['go'];
-  ebird:             Props['ebird'];
-  place:             Props['place'];
-  GenericModal:      SearchScreen['GenericModal'];
-  GenericModalTitle: SearchScreen['GenericModalTitle'];
+  parent: SearchScreen;
+  go:     Props['go'];
+  ebird:  Props['ebird'];
+  place:  Props['place'];
 }
 
 interface BrowseModalState {
+  searchFilter: string;
 }
 
 export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalState> {
@@ -2106,11 +2106,11 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
   log = new Log('BrowseModal');
 
   state = {
+    searchFilter: '',
   };
 
   // Getters
-  GenericModal      = this.props.GenericModal;
-  GenericModalTitle = this.props.GenericModalTitle;
+  parent = this.props.parent;
 
   // Refs
   sectionListRef: RefObject<SectionList<Rec>> = React.createRef();
@@ -2160,9 +2160,11 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
     const isLastItem     = (section: Section, index: number) => isLastSection(section) && index === section.data.length - 1;
 
     return (
-      <this.GenericModal style={{
+      <this.parent.GenericModal style={{
         padding: 0, // HACK Undo padding:15 in GenericModal (helpful for other modals, but not us)
       }}>
+
+        {/* Title + scroll to top */}
         <BaseButton onPress={() => {
           mapNull(this.sectionListRef.current, sectionList => { // Avoid transient nulls [why do they happen?]
             if (sectionList.scrollToLocation) { // (Why typed as undefined? I think only for old versions of react-native?)
@@ -2173,7 +2175,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
             }
           });
         }}>
-          <this.GenericModalTitle
+          <this.parent.GenericModalTitle
             viewStyle={{
               justifyContent:    'center', // (Horizontal)
               backgroundColor:   Styles.tabBar.backgroundColor,
@@ -2190,6 +2192,45 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
             })}
           />
         </BaseButton>
+
+        {/* Search bar */}
+        <SearchBar
+          // Listeners
+          onSearchChange={(searchFilter: string) => {
+            debug_print('SearchBar.onSearchChange', {searchFilter});
+            this.setState({
+              searchFilter,
+            });
+          }}
+          // Style
+          height={30}
+          padding={0}
+          inputStyle={{
+            // Disable border from SearchBar (styles.searchBar)
+            borderWidth:       0,
+            // Replace with a border that matches the title bar border
+            backgroundColor:   Styles.tabBar.backgroundColor,
+            borderBottomWidth: Styles.tabBar.borderTopWidth,
+            borderBottomColor: Styles.tabBar.borderTopColor,
+          }}
+          // Disable back button
+          //  - By: always showing back button and making it look and behave like the search icon
+          alwaysShowBackButton={true}
+          iconBackName='md-search'
+          onBackPress={() => {}}
+          // Disable close button
+          iconCloseComponent={(<View/>)}
+          // TextInputProps
+          inputProps={{
+            autoCorrect:                   false,
+            autoCapitalize:               'none',
+            // enablesReturnKeyAutomatically: true,
+            placeholder:                   'Species',
+            returnKeyType:                 'done',
+          }}
+        />
+
+        {/* SectionList */}
         <SectionList
           ref={this.sectionListRef as any} // HACK Is typing for SectionList busted? Can't make it work
           style={{
@@ -2236,7 +2277,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
                 paddingHorizontal: 5, // HACK Redo padding:15 in GenericModal (undone above)
               }}
               onPress={() => {
-                this.setState({
+                this.parent.setState({
                   showGenericModal: null, // Dismiss modal
                 });
                 // Show species
@@ -2253,7 +2294,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
             </RectButton>
           )}
         />
-      </this.GenericModal>
+      </this.parent.GenericModal>
     );
 
   };
