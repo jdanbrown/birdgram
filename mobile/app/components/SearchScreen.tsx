@@ -50,7 +50,7 @@ import { SQL, sqlf } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
-  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, json,
+  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, json, local,
   mapMapValues, mapNull, match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty,
   QueryString, round, shallowDiffPropsState, Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
@@ -174,6 +174,7 @@ interface State {
   scrollViewKey: string;
   scrollViewState: ScrollViewState;
   showGenericModal: null | (() => Element);
+  searchFilter: string; // For BrowseModal
   showHelp: boolean;
   totalRecs?: number;
   f_preds_cols?: Array<string>;
@@ -232,8 +233,8 @@ export class SearchScreen extends PureComponent<Props, State> {
   state: State = {
     scrollViewKey:    '',
     scrollViewState:  this._scrollViewState,
-    showGenericModal: null, // TODO(family_list): Restore
-    // showGenericModal: () => this.BrowseModal(), // XXX(family_list): Dev
+    showGenericModal: null,
+    searchFilter:     '', // For BrowseModal
     showHelp:         false,
     query:            null,
     refreshQuery:     false,
@@ -970,6 +971,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         go={this.props.go}
         ebird={this.props.ebird}
         place={this.props.place}
+        searchFilter={this.state.searchFilter}
       />
     );
   }
@@ -2091,14 +2093,14 @@ export class SearchScreen extends PureComponent<Props, State> {
 }
 
 interface BrowseModalProps {
-  parent: SearchScreen;
-  go:     Props['go'];
-  ebird:  Props['ebird'];
-  place:  Props['place'];
+  parent:       SearchScreen;
+  go:           Props['go'];
+  ebird:        Props['ebird'];
+  place:        Props['place'];
+  searchFilter: string; // State lifted up into SearchScreen, so it persists across close/reopen
 }
 
 interface BrowseModalState {
-  searchFilter: string;
 }
 
 export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalState> {
@@ -2106,7 +2108,6 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
   log = new Log('BrowseModal');
 
   state = {
-    searchFilter: '',
   };
 
   // Getters
@@ -2120,6 +2121,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
 
   componentDidMount = () => {
     this.log.info('componentDidMount');
+    global.BrowseModal = this; // XXX Debug
   };
 
   componentWillUnmount = () => {
@@ -2133,28 +2135,28 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
   render = () => {
     // this.log.info('render'); // Debug
 
-    // TODO(family_list): Perf: Lift/memoize redundant computation
-    //  - TODO(family_list): Lift tokenize(searchFilter) out
-    //  - TODO(family_list): Memoize stuff
-    const matchesSearchFilter = (searchFilter: string, metadata: SpeciesMetadata): boolean => {
+    // TODO(family_list): Perf: Memoize stuff
+    const matchesSearchFilter: (metadata: SpeciesMetadata) => boolean = log.timed('matchesSearchFilter', () => {
+      const tokenize = (v: string): string[] => v.toLowerCase().replace(/[^a-z ]+/, '').split(' ').filter(x => !_.isEmpty(x));
+      const searches = this.props.searchFilter.split('/').map(search => tokenize(search)).filter(x => !_.isEmpty(x));
       const ks: Array<keyof SpeciesMetadata> = [
         'shorthand',
         'sci_name',
         'com_name',
         'species_code',
         'species_group',
-        'family',
-        'order',
+        // 'family', // XXX Confusing because field not visible to user (can't see why it matched)
+        // 'order',  // XXX Confusing because field not visible to user (can't see why it matched)
       ];
-      const tokenize = (v: string): string[] => v.toLowerCase().split(/[^a-z]+/).filter(x => !!x);
-      const ss = tokenize(searchFilter);
-      const vs = _.flatMap(ks, k => tokenize(metadata[k]));
-      return _.every(ss, s => _.some(vs, v => v.includes(s)));
-    };
+      return (metadata: SpeciesMetadata): boolean => {
+        const vs = _.flatMap(ks, k => tokenize(metadata[k]));
+        return _.isEmpty(searches) || _.some(searches, search => _.every(search, term => _.some(vs, v => v.includes(term))));
+      };
+    });
 
     // Precompute sections so we can figure out various indexes
     type Section = SectionListData<SpeciesMetadata>;
-    const data = typed<SpeciesMetadata[]>(_.sortBy(
+    const data = log.timed('data', () => typed<SpeciesMetadata[]>(_.sortBy(
       matchNull(this.props.place, {
         null: () => [],
         x: place => (
@@ -2163,18 +2165,18 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
             undefined: () => [],
             x:         m  => [m],
           }))
-          .filter(m => matchesSearchFilter(this.state.searchFilter, m))
+          .filter(m => matchesSearchFilter(m))
           .value()
         ),
       }),
       m => parseFloat(m.taxon_order),
-    ));
-    const sections: Array<Section> = (
+    )));
+    const sections: Array<Section> = log.timed('sections', () => (
       _(data)
       .groupBy(m => m.species_group)
       .entries().map(([title, data]) => ({title, data}))
       .value()
-    );
+    ));
     const firstSection   = _.head(sections);
     const lastSection    = _.last(sections);
     const isFirstSection = (section: Section) => firstSection && section.title === firstSection.title;
@@ -2218,11 +2220,11 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
         {/* Search bar */}
         <SearchBar
           // Listeners
-          onSearchChange={searchFilter => this.setState({
+          onSearchChange={searchFilter => this.parent.setState({
             searchFilter,
           })}
           // Style
-          height={30}
+          height={40}
           padding={0}
           inputStyle={{
             // Disable border from SearchBar (styles.searchBar)
@@ -2240,14 +2242,17 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
           // TextInputProps
           inputProps={{
             autoCorrect:                   false,
-            autoCapitalize:               'none',
+            autoCapitalize:                'none',
             // enablesReturnKeyAutomatically: true,
             placeholder:                   'Species',
+            defaultValue:                  this.props.searchFilter,
             returnKeyType:                 'done',
+            selectTextOnFocus:             true,
+            keyboardType:                  'default',
           }}
           // TODO Prevent dismissing keyboard on X button, so that it only clears the input
           iconCloseComponent={(<View/>)} // Disable close button [TODO Nope, keep so we can easily clear text]
-          // onClose={() => this.setState({searchFilter: ''})} // FIXME Why doesn't this work?
+          // onClose={() => this.parent.setState({searchFilter: ''})} // FIXME Why doesn't this work?
         />
 
         {/* SectionList */}

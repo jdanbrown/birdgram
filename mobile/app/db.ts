@@ -19,8 +19,9 @@ export class DB {
     public filename: string,
   ) {}
 
-  static newAsync = async (): Promise<DB> => {
-    const filename = SearchRecs.dbPath;
+  static newAsync = async (
+    filename: string = SearchRecs.dbPath,
+  ): Promise<DB> => {
     if (!await fs.exists(`${fs.dirs.MainBundleDir}/${filename}`)) {
       throw `DB file not found: ${filename}`;
     }
