@@ -432,21 +432,9 @@ Column = Iterable
 Row = pd.Series
 
 
+# XXX Migrate callers to df_display
 def df_inspect(df, *xs: any):
-    if not xs:
-        xs = [lambda df: df]
-    for x in xs:
-        if hasattr(x, '__call__'):
-            x = x(df)
-        if isinstance(x, str):
-            # print(x)
-            display({'text/plain': x}, raw=True)  # display() instead of print() to match flush behavior
-        else:
-            if not isinstance(x, tuple):
-                x = (x,)
-            display(*x)  # Less reliable flush, e.g. for single-line strs (which don't make it here), and maybe others...
-            # ipy_print(*x)  # Forces text/plain instead of text/html (e.g. df colors and spacing)
-    return df
+    return df_display(df, *xs)
 
 
 def df_with_totals(df, **kwargs):
