@@ -256,6 +256,22 @@ export function mapPop<K, V>(map: Map<K, V>, k: K): V | undefined {
   return v;
 }
 
+export function setAdd<X>(xs: Set<X>, x: X): Set<X> {
+  xs = new Set(xs); // Copy so we can mutate
+  xs.add(x);
+  return xs;
+}
+
+export function setDelete<X>(xs: Set<X>, x: X): Set<X> {
+  xs = new Set(xs); // Copy so we can mutate
+  xs.delete(x);
+  return xs;
+}
+
+export function setToggle<X>(xs: Set<X>, x: X): Set<X> {
+  return xs.has(x) ? setDelete(xs, x) : setAdd(xs, x);
+}
+
 export function enumerate<X>(xs: Array<X>): Array<{x: X, i: number}> {
   return xs.map((x, i) => ({x, i}));
 }

@@ -50,13 +50,18 @@ import { SQL, sqlf } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
-  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, json, local,
+  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, into, json, local,
   mapMapValues, mapNull, match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty,
-  QueryString, round, shallowDiffPropsState, Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
+  QueryString, round, setAdd, setDelete, setToggle, shallowDiffPropsState, Style, throw_, Timer, typed, yaml,
+  yamlPretty, zipSame,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
 const log = new Log('SearchScreen');
+
+//
+// Utils
+//
 
 const sidewaysTextWidth = 14;
 const recEditingButtonWidth = 30;
@@ -136,6 +141,10 @@ export const Filters = {
 
 };
 
+//
+// SearchScreen
+//
+
 interface Props {
   // App globals
   serverConfig:            ServerConfig;
@@ -187,8 +196,11 @@ interface State {
   n_recs: number;   // For non-rec queries
   n_sp: number;     // For rec queries
   n_per_sp: number; // For rec queries
-  excludeSpecies: Array<string>;
-  excludeRecIds: Array<string>;
+  excludeSpecies: Set<string>;
+  includeSpecies: Set<string>;
+  excludeSpeciesGroups: Set<string>;
+  includeSpeciesGroups: Set<string>;
+  excludeRecIds: Set<string>;
   recs: StateRecs;
   recsQueryTime?: number;
   sourceIdForActionModal?: SourceId;
@@ -231,21 +243,26 @@ export class SearchScreen extends PureComponent<Props, State> {
   };
 
   state: State = {
-    scrollViewKey:    '',
-    scrollViewState:  this._scrollViewState,
-    showGenericModal: null,
-    searchFilter:     '', // For BrowseModal
-    showHelp:         false,
-    query:            null,
-    refreshQuery:     false,
-    filterQuality:    ['A', 'B'],
-    n_recs:           this.props.default_n_recs,
-    n_sp:             this.props.default_n_sp,
-    n_per_sp:         this.props.default_n_per_sp,
-    excludeSpecies:   [],
-    excludeRecIds:    [],
-    recs:             'loading',
-    _spectroScale:    this.props.spectroScale, // Sync from/to Settings (2/3)
+    scrollViewKey:        '',
+    scrollViewState:      this._scrollViewState,
+    // showGenericModal:     null, // TODO(family_list): Restore
+    showGenericModal:     () => this.BrowseModal(), // XXX(family_list): Dev
+    // searchFilter:         '', // For BrowseModal // TODO(family_list): Restore
+    searchFilter:         'sparrow', // XXX(family_list): Dev
+    showHelp:             false,
+    query:                null,
+    refreshQuery:         false,
+    filterQuality:        ['A', 'B'],
+    n_recs:               this.props.default_n_recs,
+    n_sp:                 this.props.default_n_sp,
+    n_per_sp:             this.props.default_n_per_sp,
+    excludeSpecies:       new Set(),
+    includeSpecies:       new Set(),
+    excludeSpeciesGroups: new Set(),
+    includeSpeciesGroups: new Set(),
+    excludeRecIds:        new Set(),
+    recs:                 'loading',
+    _spectroScale:        this.props.spectroScale, // Sync from/to Settings (2/3)
   };
 
   // Getters for props
@@ -392,12 +409,15 @@ export class SearchScreen extends PureComponent<Props, State> {
     if (!fastIsEqual(this.props.location, prevProps.location)) {
       log.info('componentDidUpdate: Reset view state');
       this.setState({
-        filterQueryText: undefined,
-        n_recs:          this.props.default_n_recs,
-        n_sp:            this.props.default_n_sp,
-        n_per_sp:        this.props.default_n_per_sp,
-        excludeSpecies:  [],
-        excludeRecIds:   [],
+        filterQueryText:      undefined,
+        n_recs:               this.props.default_n_recs,
+        n_sp:                 this.props.default_n_sp,
+        n_per_sp:             this.props.default_n_per_sp,
+        excludeSpecies:       new Set(),
+        includeSpecies:       new Set(),
+        excludeSpeciesGroups: new Set(),
+        includeSpeciesGroups: new Set(),
+        excludeRecIds:        new Set(),
       });
     }
 
@@ -967,11 +987,15 @@ export class SearchScreen extends PureComponent<Props, State> {
   BrowseModal = () => {
     return (
       <BrowseModal
-        parent={this}
+        searchFilter={this.state.searchFilter}
+        excludeSpecies={this.state.excludeSpecies}
+        includeSpecies={this.state.includeSpecies}
+        excludeSpeciesGroups={this.state.excludeSpeciesGroups}
+        includeSpeciesGroups={this.state.includeSpeciesGroups}
         go={this.props.go}
         ebird={this.props.ebird}
         place={this.props.place}
-        searchFilter={this.state.searchFilter}
+        parent={this}
       />
     );
   }
@@ -1104,7 +1128,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               iconName: 'x',
               buttonColor: iOSColors.red,
               onPress: () => this.setState((state: State, props: Props) => ({
-                excludeSpecies: [...state.excludeSpecies, rec.species],
+                excludeSpecies: setAdd(state.excludeSpecies, rec.species),
               })),
             }, {
               ...defaults,
@@ -1114,7 +1138,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               iconName: 'x',
               buttonColor: iOSColors.red,
               onPress: () => this.setState((state: State, props: Props) => ({
-                excludeRecIds: [...state.excludeRecIds, rec.source_id],
+                excludeRecIds: setAdd(state.excludeRecIds, rec.source_id),
               })),
             }
           ]})}
@@ -1127,7 +1151,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               ...defaults,
               label: 'Edit',
               iconName: 'edit',
-              buttonColor: iOSColors.green,
+              buttonColor: iOSColors.purple,
               onPress: () => this.props.go('record', {path: `/edit/${encodeURIComponent(rec.source_id)}`}),
             }
           ]})}
@@ -2092,12 +2116,20 @@ export class SearchScreen extends PureComponent<Props, State> {
 
 }
 
+//
+// BrowseModal
+//
+
 interface BrowseModalProps {
-  parent:       SearchScreen;
-  go:           Props['go'];
-  ebird:        Props['ebird'];
-  place:        Props['place'];
-  searchFilter: string; // State lifted up into SearchScreen, so it persists across close/reopen
+  searchFilter:         string; // State lifted up into SearchScreen, so it persists across close/reopen
+  excludeSpecies:       State['excludeSpecies'];
+  includeSpecies:       State['includeSpecies'];
+  excludeSpeciesGroups: State['excludeSpeciesGroups'];
+  includeSpeciesGroups: State['includeSpeciesGroups'];
+  go:                   Props['go'];
+  ebird:                Props['ebird'];
+  place:                Props['place'];
+  parent:               SearchScreen;
 }
 
 interface BrowseModalState {
@@ -2135,7 +2167,8 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
   render = () => {
     // this.log.info('render'); // Debug
 
-    // TODO(family_list): Perf: Memoize stuff
+    // Perf: lots of redundant computation here, but this isn't the bottleneck
+    //  - Bottleneck is render for SectionList -> section/item components
     const matchesSearchFilter: (metadata: SpeciesMetadata) => boolean = log.timed('matchesSearchFilter', () => {
       const tokenize = (v: string): string[] => v.toLowerCase().replace(/[^a-z ]+/, '').split(' ').filter(x => !_.isEmpty(x));
       const searches = this.props.searchFilter.split('/').map(search => tokenize(search)).filter(x => !_.isEmpty(x));
@@ -2182,39 +2215,77 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
     const isFirstSection = (section: Section) => firstSection && section.title === firstSection.title;
     const isLastSection  = (section: Section) => lastSection  && section.title === lastSection.title;
     const isLastItem     = (section: Section, index: number) => isLastSection(section) && index === section.data.length - 1;
+    const nSpeciesShown  = _.sum(sections.map(x => x.data.length));
 
     return (
-      <this.parent.GenericModal style={{
-        padding: 0, // HACK Undo padding:15 in GenericModal (helpful for other modals, but not us)
+      <View style={{
+        width: '100%', height: '100%', // Full screen
+        backgroundColor: iOSColors.white, // Opaque overlay (else SearchScreen shows through)
+        flexDirection: 'column',
       }}>
 
-        {/* Title + scroll to top */}
-        <BaseButton onPress={() => {
-          mapNull(this.sectionListRef.current, sectionList => { // Avoid transient nulls [why do they happen?]
-            if (sectionList.scrollToLocation) { // (Why typed as undefined? I think only for old versions of react-native?)
-              sectionList.scrollToLocation({
-                sectionIndex: 0, itemIndex: 0,              // First section, first item
-                viewOffset: this._firstSectionHeaderHeight, // Else first item covered by first section header
-              });
-            }
-          });
-        }}>
-          <this.parent.GenericModalTitle
-            viewStyle={{
-              justifyContent:    'center', // (Horizontal)
-              backgroundColor:   Styles.tabBar.backgroundColor,
-              borderBottomWidth: Styles.tabBar.borderTopWidth,
-              borderBottomColor: Styles.tabBar.borderTopColor,
-            }}
-            textStyle={{
+        {/* Title + scroll to top + close button */}
+        <BaseButton
+          style={{
+            // flex: 1,
+          }}
+          onPress={() => {
+            // Scroll to top
+            mapNull(this.sectionListRef.current, sectionList => { // Avoid transient nulls [why do they happen?]
+              if (sectionList.scrollToLocation) { // (Why typed as undefined? I think only for old versions of react-native?)
+                sectionList.scrollToLocation({
+                  sectionIndex: 0, itemIndex: 0,              // First section, first item
+                  viewOffset: this._firstSectionHeaderHeight, // Else first item covered by first section header
+                });
+              }
+            });
+          }}
+        >
+          <View style={{
+            flexDirection:     'row',
+            alignItems:        'center', // Vertical (row i/o column)
+            backgroundColor:   Styles.tabBar.backgroundColor,
+            borderBottomWidth: Styles.tabBar.borderTopWidth,
+            borderBottomColor: Styles.tabBar.borderTopColor,
+          }}>
+
+            {/* Title */}
+            <Text style={{
+              flexGrow: 1,
               ...material.body2Object,
-              marginBottom: 0, // HACK Undo marginBottom:5 in GenericModalTitle
-            }}
-            title={matchNull(this.props.place, {
-              x:    place => `${place.name} (${place.species.length} species)`,
-              null: ()    => '(No place selected)',
-            })}
-          />
+              marginHorizontal: 5,
+            }}>
+              {matchNull(this.props.place, {
+                x:    place => `${place.name} (${nSpeciesShown}/${place.species.length} species)`,
+                null: ()    => '(No place selected)',
+              })}
+            </Text>
+
+            {/* Close button */}
+            <RectButton
+              style={{
+                justifyContent: 'center', // Vertical
+                alignItems:     'center', // Horizontal
+                width:          35,
+                height:         35,
+              }}
+              onPress={() => {
+                // Dismiss modal
+                this.parent.setState({
+                  showGenericModal: null,
+                });
+              }}
+            >
+              <Feather style={{
+                // ...material.titleObject,
+                ...material.headlineObject,
+              }}
+                // name={'check'}
+                name={'x'}
+              />
+            </RectButton>
+
+          </View>
         </BaseButton>
 
         {/* Search bar */}
@@ -2259,16 +2330,13 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
         <SectionList
           ref={this.sectionListRef as any} // HACK Is typing for SectionList busted? Can't make it work
           style={{
-            flex: 1,
-            height: '100%',
-            width: 300, // HACK(browse_species): ~95%
-            // paddingHorizontal: 10, // HACK Redo padding:15 in GenericModal (undone above)
+            flexGrow: 1,
           }}
           sections={sections}
           // Disable lazy loading, else fast scrolling down hits a lot of partial bottoms before the real bottom
           initialNumToRender={data.length}
           maxToRenderPerBatch={data.length}
-          keyExtractor={x => x.shorthand}
+          keyExtractor={species => species.shorthand} // [Why needed in addition to key props below? key warning without this]
           ListEmptyComponent={(
             <View style={[Styles.center, {padding: 30}]}>
               <Text style={material.subheading}>
@@ -2276,53 +2344,79 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
               </Text>
             </View>
           )}
-          renderSectionHeader={({section}) => (
-            <View
-              style={[Styles.fill, {
-                backgroundColor:   iOSColors.lightGray,
-                paddingHorizontal: 5,
-                paddingTop:        2,
-                paddingBottom:     2,
-              }]}
-              // For SectionList.scrollToLocation({viewOffset})
-              onLayout={!isFirstSection(section) ? undefined : this.onFirstSectionHeaderLayout}
-            >
-              <Text style={{
-                ...material.captionObject,
-                fontWeight: 'bold',
-                color:      '#444444',
-              }}>{section.title}</Text>
-            </View>
-          )}
-          renderItem={({item: speciesMetadata, index, section}) => (
-            <RectButton
-              style={{
-                width: '100%',
-                paddingVertical: 3,
-                paddingHorizontal: 5, // HACK Redo padding:15 in GenericModal (undone above)
-              }}
-              onPress={() => {
-                this.parent.setState({
-                  showGenericModal: null, // Dismiss modal
-                });
-                // Show species
-                this.props.go('search', {path: `/species/${encodeURIComponent(speciesMetadata.shorthand)}`});
-              }}
-            >
-              {/* TODO(browse_species): Better formatting */}
-              <Text style={[material.captionObject, {color: 'black'}]}>
-                {speciesMetadata.com_name}
-              </Text>
-              <Text style={[material.captionObject, {fontSize: 10}]}>
-                {speciesMetadata.sci_name}
-              </Text>
-            </RectButton>
-          )}
+          // Perf: split out section/item components so that it stays mounted across updates
+          //  - (Why does it sometimes unmount/mount anyway?)
+          renderSectionHeader={({section}) => {
+            const {species_group} = section.data[0];
+            return (
+              <BrowseModalSectionHeader
+                key={species_group}
+                species_group={species_group}
+                isFirstSection={isFirstSection(section)}
+                excluded={this.props.excludeSpeciesGroups.has(species_group)}
+                included={this.props.includeSpeciesGroups.has(species_group)}
+                parent={this}
+                stateParent={this.props.parent}
+              />
+            );
+          }}
+          renderItem={({item: species, index, section}) => {
+            return (
+              <BrowseModalItem
+                key={species.shothand}
+                species={species} // WARNING Perf: this will trigger many unnecessary updates if object identity ever changes
+                isLastItem={isLastItem(section, index)}
+                excluded={( // exc || group exc && !inc
+                  this.props.excludeSpecies.has(species.shorthand) || (
+                    this.props.excludeSpeciesGroups.has(species.species_group) &&
+                    !this.props.includeSpecies.has(species.shorthand)
+                  )
+                )}
+                included={( // inc || group inc && !exc
+                  this.props.includeSpecies.has(species.shorthand) || (
+                    this.props.includeSpeciesGroups.has(species.species_group) &&
+                    !this.props.excludeSpecies.has(species.shorthand)
+                  )
+                )}
+                parent={this}
+                stateParent={this.props.parent}
+              />
+            );
+          }}
         />
-      </this.parent.GenericModal>
+      </View>
     );
 
   };
+
+  BrowseItemButton = (props: {
+    iconName:          string,
+    activeButtonColor: string,
+    active:            boolean,
+    onPress:           () => void,
+  }) => {
+    return (
+      <RectButton
+        style={{
+          backgroundColor:  !props.active ? iOSColors.gray : props.activeButtonColor,
+          justifyContent:   'center',
+          alignItems:       'center',
+          width:            30,
+          height:           30,
+          borderRadius:     15,
+          marginHorizontal: 2,
+        }}
+        onPress={props.onPress}
+      >
+          <Feather style={{
+            ...material.buttonObject,
+            color: iOSColors.white,
+          }}
+          name={props.iconName}
+        />
+      </RectButton>
+    );
+  }
 
   onFirstSectionHeaderLayout = async (event: LayoutChangeEvent) => {
     const {nativeEvent: {layout: {x, y, width, height}}} = event; // Unpack SyntheticEvent (before async)
@@ -2330,6 +2424,234 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
   }
 
 }
+
+//
+// BrowseModalSectionHeader
+//  - Split out component so that it stays mounted across updates
+//
+
+interface BrowseModalSectionHeaderProps {
+  species_group:  string;
+  isFirstSection: boolean | undefined;
+  excluded:       boolean;
+  included:       boolean;
+  parent:         BrowseModal;
+  stateParent:    SearchScreen;
+}
+
+interface BrowseModalSectionHeaderState {
+}
+
+export class BrowseModalSectionHeader extends PureComponent<BrowseModalSectionHeaderProps, BrowseModalSectionHeaderState> {
+
+  log = new Log(`BrowseModalSectionHeader[${this.props.species_group}]`);
+
+  state = {
+  };
+
+  // Getters
+  parent = this.props.parent;
+
+  componentDidMount = () => {
+    this.log.info('componentDidMount');
+  };
+
+  componentWillUnmount = () => {
+    this.log.info('componentWillUnmount');
+  };
+
+  componentDidUpdate = (prevProps: BrowseModalSectionHeaderProps, prevState: BrowseModalSectionHeaderState) => {
+    this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+  };
+
+  render = () => {
+    // this.log.info('render'); // Debug
+    const {species_group} = this.props;
+    return (
+      <View
+        style={[Styles.fill, {
+          flexDirection:   'row',
+          justifyContent:  'center',
+          alignItems:      'center',
+          paddingVertical: 3,
+          backgroundColor: iOSColors.lightGray,
+        }]}
+        // For SectionList.scrollToLocation({viewOffset})
+        onLayout={!this.props.isFirstSection ? undefined : this.parent.onFirstSectionHeaderLayout}
+      >
+
+        <Text style={{
+          flexGrow: 1,
+          paddingHorizontal: 5,
+          ...material.captionObject,
+          fontWeight: 'bold',
+          color:      '#444444',
+        }}>{species_group}</Text>
+
+        <this.parent.BrowseItemButton
+          iconName='x'
+          activeButtonColor={iOSColors.red}
+          active={this.props.excluded}
+          onPress={() => {
+            this.props.stateParent.setState((state, props) => {
+              const x = species_group;
+              const {excludeSpeciesGroups: exc, includeSpeciesGroups: inc} = state;
+              return {
+                excludeSpeciesGroups: !exc.has(x) ? setAdd    (exc, x) : setDelete(exc, x),
+                includeSpeciesGroups: !exc.has(x) ? setDelete (inc, x) : inc,
+              };
+            });
+          }}
+        />
+
+        <this.parent.BrowseItemButton
+          iconName='plus'
+          activeButtonColor={iOSColors.green}
+          active={this.props.included}
+          onPress={() => {
+            this.props.stateParent.setState((state, props) => {
+              const x = species_group;
+              const {excludeSpeciesGroups: exc, includeSpeciesGroups: inc} = state;
+              return {
+                includeSpeciesGroups: !inc.has(x) ? setAdd    (inc, x) : setDelete(inc, x),
+                excludeSpeciesGroups: !inc.has(x) ? setDelete (exc, x) : exc,
+              };
+            });
+          }}
+        />
+
+      </View>
+    );
+  };
+
+}
+
+//
+// BrowseModalItem
+//  - Split out component so that it stays mounted across updates
+//
+
+interface BrowseModalItemProps {
+  species:     SpeciesMetadata; // WARNING Perf: this will trigger many unnecessary updates if object identity ever changes
+  isLastItem:  boolean | undefined;
+  excluded:    boolean;
+  included:    boolean;
+  parent:      BrowseModal;
+  stateParent: SearchScreen;
+}
+
+interface BrowseModalItemState {
+}
+
+export class BrowseModalItem extends PureComponent<BrowseModalItemProps, BrowseModalItemState> {
+
+  log = new Log(`BrowseModalItem[${this.props.species.species_group}/${this.props.species.shorthand}]`);
+
+  state = {
+  };
+
+  // Getters
+  parent = this.props.parent;
+
+  componentDidMount = () => {
+    this.log.info('componentDidMount');
+  };
+
+  componentWillUnmount = () => {
+    this.log.info('componentWillUnmount');
+  };
+
+  componentDidUpdate = (prevProps: BrowseModalItemProps, prevState: BrowseModalItemState) => {
+    this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+  };
+
+  render = () => {
+    // this.log.info('render'); // Debug
+    const {species} = this.props;
+    return (
+      <View style={{
+        flexDirection:   'row',
+        justifyContent:  'center',
+        alignItems:      'center',
+        paddingVertical: 3,
+        // Vertical borders
+        //  - Internal borders: top border on non-first items per section
+        //  - Plus bottom border on last item of last section
+        borderTopWidth: 1,
+        borderTopColor: iOSColors.lightGray,
+        ...(!this.props.isLastItem ? {} : {
+          borderBottomWidth: 1,
+          borderBottomColor: iOSColors.lightGray,
+        }),
+      }}>
+
+        <this.parent.BrowseItemButton
+          iconName='search'
+          activeButtonColor={iOSColors.blue}
+          active={true}
+          onPress={() => {
+            // Dismiss modal
+            this.props.stateParent.setState({
+              showGenericModal: null,
+            });
+            // Show species
+            this.parent.props.go('search', {path: `/species/${encodeURIComponent(species.shorthand)}`});
+          }}
+        />
+
+        <View style={{
+          flexGrow: 1,
+          paddingHorizontal: 5,
+        }}>
+          <Text style={[material.captionObject, {color: 'black'}]}>
+            {species.com_name}
+          </Text>
+          <Text style={[material.captionObject, {fontSize: 10}]}>
+            {species.sci_name}
+          </Text>
+        </View>
+
+        <this.parent.BrowseItemButton
+          iconName='x'
+          activeButtonColor={iOSColors.red}
+          active={this.props.excluded}
+          onPress={() => {
+            this.props.stateParent.setState((state, props) => {
+              const x = species.shorthand;
+              const {excludeSpecies: exc, includeSpecies: inc} = state;
+              return {
+                excludeSpecies: !exc.has(x) ? setAdd    (exc, x) : setDelete(exc, x),
+                includeSpecies: !exc.has(x) ? setDelete (inc, x) : inc,
+              };
+            });
+          }}
+        />
+
+        <this.parent.BrowseItemButton
+          iconName='plus'
+          activeButtonColor={iOSColors.green}
+          active={this.props.included}
+          onPress={() => {
+            this.props.stateParent.setState((state, props) => {
+              const x = species.shorthand;
+              const {excludeSpecies: exc, includeSpecies: inc} = state;
+              return {
+                includeSpecies: !inc.has(x) ? setAdd    (inc, x) : setDelete(inc, x),
+                excludeSpecies: !inc.has(x) ? setDelete (exc, x) : exc,
+              };
+            });
+          }}
+        />
+
+      </View>
+    );
+  };
+
+}
+
+//
+// KeyboardDismissingView
+//
 
 interface KeyboardDismissingViewProps extends RN.ViewProps {
 }
@@ -2393,6 +2715,10 @@ export class KeyboardDismissingView extends PureComponent<KeyboardDismissingView
 //     </TapGestureHandler>
 //   );
 // }
+
+//
+// styles
+//
 
 const styles = StyleSheet.create({
   filtersModal: {
