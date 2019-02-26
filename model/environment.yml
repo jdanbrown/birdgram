@@ -21,7 +21,7 @@ dependencies:
 - scikit-learn=0.19.1 # Duped in pip deps
 - scipy=1.1.0
 - sox=14.4.2 # For pydub
-- sqlite=3.24.0
+- sqlite=3.26.0 # NOTE mobile/ios has 3.27.1
 - xgboost=0.72
 
 # openblas vs. mkl
