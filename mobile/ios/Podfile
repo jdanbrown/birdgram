@@ -35,6 +35,12 @@ end
 def birdgram_pods
   pod 'AudioKit', '~> 4.5'
   pod 'PromisesSwift', '~> 1.2.4' # Moved here b/c it gave me trouble in the Bubo-macos target
+  # Upgrade sqlite 3.24.x -> 3.27.x: shadow builtin ios sqlite3*.dylib with our own
+  # - https://github.com/clemensg/sqlite3pod
+  # - https://github.com/yapstudios/YapDatabase/wiki/SQLite-version-(bundled-with-OS)
+  # - https://github.com/stephencelis/SQLite.swift/blob/master/Documentation/Index.md#requiring-a-specific-version-of-sqlite
+  # - cf. https://github.com/litehelpers/Cordova-sqlite-storage-dependencies
+  pod 'sqlite3', '~> 3.27.1'
 end
 
 def all_pods
