@@ -393,7 +393,12 @@ import sqlalchemy as sqla
 
 @contextmanager
 def sqla_oneshot_eng_conn_tx(db_url: str, **engine_kwargs):
-    """Create a db engine, a connection to it, and run a single transaction, tearing down everything when done"""
+    """
+    Create a db engine, a connection to it, and run a single transaction, tearing down everything when done
+    - For interactive use, use this simpler pattern:
+        >>> eng = sqla.create_engine(db_url)
+        >>> pd.read_sql(con=eng, sql='...')
+    """
     eng = sqla.create_engine(db_url, **engine_kwargs)
     try:
         # eng.begin() is a tx bracket
