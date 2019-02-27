@@ -66,7 +66,7 @@ export const querySql = (db: SQLiteDatabase) => <Row>(sql: string, opts?: QueryS
           (tx, {rows}) => {
             const planRows = rows.raw() as QueryPlanRow[];
             const plan = queryPlanFromRows(planRows);
-            log.debug('querySql: EXPLAIN QUERY PLAN', `time[${timer.time()}s]`,
+            log.debug('querySql: EXPLAIN QUERY PLAN', `timed[${timer.time()}s]`,
               '\n' + queryPlanPretty(plan),
             );
             resolve();
@@ -89,7 +89,7 @@ export const querySql = (db: SQLiteDatabase) => <Row>(sql: string, opts?: QueryS
         sql,
         [],
         (tx, {rows, rowsAffected, insertId}) => {
-          log.info(`querySql: time[${timer.time()}s]`, `rows[${rows.length}]`, sqlTrunc);
+          log.info(`querySql: timed[${timer.time()}s]`, `rows[${rows.length}]`, sqlTrunc);
           resolve(onResults({
             rows: {
               length: rows.length,

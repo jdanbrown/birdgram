@@ -273,6 +273,16 @@ export default class App extends PureComponent<Props, State> {
       // Load db (async) on app startup
       const db = await DB.newAsync();
 
+      // XXX Debug: log sqlite version
+      // log.timedAsync('select sqlite_version()', async () => {
+      //   return await db.query<{sqlite_version: string}>(`
+      //     select sqlite_version() as sqlite_version
+      //   `)(async results => {
+      //     const [{sqlite_version}] = results.rows.raw();
+      //     log.info('componentDidMount: sqlite_version', {sqlite_version});
+      //   });
+      // });
+
       // Count species (from db)
       //  - TODO Write this into a payload .json so we don't have to spend the ~100ms[?] querying it
       const nSpecies: number = await log.timedAsync('select count(distinct species)', async () => {

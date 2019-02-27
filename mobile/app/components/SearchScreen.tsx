@@ -51,9 +51,9 @@ import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
   all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, into, json, local,
-  mapMapValues, mapNull, match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty,
-  QueryString, round, setAdd, setDelete, setToggle, shallowDiffPropsState, Style, throw_, Timer, typed, yaml,
-  yamlPretty, zipSame,
+  mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit,
+  Point, pretty, QueryString, round, setAdd, setDelete, setToggle, shallowDiffPropsState, Style, throw_, Timer, typed,
+  yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -186,6 +186,7 @@ interface State {
   searchFilter: string; // For BrowseModal
   showHelp: boolean;
   totalRecs?: number;
+  non_f_preds_cols?: Array<string>;
   f_preds_cols?: Array<string>;
   query: null | Query;
   refreshQuery: boolean; // TODO(put_all_query_state_in_location)
@@ -196,6 +197,7 @@ interface State {
   n_recs: number;   // For non-rec queries
   n_sp: number;     // For rec queries
   n_per_sp: number; // For rec queries
+  sortResults: 'slp,d_pc' | 'd_pc';
   excludeSpecies: Set<string>;
   includeSpecies: Set<string>;
   excludeSpeciesGroups: Set<string>;
@@ -245,10 +247,10 @@ export class SearchScreen extends PureComponent<Props, State> {
   state: State = {
     scrollViewKey:        '',
     scrollViewState:      this._scrollViewState,
-    // showGenericModal:     null, // TODO(family_list): Restore
-    showGenericModal:     () => this.BrowseModal(), // XXX(family_list): Dev
-    // searchFilter:         '', // For BrowseModal // TODO(family_list): Restore
-    searchFilter:         'sparrow', // XXX(family_list): Dev
+    showGenericModal:     null,
+    // showGenericModal:     () => this.BrowseModal(), // XXX(family_list): Debug
+    searchFilter:         '', // For BrowseModal
+    // searchFilter:         'sparrow', // XXX(family_list): Debug
     showHelp:             false,
     query:                null,
     refreshQuery:         false,
@@ -256,9 +258,13 @@ export class SearchScreen extends PureComponent<Props, State> {
     n_recs:               this.props.default_n_recs,
     n_sp:                 this.props.default_n_sp,
     n_per_sp:             this.props.default_n_per_sp,
+    sortResults:          'slp,d_pc',
     excludeSpecies:       new Set(),
+    // excludeSpecies:       new Set(['VIRA', 'SWTH']), // XXX(family_list): Debug
     includeSpecies:       new Set(),
     excludeSpeciesGroups: new Set(),
+    // excludeSpeciesGroups: new Set(['Waterfowl', 'Wood-Warblers']), // XXX(family_list): Debug
+    // excludeSpeciesGroups: new Set(['Waterfowl', 'Wood-Warblers', 'Gnatcatchers', 'New World Sparrows', 'Penduline-Tits and Long-tailed Tits', 'Tyrant Flycatchers: Pewees, Kingbirds, and Allies', 'Martins and Swallows', 'Catbirds, Mockingbirds, and Thrashers', 'Cardinals, Grosbeaks, and Allies', 'Blackbirds', 'Finches, Euphonias, and Allies']), // XXX(family_list): Debug
     includeSpeciesGroups: new Set(),
     excludeRecIds:        new Set(),
     recs:                 'loading',
@@ -354,19 +360,20 @@ export class SearchScreen extends PureComponent<Props, State> {
       });
     });
 
-    // Query f_preds_* cols (once)
-    log.info('componentDidMount: Querying f_preds_* cols');
+    // Query search_recs cols (once)
+    log.info('componentDidMount: Querying search_recs cols');
     await this.props.db.query<XCRec>(`
       select *
       from search_recs
       limit 1
     `)(async results => {
-      log.info('componentDidMount: state.f_preds_cols');
+      log.info('componentDidMount: state.{non_f_preds_cols,f_preds_cols}');
       const [rec] = results.rows.raw();
-      const n = Object.keys(rec).filter(k => k.startsWith('f_preds_')).length;
-      // Reconstruct strings from .length to enforce ordering
-      const f_preds_cols = _.range(n).map(i => `f_preds_${i}`);
+      const non_f_preds_cols = Object.keys(rec).filter(k => !k.startsWith('f_preds_'));
+      var   f_preds_cols     = Object.keys(rec).filter(k => k.startsWith('f_preds_'));
+      f_preds_cols = _.range(f_preds_cols.length).map(i => `f_preds_${i}`); // Reconstruct array to ensure ordering
       this.setState({
+        non_f_preds_cols,
         f_preds_cols,
       });
     });
@@ -409,6 +416,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     if (!fastIsEqual(this.props.location, prevProps.location)) {
       log.info('componentDidUpdate: Reset view state');
       this.setState({
+        searchFilter:         '', // For BrowseModal
         filterQueryText:      undefined,
         n_recs:               this.props.default_n_recs,
         n_sp:                 this.props.default_n_sp,
@@ -523,19 +531,19 @@ export class SearchScreen extends PureComponent<Props, State> {
   }
 
   updateForLocation = async (prevProps: null | Props, prevState: null | State) => {
-    log.debug('updateForLocation', () => rich({
-      props:     _.pick(this.props, ['location', 'place']),
-      prevProps: _.pick(prevProps,  ['location', 'place']),
-      state:     _.pick(this.state, ['refreshQuery', 'f_preds_cols']),
-      prevState: _.pick(prevState,  []),
-    }));
+    log.debug('updateForLocation', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
     if (
       !(
         // Don't noop if any filters/limits changed [XXX(put_all_query_state_in_location)]
         //  - Use refreshQuery as a proxy for various filters/limits changing
         this.state.refreshQuery ||
         //  - And test other filters/limits here
-        !fastIsEqual(this.props.place, _.get(prevProps, 'place'))
+        !fastIsEqual(this.props.place,                _.get(prevProps, 'place')) ||
+        !fastIsEqual(this.state.sortResults,          _.get(prevState, 'sortResults')) ||
+        !fastIsEqual(this.state.excludeSpecies,       _.get(prevState, 'excludeSpecies')) ||
+        !fastIsEqual(this.state.includeSpecies,       _.get(prevState, 'includeSpecies')) ||
+        !fastIsEqual(this.state.excludeSpeciesGroups, _.get(prevState, 'excludeSpeciesGroups')) ||
+        !fastIsEqual(this.state.includeSpeciesGroups, _.get(prevState, 'includeSpeciesGroups'))
       ) && (
         // Noop if location didn't change
         locationPathIsEqual(this.props.location, _.get(prevProps, 'location')) ||
@@ -590,6 +598,13 @@ export class SearchScreen extends PureComponent<Props, State> {
         null: ()    => '',
         x:    place => sqlf`and ${SQL.raw(table)}.species in (${place.species})`,
       });
+      // TODO(family_list): How to includeSpecies/includeSpeciesGroups?
+      const speciesFilter = (table: string) => (
+        sqlf`and species not in (${Array.from(this.state.excludeSpecies)})`
+      );
+      const speciesGroupFilter = (table: string) => (
+        sqlf`and species_species_group not in (${Array.from(this.state.excludeSpeciesGroups)})`
+      );
 
       // TODO Factor these big matchQuery cases into functions, for readability
       return _setRecs(await matchQuery<Promise<{recs: StateRecs}>>(query, {
@@ -613,6 +628,8 @@ export class SearchScreen extends PureComponent<Props, State> {
               where true
                 ${SQL.raw(placeFilter('S'))}
                 ${SQL.raw(qualityFilter('S'))}
+                ${SQL.raw(speciesFilter('S'))}
+                ${SQL.raw(speciesGroupFilter('S'))}
               order by
                 random()
               limit ${this.state.n_recs}
@@ -620,12 +637,15 @@ export class SearchScreen extends PureComponent<Props, State> {
             order by
               taxon_order_num asc,
               source_id desc
-          `)(async results => {
+          `, {
+            // logTruncate: null, // XXX(family_list): Debug
+          })(async results => {
             const recs = results.rows.raw();
             return {recs};
           });
         },
 
+        // TODO(family_list): Don't render BrowseModal x/+ buttons when query.kind === 'species'
         species: async ({filters, species}) => {
           log.info('updateForLocation: Querying recs for species', {species});
           return await this.props.db.query<XCRec>(sqlf`
@@ -646,150 +666,162 @@ export class SearchScreen extends PureComponent<Props, State> {
             order by
               taxon_order_num asc,
               source_id desc
-          `)(async results => {
+          `, {
+            // logTruncate: null, // XXX Debug
+          })(async results => {
             const recs = results.rows.raw();
             return {recs};
           });
         },
 
         rec: async ({filters, source}) => {
-          log.info('updateForLocation: Loading recs for query_rec', {source});
+          return await log.timedAsync<{recs: StateRecs}>('updateForLocation.rec', async () => {
+            log.info('updateForLocation: Loading recs for query_rec', {source});
 
-          // Compute top n_per_sp recs per species by d_pc (cosine_distance)
-          //  - TODO Replace with window functions after sqlite ≥3.25.x
-          //    - https://github.com/litehelpers/Cordova-sqlite-storage/issues/828
-          //  - Alternative approach w/o window functions:
-          //    - Query query_rec from db.search_recs
-          //      - (query_rec.preds is query_sp_p (= search.predict_probs(query_rec)))
-          //    - Take top n_recs/n_per_sp species from query_rec.preds
-          //    - Construct big sql query with one union per species (O(n_recs/n_per_sp)):
-          //      - (... where species=? order by d_pc limit n_per_sp) union all (...) ...
+            // See: notebooks/190226_mobile_dev_search_sqlite
+            //  - Dev notebook for the (complex) sql query
 
-          // Params
-          const f_preds_cols = this.state.f_preds_cols || [];
-          const n_sp         = this.state.n_sp;
-          const n_per_sp     = this.state.n_per_sp;
-          const n_recs       = n_sp * n_per_sp + 1;
+            // Params
+            const f_preds_cols = this.state.f_preds_cols || [];
+            const n_sp         = this.state.n_sp;
+            const n_per_sp     = this.state.n_per_sp;
+            const n_recs       = n_sp * n_per_sp + 1;
 
-          // Load query_rec from db
-          const query_rec = await this.props.db.loadRec(source);
-          if (query_rec === null) {
-            // query_rec not found (e.g. user deleted a user rec, or xc dataset changed)
-            return {recs: 'notfound'};
-          }
+            // Load query_rec from db
+            const query_rec = await this.props.db.loadRec(source);
+            if (query_rec === null) {
+              // query_rec not found (e.g. user deleted a user rec, or xc dataset changed)
+              return {recs: 'notfound'};
+            }
 
-          // Ensure spectro exists
-          //  - e.g. in case this is a user/edit rec from an old code version and the spectroCachePath's have moved
-          const spectroPath = Rec.spectroPath(query_rec, this.spectroPathOpts);
-          if (!await fs.exists(spectroPath)) {
-            matchRec(query_rec, {
-              xc:   _ => { throw `updateForLocation: Missing spectro asset for xc query_rec: ${query_rec.source_id}`; },
-              user: _ => log.info(`updateForLocation: Caching spectro for user query_rec: ${query_rec.source_id}`),
-            });
-            await NativeSpectro.renderAudioPathToSpectroPath(
-              Rec.audioPath(query_rec),
-              await ensureParentDir(spectroPath),
-              {
-                f_bins: this.props.f_bins,
-                denoise: true, // Like Bubo/py/model.swift:Features.denoise=true
-              },
-            );
-          }
+            // Ensure spectro exists
+            //  - e.g. in case this is a user/edit rec from an old code version and the spectroCachePath's have moved
+            const spectroPath = Rec.spectroPath(query_rec, this.spectroPathOpts);
+            if (!await fs.exists(spectroPath)) {
+              matchRec(query_rec, {
+                xc:   _ => { throw `updateForLocation: Missing spectro asset for xc query_rec: ${query_rec.source_id}`; },
+                user: _ => log.info(`updateForLocation: Caching spectro for user query_rec: ${query_rec.source_id}`),
+              });
+              await NativeSpectro.renderAudioPathToSpectroPath(
+                Rec.audioPath(query_rec),
+                await ensureParentDir(spectroPath),
+                {
+                  f_bins: this.props.f_bins,
+                  denoise: true, // Like Bubo/py/model.swift:Features.denoise=true
+                },
+              );
+            }
 
-          // Read sp_p's (species probs) from query_rec.f_preds_*
-          //  - Filter by place.species (else too few results downstream after filtering in sql)
-          const f_preds = Rec.f_preds(query_rec);
-          const sp_ps: Map<string, number> = new Map(zipSame(
-            this.props.modelsSearch.classes_,
-            f_preds_cols.map(c => f_preds[c]),
-          ));
+            // Read sp_p's (species probs) from query_rec.f_preds
+            //  - Filter by place.species (else too few results downstream after filtering in sql)
+            const sp_ps: Map<string, number> = new Map(zipSame(
+              this.props.modelsSearch.classes_,
+              query_rec.f_preds,
+            ));
 
-          // Compute slp's (species (negative) log prob) from sp_p's
-          const slp = (sp_p: number): number => Math.abs(-Math.log(sp_p)) // (abs for 1->0 i/o -0)
-          const slps: Map<string, number> = mapMapValues(sp_ps, slp);
+            // Compute slp's (species (negative) log prob) from sp_p's
+            const slp = (sp_p: number): number => Math.abs(-Math.log(sp_p)) // (abs for 1->0 i/o -0)
+            const slps: Map<string, number> = mapMapValues(sp_ps, slp);
 
-          // Compute in sql: cosine_distance(S.f_preds_*, Q.f_preds_*)
-          //  - cosine_distance(x,y) = 1 - dot(x,y) / norm(x) / norm(y)
-          const sqlDot = (f_preds_cols
-            // .slice(0, 2) // XXX Debug: smaller query
-            .map(c => sqlf`S.${SQL.raw(c)}*Q.${SQL.raw(c)}`).join(' + ') || '0'
-          );
-          const sqlCosineDist = sqlf`
-            1 - (${SQL.raw(sqlDot)}) / S.norm_f_preds / Q.norm_f_preds
-          `;
-
-          // Rank species by slp (slp asc b/c sgn(slp) ~ -sgn(sp_p))
-          const includeSpecies: (species: Species) => boolean = matchNull(this.props.place, {
-            null: ()    => (species: Species) => true, // No place selected -> include all species
-            x:    place => _.bind(Set.prototype.has, new Set(place.species)),
-          });
-          const topSlps: Array<{species: string, slp: number}> = (
-            _(Array.from(slps.entries()))
-            .map(([species, slp]) => ({species, slp}))
-            .filter(({species}) => includeSpecies(species))
-            .sortBy(({slp}) => slp)
-            .slice(0, n_sp + 1) // FIXME +1 else we get n_sp-1 species -- why?
-            .value()
-          );
-
-          // Inject sql table: slps -> (species, slp)
-          //  - FIXME sql syntax error if topSlps is empty
-          const tableSlp = sqlf`
-            select column1 as species, column2 as slp from (values ${SQL.raw(topSlps
+            // Compute in sql: cosine_distance(S.f_preds_*, Q.f_preds_*)
+            //  - cosine_distance(x,y) = 1 - dot(x,y) / norm(x) / norm(y)
+            const sqlDot = (f_preds_cols
               // .slice(0, 2) // XXX Debug: smaller query
-              .map(({species, slp}) => sqlf`(${species}, ${slp})`)
-              .join(', ')
-            )})
-          `;
+              .map(c => sqlf`S.${SQL.raw(c)}*Q.${SQL.raw(c)}`).join(' + ') || '0'
+            );
+            const sqlCosineDist = sqlf`
+              1 - (${SQL.raw(sqlDot)}) / S.norm_f_preds / Q.norm_f_preds
+            `;
 
-          // Construct queries for each species
-          //  - TODO Shorter query: refactor sqlCosineDist expr (1 per topSlps) into a shared `with` table (1 total)
-          const sqlPerSpecies = (topSlps
-            // .slice(0, 2) // XXX Debug: smaller query
-            .map(({species, slp}) => sqlf`
+            // Rank species by slp (slp asc b/c sgn(slp) ~ -sgn(sp_p))
+            const includeSpecies: (species: Species) => boolean = matchNull(this.props.place, {
+              null: ()    => (species: Species) => true, // No place selected -> include all species
+              x:    place => _.bind(Set.prototype.has, new Set(place.species)),
+            });
+            const topSlps: Array<{species: string, slp: number}> = (
+              _(Array.from(slps.entries()))
+              .map(([species, slp]) => ({species, slp}))
+              .filter(({species}) => includeSpecies(species))
+              .sortBy(({slp}) => slp)
+              // Perf: slice top k species else the query is slow b/c of a huge subquery (returns ~full dataset)
+              .slice(0, n_sp + 1) // FIXME +1 else we get n_sp-1 species -- why?
+              .value()
+            );
+
+            // Inject sql table: slps -> (species, slp)
+            //  - FIXME sql syntax error if topSlps is empty
+            const tableSlp = sqlf`
+              select column1 as species, column2 as slp from (values ${SQL.raw(topSlps
+                // .slice(0, 2) // XXX Debug: smaller query
+                .map(({species, slp}) => sqlf`(${species}, ${slp})`)
+                .join(', ')
+              )})
+            `;
+
+            // Construct query
+            //  - Perf: We exclude .f_preds_* cols for faster load (ballpark ~2x)
+            const non_f_preds_cols = this.state.non_f_preds_cols!; // Set in componentDidMount
+            const sql = sqlf`
               select
-                S.*,
-                ${SQL.raw(sqlCosineDist)} as d_pc
-              from search_recs S
-                left join (select * from search_recs where source_id = ${query_rec.source_id}) Q on true -- Only 1 row in Q
-              where true
-                and S.species = ${species}
-                ${SQL.raw(placeFilter('S'))} -- Empty subquery for species outside of placeFilter
-                ${SQL.raw(qualityFilter('S'))}
-                and S.source_id != ${query_rec.source_id} -- Exclude query_rec from results
+                -- sp_d_pc_i, -- XXX Debug
+                coalesce(S.slp, 1e38) as slp,
+                S.d_pc,
+                ${SQL.raw(non_f_preds_cols.map(x => `S.${x}`).join(', '))}
+              from (
+                select
+                  S.*,
+                  row_number() over (partition by S.species order by S.d_pc) as sp_d_pc_i
+                from (
+                  select
+                    S.*,
+                    slp.slp,
+                    ${SQL.raw(sqlCosineDist)} as d_pc
+                  from search_recs S
+                    -- Perf: join i/o left join so we filter down to top n_sp species, else query is very slow
+                    join (${SQL.raw(tableSlp)}) slp on S.species = slp.species
+                    join (select * from search_recs where source_id = ${query_rec.source_id}) Q on true -- 1 row, for dot(S,Q)
+                  where true
+                    ${SQL.raw(placeFilter('S'))} -- Empty subquery for species outside of placeFilter
+                    ${SQL.raw(qualityFilter('S'))}
+                    and S.source_id != ${query_rec.source_id} -- Exclude query_rec from results
+                ) S
+              ) S
+              where
+                sp_d_pc_i <= ${n_per_sp}
               order by
-                d_pc asc
-              limit ${n_per_sp}
-            `)
-          );
+                ${SQL.raw(match(this.state.sortResults,
+                  ['slp,d_pc', () => 'slp asc, d_pc asc'],
+                  ['d_pc',     () => 'd_pc asc'],
+                ))}
+              limit ${n_recs}
+            `;
 
-          // Construct query
-          const sql = sqlf`
-            select
-              S.*,
-              coalesce(slp.slp, 1e38) as slp
-            -- Must select * from (...) else union complains about nested order by
-            from (${SQL.raw(sqlPerSpecies.map(x => `select * from (${x})`).join(' union all '))}) S
-              left join (${SQL.raw(tableSlp)}) slp on S.species = slp.species
-            order by
-              slp asc,
-              d_pc asc
-            limit ${n_recs}
-          `;
+            // Run query
+            log.info('updateForLocation: Querying recs for query_rec', rich({query_rec}));
+            return await this.props.db.query<XCRec>(sql, {
+              logTruncate: null, // XXX Debug
+            })(async results => {
+              const recs = results.rows.raw();
 
-          // Run query
-          log.info('updateForLocation: Querying recs for query_rec', rich({query_rec}));
-          return await this.props.db.query<XCRec>(sql, {
-            // logTruncate: null, // XXX Debug
-          })(async results => {
-            const recs = results.rows.raw();
+              // XXX Debug
+              // debug_print('timed', pretty(recs
+              //   .map(rec => _.pick(rec, [
+              //     'species',
+              //     'source_id',
+              //     'sp_d_pc_i',
+              //     'slp',
+              //     'd_pc',
+              //   ]))
+              //   .map(rec => yaml(rec))
+              // ));
 
-            // HACK Inject query_rec as first result so it's visible at top
-            //  - TODO Replace this with a proper display of query_rec at the top
-            return {recs: [query_rec, ...recs]};
+              // HACK Inject query_rec as first result so it's visible at top
+              //  - TODO Replace this with a proper display of query_rec at the top
+              return {recs: [query_rec, ...recs]};
+
+            });
 
           });
-
         },
 
       }));
@@ -988,6 +1020,18 @@ export class SearchScreen extends PureComponent<Props, State> {
     return (
       <BrowseModal
         searchFilter={this.state.searchFilter}
+        showExcludeIncludeButtons={
+          matchNull(this.state.query, {
+            // null: ()    => false, // FIXME(family_list): Buttons flicker in 'random'/'rec' during updateForLocation()
+            null: ()    => true, // HACK
+            x:    query => matchQuery(query, {
+              none:    () => false,
+              random:  () => true,
+              species: () => false,
+              rec:     () => true,
+            }),
+          })
+        }
         excludeSpecies={this.state.excludeSpecies}
         includeSpecies={this.state.includeSpecies}
         excludeSpeciesGroups={this.state.excludeSpeciesGroups}
@@ -996,6 +1040,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         ebird={this.props.ebird}
         place={this.props.place}
         parent={this}
+        stateParent={this}
       />
     );
   }
@@ -1139,6 +1184,21 @@ export class SearchScreen extends PureComponent<Props, State> {
               buttonColor: iOSColors.red,
               onPress: () => this.setState((state: State, props: Props) => ({
                 excludeRecIds: setAdd(state.excludeRecIds, rec.source_id),
+              })),
+            }
+          ]})}
+        </View>
+
+        <Separator/>
+        <View style={{flexDirection: 'row'}}>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: rec.species_species_group,
+              iconName: 'x',
+              buttonColor: iOSColors.red,
+              onPress: () => this.setState((state: State, props: Props) => ({
+                excludeSpeciesGroups: setAdd(state.excludeSpeciesGroups, rec.species_species_group),
               })),
             }
           ]})}
@@ -1341,13 +1401,19 @@ export class SearchScreen extends PureComponent<Props, State> {
               {
                 label: 'Species match, then similar recs',
                 iconName: 'chevrons-down',
-                buttonColor: iOSColors.orange,
-                onPress: () => {},
+                textColor: iOSColors.black,
+                buttonColor: this.state.sortResults === 'slp,d_pc' ? iOSColors.orange : iOSColors.customGray,
+                onPress: () => this.setState({
+                  sortResults: 'slp,d_pc',
+                })
               }, {
-                label: 'Similar recs only (ignoring species match)',
+                label: 'Similar recs only (ignore species match)',
                 iconName: 'chevrons-down',
-                buttonColor: iOSColors.orange,
-                onPress: () => {},
+                textColor: iOSColors.black,
+                buttonColor: this.state.sortResults === 'd_pc' ? iOSColors.orange : iOSColors.customGray,
+                onPress: () => this.setState({
+                  sortResults: 'd_pc',
+                })
               },
             ]} />
           )
@@ -2121,15 +2187,17 @@ export class SearchScreen extends PureComponent<Props, State> {
 //
 
 interface BrowseModalProps {
-  searchFilter:         string; // State lifted up into SearchScreen, so it persists across close/reopen
-  excludeSpecies:       State['excludeSpecies'];
-  includeSpecies:       State['includeSpecies'];
-  excludeSpeciesGroups: State['excludeSpeciesGroups'];
-  includeSpeciesGroups: State['includeSpeciesGroups'];
-  go:                   Props['go'];
-  ebird:                Props['ebird'];
-  place:                Props['place'];
-  parent:               SearchScreen;
+  searchFilter:              string; // State lifted up into SearchScreen, so it persists across close/reopen
+  showExcludeIncludeButtons: boolean;
+  excludeSpecies:            State['excludeSpecies'];
+  includeSpecies:            State['includeSpecies'];
+  excludeSpeciesGroups:      State['excludeSpeciesGroups'];
+  includeSpeciesGroups:      State['includeSpeciesGroups'];
+  go:                        Props['go'];
+  ebird:                     Props['ebird'];
+  place:                     Props['place'];
+  parent:                    SearchScreen;
+  stateParent:               SearchScreen;
 }
 
 interface BrowseModalState {
@@ -2271,7 +2339,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
               }}
               onPress={() => {
                 // Dismiss modal
-                this.parent.setState({
+                this.props.stateParent.setState({
                   showGenericModal: null,
                 });
               }}
@@ -2291,7 +2359,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
         {/* Search bar */}
         <SearchBar
           // Listeners
-          onSearchChange={searchFilter => this.parent.setState({
+          onSearchChange={searchFilter => this.props.stateParent.setState({
             searchFilter,
           })}
           // Style
@@ -2323,7 +2391,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
           }}
           // TODO Prevent dismissing keyboard on X button, so that it only clears the input
           iconCloseComponent={(<View/>)} // Disable close button [TODO Nope, keep so we can easily clear text]
-          // onClose={() => this.parent.setState({searchFilter: ''})} // FIXME Why doesn't this work?
+          // onClose={() => this.props.stateParent.setState({searchFilter: ''})} // FIXME Why doesn't this work?
         />
 
         {/* SectionList */}
@@ -2352,11 +2420,12 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
               <BrowseModalSectionHeader
                 key={species_group}
                 species_group={species_group}
+                showExcludeIncludeButtons={this.props.showExcludeIncludeButtons}
                 isFirstSection={isFirstSection(section)}
                 excluded={this.props.excludeSpeciesGroups.has(species_group)}
                 included={this.props.includeSpeciesGroups.has(species_group)}
                 parent={this}
-                stateParent={this.props.parent}
+                stateParent={this.props.stateParent}
               />
             );
           }}
@@ -2365,6 +2434,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
               <BrowseModalItem
                 key={species.shothand}
                 species={species} // WARNING Perf: this will trigger many unnecessary updates if object identity ever changes
+                showExcludeIncludeButtons={this.props.showExcludeIncludeButtons}
                 isLastItem={isLastItem(section, index)}
                 excluded={( // exc || group exc && !inc
                   this.props.excludeSpecies.has(species.shorthand) || (
@@ -2379,7 +2449,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
                   )
                 )}
                 parent={this}
-                stateParent={this.props.parent}
+                stateParent={this.props.stateParent}
               />
             );
           }}
@@ -2389,40 +2459,40 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
 
   };
 
-  BrowseItemButton = (props: {
-    iconName:          string,
-    activeButtonColor: string,
-    active:            boolean,
-    onPress:           () => void,
-  }) => {
-    return (
-      <RectButton
-        style={{
-          backgroundColor:  !props.active ? iOSColors.gray : props.activeButtonColor,
-          justifyContent:   'center',
-          alignItems:       'center',
-          width:            30,
-          height:           30,
-          borderRadius:     15,
-          marginHorizontal: 2,
-        }}
-        onPress={props.onPress}
-      >
-          <Feather style={{
-            ...material.buttonObject,
-            color: iOSColors.white,
-          }}
-          name={props.iconName}
-        />
-      </RectButton>
-    );
-  }
-
   onFirstSectionHeaderLayout = async (event: LayoutChangeEvent) => {
     const {nativeEvent: {layout: {x, y, width, height}}} = event; // Unpack SyntheticEvent (before async)
     this._firstSectionHeaderHeight = height;
   }
 
+}
+
+function BrowseItemButton(props: {
+  iconName:          string,
+  activeButtonColor: string,
+  active:            boolean,
+  onPress:           () => void,
+}) {
+  return (
+    <RectButton
+      style={{
+        backgroundColor:  !props.active ? iOSColors.gray : props.activeButtonColor,
+        justifyContent:   'center',
+        alignItems:       'center',
+        width:            30,
+        height:           30,
+        borderRadius:     15,
+        marginHorizontal: 2,
+      }}
+      onPress={props.onPress}
+    >
+        <Feather style={{
+          ...material.buttonObject,
+          color: iOSColors.white,
+        }}
+        name={props.iconName}
+      />
+    </RectButton>
+  );
 }
 
 //
@@ -2431,12 +2501,13 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
 //
 
 interface BrowseModalSectionHeaderProps {
-  species_group:  string;
-  isFirstSection: boolean | undefined;
-  excluded:       boolean;
-  included:       boolean;
-  parent:         BrowseModal;
-  stateParent:    SearchScreen;
+  species_group:             string;
+  showExcludeIncludeButtons: boolean;
+  isFirstSection:            boolean | undefined;
+  excluded:                  boolean;
+  included:                  boolean;
+  parent:                    BrowseModal;
+  stateParent:               SearchScreen;
 }
 
 interface BrowseModalSectionHeaderState {
@@ -2488,37 +2559,41 @@ export class BrowseModalSectionHeader extends PureComponent<BrowseModalSectionHe
           color:      '#444444',
         }}>{species_group}</Text>
 
-        <this.parent.BrowseItemButton
-          iconName='x'
-          activeButtonColor={iOSColors.red}
-          active={this.props.excluded}
-          onPress={() => {
-            this.props.stateParent.setState((state, props) => {
-              const x = species_group;
-              const {excludeSpeciesGroups: exc, includeSpeciesGroups: inc} = state;
-              return {
-                excludeSpeciesGroups: !exc.has(x) ? setAdd    (exc, x) : setDelete(exc, x),
-                includeSpeciesGroups: !exc.has(x) ? setDelete (inc, x) : inc,
-              };
-            });
-          }}
-        />
+        {this.props.showExcludeIncludeButtons && (
+          <BrowseItemButton
+            iconName='x'
+            activeButtonColor={iOSColors.red}
+            active={this.props.excluded}
+            onPress={() => {
+              this.props.stateParent.setState((state, props) => {
+                const x = species_group;
+                const {excludeSpeciesGroups: exc, includeSpeciesGroups: inc} = state;
+                return {
+                  excludeSpeciesGroups: !exc.has(x) ? setAdd    (exc, x) : setDelete(exc, x),
+                  includeSpeciesGroups: !exc.has(x) ? setDelete (inc, x) : inc,
+                };
+              });
+            }}
+          />
+        )}
 
-        <this.parent.BrowseItemButton
-          iconName='plus'
-          activeButtonColor={iOSColors.green}
-          active={this.props.included}
-          onPress={() => {
-            this.props.stateParent.setState((state, props) => {
-              const x = species_group;
-              const {excludeSpeciesGroups: exc, includeSpeciesGroups: inc} = state;
-              return {
-                includeSpeciesGroups: !inc.has(x) ? setAdd    (inc, x) : setDelete(inc, x),
-                excludeSpeciesGroups: !inc.has(x) ? setDelete (exc, x) : exc,
-              };
-            });
-          }}
-        />
+        {this.props.showExcludeIncludeButtons && (
+          <BrowseItemButton
+            iconName='plus'
+            activeButtonColor={iOSColors.green}
+            active={this.props.included}
+            onPress={() => {
+              this.props.stateParent.setState((state, props) => {
+                const x = species_group;
+                const {excludeSpeciesGroups: exc, includeSpeciesGroups: inc} = state;
+                return {
+                  includeSpeciesGroups: !inc.has(x) ? setAdd    (inc, x) : setDelete(inc, x),
+                  excludeSpeciesGroups: !inc.has(x) ? setDelete (exc, x) : exc,
+                };
+              });
+            }}
+          />
+        )}
 
       </View>
     );
@@ -2532,12 +2607,13 @@ export class BrowseModalSectionHeader extends PureComponent<BrowseModalSectionHe
 //
 
 interface BrowseModalItemProps {
-  species:     SpeciesMetadata; // WARNING Perf: this will trigger many unnecessary updates if object identity ever changes
-  isLastItem:  boolean | undefined;
-  excluded:    boolean;
-  included:    boolean;
-  parent:      BrowseModal;
-  stateParent: SearchScreen;
+  species:                   SpeciesMetadata; // WARNING Perf: this will trigger many unnecessary updates if object identity ever changes
+  showExcludeIncludeButtons: boolean;
+  isLastItem:                boolean | undefined;
+  excluded:                  boolean;
+  included:                  boolean;
+  parent:                    BrowseModal;
+  stateParent:               SearchScreen;
 }
 
 interface BrowseModalItemState {
@@ -2585,7 +2661,7 @@ export class BrowseModalItem extends PureComponent<BrowseModalItemProps, BrowseM
         }),
       }}>
 
-        <this.parent.BrowseItemButton
+        <BrowseItemButton
           iconName='search'
           activeButtonColor={iOSColors.blue}
           active={true}
@@ -2611,37 +2687,41 @@ export class BrowseModalItem extends PureComponent<BrowseModalItemProps, BrowseM
           </Text>
         </View>
 
-        <this.parent.BrowseItemButton
-          iconName='x'
-          activeButtonColor={iOSColors.red}
-          active={this.props.excluded}
-          onPress={() => {
-            this.props.stateParent.setState((state, props) => {
-              const x = species.shorthand;
-              const {excludeSpecies: exc, includeSpecies: inc} = state;
-              return {
-                excludeSpecies: !exc.has(x) ? setAdd    (exc, x) : setDelete(exc, x),
-                includeSpecies: !exc.has(x) ? setDelete (inc, x) : inc,
-              };
-            });
-          }}
-        />
+        {this.props.showExcludeIncludeButtons && (
+          <BrowseItemButton
+            iconName='x'
+            activeButtonColor={iOSColors.red}
+            active={this.props.excluded}
+            onPress={() => {
+              this.props.stateParent.setState((state, props) => {
+                const x = species.shorthand;
+                const {excludeSpecies: exc, includeSpecies: inc} = state;
+                return {
+                  excludeSpecies: !exc.has(x) ? setAdd    (exc, x) : setDelete(exc, x),
+                  includeSpecies: !exc.has(x) ? setDelete (inc, x) : inc,
+                };
+              });
+            }}
+          />
+        )}
 
-        <this.parent.BrowseItemButton
-          iconName='plus'
-          activeButtonColor={iOSColors.green}
-          active={this.props.included}
-          onPress={() => {
-            this.props.stateParent.setState((state, props) => {
-              const x = species.shorthand;
-              const {excludeSpecies: exc, includeSpecies: inc} = state;
-              return {
-                includeSpecies: !inc.has(x) ? setAdd    (inc, x) : setDelete(inc, x),
-                excludeSpecies: !inc.has(x) ? setDelete (exc, x) : exc,
-              };
-            });
-          }}
-        />
+        {this.props.showExcludeIncludeButtons && (
+          <BrowseItemButton
+            iconName='plus'
+            activeButtonColor={iOSColors.green}
+            active={this.props.included}
+            onPress={() => {
+              this.props.stateParent.setState((state, props) => {
+                const x = species.shorthand;
+                const {excludeSpecies: exc, includeSpecies: inc} = state;
+                return {
+                  includeSpecies: !inc.has(x) ? setAdd    (inc, x) : setDelete(inc, x),
+                  excludeSpecies: !inc.has(x) ? setDelete (exc, x) : exc,
+                };
+              });
+            }}
+          />
+        )}
 
       </View>
     );

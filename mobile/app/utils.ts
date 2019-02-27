@@ -6,7 +6,7 @@ import _ from 'lodash';
 import moment from 'moment';
 import { sprintf } from 'sprintf-js';
 
-import { debug_print, puts } from 'app/log';
+import { debug_print, puts, rich } from 'app/log';
 
 // Export global:any, which would have otherwise come from DOM but we disable DOM for react-native (tsconfig -> "lib")
 //  - Fallback to a mock `{}` for release builds, which run in jsc instead of chrome v8 and don't have window.global
@@ -710,17 +710,35 @@ export function setStateAsync<P, S, K extends keyof S>(
   });
 }
 
-// Typesafe wrapper around react-fast-compare
+// Fast _.isEqual (deep)
+//  - Typesafe wrapper around reactFastCompare, which is a faster version of _.isEqual
 //  - Notes vs. _.isEqual: https://formidable.com/blog/2018/introducing-react-fast-compare/
 export function fastIsEqual<X, Y extends X>(x: X, y: Y | null | undefined): boolean {
-  return reactFastCompare(x, y);
+  // HACK reactFastCompare doesn't support Set/Map types
+  //  - https://github.com/FormidableLabs/react-fast-compare/issues/36
+  //  - Fallback to slow _.isEqual
+  if (
+    x instanceof Set     || y instanceof Set     ||
+    x instanceof WeakSet || y instanceof WeakSet ||
+    x instanceof Map     || y instanceof Map     ||
+    x instanceof WeakMap || y instanceof WeakMap
+  ) {
+    return _.isEqual(x, y);
+  } else {
+    return reactFastCompare(x, y);
+  }
 }
 
-export function shallowDiffPropsState<Props, State>(prevProps: Props, prevState: State, props: Props, state: State): object {
+export function shallowDiffPropsState<Props, State>(
+  prevProps: Props | null,
+  prevState: State | null,
+  props:     Props,
+  state:     State,
+): object {
   const diff = {};
   [
-    {prefix: 'props', prevObj: prevProps, obj: props},
-    {prefix: 'state', prevObj: prevState, obj: state},
+    {prefix: 'props', prevObj: prevProps || {}, obj: props},
+    {prefix: 'state', prevObj: prevState || {}, obj: state},
   ].forEach(({prefix, prevObj, obj}) => {
     const changed = _.assignWith(_.clone(prevObj), obj, (x: any, y: any) => x === y);
     _.uniq([..._.keys(prevObj), ..._.keys(obj)]).forEach(k => {

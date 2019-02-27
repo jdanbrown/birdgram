@@ -20,16 +20,20 @@ import {
 // TODO How to prevent callers from constructing a Rec i/o one of the subtypes? [Maybe classes with constructors?]
 export type Rec = XCRec | UserRec;
 
+// TODO Clean up? (factored out when adding sqlite windowed query, to speed up results read, by not reading all .f_preds_* cols)
+export interface Has_f_preds {
+  f_preds: Array<number>;
+}
+
 export interface XCRec extends _RecImpl {
-  // kind:   'xc';     // TODO Requires new-ing our own XCRec objects i/o (unsafely) casting them from sqlite rows
+  // kind:   'xc';     // Requires new-ing our own XCRec objects i/o casting from sqlite rows [TODO We do this now, in db.loadRec]
   xc_id:  number;
-  // source: XCSource; // TODO Requires new-ing our own XCRec objects i/o (unsafely) casting them from sqlite rows
+  // source: XCSource; // Requires new-ing our own XCRec objects i/o casting from sqlite rows [TODO We do this now, in db.loadRec]
 }
 
 export interface UserRec extends _RecImpl {
-  kind:    'user';
-  f_preds: Array<number>;
-  source:  UserSource
+  kind:   'user';
+  source: UserSource
 }
 
 export interface _RecImpl {
@@ -181,13 +185,6 @@ export const Rec = {
   }): Promise<void> => {
     Rec.log.debug('writeMetadata', rich({audioPath, versionedMetadata}));
     await NativeTagLib.writeComment(audioPath, json(versionedMetadata));
-  },
-
-  f_preds: (rec: Rec): Rec_f_preds => {
-    return matchRec(rec, {
-      xc:   rec => rec as unknown as Rec_f_preds,                               // Expose .f_preds_* from sqlite
-      user: rec => _.fromPairs(rec.f_preds.map((p, i) => [`f_preds_${i}`, p])), // Materialize {f_preds_*:p} from .f_preds
-    });
   },
 
   hasCoords: (rec: Rec): boolean => {

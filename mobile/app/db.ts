@@ -3,7 +3,7 @@ import SQLite, { SQLiteDatabase } from 'react-native-sqlite-storage';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
-import { matchSource, Rec, SearchRecs, Source, SourceId, UserRec, XCRec } from 'app/datatypes';
+import { Has_f_preds, matchSource, Rec, SearchRecs, Source, SourceId, UserRec, XCRec } from 'app/datatypes';
 import { Log, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import Sound from 'app/sound';
@@ -41,10 +41,10 @@ export class DB {
   query: QuerySql = querySql(this.sqlite);
 
   // Returns null if audio file for source doesn't exist (e.g. user deleted a user rec, or xc dataset changed)
-  loadRec = async (source: Source): Promise<Rec | null> => {
+  loadRec = async (source: Source): Promise<Rec & Has_f_preds | null> => {
     log.info('loadRec', {source});
     const sourceId = Source.stringify(source);
-    return await matchSource<Promise<Rec | null>>(source, {
+    return await matchSource<Promise<Rec & Has_f_preds | null>>(source, {
       xc: async source => {
 
         // Read xc rec from db search_recs (includes f_preds as cols)
@@ -55,8 +55,23 @@ export class DB {
           limit 1
         `)(async results => {
           const rows = results.rows.raw();
-          // Return null if no rows found (e.g. xc dataset changed)
-          return rows.length === 0 ? null : rows[0]; // TODO Return XCRec i/o Rec
+          if (rows.length === 0) {
+            // Return null if no rows found (e.g. xc dataset changed)
+            return null;
+          } else {
+            const rec = rows[0];
+
+            // Add js-friendly .f_preds array i/o sql-friendly .f_preds_* cols
+            //  - TODO Perf: build .f_preds from .f_preds_* cols i/o reading audio file
+            //    - Careful with col ordering -- cf. SearchScreen.componentDidMount
+            const {f_preds} = await this.predsFromAudioFile(source, XCRec.audioPath(rec));
+
+            return typed<XCRec & Has_f_preds>({
+              ...rec,
+              f_preds,
+            });
+
+          }
         });
 
       },
@@ -70,10 +85,10 @@ export class DB {
 
           // Predict (and read duration_s) from audio file
           //  - TODO Push duration_s into proper metadata, for simplicity
-          const {f_preds, duration_s} = await this.predsFromAudioFile(source, UserRec);
+          const {f_preds, duration_s} = await this.predsFromAudioFile(source, UserRec.audioPath(source));
 
           // Make UserRec
-          return typed<UserRec>({
+          return typed<UserRec & Has_f_preds>({
             // UserRec
             kind:                  'user',
             f_preds,
@@ -110,9 +125,7 @@ export class DB {
     });
   }
 
-  predsFromAudioFile = async <X extends Source>(source: X, RecType: {
-    audioPath: (source: X) => string,
-  }): Promise<{
+  predsFromAudioFile = async <X extends Source>(source: X, audioPath: string): Promise<{
     // Preds
     f_preds: Array<number>,
     // Audio metadata (that requires reading the file, which we're already doing)
@@ -120,8 +133,7 @@ export class DB {
   }> => {
 
     // Params
-    const sourceId  = Source.stringify(source);
-    const audioPath = RecType.audioPath(source);
+    const sourceId = Source.stringify(source);
 
     // Predict f_preds from audio file
     //  - Predict from audio not spectro: our spectros use Settings.f_bins (e.g. >40) i/o model's f_bins=40
