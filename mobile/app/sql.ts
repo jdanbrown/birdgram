@@ -1,3 +1,4 @@
+import AsyncLock from 'async-lock';
 import _ from 'lodash';
 import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import _SQL from 'sqlstring-sqlite';
@@ -6,6 +7,8 @@ import { Log, rich } from 'app/log';
 import { noawait, Timer, yamlPretty } from 'app/utils';
 
 const log = new Log('sql');
+
+const _lock = new AsyncLock(); // WARNING Not reentrant? (by default)
 
 // Re-export sqlstring as SQL + add extra methods
 export const SQL = {..._SQL,
@@ -59,6 +62,7 @@ export const querySql = (db: SQLiteDatabase) => <Row>(sql: string, opts?: QueryS
   if (opts.logQueryPlan) {
     const timer = new Timer();
     noawait(new Promise((resolve, reject) => {
+      // FIXME(family_list): Add locking [requires nontrivial refactor for async]
       db.transaction(tx => {
         tx.executeSql(
           sqlf`explain query plan ${SQL.raw(sql)}`,
@@ -81,29 +85,35 @@ export const querySql = (db: SQLiteDatabase) => <Row>(sql: string, opts?: QueryS
   const timer = new Timer();
   const sqlTrunc = !opts.logTruncate ? sql : _.truncate(sql, {length: opts.logTruncate});
   log.debug('querySql: Running...', sqlTrunc);
-  return onResults => new Promise((resolve, reject) => {
-    // TODO How to also `await db.transaction`? (Do we even want to?)
-    db.transaction(tx => {
-      // [How do you use the Promise version of tx.executeSql without jumping out of the tx?]
-      tx.executeSql(
-        sql,
-        [],
-        (tx, {rows, rowsAffected, insertId}) => {
-          log.info(`querySql: timed[${timer.time()}s]`, `rows[${rows.length}]`, sqlTrunc);
-          resolve(onResults({
-            rows: {
-              length: rows.length,
-              item: i => (rows.item(i) as unknown as Row),
-              raw: () => (rows.raw() as unknown[] as Row[]),
+  return <X>(onResults: (results: ResultSet<Row>) => Promise<X>): Promise<X> => {
+    // TODO(family_list): Does locking avoid the sqlite EXC_BAD_ACCESS? (only repros in US, not CA3500/CA100)
+    //  - XXX(family_list): Nope :( didn't magically fix the segfault...
+    return _lock.acquire('the-only-key', () => {
+      return new Promise<X>((resolve, reject) => {
+        // TODO How to also `await db.transaction`? (Do we even want to?)
+        db.transaction(tx => {
+          // [How do you use the Promise version of tx.executeSql without jumping out of the tx?]
+          tx.executeSql(
+            sql,
+            [],
+            (tx, {rows, rowsAffected, insertId}) => {
+              log.info(`querySql: timed[${timer.time()}s]`, `rows[${rows.length}]`, sqlTrunc);
+              resolve(onResults({
+                rows: {
+                  length: rows.length,
+                  item: i => (rows.item(i) as unknown as Row),
+                  raw: () => (rows.raw() as unknown[] as Row[]),
+                },
+                insertId,
+                rowsAffected,
+              }))
             },
-            insertId,
-            rowsAffected,
-          }))
-        },
-        e => reject(e),
-      );
+            e => reject(e),
+          );
+        });
+      });
     });
-  });
+  };
 
 }
 

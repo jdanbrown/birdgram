@@ -531,7 +531,10 @@ export class SearchScreen extends PureComponent<Props, State> {
   }
 
   updateForLocation = async (prevProps: null | Props, prevState: null | State) => {
-    log.debug('updateForLocation', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+    log.debug('updateForLocation', () => (prevProps === null && prevState === null
+      ? rich({prevProps, prevState, props: '[OMITTED]', state: '[OMITTED]'}) // null->{props,state} is very noisy (e.g. xcode logs)
+      : rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state))
+    ));
     if (
       !(
         // Don't noop if any filters/limits changed [XXX(put_all_query_state_in_location)]
@@ -814,6 +817,9 @@ export class SearchScreen extends PureComponent<Props, State> {
               //   ]))
               //   .map(rec => yaml(rec))
               // ));
+
+              // XXX(family_list): Debug crash in US
+              // return {recs: typed<StateRecs>([])};
 
               // HACK Inject query_rec as first result so it's visible at top
               //  - TODO Replace this with a proper display of query_rec at the top
@@ -2229,6 +2235,7 @@ export class BrowseModal extends PureComponent<BrowseModalProps, BrowseModalStat
   };
 
   componentDidUpdate = (prevProps: BrowseModalProps, prevState: BrowseModalState) => {
+    // Noisy (in xcode)
     this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   };
 

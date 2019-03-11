@@ -40,7 +40,7 @@ def birdgram_pods
   # - https://github.com/yapstudios/YapDatabase/wiki/SQLite-version-(bundled-with-OS)
   # - https://github.com/stephencelis/SQLite.swift/blob/master/Documentation/Index.md#requiring-a-specific-version-of-sqlite
   # - cf. https://github.com/litehelpers/Cordova-sqlite-storage-dependencies
-  pod 'sqlite3', '~> 3.27.1'
+  pod 'sqlite3', '~> 3.26.0'
 end
 
 def all_pods
