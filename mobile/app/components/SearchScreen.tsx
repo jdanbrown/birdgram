@@ -681,8 +681,18 @@ export class SearchScreen extends PureComponent<Props, State> {
           return await log.timedAsync<{recs: StateRecs}>('updateForLocation.rec', async () => {
             log.info('updateForLocation: Loading recs for query_rec', {source});
 
-            // See: notebooks/190226_mobile_dev_search_sqlite
-            //  - Dev notebook for the (complex) sql query
+            // Compute top n_per_sp recs per species by d_pc (cosine_distance)
+            //  - Dev notes: notebooks/190226_mobile_dev_search_sqlite
+            //    - Interactive dev/perf for the (complex) sql query
+            //  - TODO Replace union query with windowed query after sqlite ≥3.25.x
+            //    - https://github.com/andpor/react-native-sqlite-storage/issues/310
+            //    - Wait for future ios version to upgrade built-in sqlite to ≥3.25.x (see github thread)
+            //  - Approach w/o window functions
+            //    - Query query_rec from db.search_recs
+            //      - (query_rec.preds is query_sp_p (= search.predict_probs(query_rec)))
+            //    - Take top n_recs/n_per_sp species from query_rec.preds
+            //    - Construct big sql query with one union per species (O(n_recs/n_per_sp)):
+            //      - (... where species=? order by d_pc limit n_per_sp) union all (...) ...
 
             // Params
             const f_preds_cols = this.state.f_preds_cols || [];
@@ -746,80 +756,68 @@ export class SearchScreen extends PureComponent<Props, State> {
               .map(([species, slp]) => ({species, slp}))
               .filter(({species}) => includeSpecies(species))
               .sortBy(({slp}) => slp)
-              // Perf: slice top k species else the query is slow b/c of a huge subquery (returns ~full dataset)
               .slice(0, n_sp + 1) // FIXME +1 else we get n_sp-1 species -- why?
               .value()
             );
 
-            // Inject sql table: slps -> (species, slp)
-            //  - FIXME sql syntax error if topSlps is empty
-            const tableSlp = sqlf`
-              select column1 as species, column2 as slp from (values ${SQL.raw(topSlps
-                // .slice(0, 2) // XXX Debug: smaller query
-                .map(({species, slp}) => sqlf`(${species}, ${slp})`)
-                .join(', ')
-              )})
-            `;
-
             // Construct query
+            //  - Union `limit n` queries per species (b/c we don't have windowing)
             //  - Perf: We exclude .f_preds_* cols for faster load (ballpark ~2x)
+            //  - TODO this.state.sortResults ('slp,d_pc' / 'd_pc')
             const non_f_preds_cols = this.state.non_f_preds_cols!; // Set in componentDidMount
+            const sqlPerSpecies = (topSlps
+              // .slice(0, 2) // XXX Debug: smaller query
+              .map(({species, slp}) => sqlf`
+                select *, coalesce(${slp}, 1e38) as slp
+                from search_recs_filtered_and_dist where species = ${species}
+                order by d_pc asc
+                limit ${n_per_sp}
+              `)
+            );
             const sql = sqlf`
-              select
-                -- sp_d_pc_i, -- XXX Debug
-                coalesce(S.slp, 1e38) as slp,
-                S.d_pc,
-                ${SQL.raw(non_f_preds_cols.map(x => `S.${x}`).join(', '))}
-              from (
-                select
-                  S.*,
-                  row_number() over (partition by S.species order by S.d_pc) as sp_d_pc_i
-                from (
+              with
+                -- For sqlCosineDist ('Q' = query_rec)
+                Q as (
+                  select *
+                  from search_recs
+                  where source_id = ${query_rec.source_id}
+                  limit 1 -- Should always be ≤1, but safeguard perf in case of data bugs
+                ),
+                -- For nested sqlPerSpecies queries
+                search_recs_filtered_and_dist as (
                   select
-                    S.*,
-                    slp.slp,
+                    ${SQL.raw(non_f_preds_cols.map(x => `S.${x}`).join(', '))},
                     ${SQL.raw(sqlCosineDist)} as d_pc
                   from search_recs S
-                    -- Perf: join i/o left join so we filter down to top n_sp species, else query is very slow
-                    join (${SQL.raw(tableSlp)}) slp on S.species = slp.species
-                    join (select * from search_recs where source_id = ${query_rec.source_id}) Q on true -- 1 row, for dot(S,Q)
+                    left join Q on true -- (1 row)
                   where true
                     ${SQL.raw(placeFilter('S'))} -- Empty subquery for species outside of placeFilter
                     ${SQL.raw(qualityFilter('S'))}
                     and S.source_id != ${query_rec.source_id} -- Exclude query_rec from results
-                ) S
-              ) S
-              where
-                sp_d_pc_i <= ${n_per_sp}
+                )
+              select *
+              from (
+                -- Must wrap subqueries in 'select * from (...)' else union complains about nested order by
+                ${SQL.raw(sqlPerSpecies.map(x => `select * from (${x})`).join(' union all '))}
+              )
               order by
-                ${SQL.raw(match(this.state.sortResults,
-                  ['slp,d_pc', () => 'slp asc, d_pc asc'],
-                  ['d_pc',     () => 'd_pc asc'],
-                ))}
+                slp asc,
+                d_pc asc
               limit ${n_recs}
             `;
 
             // Run query
             log.info('updateForLocation: Querying recs for query_rec', rich({query_rec}));
             return await this.props.db.query<XCRec>(sql, {
-              logTruncate: null, // XXX Debug
+              logTruncate: null, // XXX Debug (no perf concerns -- safe to always log full query)
             })(async results => {
               const recs = results.rows.raw();
 
-              // XXX Debug
+              // XXX(family_list): Debug
               // debug_print('timed', pretty(recs
-              //   .map(rec => _.pick(rec, [
-              //     'species',
-              //     'source_id',
-              //     'sp_d_pc_i',
-              //     'slp',
-              //     'd_pc',
-              //   ]))
+              //   .map(rec => _.pick(rec, ['species', 'source_id', 'sp_d_pc_i', 'slp', 'd_pc']))
               //   .map(rec => yaml(rec))
               // ));
-
-              // XXX(family_list): Debug crash in US
-              // return {recs: typed<StateRecs>([])};
 
               // HACK Inject query_rec as first result so it's visible at top
               //  - TODO Replace this with a proper display of query_rec at the top
