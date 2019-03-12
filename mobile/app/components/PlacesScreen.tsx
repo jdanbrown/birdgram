@@ -158,7 +158,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
             )}
             renderItem={({item: place, index}) => (
               <RectButton
-                onPress={() => this.props.settings.set('place', place)}
+                onPress={() => this.props.settings.set({place})}
               >
                 <View style={{
                   flex: 1,

@@ -106,7 +106,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               hasNavArrow={false}
               hasSwitch={true}
               switchState={this.props.showDebug}
-              switchOnValueChange={async x => await this.props.settings.set('showDebug', x)}
+              switchOnValueChange={async showDebug => await this.props.settings.set({showDebug})}
             />
 
             <SettingsList.Header headerStyle={{marginTop: 15}} />
@@ -118,7 +118,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               hasNavArrow={false}
               hasSwitch={true}
               switchState={this.props.allowUploads}
-              switchOnValueChange={async x => await this.props.settings.set('allowUploads', x)}
+              switchOnValueChange={async allowUploads => await this.props.settings.set({allowUploads})}
             /> */}
 
             <SettingsList.Item
@@ -127,7 +127,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               hasNavArrow={false}
               hasSwitch={true}
               switchState={this.props.geoHighAccuracy}
-              switchOnValueChange={async x => await this.props.settings.set('geoHighAccuracy', x)}
+              switchOnValueChange={async geoHighAccuracy => await this.props.settings.set({geoHighAccuracy})}
             />
 
             <SettingsList.Item
@@ -136,7 +136,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               hasNavArrow={false}
               hasSwitch={true}
               switchState={this.props.geoWarnIfNoCoords}
-              switchOnValueChange={async x => await this.props.settings.set('geoWarnIfNoCoords', x)}
+              switchOnValueChange={async geoWarnIfNoCoords => await this.props.settings.set({geoWarnIfNoCoords})}
             />
 
             {/* FIXME Various (small) issues when changing this: */}
@@ -151,7 +151,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               onTextChange={async str => {
                 const x = parseInt(str);
                 const f_bins = _.isNaN(x) ? DEFAULTS.f_bins : x;
-                await this.props.settings.set('f_bins', f_bins);
+                await this.props.settings.set({f_bins});
               }}
             /> */}
 
@@ -165,7 +165,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               onTextChange={async str => {
                 const x = parseInt(str);
                 const maxHistory = _.isNaN(x) ? DEFAULTS.maxHistory : x;
-                await this.props.settings.set('maxHistory', maxHistory);
+                await this.props.settings.set({maxHistory});
               }}
             />
 
@@ -179,7 +179,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               onTextChange={async str => {
                 const x = parseInt(str);
                 const refreshRate = _.clamp(_.isNaN(x) ? 1 : x, refreshRateMin, refreshRateMax);
-                await this.props.settings.set('refreshRate', refreshRate);
+                await this.props.settings.set({refreshRate});
               }}
             />
 
@@ -193,7 +193,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               onTextChange={async str => {
                 const x = parseInt(str);
                 const doneSpectroChunkWidth = _.isNaN(x) ? DEFAULTS.doneSpectroChunkWidth : x;
-                await this.props.settings.set('doneSpectroChunkWidth', doneSpectroChunkWidth);
+                await this.props.settings.set({doneSpectroChunkWidth});
               }}
             />
 
@@ -207,7 +207,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               onTextChange={async str => {
                 const x = parseInt(str);
                 const spectroChunkLimit = _.isNaN(x) ? 1 : x;
-                await this.props.settings.set('spectroChunkLimit', spectroChunkLimit);
+                await this.props.settings.set({spectroChunkLimit});
               }}
             />
 
@@ -217,7 +217,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               hasNavArrow={false}
               hasSwitch={true}
               switchState={this.props.playingProgressEnable}
-              switchOnValueChange={async x => await this.props.settings.set('playingProgressEnable', x)}
+              switchOnValueChange={async playingProgressEnable => await this.props.settings.set({playingProgressEnable})}
             />
 
             {/* FIXME Horrible UX. I think we'll need to redo react-native-settings-list ourselves... */}
@@ -229,7 +229,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
               value={(this.props.playingProgressInterval || '').toString()}
               onTextChange={async str => {
                 const x = parseInt(str);
-                await this.props.settings.set('playingProgressInterval', _.isNaN(x) ? 0 : x);
+                await this.props.settings.set({playingProgressInterval: _.isNaN(x) ? 0 : x});
               }}
             />
 

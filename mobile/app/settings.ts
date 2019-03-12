@@ -32,6 +32,7 @@ export interface Props {
   readonly metadataColumnsBelow: Array<MetadataColumnBelow>;
   readonly editing: boolean;
   readonly seekOnPlay: boolean;
+  readonly playOnTap: boolean;
   readonly playingProgressEnable: boolean;
   readonly playingProgressInterval: number;
   readonly spectroScale: number;
@@ -70,6 +71,7 @@ export const DEFAULTS: Props = {
   ]),
   editing: false,
   seekOnPlay: true,
+  playOnTap: true,
   playingProgressEnable: false, // FIXME High cpu
   // playingProgressInterval: 16, // ~frame rate (60fps), but kills rndebugger in dev
   playingProgressInterval: 250,   // Usable in dev
@@ -98,6 +100,7 @@ export const TYPES: {[key: string]: Array<string>} = {
   metadataColumnsBelow: ['object'],
   editing: ['boolean'],
   seekOnPlay: ['boolean'],
+  playOnTap: ['boolean'],
   playingProgressEnable: ['boolean'],
   playingProgressInterval: ['number'],
   spectroScale: ['number'],
@@ -126,6 +129,7 @@ export const KEYS = [
   'metadataColumnsBelow',
   'editing',
   'seekOnPlay',
+  'playOnTap',
   'playingProgressEnable',
   'playingProgressInterval',
   'spectroScale',
@@ -135,7 +139,7 @@ export const KEYS = [
 ];
 
 export interface SettingsWrites {
-  set<K extends keyof Props>(key: K, value: Props[K]): Promise<void>;
+  set(props: Partial<Props>): Promise<void>;
   get<K extends keyof Props>(key: K): Promise<Props[K]>;
   update<K extends keyof Props>(key: K, f: (v: Props[K]) => Props[K]): Promise<void>;
   toggle<K extends keyof Props>(key: K): Promise<boolean>;
@@ -145,8 +149,8 @@ export class SettingsProxy implements SettingsWrites {
   constructor(
     public getProxy: () => SettingsWrites,
   ) {}
-  async set<K extends keyof Props>(key: K, value: Props[K]): Promise<void> {
-    return await this.getProxy().set(key, value);
+  async set(props: Partial<Props>): Promise<void> {
+    return await this.getProxy().set(props);
   }
   async get<K extends keyof Props>(key: K): Promise<Props[K]> {
     return await this.getProxy().get(key);
@@ -184,6 +188,7 @@ export class Settings implements SettingsWrites, Props {
     public readonly metadataColumnsBelow: Array<MetadataColumnBelow>,
     public readonly editing: boolean,
     public readonly seekOnPlay: boolean,
+    public readonly playOnTap: boolean,
     public readonly playingProgressEnable: boolean,
     public readonly playingProgressInterval: number,
     public readonly spectroScale: number,
@@ -249,15 +254,25 @@ export class Settings implements SettingsWrites, Props {
 
   }
 
-  async set<K extends keyof Props>(key: K, value: Props[K]): Promise<void> {
-    log.info('set', {key, value});
+  // XXX Replaced with set(props) (via multiSet i/o setItem)
+  // async set<K extends keyof Props>(key: K, value: Props[K]): Promise<void> {
+  //   log.info('set', {key, value});
+  //   // Set locally
+  //   //  - Before persist: faster App.state response, async persist (which has high variance runtime)
+  //   this.appSetState(this.withProps({
+  //     [key]: value,
+  //   }));
+  //   // Persist in AsyncStorage (async wrt. App.state)
+  //   await Settings.setItem(key, value);
+  // }
+
+  async set(props: Partial<Props>): Promise<void> {
+    log.info('set', props);
     // Set locally
     //  - Before persist: faster App.state response, async persist (which has high variance runtime)
-    this.appSetState(this.withProps({
-      [key]: value,
-    }));
+    this.appSetState(this.withProps(props));
     // Persist in AsyncStorage (async wrt. App.state)
-    await Settings.setItem(key, value);
+    await Settings.multiSet(props);
   }
 
   async get<K extends keyof Props>(key: K): Promise<Props[K]> {
@@ -271,13 +286,13 @@ export class Settings implements SettingsWrites, Props {
   }
 
   async update<K extends keyof Props>(key: K, f: (v: Props[K]) => Props[K]): Promise<void> {
-    await this.set(key, f(this[key]));
+    await this.set({[key]: f(this[key])});
   }
 
   async toggle<K extends keyof Props>(key: K): Promise<boolean> {
     Settings.assertKeyHasType(key, 'boolean');
     const value = this[key];
-    await this.set(key, !value);
+    await this.set({[key]: !value});
     return !value;
   }
 
@@ -317,6 +332,21 @@ export class Settings implements SettingsWrites, Props {
       Settings.prefixKey(key),
       JSON.stringify(value),
     );
+  }
+
+  // Like AsyncStorage.multiSet except:
+  //  - Prefixes stored keys
+  //  - Does json serdes
+  //  - Typesafe (kind of)
+  static async multiSet(props: object): Promise<void> {
+    const kvs = _.toPairs(props);
+    kvs.forEach(([key, value]) => {
+      Settings.assertKeyHasType(key, typeof value);
+    });
+    await AsyncStorage.multiSet(kvs.map(([key, value]) => [
+      Settings.prefixKey(key),
+      JSON.stringify(value),
+    ]));
   }
 
   // Like AsyncStorage.getItem except:

@@ -515,6 +515,7 @@ export default class App extends PureComponent<Props, State> {
           metadataColumnsBelow    = {this.state.settings!.metadataColumnsBelow}
           editing                 = {this.state.settings!.editing}
           seekOnPlay              = {this.state.settings!.seekOnPlay}
+          playOnTap               = {this.state.settings!.playOnTap}
           playingProgressEnable   = {this.state.settings!.playingProgressEnable}
           playingProgressInterval = {this.state.settings!.playingProgressInterval}
           spectroScale            = {this.state.settings!.spectroScale}

@@ -50,10 +50,10 @@ import { SQL, sqlf } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
-  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, into, json, local,
-  mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait, objectKeysTyped, Omit,
-  Point, pretty, QueryString, round, setAdd, setDelete, setToggle, shallowDiffPropsState, Style, throw_, Timer, typed,
-  yaml, yamlPretty, zipSame,
+  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, ifNull, into,
+  json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait,
+  objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDelete, setToggle, shallowDiffPropsState, Style,
+  throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -164,6 +164,7 @@ interface Props {
   metadataColumnsBelow:    Array<MetadataColumnBelow>;
   editing:                 boolean;
   seekOnPlay:              boolean;
+  playOnTap:               boolean;
   playingProgressEnable:   boolean;
   playingProgressInterval: number;
   spectroScale:            number;
@@ -202,7 +203,7 @@ interface State {
   includeSpecies: Set<string>;
   excludeSpeciesGroups: Set<string>;
   includeSpeciesGroups: Set<string>;
-  excludeRecIds: Set<string>;
+  excludeRecs: Set<string>;
   recs: StateRecs;
   recsQueryTime?: number;
   sourceIdForActionModal?: SourceId;
@@ -266,7 +267,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     // excludeSpeciesGroups: new Set(['Waterfowl', 'Wood-Warblers']), // XXX(family_list): Debug
     // excludeSpeciesGroups: new Set(['Waterfowl', 'Wood-Warblers', 'Gnatcatchers', 'New World Sparrows', 'Penduline-Tits and Long-tailed Tits', 'Tyrant Flycatchers: Pewees, Kingbirds, and Allies', 'Martins and Swallows', 'Catbirds, Mockingbirds, and Thrashers', 'Cardinals, Grosbeaks, and Allies', 'Blackbirds', 'Finches, Euphonias, and Allies']), // XXX(family_list): Debug
     includeSpeciesGroups: new Set(),
-    excludeRecIds:        new Set(),
+    excludeRecs:          new Set(),
     recs:                 'loading',
     _spectroScale:        this.props.spectroScale, // Sync from/to Settings (2/3)
   };
@@ -425,7 +426,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         includeSpecies:       new Set(),
         excludeSpeciesGroups: new Set(),
         includeSpeciesGroups: new Set(),
-        excludeRecIds:        new Set(),
+        excludeRecs:          new Set(),
       });
     }
 
@@ -437,7 +438,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     //    batch-update them with other local state keys (e.g. global spectroScale + local scrollViewKey)
     //  - QUESTION What's a better pattern for "batch setState(x,y,z) locally + persist settings.set(x) globally"?
     if (this.state._spectroScale !== prevState._spectroScale) {
-      noawait(this.props.settings.set('spectroScale', this.state._spectroScale));
+      noawait(this.props.settings.set({spectroScale: this.state._spectroScale}));
     }
 
     // Show this.props.location
@@ -546,7 +547,8 @@ export class SearchScreen extends PureComponent<Props, State> {
         !fastIsEqual(this.state.excludeSpecies,       _.get(prevState, 'excludeSpecies')) ||
         !fastIsEqual(this.state.includeSpecies,       _.get(prevState, 'includeSpecies')) ||
         !fastIsEqual(this.state.excludeSpeciesGroups, _.get(prevState, 'excludeSpeciesGroups')) ||
-        !fastIsEqual(this.state.includeSpeciesGroups, _.get(prevState, 'includeSpeciesGroups'))
+        !fastIsEqual(this.state.includeSpeciesGroups, _.get(prevState, 'includeSpeciesGroups')) ||
+        !fastIsEqual(this.state.excludeRecs,          _.get(prevState, 'excludeRecs'))
       ) && (
         // Noop if location didn't change
         locationPathIsEqual(this.props.location, _.get(prevProps, 'location')) ||
@@ -594,6 +596,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
       // Global filters
       //  - TODO(put_all_query_state_in_location)
+      //  - TODO(family_list): How to includeSpecies/includeSpeciesGroups?
       const qualityFilter = (table: string) => (
         sqlf`and ${SQL.raw(table)}.quality in (${this.state.filterQuality})`
       );
@@ -601,12 +604,14 @@ export class SearchScreen extends PureComponent<Props, State> {
         null: ()    => '',
         x:    place => sqlf`and ${SQL.raw(table)}.species in (${place.species})`,
       });
-      // TODO(family_list): How to includeSpecies/includeSpeciesGroups?
       const speciesFilter = (table: string) => (
-        sqlf`and species not in (${Array.from(this.state.excludeSpecies)})`
+        sqlf`and ${SQL.raw(table)}.species not in (${Array.from(this.state.excludeSpecies)})`
       );
       const speciesGroupFilter = (table: string) => (
-        sqlf`and species_species_group not in (${Array.from(this.state.excludeSpeciesGroups)})`
+        sqlf`and ${SQL.raw(table)}.species_species_group not in (${Array.from(this.state.excludeSpeciesGroups)})`
+      );
+      const recFilter = (table: string) => (
+        sqlf`and ${SQL.raw(table)}.source_id not in (${Array.from(this.state.excludeRecs)})`
       );
 
       // TODO Factor these big matchQuery cases into functions, for readability
@@ -726,7 +731,6 @@ export class SearchScreen extends PureComponent<Props, State> {
             }
 
             // Read sp_p's (species probs) from query_rec.f_preds
-            //  - Filter by place.species (else too few results downstream after filtering in sql)
             const sp_ps: Map<string, number> = new Map(zipSame(
               this.props.modelsSearch.classes_,
               query_rec.f_preds,
@@ -746,15 +750,39 @@ export class SearchScreen extends PureComponent<Props, State> {
               1 - (${SQL.raw(sqlDot)}) / S.norm_f_preds / Q.norm_f_preds
             `;
 
-            // Rank species by slp (slp asc b/c sgn(slp) ~ -sgn(sp_p))
-            const includeSpecies: (species: Species) => boolean = matchNull(this.props.place, {
-              null: ()    => (species: Species) => true, // No place selected -> include all species
-              x:    place => _.bind(Set.prototype.has, new Set(place.species)),
+            // Query which species are left after applying filters
+            //  - This is difficult to make exact, but we can get very close
+            //    - e.g.
+            //  - TODO Perf: Cache this once per filter update i/o redoing on every rec search
+            //  - NOTE Perf: If this is slow (e.g. for a place with many species), make sure it's using a covering index
+            //    - Query plan should say `USING COVERING INDEX`, not `USING INDEX` (or `SCAN TABLE`)
+            //    - https://www.sqlite.org/optoverview.html#covering_indices
+            //    - https://www.sqlite.org/queryplanner.html#_covering_indices
+            log.info('updateForLocation: Querying species for filters', rich({query_rec}));
+            const filteredSpecies: Set<Species> = await this.props.db.query<{species: Species}>(sqlf`
+              select distinct species
+              from search_recs S
+              where true
+                -- Filters duplicated below (in rec query)
+                ${SQL.raw(placeFilter('S'))}        -- Safe for covering index (species)
+                -- ${SQL.raw(qualityFilter('S'))}   -- Unsafe for covering index (quality)
+                ${SQL.raw(speciesFilter('S'))}      -- Safe for covering index (species)
+                ${SQL.raw(speciesGroupFilter('S'))} -- Safe for covering index (species)
+                -- ${SQL.raw(recFilter('S'))}       -- Unsafe for covering index (source_id) [why? index is (species, source_id)]
+            `, {
+              logTruncate: null,
+              // logQueryPlan: true, // XXX Debug: ensure covering index (see above)
+            })(async results => {
+              const recs = results.rows.raw();
+              return new Set(recs.map(rec => rec.species));
             });
+
+            // Rank species by slp (slp asc b/c sgn(slp) ~ -sgn(sp_p))
+            //  - Filter species to match rec filters, else we'll return too few rec results below
             const topSlps: Array<{species: string, slp: number}> = (
               _(Array.from(slps.entries()))
               .map(([species, slp]) => ({species, slp}))
-              .filter(({species}) => includeSpecies(species))
+              .filter(({species}) => filteredSpecies.has(species))
               .sortBy(({slp}) => slp)
               .slice(0, n_sp + 1) // FIXME +1 else we get n_sp-1 species -- why?
               .value()
@@ -768,8 +796,9 @@ export class SearchScreen extends PureComponent<Props, State> {
             const sqlPerSpecies = (topSlps
               // .slice(0, 2) // XXX Debug: smaller query
               .map(({species, slp}) => sqlf`
-                select *, coalesce(${slp}, 1e38) as slp
-                from search_recs_filtered_and_dist where species = ${species}
+                select *, ${ifNull(slp, () => 1e38)} as slp
+                from S_filter_dist
+                where species = ${species}
                 order by d_pc asc
                 limit ${n_per_sp}
               `)
@@ -784,15 +813,19 @@ export class SearchScreen extends PureComponent<Props, State> {
                   limit 1 -- Should always be ≤1, but safeguard perf in case of data bugs
                 ),
                 -- For nested sqlPerSpecies queries
-                search_recs_filtered_and_dist as (
+                S_filter_dist as (
                   select
                     ${SQL.raw(non_f_preds_cols.map(x => `S.${x}`).join(', '))},
                     ${SQL.raw(sqlCosineDist)} as d_pc
                   from search_recs S
                     left join Q on true -- (1 row)
                   where true
-                    ${SQL.raw(placeFilter('S'))} -- Empty subquery for species outside of placeFilter
+                    -- Filters duplicated above (in species query)
+                    ${SQL.raw(placeFilter('S'))}
                     ${SQL.raw(qualityFilter('S'))}
+                    ${SQL.raw(speciesFilter('S'))}
+                    ${SQL.raw(speciesGroupFilter('S'))}
+                    ${SQL.raw(recFilter('S'))}
                     and S.source_id != ${query_rec.source_id} -- Exclude query_rec from results
                 )
               select *
@@ -809,7 +842,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             // Run query
             log.info('updateForLocation: Querying recs for query_rec', rich({query_rec}));
             return await this.props.db.query<XCRec>(sql, {
-              logTruncate: null, // XXX Debug (no perf concerns -- safe to always log full query)
+              logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
             })(async results => {
               const recs = results.rows.raw();
 
@@ -1187,7 +1220,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               iconName: 'x',
               buttonColor: iOSColors.red,
               onPress: () => this.setState((state: State, props: Props) => ({
-                excludeRecIds: setAdd(state.excludeRecIds, rec.source_id),
+                excludeRecs: setAdd(state.excludeRecs, rec.source_id),
               })),
             }
           ]})}
@@ -1503,9 +1536,24 @@ export class SearchScreen extends PureComponent<Props, State> {
       {/* Toggle seekOnPlay crosshairs */}
       <this.BottomControlsButton
         help='Seek'
-        active={this.props.seekOnPlay}
-        iconProps={{name: 'crosshair'}}
-        onPress={() => this.props.settings.toggle('seekOnPlay')}
+        active={this.props.playOnTap && this.props.seekOnPlay}
+        iconProps={{
+          ...(this.props.playOnTap ? {
+            name: 'crosshair',
+          } : {
+            name: 'slash',
+            style: {color: iOSColors.red},
+          }),
+        }}
+        onPress={async () => {
+          var {playOnTap, seekOnPlay} = this.props;
+          [playOnTap, seekOnPlay] = (
+            playOnTap && seekOnPlay  ? [true,  false] : // blue  -> black
+            playOnTap && !seekOnPlay ? [false, false] : // black -> gray
+                                       [true,  true]    // gray  -> blue
+          );
+          await this.props.settings.set({seekOnPlay, playOnTap});
+        }}
       />
       {/* Zoom more/fewer recs (spectro height) */}
       {/* - TODO Disable when spectroScale is min/max */}
@@ -2016,7 +2064,11 @@ export class SearchScreen extends PureComponent<Props, State> {
                           </View>
 
                           {/* Spectro (tap) */}
-                          <TapGestureHandler onHandlerStateChange={this.toggleRecPlaying(rec)}>
+                          <TapGestureHandler onHandlerStateChange={
+                            // Toggle play/pause normally, but show modal if playOnTap is disabled
+                            //  - UX HACK to allow a faster workflow for hiding lots of families/species/recs in a row
+                            this.props.playOnTap ? this.toggleRecPlaying(rec) : ev => this.showRecActionModal(rec)
+                          }>
                             <Animated.View>
 
                               {/* Image */}
