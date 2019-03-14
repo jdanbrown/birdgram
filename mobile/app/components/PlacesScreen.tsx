@@ -11,7 +11,7 @@ import { human, iOSColors, material, materialColors, systemWeights } from 'react
 
 import { config } from 'app/config';
 import { Geo, GeoCoords, GeoError } from 'app/components/Geo';
-import { matchSearchPathParams, MetadataSpecies, Place, Species } from 'app/datatypes';
+import { matchSearchPathParams, Place, Species } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
 import { Log, rich } from 'app/log';
 import { Go, Histories, History, Location } from 'app/router';
@@ -31,7 +31,6 @@ interface Props {
   history:         History;
   histories:       Histories;
   go:              Go;
-  metadataSpecies: MetadataSpecies;
   ebird:           Ebird;
   geo:             Geo;
   nSpecies:        number;

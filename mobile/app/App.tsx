@@ -26,7 +26,7 @@ import { TabRoute, TabRouteKey, TabRoutes, TabLink } from 'app/components/TabRou
 import * as Colors from 'app/colors';
 import { config } from 'app/config';
 import {
-  MetadataSpecies, Models, ModelsSearch, Rec, SearchRecs, ServerConfig, UserRec, XCRec,
+  MetadataSpecies, MetadataXcIds, Models, ModelsSearch, Rec, SearchRecs, ServerConfig, UserRec, XCRec,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
@@ -208,53 +208,57 @@ export default class App extends PureComponent<Props, State> {
 
       // Back compat: migrate old-style {user-recs-v0,edits-v0}/ dirs to new-style Recordings/ dir
       //  - XXX(unify_edit_user_recs): After all (three) active users have migrated
-      if (await fs.isDir(Rec.old_editDir))    await fs.mv(Rec.old_editDir, Rec.trash_editDir); // edits-v0/     -> _trash_edits-v0/
-      if (await fs.isDir(Rec.old_userRecDir)) await fs.mv(Rec.old_userRecDir, Rec.userRecDir); // user-recs-v0/ -> Recordings/
+      //  - Perf: guard on fs.isDir(userRecDir) to avoid 2x calls to fs.isDir in the common case
+      //    - Safety: move userRecDir last, in case of partial writes
+      await log.timedAsync('Back compat: fs.isDir', async () => {
+        if (await fs.isDir(Rec.old_userRecDir)) {
+          if (await fs.isDir(Rec.old_editDir))    await fs.mv(Rec.old_editDir, Rec.trash_editDir); // edits-v0/     -> _trash_edits-v0/
+          if (await fs.isDir(Rec.old_userRecDir)) await fs.mv(Rec.old_userRecDir, Rec.userRecDir); // user-recs-v0/ -> Recordings/
+        }
+      });
 
       // Load/create histories
-      const histories = (
-        await log.timedAsync(`Load histories`, async () => {
-          const histories = await loadHistories() || createDefaultHistories();
-          Object.values(histories).forEach(history => {
-            // On history change
-            history.listen(() => {
+      const histories = await log.timedAsync(`Load histories`, async () => {
+        const histories = await loadHistories() || createDefaultHistories();
+        Object.values(histories).forEach(history => {
+          // On history change
+          history.listen(() => {
 
-              // Trim history.entries (else we're stuck with the default unbounded growth)
-              //  - HACK MemoryHistory.setState isn't exposed, so we have to mutate the props manually
-              const maxHistory = this.state.settings && this.state.settings.maxHistory;
-              if (maxHistory && maxHistory > 0) {
-                const {entries} = history;
-                const trimmed   = entries.slice(-maxHistory); // Most recent last
-                const diff      = entries.length - trimmed.length
-                history.entries = trimmed;
-                history.length  = history.length - diff;
-                history.index   = Math.max(0, history.index - diff);
-                assert(history.length >= 0 && history.index >= 0);
-              }
+            // Trim history.entries (else we're stuck with the default unbounded growth)
+            //  - HACK MemoryHistory.setState isn't exposed, so we have to mutate the props manually
+            const maxHistory = this.state.settings && this.state.settings.maxHistory;
+            if (maxHistory && maxHistory > 0) {
+              const {entries} = history;
+              const trimmed   = entries.slice(-maxHistory); // Most recent last
+              const diff      = entries.length - trimmed.length
+              history.entries = trimmed;
+              history.length  = history.length - diff;
+              history.index   = Math.max(0, history.index - diff);
+              assert(history.length >= 0 && history.index >= 0);
+            }
 
-              // Save all histories (on any history change)
-              saveHistories(histories);
+            // Save all histories (on any history change)
+            saveHistories(histories);
 
-              // Update tabLocations (on any history change)
-              this.setState((state, props) => {
-                if (!state.histories) return null;
-                const tabLocations = getTabLocations(state.histories);
-                if (fastIsEqual(tabLocations, state.tabLocations)) return null;
-                return {
-                  tabLocations,
-                };
-              });
-
+            // Update tabLocations (on any history change)
+            this.setState((state, props) => {
+              if (!state.histories) return null;
+              const tabLocations = getTabLocations(state.histories);
+              if (fastIsEqual(tabLocations, state.tabLocations)) return null;
+              return {
+                tabLocations,
+              };
             });
+
           });
-          return histories;
-        })
-      );
+        });
+        return histories;
+      });
 
       // Set initial tabLocations
       const tabLocations = getTabLocations(histories);
 
-      // Load settings (async) on app startup
+      // Load settings on app startup
       const settings = (
         await log.timedAsync(`Load Settings`, async () => {
           return await Settings.load(
@@ -270,8 +274,10 @@ export default class App extends PureComponent<Props, State> {
         return this.state.settings!
       });
 
-      // Load db (async) on app startup
-      const db = await DB.newAsync();
+      // Load db on app startup
+      const db = await log.timedAsync(`DB.newAsync`, async () => {
+        return await DB.newAsync();
+      });
 
       // XXX Debug: log sqlite version
       // log.timedAsync('select sqlite_version()', async () => {
@@ -283,19 +289,7 @@ export default class App extends PureComponent<Props, State> {
       //   });
       // });
 
-      // Count species (from db)
-      //  - TODO Write this into a payload .json so we don't have to spend the ~100ms[?] querying it
-      const nSpecies: number = await log.timedAsync('select count(distinct species)', async () => {
-        return await db.query<{n: number}>(`
-          select count(distinct species) as n
-          from search_recs
-        `)(async results => {
-          const [{n}] = results.rows.raw();
-          return n;
-        });
-      });
-
-      // Load serverConfig (async) on app startup
+      // Load serverConfig on app startup
       const serverConfigPath = `${fs.dirs.MainBundleDir}/${SearchRecs.serverConfigPath}`;
       const serverConfig = (
         await log.timedAsync(`Load serverConfig ${json({serverConfigPath})}`, async () => {
@@ -303,7 +297,7 @@ export default class App extends PureComponent<Props, State> {
         })
       );
 
-      // Load metadataSpecies (async) on app startup
+      // Load metadataSpecies on app startup
       const metadataSpeciesPath = `${fs.dirs.MainBundleDir}/${SearchRecs.metadataSpeciesPath}`;
       const metadataSpecies = (
         await log.timedAsync(`Load metadataSpecies ${json({metadataSpeciesPath})}`, async () => {
@@ -311,13 +305,30 @@ export default class App extends PureComponent<Props, State> {
         })
       );
 
+      // Load metadataXcIds on app startup
+      //  - Perf: faster to load from json file (~0.09s) i/o db query (~1.2s)
+      const metadataXcIdsPath = `${fs.dirs.MainBundleDir}/${SearchRecs.metadataXcIdsPath}`;
+      const metadataXcIds = (
+        await log.timedAsync(`Load metadataXcIds ${json({metadataXcIdsPath})}`, async () => {
+          return await readJsonFile<MetadataXcIds>(metadataXcIdsPath);
+        })
+      );
+
+      // Load nSpecies
+      //  - Perf: compute from already-loaded metadataSpecies (~0s) i/o making another db query (~0.1s)
+      const nSpecies: number = metadataSpecies.length;
+
       // Load xc
-      const xc = await XC.newAsync(db);
+      const xc = await log.timedAsync(`XC.newAsync`, async () => {
+        return await XC.newAsync(db, metadataXcIds);
+      });
 
       // Load ebird (not much to it, just needs metadataSpecies)
-      const ebird = new Ebird(metadataSpecies);
+      const ebird = await log.timedAsync(`new Ebird`, async () => {
+        return new Ebird(metadataSpecies);
+      });
 
-      // Load modelsSearch (async) on app startup
+      // Load modelsSearch on app startup
       const modelsSearchPath = `${fs.dirs.MainBundleDir}/${Models.search.path}`;
       const modelsSearch: ModelsSearch = (
         await log.timedAsync(`Load modelsSearch ${json({modelsSearchPath})}`, async () => ({
@@ -328,12 +339,15 @@ export default class App extends PureComponent<Props, State> {
 
       // Track geo coords (while app is running)
       //  - TODO(geo_reload): Trigger reload when settings.geoHighAccuracy changes (used to be a react component)
-      const geo = new Geo({
-        enableHighAccuracy: settings.geoHighAccuracy,
+      const geo = await log.timedAsync(`new Geo / geo.start()`, async () => {
+        const geo = new Geo({
+          enableHighAccuracy: settings.geoHighAccuracy,
+        });
+        geo.start();
+        return geo;
       });
-      geo.start();
 
-      // Load native models (async) on app startup
+      // Load native models on app startup
       //  - TODO(refactor_native_deps) Refactor so that all native singletons are created together at App init, so deps can be passed in
       //    - Search is currently created at App init [here]
       //    - Spectro is currently re-created on each startRecording(), and needs Search as a dep
@@ -356,21 +370,23 @@ export default class App extends PureComponent<Props, State> {
       };
 
       // TODO Show loading screen until loads complete
-      this.setState({
-        loading: false,
-        histories,
-        tabLocations,
-        serverConfig,
-        metadataSpecies,
-        xc,
-        ebird,
-        modelsSearch,
-        settings,
-        settingsWrites,
-        geo,
-        db,
-        nSpecies,
-        appContext,
+      await log.timedAsync(`setState`, async () => {
+        this.setState({
+          loading: false,
+          histories,
+          tabLocations,
+          serverConfig,
+          metadataSpecies,
+          xc,
+          ebird,
+          modelsSearch,
+          settings,
+          settingsWrites,
+          geo,
+          db,
+          nSpecies,
+          appContext,
+        });
       });
 
     });
@@ -380,6 +396,9 @@ export default class App extends PureComponent<Props, State> {
     // log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state))); // Noisy in xcode
     global.histories = this.state.histories; // XXX Debug
     global.settings = this.state.settings; // XXX Debug
+    global.xc = this.state.xc; // XXX Debug
+    global.ebird = this.state.ebird; // XXX Debug
+    global.db = this.state.db; // XXX Debug
   }
 
   render = () => {
@@ -560,7 +579,6 @@ export default class App extends PureComponent<Props, State> {
         <PlacesScreen {...props}
           // App globals
           go                      = {this.go}
-          metadataSpecies         = {this.state.metadataSpecies!}
           ebird                   = {this.state.ebird!}
           geo                     = {this.state.geo!}
           nSpecies                = {this.state.nSpecies!}

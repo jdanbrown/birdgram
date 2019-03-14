@@ -49,6 +49,7 @@ export const SearchRecs = {
 
   serverConfigPath:    `${Paths.search_recs}/server-config.json`,
   metadataSpeciesPath: `${Paths.search_recs}/metadata/species.json`,
+  metadataXcIdsPath:   `${Paths.search_recs}/metadata/xc_ids.json`,
   dbPath:              `${Paths.search_recs}/search_recs.sqlite3`, // TODO Test asset paths on android (see notes in README)
 
   // TODO After verifying that asset dirs are preserved on android, simplify the basenames back to `${xc_id}.${format}`
@@ -96,6 +97,7 @@ export interface ServerConfig {
 };
 
 export type MetadataSpecies = Array<SpeciesMetadata>;
+export type MetadataXcIds   = {[key: string]: Species};
 
 //
 // Species

@@ -233,6 +233,7 @@ def df_cache_hybrid(
             mobile_server_config_path = mobile_dir / 'server-config.json'
             mobile_metadata_dir = ensure_dir(mobile_dir / 'metadata')
             mobile_metadata_species_path = mobile_metadata_dir / 'species.json'
+            mobile_metadata_xc_ids_path = mobile_metadata_dir / 'xc_ids.json'
             mobile_models_dir = ensure_dir(mobile_dir / 'models')
             mobile_models_search_path = mobile_models_dir / 'search.json'
 
@@ -377,7 +378,7 @@ def df_cache_hybrid(
                         # never synced their payload/*/api/ dirs from remote
                         #   - (i.e. running notebooks/mobile_build_payload_search_recs locally will barf)
                         #   - TODO Sync remote data/cache/payloads/*/api/ -> gs -> local
-                        #   - (cf. notebooks/mobile_build_payload_search_recs_manually_create_indexes)
+                        #   - (cf. config.py, notebooks/mobile_build_payload_search_recs_manually_create_indexes)
                     ]:
                         index_name = '__'.join([f'ix_{table}', *index['cols']])
                         index_cols = ', '.join(index['cols'])
@@ -402,11 +403,25 @@ def df_cache_hybrid(
                 )
 
             # Write file: metadata/species.json
+            #   - For: mobile/app/ebird.ts
+            #   - Perf: trim down to just the species in mobile_df
+            #       - Faster app startup: ~0.65s for 10k sp -> ~0.089s for 770 sp (US)
+            #   - HACK(manually_create_indexes): These were manually built for US/CR:
+            #       $ cd app/assets/payloads/.../search_recs/
+            #       $ cat /tmp/species-all.json \
+            #           | jq "map(select(.shorthand | in(`
+            #               sqlite3 -csv search_recs.sqlite3 \
+            #               <<< 'select distinct species from search_recs' \
+            #               | csvjson \
+            #               | jq -c 'map({key: .species, value: null}) | from_entries'
+            #           `)))" \
+            #           > metadata/species.json
             with log_time_context(f'Mobile: Write {rel(mobile_metadata_species_path)}',
                 lambda: naturalsize_path(mobile_metadata_species_path),
             ):
-                metadata_species = (
-                    metadata.species.df
+                mobile_species = set(mobile_df.species)
+                metadata_species = (metadata.species.df
+                    [lambda df: df.shorthand.isin(mobile_species)]  # Trim down to just species in mobile_df
                     .pipe(df_cat_to_str)  # Required for .fillna(''), and we don't need cats to dump to json
                     .fillna('')           # Get rid of any NaN's, which we disallow below
                     .to_dict(orient='records')
@@ -415,6 +430,33 @@ def df_cache_hybrid(
                     path=mobile_metadata_species_path,
                     allow_nan=False,  # NaN's aren't safe for react-native JSON.parse
                     obj=metadata_species,
+                )
+
+            # Write file: metadata/xc_ids.json
+            #   - For: mobile/app/xc.ts
+            #   - What: a json object with the xc_id->species mapping from the db
+            #   - Why: faster to load from json file (~0.5s) i/o db query (~1.2s)
+            #   - HACK(manually_create_indexes): These were manually built for US/CR:
+            #       $ cd app/assets/payloads/.../search_recs/
+            #       $ sqlite3 -csv search_recs.sqlite3 \
+            #           <<< 'select distinct xc_id, species from search_recs' \
+            #           | csvjson \
+            #           | jq 'map({key: (.xc_id | tostring), value: .species}) | from_entries' \
+            #           > metadata/xc_ids.json
+            with log_time_context(f'Mobile: Write {rel(mobile_metadata_xc_ids_path)}',
+                lambda: naturalsize_path(mobile_metadata_xc_ids_path),
+            ):
+                metadata_xc_ids = (mobile_df
+                    [['xc_id', 'species']]
+                    .astype({'xc_id': 'str'})  # Convert keys int->str for json/js
+                    .set_index('xc_id')
+                    ['species']
+                    .to_dict()
+                )
+                json_dump_path(indent=2,
+                    path=mobile_metadata_xc_ids_path,
+                    allow_nan=False,  # NaN's aren't safe for react-native JSON.parse
+                    obj=metadata_xc_ids,
                 )
 
             # Write file: models/search.json

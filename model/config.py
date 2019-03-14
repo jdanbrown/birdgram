@@ -96,6 +96,11 @@ config = AttrDict(
             #     countries_k='na', com_names_k='ca', num_recs=None,  # NA/CA
             # ),
 
+            # TODO(manually_create_indexes): Sync US/CR payload/*/api/ dirs from remote
+            #   - Until then, we can't locally rebuild mobile payloads b/c they cache hit from the api payload
+            #   - [Or is it simple enough to just rebuild the api payload locally?]
+            #   - (cf. payloads.py, notebooks/mobile_build_payload_search_recs_manually_create_indexes)
+
             # # US
             # search=dict(
             #     experiment_id='train-na-us-v0-na-us',

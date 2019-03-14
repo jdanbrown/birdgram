@@ -97,14 +97,15 @@ export class DB {
             source_id:             sourceId,
             duration_s,
             // Rec:xc (mock)
-            //  - TODO Push these fields into XCRec and update consumers to supply 'unknown' values for user/edit recs
-            species:               'unknown',
+            //  - TODO Push these fields into XCRec and update consumers to supply unknown values for user/edit recs
+            //  - TODO Dedupe with py model.constants
+            species:               '_UNK',
             species_taxon_order:   '_UNK',
-            species_com_name:      'unknown',
-            species_sci_name:      'unknown',
-            species_species_group: 'unknown',
-            species_family:        'unknown',
-            species_order:         'unknown',
+            species_com_name:      'Unknown',
+            species_sci_name:      'Unknown',
+            species_species_group: 'Unknown',
+            species_family:        'Unknown',
+            species_order:         'Unknown',
             recs_for_sp:           -1,
             quality:               'no score',
             date:                  '',

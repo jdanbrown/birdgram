@@ -2,7 +2,7 @@
 -- payload/*/api/ dirs from remote
 --  - (i.e. running notebooks/mobile_build_payload_search_recs locally will barf)
 --  - TODO Sync remote data/cache/payloads/*/api/ -> gs -> local
---  - (cf. payloads.py)
+--  - (cf. payloads.py, config.py)
 
 create unique index ix_search_recs__source_id on search_recs (source_id);
 create unique index ix_search_recs__species__source_id on search_recs (species, source_id);

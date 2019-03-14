@@ -22,7 +22,7 @@ const _columns = {
 
   species: (rec: Rec) => (
     <MetadataText>
-      <Hyperlink url={rec.species === 'unknown' ? null : Rec.speciesUrl(rec)}>
+      <Hyperlink url={rec.species === '_UNK' ? null : Rec.speciesUrl(rec)}>
         {rec.species_com_name} <Text style={{fontStyle: 'italic'}}>({rec.species_sci_name})</Text>
       </Hyperlink>
     </MetadataText>
@@ -48,7 +48,7 @@ const _columns = {
 
   com_name: (rec: Rec) => (
     <MetadataText>
-      <Hyperlink url={rec.species === 'unknown' ? null : Rec.speciesUrl(rec)}>
+      <Hyperlink url={rec.species === '_UNK' ? null : Rec.speciesUrl(rec)}>
         {rec.species_com_name}
       </Hyperlink>
     </MetadataText>
@@ -56,7 +56,7 @@ const _columns = {
 
   sci_name: (rec: Rec) => (
     <MetadataText>
-      <Hyperlink url={rec.species === 'unknown' ? null : Rec.speciesUrl(rec)}>
+      <Hyperlink url={rec.species === '_UNK' ? null : Rec.speciesUrl(rec)}>
         {rec.species_sci_name}
       </Hyperlink>
     </MetadataText>
