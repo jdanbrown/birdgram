@@ -336,32 +336,60 @@ def df_cache_hybrid(
             with log_time_context(f'Mobile: Write {rel(mobile_db_path)}', lambda: naturalsize_path(mobile_db_path)):
                 # Create and connect to sqlite file
                 with sqla_oneshot_eng_conn_tx(f'sqlite:///{ensure_parent_dir(mobile_db_path)}') as conn:
+                    def size_sql_relation(name: str) -> int:
+                        df = pd.read_sql(con=conn, sql='''
+                            select sum(pgsize) as size from dbstat where name=:name
+                        ''', params=dict(
+                            name=name,
+                        ))
+                        return one(df_rows(df))['size']  # (Careful: df['size'] i/o df.size, else you'll get the row count)
                     # Write table
-                    (mobile_df
-                        .to_sql(table, conn,
-                            if_exists='replace',
-                            index=False,  # Silently drop df index (we shouldn't have any)
-                            **{**to_sql_kwargs,
-                                'chunksize': 1000,  # Safe default for big writes (pd default writes all rows at once -- mem unsafe)
-                            },
+                    with log_time_context(f'Mobile: Create table {table}', lambda: naturalsize(size_sql_relation(table))):
+                        (mobile_df
+                            .to_sql(table, conn,
+                                if_exists='replace',
+                                index=False,  # Silently drop df index (we shouldn't have any)
+                                **{**to_sql_kwargs,
+                                    'chunksize': 1000,  # Safe default for big writes (pd default writes all rows at once -- mem unsafe)
+                                },
+                            )
                         )
-                    )
-                    mobile_file_sizes[rel(mobile_db_path)] = size_path(mobile_db_path)
                     # Create indexes
                     #   - https://www.sqlite.org/lang_createindex.html
                     #   - https://www.sqlite.org/queryplanner.html
                     #   - Separate from df.to_sql because it doesn't provide easy support for creating indexes
                     #       - Can create single-col indexes but not composite ones [https://stackoverflow.com/q/39089382/397334]
                     #       - Can't create a primary key [https://stackoverflow.com/q/39407254/397334]
+                    #   - To inspect index sizes: `sqlite3_analyzer search_recs.sqlite3`
+                    #       - https://www.sqlite.org/sqlanalyze.html
+                    #       - https://www.sqlite.org/dbstat.html
                     for index in [
-                        dict(cols=['source_id'], unique=True),
-                        dict(cols=['species', 'source_id'], unique=True),
+                        # US: ~800KB (.20% of db)
+                        dict(unique=True, cols=['source_id']),
+                        # US: ~1MB (.26% of db)
+                        dict(unique=True, cols=['species', 'source_id']),
+                        # A covering index for filters in mobile/Search (see SearchScreen.tsx:filteredSpecies)
+                        #   - (sp, group) appears better than (group, sp) since the former avoids a `USE TEMP B-TREE FOR DISTINCT`
+                        #   - But include both since recreating payload indexes is a pita
+                        dict(unique=True, cols=['species', 'species_species_group', 'quality', 'source_id']),
+                        dict(unique=True, cols=['species_species_group', 'species', 'quality', 'source_id']),
+                        # FIXME(manually_create_indexes): We can't locally rebuild mobile payloads for US/CR because we
+                        # never synced their payload/*/api/ dirs from remote
+                        #   - (i.e. running notebooks/mobile_build_payload_search_recs locally will barf)
+                        #   - TODO Sync remote data/cache/payloads/*/api/ -> gs -> local
+                        #   - (cf. notebooks/mobile_build_payload_search_recs_manually_create_indexes)
                     ]:
-                        conn.execute('create %sindex ix_search_recs_%s on search_recs (%s)' % (
-                            'unique ' if index.get('unique') else ' ',
-                            '_'.join(index['cols']),
-                            ', '.join(index['cols']),
-                        ))
+                        index_name = '__'.join([f'ix_{table}', *index['cols']])
+                        index_cols = ', '.join(index['cols'])
+                        with log_time_context(f'Mobile: Create index ({index_cols})', lambda: naturalsize(size_sql_relation(index_name))):
+                            conn.execute('create %(unique)s index %(index_name)s on %(table)s (%(index_cols)s)' % dict(
+                                unique='unique' if index.get('unique') else '',
+                                index_name=index_name,
+                                table=table,
+                                index_cols=index_cols,
+                            ))
+                    # Save sqlite file size (after creating indexes)
+                    mobile_file_sizes[rel(mobile_db_path)] = size_path(mobile_db_path)
 
             # Write file: server-config.json
             #   - TODO Trim down (see ServerConfig in app/datatypes.ts for first cut at contract with mobile)

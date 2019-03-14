@@ -1877,9 +1877,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca100.debug";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us.debug";
 				PRODUCT_NAME = Birdgram;
-				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-ca100.debug";
+				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-us.debug";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 4.2;
@@ -2085,9 +2085,9 @@
 					"-lc++",
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" -Xcc -fmodule-map-file=$(SRCROOT)/swift-npy/SwiftNpy.xcodeproj/GeneratedModuleMap/Cminizip/module.modulemap";
-				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-ca100";
+				PRODUCT_BUNDLE_IDENTIFIER = "app.birdgram.birdgram-us";
 				PRODUCT_NAME = Birdgram;
-				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-ca100";
+				PROVISIONING_PROFILE_SPECIFIER = "match Development app.birdgram.birdgram-us";
 				SWIFT_OBJC_BRIDGING_HEADER = "Birdgram-Bridging-Header.h";
 				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";

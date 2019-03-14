@@ -750,6 +750,8 @@ export class SearchScreen extends PureComponent<Props, State> {
               1 - (${SQL.raw(sqlDot)}) / S.norm_f_preds / Q.norm_f_preds
             `;
 
+            // TODO TODO Add a db index for (species, species_group), so we get covering index for the filter
+
             // Query which species are left after applying filters
             //  - This is difficult to make exact, but we can get very close
             //    - e.g.
@@ -758,6 +760,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             //    - Query plan should say `USING COVERING INDEX`, not `USING INDEX` (or `SCAN TABLE`)
             //    - https://www.sqlite.org/optoverview.html#covering_indices
             //    - https://www.sqlite.org/queryplanner.html#_covering_indices
+            //    - See py model.payloads.df_cache_hybrid for index definitions
             log.info('updateForLocation: Querying species for filters', rich({query_rec}));
             const filteredSpecies: Set<Species> = await this.props.db.query<{species: Species}>(sqlf`
               select distinct species
@@ -765,10 +768,10 @@ export class SearchScreen extends PureComponent<Props, State> {
               where true
                 -- Filters duplicated below (in rec query)
                 ${SQL.raw(placeFilter('S'))}        -- Safe for covering index (species)
-                -- ${SQL.raw(qualityFilter('S'))}   -- Unsafe for covering index (quality)
+                ${SQL.raw(qualityFilter('S'))}      -- Safe for covering index (quality)
                 ${SQL.raw(speciesFilter('S'))}      -- Safe for covering index (species)
-                ${SQL.raw(speciesGroupFilter('S'))} -- Safe for covering index (species)
-                -- ${SQL.raw(recFilter('S'))}       -- Unsafe for covering index (source_id) [why? index is (species, source_id)]
+                ${SQL.raw(speciesGroupFilter('S'))} -- Safe for covering index (species_species_group)
+                ${SQL.raw(recFilter('S'))}          -- Safe for covering index (source_id)
             `, {
               logTruncate: null,
               // logQueryPlan: true, // XXX Debug: ensure covering index (see above)

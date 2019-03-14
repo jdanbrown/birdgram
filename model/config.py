@@ -53,7 +53,7 @@ config = AttrDict(
     server_globals=dict(
         sg_load=dict(
 
-            # US-CA
+            # CA100
             search=dict(
                 experiment_id='comp-l1-l2-na-ca',
                 cv_str='split_i=0,train=34875,test=331,classes=331',
@@ -63,11 +63,38 @@ config = AttrDict(
                 fix_missing_skm_projection_id='peterson-v0-26bae1c',
             ),
             xc_meta=dict(
-                # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
-                countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
-                # countries_k='na', com_names_k='dan5', num_recs=None,  # XXX Faster dev
+                limit=100,
                 # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
+                countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
+                # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
             ),
+
+            # # CA3500
+            # search=dict(
+            #     experiment_id='comp-l1-l2-na-ca',
+            #     cv_str='split_i=0,train=34875,test=331,classes=331',
+            #     search_params_str='n_species=331,n_recs=1.0',
+            #     classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
+            #     random_state=0,
+            #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
+            # ),
+            # xc_meta=dict(
+            #     limit=3500,
+            #     countries_k='na', com_names_k='ca', num_recs=None,  # NA/CA
+            # ),
+
+            # # CA
+            # search=dict(
+            #     experiment_id='comp-l1-l2-na-ca',
+            #     cv_str='split_i=0,train=34875,test=331,classes=331',
+            #     search_params_str='n_species=331,n_recs=1.0',
+            #     classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
+            #     random_state=0,
+            #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
+            # ),
+            # xc_meta=dict(
+            #     countries_k='na', com_names_k='ca', num_recs=None,  # NA/CA
+            # ),
 
             # # US
             # search=dict(
@@ -117,7 +144,6 @@ config = AttrDict(
                 # Semantically relevant params (i.e. affects the output, not the process)
                 params=dict(
                     # Global params for precomputed search_recs
-                    limit=100,  # XXX Faster dev (declared here for cache invalidation)
                     audio_s=10,  # TODO How to support multiple precomputed search_recs so user can choose e.g. 10s vs. 5s?
                     version=8,   # Manually bump to invalidate cache
                 ),

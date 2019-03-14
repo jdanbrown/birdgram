@@ -283,7 +283,8 @@ export class SettingsScreen extends PureComponent<Props, State> {
               //    - this.props.serverConfig.api.recs.search_recs.params
               payload: {
                 ...this.props.serverConfig.server_globals.sg_load.xc_meta,
-                ..._.pick(this.props.serverConfig.api.recs.search_recs.params, ['limit', 'audio_s']),
+                ..._.pick(this.props.serverConfig.server_globals.sg_load.xc_meta, ['limit']),
+                ..._.pick(this.props.serverConfig.api.recs.search_recs.params, ['audio_s']),
                 ..._.pick(this.props.serverConfig.server_globals.sg_load.search, ['cv_str']),
               },
             })}/>

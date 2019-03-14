@@ -706,7 +706,8 @@ def _compute_search_recs() -> pd.DataFrame:
     #           - http://essays.ajs.com/2011/02/python-subprocess-vs-ospopen-overhead.html
     return (sg.xc_meta
         # Limit (for faster dev)
-        [:config.api.recs.search_recs.params.get('limit')]
+        #   - TODO Push up into sg.xc_meta (requires modifying: _sg_load.load_xc_meta + datasets.load_xc_meta + datasets.load_xc_recs)
+        [:sg_load.config.xc_meta.get('limit')]
 
         # XXX Old, slow b/c fork() is slow with large ram and bogged down job runtime
         # .pipe(df_batched, f,
