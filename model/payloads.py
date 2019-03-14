@@ -389,6 +389,11 @@ def df_cache_hybrid(
                                 table=table,
                                 index_cols=index_cols,
                             ))
+                    # Run vacuum + analyze
+                    with log_time_context(f'Mobile: vacuum + analyze'):
+                        conn.execute('commit')  # TODO Revisit sqla_oneshot_eng_conn_tx above so that all cmds run in their own tx
+                        conn.execute('vacuum')
+                        conn.execute('analyze')
                     # Save sqlite file size (after creating indexes)
                     mobile_file_sizes[rel(mobile_db_path)] = size_path(mobile_db_path)
 
