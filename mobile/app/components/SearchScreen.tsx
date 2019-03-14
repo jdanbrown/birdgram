@@ -901,7 +901,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     return await soundAsync!;
   }
 
-  toggleRecPlaying = (rec: Rec) => {
+  toggleRecPlaying = async (rec: Rec) => {
 
     // Eagerly allocate Sound resource for rec
     //  - TODO How eagerly should we cache this? What are the cpu/mem costs and tradeoffs?
@@ -1041,10 +1041,39 @@ export class SearchScreen extends PureComponent<Props, State> {
     return !playing ? false : playing.rec.source_id === sourceId;
   }
 
+  onSpectroHandlerStateChange = (rec: Rec) => {
+
+    // Eagerly allocate Sound resource for rec
+    //  - TODO How eagerly should we cache this? What are the cpu/mem costs and tradeoffs?
+    const soundAsync = this.getOrAllocateSoundAsync(rec);
+
+    // Mimic Gesture.BaseButton
+    return async (event: Gesture.TapGestureHandlerStateChangeEvent) => {
+      const {nativeEvent: {state, oldState, x, absoluteX}} = event; // Unpack SyntheticEvent (before async)
+      if (
+        oldState === Gesture.State.ACTIVE &&
+        state !== Gesture.State.CANCELLED
+      ) {
+        await this.onSpectroPress(rec);
+      }
+    };
+
+  }
+
+  onSpectroPress = async (rec: Rec) => {
+    // Toggle play/pause normally, but show modal if playOnTap is disabled
+    //  - UX HACK to allow a faster workflow for hiding lots of families/species/recs in a row
+    if (this.props.playOnTap) {
+      await this.toggleRecPlaying(rec);
+    } else {
+      await this.showRecActionModal(rec);
+    }
+  }
+
   onSpectroLongPress = (rec: Rec) => async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
     const {nativeEvent: {state}} = event; // Unpack SyntheticEvent (before async)
     if (state === Gesture.State.ACTIVE) {
-      this.showRecActionModal(rec);
+      await this.showRecActionModal(rec);
     }
   }
 
@@ -1141,7 +1170,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     );
   }
 
-  showRecActionModal = (rec: Rec) => {
+  showRecActionModal = async (rec: Rec) => {
     this.setState({
       sourceIdForActionModal: rec.source_id,
       showGenericModal: () => (
@@ -2067,11 +2096,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                           </View>
 
                           {/* Spectro (tap) */}
-                          <TapGestureHandler onHandlerStateChange={
-                            // Toggle play/pause normally, but show modal if playOnTap is disabled
-                            //  - UX HACK to allow a faster workflow for hiding lots of families/species/recs in a row
-                            this.props.playOnTap ? this.toggleRecPlaying(rec) : ev => this.showRecActionModal(rec)
-                          }>
+                          <TapGestureHandler onHandlerStateChange={this.onSpectroHandlerStateChange(rec)}>
                             <Animated.View>
 
                               {/* Image */}
