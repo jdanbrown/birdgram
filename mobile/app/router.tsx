@@ -158,6 +158,7 @@ export interface TabHistories {
   search:   History;
   recent:   History;
   saved:    History;
+  browse:   History;
   places:   History;
   settings: History;
   help:     History;
@@ -169,6 +170,7 @@ export const tabHistoriesKeys: Array<string> = [
   'search',
   'recent',
   'saved',
+  'browse',
   'places',
   'settings',
   'help',
@@ -192,6 +194,7 @@ export function getTabLocations(histories: TabHistories): TabLocations {
     search:   histories.search.location,
     recent:   histories.recent.location,
     saved:    histories.saved.location,
+    browse:   histories.browse.location,
     places:   histories.places.location,
     settings: histories.settings.location,
     help:     histories.help.location,
@@ -265,6 +268,7 @@ export function createDefaultHistories(): Histories {
     search:   createHistory(),
     recent:   createHistory(),
     saved:    createHistory(),
+    browse:   createHistory(),
     places:   createHistory(),
     settings: createHistory(),
     help:     createHistory(),

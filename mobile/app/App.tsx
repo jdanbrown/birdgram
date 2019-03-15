@@ -13,6 +13,7 @@ import { BackButton, Link, matchPath, Redirect, Route, Switch } from 'react-rout
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
+import { BrowseScreen } from 'app/components/BrowseScreen';
 import { DeepLinking } from 'app/components/DeepLinking';
 import { HelpScreen } from 'app/components/HelpScreen';
 import { Geo, geolocation } from 'app/components/Geo';
@@ -140,6 +141,9 @@ timed('url-parse',          () => global.urlParse        = require('url-parse'))
 global.base64 = global.RNFB.base64;
 global.fs = global.RNFB.fs;
 
+export type AppProps = Props;
+export type AppState = State;
+
 interface Props {
   sampleRate: number;
   channels: number;
@@ -164,6 +168,11 @@ interface State {
   nSpecies?: number;
   geo?: Geo;
   appContext?: AppContext;
+  // For BrowseScreen/SearchScreen
+  excludeSpecies: Set<string>;
+  includeSpecies: Set<string>;
+  excludeSpeciesGroups: Set<string>;
+  includeSpeciesGroups: Set<string>;
 }
 
 interface AppContext {
@@ -181,6 +190,7 @@ const iconForTab: {[key in TabName]: string} = {
   // recent:   'list',
   recent:   'clock',
   saved:    'bookmark',
+  browse:   'list',
   places:   'map-pin',
   settings: 'settings',
   help:     'help-circle',
@@ -199,6 +209,13 @@ export default class App extends PureComponent<Props, State> {
     tabIndex: 2, // TODO
     orientation: getOrientation(),
     loading: true,
+    // For BrowseScreen/SearchScreen
+    excludeSpecies:       new Set(),
+    // excludeSpecies:       new Set(['VIRA', 'SWTH']), // XXX(family_list): Debug
+    includeSpecies:       new Set(),
+    excludeSpeciesGroups: new Set(),
+    // excludeSpeciesGroups: new Set(['Waterfowl', 'Wood-Warblers']), // XXX(family_list): Debug
+    includeSpeciesGroups: new Set(),
   };
 
   componentDidMount = async () => {
@@ -526,6 +543,7 @@ export default class App extends PureComponent<Props, State> {
           go                      = {this.go}
           xc                      = {this.state.xc!}
           ebird                   = {this.state.ebird!}
+          app                     = {this}
           // Settings
           settings                = {this.state.settingsWrites!}
           db                      = {this.state.db!}
@@ -542,6 +560,11 @@ export default class App extends PureComponent<Props, State> {
           spectroScale            = {this.state.settings!.spectroScale}
           place                   = {this.state.settings!.place}
           places                  = {this.state.settings!.places}
+          // For BrowseScreen/SearchScreen
+          excludeSpecies          = {this.state.excludeSpecies}
+          includeSpecies          = {this.state.includeSpecies}
+          excludeSpeciesGroups    = {this.state.excludeSpeciesGroups}
+          includeSpeciesGroups    = {this.state.includeSpeciesGroups}
           // SearchScreen
           f_bins                  = {this.state.settings!.f_bins}
         />
@@ -575,6 +598,23 @@ export default class App extends PureComponent<Props, State> {
           ebird                   = {this.state.ebird!}
           // SavedScreen
           iconForTab              = {iconForTab}
+        />
+      ),
+    }, {
+      key: 'browse', route: {path: '/browse'}, label: 'Browse', iconName: iconForTab['browse'],
+      badge: this.badgeForTab('browse'),
+      render: props => (
+        <BrowseScreen {...props}
+          // App globals
+          go                      = {this.go}
+          ebird                   = {this.state.ebird!}
+          place                   = {this.state.settings!.place}
+          app                     = {this}
+          // For BrowseScreen/SearchScreen
+          excludeSpecies          = {this.state.excludeSpecies}
+          includeSpecies          = {this.state.includeSpecies}
+          excludeSpeciesGroups    = {this.state.excludeSpeciesGroups}
+          includeSpeciesGroups    = {this.state.includeSpeciesGroups}
         />
       ),
     }, {
@@ -653,6 +693,23 @@ export default class App extends PureComponent<Props, State> {
         search:   () => null,
         recent:   () => null,
         saved:    () => null,
+        browse:   () => (
+          <Text>
+            {
+              // TODO(family_list): Make this legible
+              //  - Add ebird.speciesForSpeciesGroup(speciesGroup).length
+              //  - Format like '-N+M'
+              //  - Add red/green styles
+              [
+                `-${this.state.excludeSpecies.size}`,
+                // `+${this.state.includeSpecies.size}`,
+                ',',
+                `-${this.state.excludeSpeciesGroups.size}`,
+                // `+${this.state.includeSpeciesGroups.size}`,
+              ].join('')
+            }
+          </Text>
+        ),
         places:   () => (
           <Text>
             {matchNull(settings.place, {
@@ -674,6 +731,8 @@ export default class App extends PureComponent<Props, State> {
   }
 
 }
+
+export {App};
 
 const styles = StyleSheet.create({
   container: {
