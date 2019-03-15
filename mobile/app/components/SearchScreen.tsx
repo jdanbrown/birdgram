@@ -888,120 +888,105 @@ export class SearchScreen extends PureComponent<Props, State> {
     return await soundAsync!;
   }
 
-  toggleRecPlaying = async (rec: Rec) => {
+  toggleRecPlaying = async (rec: Rec, soundAsync: Promise<Sound>, x: number): Promise<void> => {
+    log.debug('toggleRecPlaying', () => pretty({x, sourceId: rec.source_id,
+      playing: this.state.playing && {sourceId: this.state.playing.rec.source_id},
+    }));
 
-    // Eagerly allocate Sound resource for rec
-    //  - TODO How eagerly should we cache this? What are the cpu/mem costs and tradeoffs?
-    const soundAsync = this.getOrAllocateSoundAsync(rec);
+    // FIXME Race conditions: tap many spectros really quickly and watch the "Playing rec" logs pile up
+    //  - Maybe have to replace react-native-audio with full expo, to get Expo.Audio?
+    //    - https://docs.expo.io/versions/latest/sdk/audio
+    //    - https://docs.expo.io/versions/latest/sdk/av.html
+    //    - https://github.com/expo/expo/tree/master/packages/expo/src/av
+    //    - https://github.com/expo/expo/blob/master/packages/expo/package.json
 
-    return async (event: Gesture.TapGestureHandlerStateChangeEvent) => {
-      const {nativeEvent: {state, oldState, x, absoluteX}} = event; // Unpack SyntheticEvent (before async)
-      if (
-        // [Mimic Gesture.BaseButton]
-        oldState === Gesture.State.ACTIVE &&
-        state !== Gesture.State.CANCELLED
-      ) {
-        log.debug('toggleRecPlaying', () => pretty({x, sourceId: rec.source_id,
-          playing: this.state.playing && {sourceId: this.state.playing.rec.source_id},
-        }));
+    const {playing} = this.state;
 
-        // FIXME Race conditions: tap many spectros really quickly and watch the "Playing rec" logs pile up
-        //  - Maybe have to replace react-native-audio with full expo, to get Expo.Audio?
-        //    - https://docs.expo.io/versions/latest/sdk/audio
-        //    - https://docs.expo.io/versions/latest/sdk/av.html
-        //    - https://github.com/expo/expo/tree/master/packages/expo/src/av
-        //    - https://github.com/expo/expo/blob/master/packages/expo/package.json
+    // Workaround: Manually clean up on done/stop b/c the .play done callback doesn't trigger on .stop
+    const onDone = async () => {
+      log.info('toggleRecPlaying: Done', {source_id: rec.source_id});
+      timer.clearInterval(this, 'playingCurrentTime');
+      this.setState({
+        playing: undefined,
+      });
+    };
 
-        const {playing} = this.state;
+    // Stop any recs that are currently playing
+    //  - TODO(stop_button): Extract a stopRecPlaying(), which looks like a bit complicated and error prone
+    if (playing) {
+      const {rec, sound} = playing;
+      global.sound = sound; // XXX Debug
 
-        // Workaround: Manually clean up on done/stop b/c the .play done callback doesn't trigger on .stop
-        const onDone = async () => {
-          log.info('toggleRecPlaying: Done', {source_id: rec.source_id});
-          timer.clearInterval(this, 'playingCurrentTime');
-          this.setState({
-            playing: undefined,
-          });
-        };
+      // Stop sound playback
+      log.info('toggleRecPlaying: Stopping', {source_id: rec.source_id});
+      if (sound.isLoaded()) { // Else we'll hang if sound was released while playing (e.g. play -> load new search)
+        await sound.stopAsync();
+      }
+      await onDone();
 
-        // Stop any recs that are currently playing
-        //  - TODO(stop_button): Extract a stopRecPlaying(), which looks like a bit complicated and error prone
-        if (playing) {
-          const {rec, sound} = playing;
-          global.sound = sound; // XXX Debug
+    }
 
-          // Stop sound playback
-          log.info('toggleRecPlaying: Stopping', {source_id: rec.source_id});
-          if (sound.isLoaded()) { // Else we'll hang if sound was released while playing (e.g. play -> load new search)
-            await sound.stopAsync();
-          }
+    // If touched rec was the currently playing rec, then we're done (it's stopped)
+    //  - Unless seekOnPlay [TODO(stop_button)]
+    // Else, play the (new) touched rec
+    if (
+      !this.recIsPlaying(rec.source_id, playing)
+      // || this.props.seekOnPlay // TODO(stop_button)
+    ) {
+      const sound = await soundAsync;
+      global.sound = sound; // XXX Debug
+
+      // Compute startTime to seek rec (if enabled)
+      let startTime;
+      if (this.props.seekOnPlay) {
+        startTime = this.spectroTimeFromX(rec, x);
+      } else {
+        // startTime = 0; // TODO Show some kind of visual feedback when not seekOnPlay
+      }
+
+      // Play rec (if startTime is valid)
+      if (!startTime || startTime < sound.getDuration()) {
+        log.info('toggleRecPlaying: Playing', {source_id: rec.source_id});
+
+        // setState
+        this.setState({
+          playing: {
+            rec,
+            sound,
+            startTime,
+          },
+          playingCurrentTime: 0,
+        });
+
+        // Update playingCurrentTime on interval (if enabled)
+        //  - HACK react-native-sound doesn't have an onProgress callback, so we have to hack it ourselves :/
+        //    - Ugh, waaay slow and cpu inefficient: 16ms (60fps) kills rndebugger in Debug and pegs cpu in Release
+        //    - TODO Explore alternatives: if setState->render is the bottleneck, then investigate Animated...
+        //  - WARNING Don't separate timers per rec.source_id until we resolve "FIXME Race conditions" above ("tap many")
+        if (this.props.playingProgressEnable && this.props.playingProgressInterval !== 0) {
+          timer.setInterval(this, 'playingCurrentTime',
+            async () => {
+              const {seconds, isPlaying} = await sound.getCurrentTimeAsync();
+              if (isPlaying) {
+                this.setState({
+                  playingCurrentTime: seconds,
+                });
+              }
+            },
+            this.props.playingProgressInterval,
+          );
+        }
+
+        // Seek + play + clean up when done
+        //  - Don't await: .playAsync promise fulfills after playback completes (/ is stopped / fails)
+        if (startTime) sound.setCurrentTime(startTime);
+        finallyAsync(sound.playAsync(), async () => {
           await onDone();
-
-        }
-
-        // If touched rec was the currently playing rec, then we're done (it's stopped)
-        //  - Unless seekOnPlay [TODO(stop_button)]
-        // Else, play the (new) touched rec
-        if (
-          !this.recIsPlaying(rec.source_id, playing)
-          // || this.props.seekOnPlay // TODO(stop_button)
-        ) {
-          const sound = await soundAsync;
-          global.sound = sound; // XXX Debug
-
-          // Compute startTime to seek rec (if enabled)
-          let startTime;
-          if (this.props.seekOnPlay) {
-            startTime = this.spectroTimeFromX(rec, x);
-          } else {
-            // startTime = 0; // TODO Show some kind of visual feedback when not seekOnPlay
-          }
-
-          // Play rec (if startTime is valid)
-          if (!startTime || startTime < sound.getDuration()) {
-            log.info('toggleRecPlaying: Playing', {source_id: rec.source_id});
-
-            // setState
-            this.setState({
-              playing: {
-                rec,
-                sound,
-                startTime,
-              },
-              playingCurrentTime: 0,
-            });
-
-            // Update playingCurrentTime on interval (if enabled)
-            //  - HACK react-native-sound doesn't have an onProgress callback, so we have to hack it ourselves :/
-            //    - Ugh, waaay slow and cpu inefficient: 16ms (60fps) kills rndebugger in Debug and pegs cpu in Release
-            //    - TODO Explore alternatives: if setState->render is the bottleneck, then investigate Animated...
-            //  - WARNING Don't separate timers per rec.source_id until we resolve "FIXME Race conditions" above ("tap many")
-            if (this.props.playingProgressEnable && this.props.playingProgressInterval !== 0) {
-              timer.setInterval(this, 'playingCurrentTime',
-                async () => {
-                  const {seconds, isPlaying} = await sound.getCurrentTimeAsync();
-                  if (isPlaying) {
-                    this.setState({
-                      playingCurrentTime: seconds,
-                    });
-                  }
-                },
-                this.props.playingProgressInterval,
-              );
-            }
-
-            // Seek + play + clean up when done
-            //  - Don't await: .playAsync promise fulfills after playback completes (/ is stopped / fails)
-            if (startTime) sound.setCurrentTime(startTime);
-            finallyAsync(sound.playAsync(), async () => {
-              await onDone();
-            });
-
-          }
-
-        }
+        });
 
       }
-    };
+
+    }
   }
 
   spectroTimeFromX = (rec: Rec, x: number): number => {
@@ -1041,17 +1026,17 @@ export class SearchScreen extends PureComponent<Props, State> {
         oldState === Gesture.State.ACTIVE &&
         state !== Gesture.State.CANCELLED
       ) {
-        await this.onSpectroPress(rec);
+        await this.onSpectroPress(rec, soundAsync, x);
       }
     };
 
   }
 
-  onSpectroPress = async (rec: Rec) => {
+  onSpectroPress = async (rec: Rec, soundAsync: Promise<Sound>, x: number) => {
     // Toggle play/pause normally, but show modal if playOnTap is disabled
     //  - UX HACK to allow a faster workflow for hiding lots of families/species/recs in a row
     if (this.props.playOnTap) {
-      await this.toggleRecPlaying(rec);
+      await this.toggleRecPlaying(rec, soundAsync, x);
     } else {
       await this.showRecActionModal(rec);
     }
