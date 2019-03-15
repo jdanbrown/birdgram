@@ -170,7 +170,7 @@ interface Props {
   playingProgressEnable:   boolean;
   playingProgressInterval: number;
   spectroScale:            number;
-  place:                   null | Place;
+  place:                   Place;
   places:                  Array<Place>;
   // For BrowseScreen/SearchScreen
   excludeSpecies:          Set<string>;
@@ -413,12 +413,9 @@ export class SearchScreen extends PureComponent<Props, State> {
         n_recs:               this.props.default_n_recs,
         n_sp:                 this.props.default_n_sp,
         n_per_sp:             this.props.default_n_per_sp,
+        // TODO(family_list): Confusing UX: excludeRecs resets on each search, but exclude/include species/groups persists
+        //  - If we switch to persisting excludeRecs, then we need to also make it visible/editable somewhere in the UI
         excludeRecs:          new Set(),
-        // TODO(family_list): How/whether to reset BrowseScreen state when switching search location?
-        // excludeSpecies:       new Set(),
-        // includeSpecies:       new Set(),
-        // excludeSpeciesGroups: new Set(),
-        // includeSpeciesGroups: new Set(),
       });
     }
 
@@ -592,10 +589,9 @@ export class SearchScreen extends PureComponent<Props, State> {
       const qualityFilter = (table: string) => (
         sqlf`and ${SQL.raw(table)}.quality in (${this.state.filterQuality})`
       );
-      const placeFilter   = (table: string) => matchNull(this.props.place, {
-        null: ()    => '',
-        x:    place => sqlf`and ${SQL.raw(table)}.species in (${place.species})`,
-      });
+      const placeFilter   = (table: string) => (
+        sqlf`and ${SQL.raw(table)}.species in (${this.props.place.species})`
+      );
       const speciesFilter = (table: string) => (
         sqlf`and ${SQL.raw(table)}.species not in (${Array.from(this.props.excludeSpecies)})`
       );
@@ -638,7 +634,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               taxon_order_num asc,
               source_id desc
           `, {
-            // logTruncate: null, // XXX(family_list): Debug
+            // logTruncate: null, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
             return {recs};
@@ -840,7 +836,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             })(async results => {
               const recs = results.rows.raw();
 
-              // XXX(family_list): Debug
+              // XXX Debug
               // debug_print('timed', pretty(recs
               //   .map(rec => _.pick(rec, ['species', 'source_id', 'sp_d_pc_i', 'slp', 'd_pc']))
               //   .map(rec => yaml(rec))
@@ -1091,10 +1087,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               ...material.body1Object,
             }}
           >
-            Place: {matchNull(this.props.place, {
-              null: () => 'none',
-              x: ({name, props}) => `${name} (${yaml(props).slice(1, -1)})`,
-            })}
+            Place: {this.props.place.name} ({yaml(this.props.place.props).slice(1, -1)}),
           </Text>
         <View>
 

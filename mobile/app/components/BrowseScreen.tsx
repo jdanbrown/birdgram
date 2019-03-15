@@ -42,7 +42,7 @@ interface Props {
   histories:            Histories;
   go:                   Go;
   ebird:                Ebird;
-  place:                Place | null;
+  place:                Place;
   app:                  App;
   // For BrowseScreen/SearchScreen
   excludeSpecies:       Set<string>;
@@ -108,19 +108,21 @@ export class BrowseScreen extends PureComponent<Props, State> {
 
     // Precompute sections so we can figure out various indexes
     type Section = SectionListData<SpeciesMetadata>;
+    const allData = log.timed('allData', () => typed<SpeciesMetadata[]>(_.sortBy(
+      (_(this.props.place.species)
+        .flatMap(species => matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+          undefined: () => [],
+          x:         m  => [m],
+        }))
+        .value()
+      ),
+      m => parseFloat(m.taxon_order),
+    )));
     const data = log.timed('data', () => typed<SpeciesMetadata[]>(_.sortBy(
-      matchNull(this.props.place, {
-        null: () => [],
-        x: place => (
-          _(place.species)
-          .flatMap(species => matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
-            undefined: () => [],
-            x:         m  => [m],
-          }))
-          .filter(m => matchesSearchFilter(m))
-          .value()
-        ),
-      }),
+      (_(allData)
+        .filter(m => matchesSearchFilter(m))
+        .value()
+      ),
       m => parseFloat(m.taxon_order),
     )));
     const sections: Array<Section> = log.timed('sections', () => (
@@ -134,7 +136,6 @@ export class BrowseScreen extends PureComponent<Props, State> {
     const isFirstSection = (section: Section) => firstSection && section.title === firstSection.title;
     const isLastSection  = (section: Section) => lastSection  && section.title === lastSection.title;
     const isLastItem     = (section: Section, index: number) => isLastSection(section) && index === section.data.length - 1;
-    const nSpeciesShown  = _.sum(sections.map(x => x.data.length));
 
     return (
       <View style={{
@@ -174,10 +175,11 @@ export class BrowseScreen extends PureComponent<Props, State> {
               ...material.body2Object,
               marginHorizontal: 5,
             }}>
-              {matchNull(this.props.place, {
-                x:    place => `${place.name} (${nSpeciesShown}/${place.species.length} species)`,
-                null: ()    => '(No place selected)',
-              })}
+              {/* TODO(place_n_species): Make this less confusing (n1/n2/n3) */}
+              {/*   - n1: place.species often includes species that aren't in the app (e.g. CR place in US app) */}
+              {/*   - n2: allData is that minus species that aren't in the app */}
+              {/*   - n3: data is that minus species that don't match the searchFilter */}
+              {this.props.place.name} ({data.length}/{allData.length}/{this.props.place.species.length} species)
             </Text>
 
             {/* Reset button */}
@@ -189,14 +191,19 @@ export class BrowseScreen extends PureComponent<Props, State> {
                 height:         35,
               }}
               onPress={() => {
-                // TODO(family_list): Reset filters
+                this.props.app.setState({
+                  excludeSpecies:       new Set(),
+                  includeSpecies:       new Set(),
+                  excludeSpeciesGroups: new Set(),
+                  includeSpeciesGroups: new Set(),
+                });
               }}
             >
               <Feather style={{
                 // ...material.titleObject,
                 ...material.headlineObject,
               }}
-                name={'x'} // TODO(family_list): Reset/reload icon
+                name={'refresh-ccw'}
               />
             </RectButton>
 

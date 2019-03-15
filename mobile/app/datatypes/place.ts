@@ -6,8 +6,8 @@ import { BarchartProps } from 'app/ebird';
 
 export interface Place {
   name:    string;
-  props:   BarchartProps;
   species: Array<Species>;
+  props:   BarchartProps | null;
 }
 
 export const Place = {

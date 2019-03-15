@@ -37,7 +37,7 @@ interface Props {
   // Settings
   settings:        SettingsWrites;
   showDebug:       boolean;
-  place:           Place | null;
+  place:           Place;
   places:          Array<Place>;
 }
 
@@ -146,7 +146,10 @@ export class PlacesScreen extends PureComponent<Props, State> {
               top:    -1, // Hide top elem border under bottom border of title bar
               bottom: -1, // Hide bottom elem border under top border of tab bar
             }}
-            data={typed<Array<Place | null>>([null, ...this.props.places])}
+            data={typed<Array<Place>>([
+              this.props.ebird.allPlace,
+              ...this.props.places,
+            ])}
             keyExtractor={(place, index) => `${index}`}
             ListEmptyComponent={(
               <View style={[Styles.center, {padding: 30}]}>
@@ -158,8 +161,9 @@ export class PlacesScreen extends PureComponent<Props, State> {
             renderItem={({item: place, index}) => (
               <RectButton
                 onPress={() => {
+                  // FIXME Perf: really slow in dev (but no log.timed surfaces the bottleneck...)
+                  // this.props.go('search'); // TODO Helpful or not helpful?
                   this.props.settings.set({place});
-                  this.props.go('search');
                 }}
               >
                 <View style={{
@@ -174,34 +178,21 @@ export class PlacesScreen extends PureComponent<Props, State> {
                   }),
                 }}>
                   {/* TODO(ebird_priors): Better formatting */}
-                  {matchNull(place, {
-                    null: () => (
-                      <View style={{flex: 1}}>
-                        <Text style={material.body1}>
-                          All species (no place filter)
-                        </Text>
-                        <Text style={material.caption}>
-                          {config.env.APP_NAME}
-                        </Text>
-                        <Text style={material.caption}>
-                          {this.props.nSpecies} species
-                        </Text>
-                      </View>
-                    ),
-                    x: place => (
-                      <View style={{flex: 1}}>
-                        <Text style={material.body1}>
-                          {place.name}
-                        </Text>
-                        <Text style={material.caption}>
-                          {yaml(place.props).slice(1, -1)}
-                        </Text>
-                        <Text style={material.caption}>
-                          {place.species.length} species
-                        </Text>
-                      </View>
-                    ),
-                  })}
+                  <View style={{flex: 1}}>
+                    <Text style={material.body1}>
+                      {place.name}
+                    </Text>
+                    <Text style={[material.caption, {color: iOSColors.black}]}>
+                      {/* TODO(place_n_species): Make this less confusing (n1/n2/n3) */}
+                      {/*   - place.species often includes species that aren't in the app (e.g. CR place in US app) */}
+                      {/*   - Most prominently, we want to show the number of place species that are in the app */}
+                      {/*   - Less prominently, we want to also show the total number of species for the place */}
+                      {place.species.length} species
+                    </Text>
+                    <Text style={material.caption}>
+                      {yaml(place.props).slice(1, -1)}
+                    </Text>
+                  </View>
                 </View>
               </RectButton>
             )}

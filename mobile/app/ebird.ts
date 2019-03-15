@@ -2,7 +2,8 @@ import cheerio from 'cheerio-without-node-native';
 import _ from 'lodash';
 import queryString from 'query-string';
 
-import { MetadataSpecies, Species, SpeciesCode, SpeciesMetadata } from 'app/datatypes';
+import { config } from 'app/config';
+import { MetadataSpecies, Place, Species, SpeciesCode, SpeciesMetadata } from 'app/datatypes';
 import { Log, rich } from 'app/log';
 import { NativeHttp } from 'app/native/Http';
 import {
@@ -21,21 +22,41 @@ export interface BarchartProps {
 
 export class Ebird {
 
+  allSpecies:                 Array<Species>;
   speciesFromSpeciesCode:     Map<SpeciesCode, Species>;
   speciesMetadataFromSpecies: Map<Species, SpeciesMetadata>;
+  speciesForSpeciesGroup:     Map<string, Array<Species>>;
 
   constructor(
     public metadataSpecies: MetadataSpecies,
   ) {
+    this.allSpecies = metadataSpecies.map(x => x.shorthand);
     // Manually map species_code -> species
     //  - XXX after we add species_code to datasets.metadata_from_dataset, which requires rebuilding the load._metadata
     //    cache, which takes ~overnight (see metadata_from_dataset)
     this.speciesFromSpeciesCode = new Map(metadataSpecies.map<[SpeciesCode, Species]>(x => [
-      x.species_code, x.shorthand,
+      x.species_code,
+      x.shorthand,
     ]));
     this.speciesMetadataFromSpecies = new Map(metadataSpecies.map<[Species, SpeciesMetadata]>(x => [
-      x.shorthand, x,
+      x.shorthand,
+      x,
     ]));
+    this.speciesForSpeciesGroup = new Map(
+      _(metadataSpecies)
+      .groupBy(x => x.species_group)
+      .mapValues(xs => xs.map(x => x.shorthand))
+      .entries()
+      .value()
+    );
+  }
+
+  get allPlace(): Place {
+    return {
+      name:    config.env.APP_REGION,
+      species: this.allSpecies,
+      props:   null,
+    };
   }
 
   barchartSpecies = async (props: BarchartProps): Promise<Array<Species>> => {

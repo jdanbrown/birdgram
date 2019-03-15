@@ -27,7 +27,7 @@ import { TabRoute, TabRouteKey, TabRoutes, TabLink } from 'app/components/TabRou
 import * as Colors from 'app/colors';
 import { config } from 'app/config';
 import {
-  MetadataSpecies, MetadataXcIds, Models, ModelsSearch, Rec, SearchRecs, ServerConfig, UserRec, XCRec,
+  MetadataSpecies, MetadataXcIds, Models, ModelsSearch, Place, Rec, SearchRecs, ServerConfig, Species, UserRec, XCRec,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
@@ -46,8 +46,9 @@ import { querySql } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { urlpack } from 'app/urlpack';
 import {
-  assert, dirname, fastIsEqual, global, Interval, json, local, mapNull, match, matchNull, matchUndefined, Omit, pretty,
-  qsSane, readJsonFile, shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
+  assert, dirname, fastIsEqual, global, Interval, ifNil, ifNull, ifUndefined, into, json, local, mapNull, mapUndefined,
+  match, matchNil, matchNull, matchUndefined, Omit, pretty, qsSane, readJsonFile, shallowDiff, shallowDiffPropsState,
+  Style, Timer, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -217,6 +218,19 @@ export default class App extends PureComponent<Props, State> {
     // excludeSpeciesGroups: new Set(['Waterfowl', 'Wood-Warblers']), // XXX(family_list): Debug
     includeSpeciesGroups: new Set(),
   };
+
+  // Default settings.place:null to ebird.allPlace
+  //  - Returns null before App.componentDidMount completes, but never afterwards
+  get place(): Place | null {
+    return ifUndefined(
+      mapUndefined(this.state.settings, settings => ( // Return null if state.settings not yet initialized (in componentDidMount)
+        mapUndefined(this.state.ebird, ebird => (     // Return null if state.ebird    not yet initialized (in componentDidMount)
+          settings.place || ebird.allPlace            // Return the selected place, else the allPlace if no place selected
+        ))
+      )),
+      () => null, // Map any undefineds to null, for consistency
+    );
+  }
 
   componentDidMount = async () => {
     log.info('componentDidMount');
@@ -558,7 +572,7 @@ export default class App extends PureComponent<Props, State> {
           playingProgressEnable   = {this.state.settings!.playingProgressEnable}
           playingProgressInterval = {this.state.settings!.playingProgressInterval}
           spectroScale            = {this.state.settings!.spectroScale}
-          place                   = {this.state.settings!.place}
+          place                   = {this.place!}
           places                  = {this.state.settings!.places}
           // For BrowseScreen/SearchScreen
           excludeSpecies          = {this.state.excludeSpecies}
@@ -608,7 +622,7 @@ export default class App extends PureComponent<Props, State> {
           // App globals
           go                      = {this.go}
           ebird                   = {this.state.ebird!}
-          place                   = {this.state.settings!.place}
+          place                   = {this.place!}
           app                     = {this}
           // For BrowseScreen/SearchScreen
           excludeSpecies          = {this.state.excludeSpecies}
@@ -630,7 +644,7 @@ export default class App extends PureComponent<Props, State> {
           // Settings
           settings                = {this.state.settingsWrites!}
           showDebug               = {this.state.settings!.showDebug}
-          place                   = {this.state.settings!.place}
+          place                   = {this.place!}
           places                  = {this.state.settings!.places}
         />
       ),
@@ -694,25 +708,48 @@ export default class App extends PureComponent<Props, State> {
         recent:   () => null,
         saved:    () => null,
         browse:   () => (
-          <Text>
-            {
-              // TODO(family_list): Make this legible
-              //  - Add ebird.speciesForSpeciesGroup(speciesGroup).length
-              //  - Format like '-N+M'
-              //  - Add red/green styles
-              [
-                `-${this.state.excludeSpecies.size}`,
-                // `+${this.state.includeSpecies.size}`,
-                ',',
-                `-${this.state.excludeSpeciesGroups.size}`,
-                // `+${this.state.includeSpeciesGroups.size}`,
-              ].join('')
-            }
-          </Text>
+          mapNull(this.place, place => (
+            mapUndefined(this.state.ebird, ebird => {
+
+              const placeSpecies = new Set(place.species);
+              const speciesForGroups = (groups: Set<string>): Array<Species> => {
+                return (
+                  _(Array.from(groups))
+                  .flatMap(x => ebird.speciesForSpeciesGroup.get(x) || [])
+                  .filter(x => placeSpecies.has(x))
+                  .value()
+                );
+              };
+
+              const nExcludedSpecies = _.uniq([
+                ...Array.from(this.state.excludeSpecies),
+                ...speciesForGroups(this.state.excludeSpeciesGroups),
+              ]).length;
+              const nIncludedSpecies = _.uniq([
+                ...Array.from(this.state.includeSpecies),
+                ...speciesForGroups(this.state.includeSpeciesGroups),
+              ]).length;
+
+              return (
+                nExcludedSpecies > 0 && nIncludedSpecies > 0 ? (
+                  <Text>
+                    <Text style={{color: iOSColors.red}}>-{nExcludedSpecies}</Text>,
+                    <Text style={{color: iOSColors.green}}>+{nIncludedSpecies}</Text>
+                  </Text>
+                ) : nExcludedSpecies > 0 ? (
+                  <Text style={{color: iOSColors.red}}>-{nExcludedSpecies}</Text>
+                ) : nIncludedSpecies > 0 ? (
+                  <Text style={{color: iOSColors.green}}>+{nIncludedSpecies}</Text>
+                ) : (
+                  null
+                )
+              );
+            })
+          ))
         ),
         places:   () => (
           <Text>
-            {matchNull(settings.place, {
+            {matchNull(this.place, {
               null: ()    => this.state.nSpecies,
               x:    place => place.species.length,
             })}
