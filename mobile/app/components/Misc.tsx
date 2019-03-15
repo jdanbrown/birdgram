@@ -22,15 +22,13 @@ export function Hyperlink(props: {url: null | string} & TextProps) { // TODO Ret
   );
 }
 
-// TODO Element -> ReactNode
-export function CCIcon(props?: object): Element {
+export function CCIcon(props?: object): ReactNode {
   const [icon] = LicenseTypeIcons('cc', props);
   return icon;
 }
 
-// TODO Element -> ReactNode
 // TODO Make into a proper component (push licenseType into props)
-export function LicenseTypeIcons(licenseType: string, props?: object): Array<Element> {
+export function LicenseTypeIcons(licenseType: string, props?: object): Array<ReactNode> {
   return ['cc', ...licenseType.split('-')].map(k => k && (
     <FontAwesome5
       key={k}

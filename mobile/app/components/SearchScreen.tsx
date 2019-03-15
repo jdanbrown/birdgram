@@ -183,7 +183,7 @@ interface Props {
 interface State {
   scrollViewKey: string;
   scrollViewState: ScrollViewState;
-  showGenericModal: null | (() => Element);
+  showGenericModal: null | (() => ReactNode);
   searchFilter: string; // For BrowseModal
   showHelp: boolean;
   totalRecs?: number;

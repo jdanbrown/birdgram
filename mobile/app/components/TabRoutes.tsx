@@ -4,7 +4,9 @@ import _ from 'lodash';
 import memoizeOne from 'memoize-one';
 import React, { Component, ComponentClass, PureComponent, ReactNode } from 'React';
 import { ActivityIndicator, Dimensions, Platform, Text, TouchableWithoutFeedback, View } from 'react-native';
+import IconBadge from 'react-native-icon-badge';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
+import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-router-native';
 
@@ -41,6 +43,7 @@ export interface TabRoute {
   route: TabRouteRoute;
   label: string;
   iconName: string;
+  badge: ReactNode;
   render: (props: TabRouteProps) => ReactNode;
 }
 
@@ -211,6 +214,7 @@ export class TabRoutes extends PureComponent<Props, State> {
               to={route.route.path}
               label={route.label}
               iconName={route.iconName}
+              badge={route.badge}
             />
           )}/>
         </View>
@@ -257,6 +261,7 @@ export interface TabLinkProps {
   to: string;
   label: string; // TODO
   iconName: string;
+  badge: ReactNode;
 }
 
 export function TabLink(props: TabLinkProps) {
@@ -272,12 +277,45 @@ export function TabLink(props: TabLinkProps) {
       to={props.to}
       replace // Replace i/o push since we're a tab view (not a stack view)
     >
-      <Feather
-        style={{
-          color: props.focused ? TabBarStyle.activeTintColor : TabBarStyle.inactiveTintColor,
+      <IconBadge
+        // https://github.com/yanqiw/react-native-icon-badge
+        //  - Put IconBadge inside of Link so that the badge doesn't block the tap area
+
+        // Icon
+        MainViewStyle={[
+          styles.fill, styles.center, // Else Link's fill/center shrinkwraps our height/width
+        ]}
+        MainElement={(
+          <Feather
+            style={{
+              color: props.focused ? TabBarStyle.activeTintColor : TabBarStyle.inactiveTintColor,
+            }}
+            name={props.iconName}
+            size={size}
+          />
+        )}
+
+        // Badge
+        Hidden={!props.badge}
+        IconBadgeStyle={{
+          backgroundColor: 'inherit',
+          // Helpful example of how to set {top,bottom,height} and {left,right,width} with position:absolute
+          //  - https://stackoverflow.com/a/44488046/397334
+          // position: 'absolute', // Default
+          top: 'auto', bottom: -1, height: 'auto',
+          left: 'auto', right: 'auto',
         }}
-        name={props.iconName}
-        size={size}
+        BadgeElement={(
+          <Text style={{
+            ...material.captionObject,
+            fontSize: 9,
+            color: props.focused ? TabBarStyle.activeTintColor : TabBarStyle.inactiveTintColor,
+            fontWeight: 'bold',
+          }}>
+            {props.badge}
+          </Text>
+        )}
+
       />
     </Link>
   );

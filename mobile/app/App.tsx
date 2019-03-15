@@ -38,15 +38,15 @@ import { NativeTagLib } from 'app/native/TagLib';
 import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import {
   createDefaultHistories, getTabLocations, go, Go, GoTo, Histories, HistoryConsumer, loadHistories, locationPathIsEqual,
-  ObserveHistory, RouterWithHistory, saveHistories, TabHistories, TabLocations, TabName,
+  matchTabName, ObserveHistory, RouterWithHistory, saveHistories, TabHistories, TabLocations, TabName,
 } from 'app/router';
 import { Settings, SettingsProxy, SettingsWrites } from 'app/settings';
 import { querySql } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { urlpack } from 'app/urlpack';
 import {
-  assert, dirname, fastIsEqual, global, Interval, json, local, mapNull, match, matchNil, Omit, pretty, qsSane,
-  readJsonFile, shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
+  assert, dirname, fastIsEqual, global, Interval, json, local, mapNull, match, matchNull, matchUndefined, Omit, pretty,
+  qsSane, readJsonFile, shallowDiff, shallowDiffPropsState, Style, Timer, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -493,6 +493,7 @@ export default class App extends PureComponent<Props, State> {
   makeRoutes = (): Array<TabRoute> => [          // Must be a function, else screens won't update on App props/state change
     {
       key: 'record', route: {path: '/record'}, label: 'Record', iconName: iconForTab['record'],
+      badge: this.badgeForTab('record'),
       render: props => (
         <RecordScreen {...props}
           // App globals
@@ -516,6 +517,7 @@ export default class App extends PureComponent<Props, State> {
       ),
     }, {
       key: 'search', route: {path: '/search'}, label: 'Search', iconName: iconForTab['search'],
+      badge: this.badgeForTab('search'),
       render: props => (
         <SearchScreen {...props}
           // App globals
@@ -546,6 +548,7 @@ export default class App extends PureComponent<Props, State> {
       ),
     }, {
       key: 'recent', route: {path: '/recent'}, label: 'Recent', iconName: iconForTab['recent'],
+      badge: this.badgeForTab('recent'),
       render: props => (
         <RecentScreen {...props}
           // App globals
@@ -562,6 +565,7 @@ export default class App extends PureComponent<Props, State> {
       ),
     }, {
       key: 'saved', route: {path: '/saved'}, label: 'Saved', iconName: iconForTab['saved'],
+      badge: this.badgeForTab('saved'),
       render: props => (
         <SavedScreen {...props}
           // App globals
@@ -575,6 +579,7 @@ export default class App extends PureComponent<Props, State> {
       ),
     }, {
       key: 'places', route: {path: '/places'}, label: 'Places', iconName: iconForTab['places'],
+      badge: this.badgeForTab('places'),
       render: props => (
         <PlacesScreen {...props}
           // App globals
@@ -591,6 +596,7 @@ export default class App extends PureComponent<Props, State> {
       ),
     }, {
       key: 'settings', route: {path: '/settings'}, label: 'Settings', iconName: iconForTab['settings'],
+      badge: this.badgeForTab('settings'),
       render: props => (
         <SettingsScreen {...props}
           // Settings
@@ -614,6 +620,7 @@ export default class App extends PureComponent<Props, State> {
       ),
     }, {
       key: 'help', route: {path: '/help'}, label: 'Help', iconName: iconForTab['help'],
+      badge: this.badgeForTab('help'),
       render: props => (
         <HelpScreen {...props}
           // App globals
@@ -636,6 +643,29 @@ export default class App extends PureComponent<Props, State> {
       const {tab, tabPath} = match.params as {tab: TabName, tabPath: string};
       this.go(tab, {path: '/' + (tabPath || '')}); // (Leading '/' for absolute i/o relative)
     }
+  }
+
+  badgeForTab = (tab: TabName): ReactNode => {
+    return matchUndefined(this.state.settings, {
+      undefined: ()       => null,
+      x:         settings => matchTabName(tab, {
+        record:   () => null,
+        search:   () => null,
+        recent:   () => null,
+        saved:    () => null,
+        places:   () => (
+          <Text>
+            {matchNull(settings.place, {
+              null: ()    => this.state.nSpecies,
+              x:    place => place.species.length,
+            })}
+            {} sp
+          </Text>
+        ),
+        settings: () => null,
+        help:     () => null,
+      }),
+    });
   }
 
   // Wrap router.go() to supply this.state.histories

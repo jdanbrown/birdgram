@@ -181,6 +181,10 @@ export interface Histories extends TabHistories {
 export type TabName = keyof TabHistories;
 export type HistoryName = keyof Histories;
 
+export function matchTabName<X>(tab: TabName, cases: {[key in TabName]: () => X}): X {
+  return cases[tab]();
+}
+
 export type TabLocations<K extends string = TabName> = {[key in K]: Location};
 export function getTabLocations(histories: TabHistories): TabLocations {
   return {
