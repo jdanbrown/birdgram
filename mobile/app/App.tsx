@@ -639,7 +639,7 @@ export default class App extends PureComponent<Props, State> {
   }
 
   // Wrap router.go() to supply this.state.histories
-  go = (tab: TabName, to: GoTo) => {
+  go = (tab: TabName, to?: GoTo) => {
     return go(this.state.histories!, tab, to);
   }
 

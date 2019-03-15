@@ -52,14 +52,16 @@ export function ObserveHistory(props: {globalKey: string}) {
 // Go
 //
 
-export type Go = (tab: TabName, to: GoTo) => void;
+export type Go = (tab: TabName, to?: GoTo) => void;
 export type GoTo = {path?: string, index?: number}; // TODO Make this a proper union type
 
-export function go(histories: Histories, tab: TabName, to: GoTo) {
+export function go(histories: Histories, tab: TabName, to?: GoTo) {
   log.info('go', {tab, to});
   // Update tab location (async, can't await)
   const history = histories[tab];
-  if (to.path !== undefined) {
+  if (to === undefined) {
+    // Noop location, just switch to tab
+  } else if (to.path !== undefined) {
     // Push new location on top of most recent location (else we lose items)
     //  - HACK Mutate history.index i/o calling history.go() to avoid an unnecessary update
     //    - Ref: https://github.com/ReactTraining/history/blob/v4.7.2/modules/createMemoryHistory.js#L61
