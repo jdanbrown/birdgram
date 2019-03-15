@@ -15,9 +15,6 @@ const log = new Log('router');
 // Utils
 //
 
-export type Go = (tab: TabName, to: GoTo) => void;
-export type GoTo = {path?: string, index?: number}; // TODO Make this a proper union type
-
 export function HistoryConsumer(props: {
   children: (props: {location: Location, history: History}) => ReactNode,
 }) {
@@ -49,6 +46,41 @@ export function ObserveHistory(props: {globalKey: string}) {
       return null;
     }}/>
   );
+}
+
+//
+// Go
+//
+
+export type Go = (tab: TabName, to: GoTo) => void;
+export type GoTo = {path?: string, index?: number}; // TODO Make this a proper union type
+
+export function go(histories: Histories, tab: TabName, to: GoTo) {
+  log.info('go', {tab, to});
+  // Update tab location (async, can't await)
+  const history = histories[tab];
+  if (to.path !== undefined) {
+    // Push new location on top of most recent location (else we lose items)
+    //  - HACK Mutate history.index i/o calling history.go() to avoid an unnecessary update
+    //    - Ref: https://github.com/ReactTraining/history/blob/v4.7.2/modules/createMemoryHistory.js#L61
+    history.index = history.length - 1;
+    // Dedupe contiguous history.entries: replace if .pathname isn't changing
+    //  - NOTE .state isn't compared; it should be determined by .pathname (modulo important, e.g. timestamp isn't)
+    //  - NOTE Compare using locationPathIsEqual b/c === on .pathname isn't reliable (see locationPathIsEqual)
+    if (locationPathIsEqual({pathname: to.path}, history.entries[history.index])) {
+      // log.debug('go: Dedupe', {to, historyLocation: history.location}); // XXX Debug
+    } else {
+      // log.debug('go: Push', {to, historyLocation: history.location}); // XXX Debug
+      history.push(to.path, {
+        timestamp: new Date(),
+      });
+    }
+  } else if (to.index !== undefined) {
+    // Jump back/forward to existing location in history (by index)
+    history.go(to.index - history.index);
+  }
+  // Switch to tab
+  histories.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)
 }
 
 //

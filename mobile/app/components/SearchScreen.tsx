@@ -766,7 +766,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               select distinct species
               from search_recs S
               where true
-                -- Filters duplicated below (in rec query)
+                -- Filters duplicated below (in final query)
                 ${SQL.raw(placeFilter('S'))}        -- Safe for covering index (species)
                 ${SQL.raw(qualityFilter('S'))}      -- Safe for covering index (quality)
                 ${SQL.raw(speciesFilter('S'))}      -- Safe for covering index (species)
@@ -823,7 +823,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                   from search_recs S
                     left join Q on true -- (1 row)
                   where true
-                    -- Filters duplicated above (in species query)
+                    -- Filters duplicated above (in filteredSpecies query)
                     ${SQL.raw(placeFilter('S'))}
                     ${SQL.raw(qualityFilter('S'))}
                     ${SQL.raw(speciesFilter('S'))}

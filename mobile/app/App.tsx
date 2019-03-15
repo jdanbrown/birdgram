@@ -37,7 +37,7 @@ import { NativeSpectro } from 'app/native/Spectro';
 import { NativeTagLib } from 'app/native/TagLib';
 import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import {
-  createDefaultHistories, getTabLocations, Go, GoTo, Histories, HistoryConsumer, loadHistories, locationPathIsEqual,
+  createDefaultHistories, getTabLocations, go, Go, GoTo, Histories, HistoryConsumer, loadHistories, locationPathIsEqual,
   ObserveHistory, RouterWithHistory, saveHistories, TabHistories, TabLocations, TabName,
 } from 'app/router';
 import { Settings, SettingsProxy, SettingsWrites } from 'app/settings';
@@ -638,31 +638,9 @@ export default class App extends PureComponent<Props, State> {
     }
   }
 
+  // Wrap router.go() to supply this.state.histories
   go = (tab: TabName, to: GoTo) => {
-    log.info('go', {tab, to});
-    // Update tab location (async, can't await)
-    const history = this.state.histories![tab];
-    if (to.path !== undefined) {
-      // Push new location on top of most recent location (else we lose items)
-      //  - HACK Mutate history.index i/o calling history.go() to avoid an unnecessary update
-      //    - Ref: https://github.com/ReactTraining/history/blob/v4.7.2/modules/createMemoryHistory.js#L61
-      history.index = history.length - 1;
-      // Dedupe contiguous history.entries: don't push if .pathname isn't changing
-      //  - NOTE .state isn't compared; it should be determined by .pathname (modulo important, e.g. timestamp isn't)
-      //  - NOTE Compare using locationPathIsEqual b/c === on .pathname isn't reliable (see locationPathIsEqual)
-      if (locationPathIsEqual({pathname: to.path}, history.entries[history.index])) {
-        // log.debug('go: Dedupe', {to, historyLocation: history.location}); // XXX Debug
-      } else {
-        // log.debug('go: Push', {to, historyLocation: history.location}); // XXX Debug
-        history.push(to.path, {
-          timestamp: new Date(),
-        });
-      }
-    } else if (to.index !== undefined) {
-      history.go(to.index - history.index);
-    }
-    // Switch to tab
-    this.state.histories!.tabs.replace('/' + tab); // (Leading '/' for absolute i/o relative)
+    return go(this.state.histories!, tab, to);
   }
 
 }
