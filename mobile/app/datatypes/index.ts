@@ -103,8 +103,9 @@ export type MetadataXcIds   = {[key: string]: Species};
 // Species
 //
 
-export type Species     = string; // SpeciesMetadata.shorthand    (e.g. 'HETH')
-export type SpeciesCode = string; // SpeciesMetadata.species_code (e.g. 'herthr')
+export type Species      = string; // SpeciesMetadata.shorthand     (e.g. 'HETH')
+export type SpeciesCode  = string; // SpeciesMetadata.species_code  (e.g. 'herthr')
+export type SpeciesGroup = string; // SpeciesMetadata.species_group (e.g. 'Thrushes')
 
 export interface SpeciesMetadata {
   sci_name:       string;
@@ -117,7 +118,7 @@ export interface SpeciesMetadata {
   banding_codes:  string;
   shorthand:      Species;
   longhand:       string;
-  species_group:  string;
+  species_group:  SpeciesGroup;
   family:         string;
   order:          string;
 };

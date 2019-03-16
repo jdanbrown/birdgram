@@ -256,20 +256,22 @@ export function mapPop<K, V>(map: Map<K, V>, k: K): V | undefined {
   return v;
 }
 
-export function setAdd<X>(xs: Set<X>, x: X): Set<X> {
+export function setAdd<X>(xs: Set<X>, ys: Set<X> | Array<X> | X): Set<X> {
   xs = new Set(xs); // Copy so we can mutate
-  xs.add(x);
+  ys = _.isSet(ys) ? ys : _.isArray(ys) ? new Set(ys) : new Set([ys]); // Promote to Set
+  ys.forEach(y => xs.add(y));
   return xs;
 }
 
-export function setDelete<X>(xs: Set<X>, x: X): Set<X> {
+export function setDiff<X>(xs: Set<X>, ys: Set<X> | Array<X> | X): Set<X> {
   xs = new Set(xs); // Copy so we can mutate
-  xs.delete(x);
+  ys = _.isSet(ys) ? ys : _.isArray(ys) ? new Set(ys) : new Set([ys]); // Promote to Set
+  ys.forEach(y => xs.delete(y));
   return xs;
 }
 
 export function setToggle<X>(xs: Set<X>, x: X): Set<X> {
-  return xs.has(x) ? setDelete(xs, x) : setAdd(xs, x);
+  return xs.has(x) ? setDiff(xs, x) : setAdd(xs, x);
 }
 
 export function enumerate<X>(xs: Array<X>): Array<{x: X, i: number}> {

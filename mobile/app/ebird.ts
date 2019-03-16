@@ -3,11 +3,11 @@ import _ from 'lodash';
 import queryString from 'query-string';
 
 import { config } from 'app/config';
-import { MetadataSpecies, Place, Species, SpeciesCode, SpeciesMetadata } from 'app/datatypes';
+import { MetadataSpecies, Place, Species, SpeciesCode, SpeciesGroup, SpeciesMetadata } from 'app/datatypes';
 import { Log, rich } from 'app/log';
 import { NativeHttp } from 'app/native/Http';
 import {
-  assert, dirname, global, json, match, Omit, pretty, readJsonFile, Timer, yaml,
+  assert, dirname, global, json, mapUndefined, match, Omit, pretty, readJsonFile, Timer, yaml,
 } from 'app/utils';
 
 const log = new Log('ebird');
@@ -23,14 +23,16 @@ export interface BarchartProps {
 export class Ebird {
 
   allSpecies:                 Array<Species>;
+  allSpeciesGroups:           Array<SpeciesGroup>;
   speciesFromSpeciesCode:     Map<SpeciesCode, Species>;
   speciesMetadataFromSpecies: Map<Species, SpeciesMetadata>;
-  speciesForSpeciesGroup:     Map<string, Array<Species>>;
+  speciesForSpeciesGroup:     Map<SpeciesGroup, Array<Species>>;
 
   constructor(
     public metadataSpecies: MetadataSpecies,
   ) {
-    this.allSpecies = metadataSpecies.map(x => x.shorthand);
+    this.allSpecies       = metadataSpecies.map(x => x.shorthand);
+    this.allSpeciesGroups = _.uniq(metadataSpecies.map(x => x.species_group));
     // Manually map species_code -> species
     //  - XXX after we add species_code to datasets.metadata_from_dataset, which requires rebuilding the load._metadata
     //    cache, which takes ~overnight (see metadata_from_dataset)
@@ -57,6 +59,10 @@ export class Ebird {
       species: this.allSpecies,
       props:   null,
     };
+  }
+
+  speciesGroupFromSpecies = (species: Species): SpeciesGroup | undefined => {
+    return mapUndefined(this.speciesMetadataFromSpecies.get(species), x => x.species_group);
   }
 
   barchartSpecies = async (props: BarchartProps): Promise<Array<Species>> => {

@@ -27,7 +27,8 @@ import { TabRoute, TabRouteKey, TabRoutes, TabLink } from 'app/components/TabRou
 import * as Colors from 'app/colors';
 import { config } from 'app/config';
 import {
-  MetadataSpecies, MetadataXcIds, Models, ModelsSearch, Place, Rec, SearchRecs, ServerConfig, Species, UserRec, XCRec,
+  MetadataSpecies, MetadataXcIds, Models, ModelsSearch, Place, Rec, SearchRecs, ServerConfig, Species, SpeciesGroup,
+  UserRec, XCRec,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
@@ -47,8 +48,8 @@ import { StyleSheet } from 'app/stylesheet';
 import { urlpack } from 'app/urlpack';
 import {
   assert, dirname, fastIsEqual, global, Interval, ifNil, ifNull, ifUndefined, into, json, local, mapNull, mapUndefined,
-  match, matchNil, matchNull, matchUndefined, Omit, pretty, qsSane, readJsonFile, shallowDiff, shallowDiffPropsState,
-  Style, Timer, yaml,
+  match, matchNil, matchNull, matchUndefined, Omit, pretty, qsSane, readJsonFile, setAdd, setDiff, shallowDiff,
+  shallowDiffPropsState, Style, Timer, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -170,10 +171,9 @@ interface State {
   geo?: Geo;
   appContext?: AppContext;
   // For BrowseScreen/SearchScreen
-  excludeSpecies: Set<string>;
-  includeSpecies: Set<string>;
-  excludeSpeciesGroups: Set<string>;
-  includeSpeciesGroups: Set<string>;
+  excludeSpecies: Set<Species>;
+  excludeSpeciesGroups: Set<SpeciesGroup>;
+  unexcludeSpecies: Set<Species>;
 }
 
 interface AppContext {
@@ -212,11 +212,11 @@ export default class App extends PureComponent<Props, State> {
     loading: true,
     // For BrowseScreen/SearchScreen
     excludeSpecies:       new Set(),
-    // excludeSpecies:       new Set(['VIRA', 'SWTH']), // XXX(family_list): Debug
-    includeSpecies:       new Set(),
     excludeSpeciesGroups: new Set(),
-    // excludeSpeciesGroups: new Set(['Waterfowl', 'Wood-Warblers']), // XXX(family_list): Debug
-    includeSpeciesGroups: new Set(),
+    unexcludeSpecies:     new Set(),
+    // excludeSpecies:       new Set(['VIRA', 'COYE']), // XXX(unexclude_species): Debug
+    // excludeSpeciesGroups: new Set(['Wrens', 'Wood-Warblers']), // XXX(unexclude_species): Debug
+    // unexcludeSpecies:     new Set(['COYE', 'SWTH']), // XXX(unexclude_species): Debug
   };
 
   // Default settings.place:null to ebird.allPlace
@@ -576,11 +576,43 @@ export default class App extends PureComponent<Props, State> {
           places                  = {this.state.settings!.places}
           // For BrowseScreen/SearchScreen
           excludeSpecies          = {this.state.excludeSpecies}
-          includeSpecies          = {this.state.includeSpecies}
           excludeSpeciesGroups    = {this.state.excludeSpeciesGroups}
-          includeSpeciesGroups    = {this.state.includeSpeciesGroups}
+          unexcludeSpecies        = {this.state.unexcludeSpecies}
           // SearchScreen
           f_bins                  = {this.state.settings!.f_bins}
+        />
+      ),
+    }, {
+      key: 'browse', route: {path: '/browse'}, label: 'Browse', iconName: iconForTab['browse'],
+      badge: this.badgeForTab('browse'),
+      render: props => (
+        <BrowseScreen {...props}
+          // App globals
+          go                      = {this.go}
+          ebird                   = {this.state.ebird!}
+          place                   = {this.place!}
+          app                     = {this}
+          // For BrowseScreen/SearchScreen
+          excludeSpecies          = {this.state.excludeSpecies}
+          excludeSpeciesGroups    = {this.state.excludeSpeciesGroups}
+          unexcludeSpecies        = {this.state.unexcludeSpecies}
+        />
+      ),
+    }, {
+      key: 'places', route: {path: '/places'}, label: 'Places', iconName: iconForTab['places'],
+      badge: this.badgeForTab('places'),
+      render: props => (
+        <PlacesScreen {...props}
+          // App globals
+          go                      = {this.go}
+          ebird                   = {this.state.ebird!}
+          geo                     = {this.state.geo!}
+          nSpecies                = {this.state.nSpecies!}
+          // Settings
+          settings                = {this.state.settingsWrites!}
+          showDebug               = {this.state.settings!.showDebug}
+          place                   = {this.place!}
+          places                  = {this.state.settings!.places}
         />
       ),
     }, {
@@ -612,40 +644,6 @@ export default class App extends PureComponent<Props, State> {
           ebird                   = {this.state.ebird!}
           // SavedScreen
           iconForTab              = {iconForTab}
-        />
-      ),
-    }, {
-      key: 'browse', route: {path: '/browse'}, label: 'Browse', iconName: iconForTab['browse'],
-      badge: this.badgeForTab('browse'),
-      render: props => (
-        <BrowseScreen {...props}
-          // App globals
-          go                      = {this.go}
-          ebird                   = {this.state.ebird!}
-          place                   = {this.place!}
-          app                     = {this}
-          // For BrowseScreen/SearchScreen
-          excludeSpecies          = {this.state.excludeSpecies}
-          includeSpecies          = {this.state.includeSpecies}
-          excludeSpeciesGroups    = {this.state.excludeSpeciesGroups}
-          includeSpeciesGroups    = {this.state.includeSpeciesGroups}
-        />
-      ),
-    }, {
-      key: 'places', route: {path: '/places'}, label: 'Places', iconName: iconForTab['places'],
-      badge: this.badgeForTab('places'),
-      render: props => (
-        <PlacesScreen {...props}
-          // App globals
-          go                      = {this.go}
-          ebird                   = {this.state.ebird!}
-          geo                     = {this.state.geo!}
-          nSpecies                = {this.state.nSpecies!}
-          // Settings
-          settings                = {this.state.settingsWrites!}
-          showDebug               = {this.state.settings!.showDebug}
-          place                   = {this.place!}
-          places                  = {this.state.settings!.places}
         />
       ),
     }, {
@@ -710,9 +708,8 @@ export default class App extends PureComponent<Props, State> {
         browse:   () => (
           mapNull(this.place, place => (
             mapUndefined(this.state.ebird, ebird => {
-
               const placeSpecies = new Set(place.species);
-              const speciesForGroups = (groups: Set<string>): Array<Species> => {
+              const groupsSpecies = (groups: Set<string>): Array<Species> => {
                 return (
                   _(Array.from(groups))
                   .flatMap(x => ebird.speciesForSpeciesGroup.get(x) || [])
@@ -720,29 +717,12 @@ export default class App extends PureComponent<Props, State> {
                   .value()
                 );
               };
-
-              const nExcludedSpecies = _.uniq([
-                ...Array.from(this.state.excludeSpecies),
-                ...speciesForGroups(this.state.excludeSpeciesGroups),
-              ]).length;
-              const nIncludedSpecies = _.uniq([
-                ...Array.from(this.state.includeSpecies),
-                ...speciesForGroups(this.state.includeSpeciesGroups),
-              ]).length;
-
-              return (
-                nExcludedSpecies > 0 && nIncludedSpecies > 0 ? (
-                  <Text>
-                    <Text style={{color: iOSColors.red}}>-{nExcludedSpecies}</Text>,
-                    <Text style={{color: iOSColors.green}}>+{nIncludedSpecies}</Text>
-                  </Text>
-                ) : nExcludedSpecies > 0 ? (
-                  <Text style={{color: iOSColors.red}}>-{nExcludedSpecies}</Text>
-                ) : nIncludedSpecies > 0 ? (
-                  <Text style={{color: iOSColors.green}}>+{nIncludedSpecies}</Text>
-                ) : (
-                  null
-                )
+              const nExcludedSpecies = setDiff(
+                setAdd(this.state.excludeSpecies, groupsSpecies(this.state.excludeSpeciesGroups)),
+                this.state.unexcludeSpecies,
+              ).size;
+              return nExcludedSpecies > 0 && (
+                <Text style={{color: iOSColors.red}}>-{nExcludedSpecies} sp</Text>
               );
             })
           ))

@@ -37,7 +37,7 @@ import { TabBarStyle } from 'app/components/TabRoutes';
 import { config } from 'app/config';
 import {
   ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams, searchPathParamsFromLocation,
-  SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesMetadata, SpectroPathOpts, UserRec, XCRec,
+  SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesGroup, SpeciesMetadata, SpectroPathOpts, UserRec, XCRec,
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
@@ -53,7 +53,7 @@ import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
   all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, ifNull, into,
   json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait,
-  objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDelete, setToggle, shallowDiffPropsState, Style,
+  objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDiff, setToggle, shallowDiffPropsState, Style,
   throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { XC } from 'app/xc';
@@ -173,10 +173,9 @@ interface Props {
   place:                   Place;
   places:                  Array<Place>;
   // For BrowseScreen/SearchScreen
-  excludeSpecies:          Set<string>;
-  includeSpecies:          Set<string>;
-  excludeSpeciesGroups:    Set<string>;
-  includeSpeciesGroups:    Set<string>;
+  excludeSpecies:          Set<Species>;
+  excludeSpeciesGroups:    Set<SpeciesGroup>;
+  unexcludeSpecies:        Set<Species>;
   // SearchScreen
   f_bins:                  number;
   spectroBase:             Dim<number>;
@@ -413,7 +412,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         n_recs:               this.props.default_n_recs,
         n_sp:                 this.props.default_n_sp,
         n_per_sp:             this.props.default_n_per_sp,
-        // TODO(family_list): Confusing UX: excludeRecs resets on each search, but exclude/include species/groups persists
+        // TODO(exclude_recs): Confusing UX: excludeRecs resets on each search, but exclude/include species/groups persists
         //  - If we switch to persisting excludeRecs, then we need to also make it visible/editable somewhere in the UI
         excludeRecs:          new Set(),
       });
@@ -533,9 +532,8 @@ export class SearchScreen extends PureComponent<Props, State> {
         //  - And test other filters/limits here
         !fastIsEqual(this.props.place,                _.get(prevProps, 'place')) ||
         !fastIsEqual(this.props.excludeSpecies,       _.get(prevProps, 'excludeSpecies')) ||
-        !fastIsEqual(this.props.includeSpecies,       _.get(prevProps, 'includeSpecies')) ||
         !fastIsEqual(this.props.excludeSpeciesGroups, _.get(prevProps, 'excludeSpeciesGroups')) ||
-        !fastIsEqual(this.props.includeSpeciesGroups, _.get(prevProps, 'includeSpeciesGroups')) ||
+        !fastIsEqual(this.props.unexcludeSpecies,     _.get(prevProps, 'unexcludeSpecies')) ||
         !fastIsEqual(this.state.sortResults,          _.get(prevState, 'sortResults')) ||
         !fastIsEqual(this.state.excludeRecs,          _.get(prevState, 'excludeRecs'))
       ) && (
@@ -585,13 +583,13 @@ export class SearchScreen extends PureComponent<Props, State> {
 
       // Global filters
       //  - TODO(put_all_query_state_in_location)
-      //  - TODO(family_list): How to includeSpecies/includeSpeciesGroups?
       const qualityFilter = (table: string) => (
         sqlf`and ${SQL.raw(table)}.quality in (${this.state.filterQuality})`
       );
       const placeFilter   = (table: string) => (
         sqlf`and ${SQL.raw(table)}.species in (${this.props.place.species})`
       );
+      // TODO(unexclude_species): Incorporate unexcludeSpecies into filter(s)
       const speciesFilter = (table: string) => (
         sqlf`and ${SQL.raw(table)}.species not in (${Array.from(this.props.excludeSpecies)})`
       );
@@ -736,8 +734,6 @@ export class SearchScreen extends PureComponent<Props, State> {
             const sqlCosineDist = sqlf`
               1 - (${SQL.raw(sqlDot)}) / S.norm_f_preds / Q.norm_f_preds
             `;
-
-            // TODO TODO Add a db index for (species, species_group), so we get covering index for the filter
 
             // Query which species are left after applying filters
             //  - This is difficult to make exact, but we can get very close
@@ -1181,9 +1177,27 @@ export class SearchScreen extends PureComponent<Props, State> {
               label: rec.species,
               iconName: 'x',
               buttonColor: iOSColors.red,
-              onPress: () => this.props.app.setState((state: AppState, props: AppProps) => ({
-                excludeSpecies: setAdd(state.excludeSpecies, rec.species),
-              })),
+              onPress: () => {
+
+                this.props.app.setState((state: AppState, props: AppProps) => ({
+                  excludeSpecies: setAdd(state.excludeSpecies, rec.species),
+                }));
+
+                const species       = rec.species;
+                const species_group = rec.species_species_group;
+                // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
+                this.props.app.setState((state, props) => {
+                  const s = species;
+                  const g = species_group;
+                  var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
+                  if      (!exG.has(g) && !exS.has(s)) { exS = setAdd  (exS, s); } // !exG, !exS -> exS+s
+                  else if (!exG.has(g) &&  exS.has(s)) { exS = setDiff (exS, s); } // !exG,  exS -> exS-s
+                  else if ( exG.has(g) && !unS.has(s)) { unS = setAdd  (unS, s); } //  exG, !unS -> unS+s
+                  else if ( exG.has(g) &&  unS.has(s)) { unS = setDiff (unS, s); } //  exG,  unS -> unS-s
+                  return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+                });
+
+              },
             }, {
               ...defaults,
               label: Source.show(Rec.source(rec), {
@@ -1206,9 +1220,63 @@ export class SearchScreen extends PureComponent<Props, State> {
               label: rec.species_species_group,
               iconName: 'x',
               buttonColor: iOSColors.red,
-              onPress: () => this.props.app.setState((state: AppState, props: AppProps) => ({
-                excludeSpeciesGroups: setAdd(state.excludeSpeciesGroups, rec.species_species_group),
-              })),
+              onPress: () => {
+                const {ebird} = this.props;
+                const species_group = rec.species_species_group;
+                // TODO(exclude_invariants): Dedupe with BrowseScreen
+                const unexcludedAny = (unS: Set<Species>) => (
+                  Array.from(unS)
+                  .map(x => ebird.speciesGroupFromSpecies(x))
+                  .includes(species_group)
+                );
+                // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
+                //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
+                this.props.app.setState((state: AppState, props: AppProps) => {
+                  var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
+                  const unAny = unexcludedAny(unS);
+                  const g     = species_group;
+                  const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
+                  if      (!exG.has(g)          ) { exG = setAdd  (exG, g); exS = setDiff (exS, ss); } // !exG         -> exG+g, exS-ss
+                  else if ( exG.has(g) && !unAny) { exG = setDiff (exG, g);                          } //  exG, !unAny -> exG-g
+                  else if ( exG.has(g) &&  unAny) { unS = setDiff (unS, ss);                         } //  exG,  unAny -> unS-ss
+                  return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+                });
+              },
+            }
+          ]})}
+        </View>
+
+        <Separator/>
+        <View style={{flexDirection: 'row'}}>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: rec.species_species_group,
+              iconName: 'maximize-2',
+              buttonColor: iOSColors.orange,
+              onPress: () => {
+                const {ebird} = this.props;
+                const species_group = rec.species_species_group;
+                // TODO(exclude_invariants): Dedupe with BrowseScreen
+                const unexcludedAny = (unS: Set<Species>) => (
+                  Array.from(unS)
+                  .map(x => ebird.speciesGroupFromSpecies(x))
+                  .includes(species_group)
+                );
+                // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
+                //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
+                this.props.app.setState((state: AppState, props: AppProps) => {
+                  var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
+                  const unAny = unexcludedAny(unS);
+                  const g     = species_group;
+                  const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
+                  // HACK(exclude_invariants): Smash through existing state [is this good?]
+                  exS = new Set();
+                  exG = setDiff(new Set(ebird.allSpeciesGroups), g);
+                  unS = new Set();
+                  return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+                });
+              },
             }
           ]})}
         </View>

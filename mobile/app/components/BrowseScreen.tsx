@@ -11,15 +11,16 @@ import {
   // FlatList, ScrollView, Slider, Switch, TextInput, // TODO Needed?
 } from 'react-native-gesture-handler';
 import SearchBar from 'react-native-material-design-searchbar'
+import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import { sprintf } from 'sprintf-js';
 
-import { App } from 'app/App';
+import { App, AppProps, AppState } from 'app/App';
 import {
   ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams, searchPathParamsFromLocation,
-  SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesMetadata, SpectroPathOpts, UserRec, XCRec,
+  SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesGroup, SpeciesMetadata, SpectroPathOpts, UserRec, XCRec,
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
 import { debug_print, Log, puts, rich, tap } from 'app/log';
@@ -29,7 +30,7 @@ import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
   all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, ifNull, into,
   json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait,
-  objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDelete, setToggle, shallowDiffPropsState, Style,
+  objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDiff, setToggle, shallowDiffPropsState, Style,
   throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 
@@ -45,10 +46,9 @@ interface Props {
   place:                Place;
   app:                  App;
   // For BrowseScreen/SearchScreen
-  excludeSpecies:       Set<string>;
-  includeSpecies:       Set<string>;
-  excludeSpeciesGroups: Set<string>;
-  includeSpeciesGroups: Set<string>;
+  excludeSpecies:       Set<Species>;
+  excludeSpeciesGroups: Set<SpeciesGroup>;
+  unexcludeSpecies:     Set<Species>;
 }
 
 interface State {
@@ -144,6 +144,33 @@ export class BrowseScreen extends PureComponent<Props, State> {
         flexDirection: 'column',
       }}>
 
+        {/* NOTE BaseButton b/c TouchableWithoutFeedback wouldn't trigger onPress during FlatList scroll animation */}
+        <BaseButton onPress={() => {
+          mapNull(this.sectionListRef.current, sectionList => { // Avoid transient nulls [why do they happen?]
+            if (sectionList.scrollToLocation) { // (Why typed as undefined? I think only for old versions of react-native?)
+              sectionList.scrollToLocation({
+                sectionIndex: 0, itemIndex: 0,              // First section, first item
+                viewOffset: this._firstSectionHeaderHeight, // Else first item covered by first section header
+              });
+            }
+          });
+        }}>
+          <View style={{
+            backgroundColor:   Styles.tabBar.backgroundColor,
+            borderBottomWidth: Styles.tabBar.borderTopWidth,
+            borderBottomColor: Styles.tabBar.borderTopColor,
+          }}>
+            <Text style={{
+              alignSelf: 'center',
+              marginTop: 30 - getStatusBarHeight(), // No status bar
+              marginBottom: 10,
+              ...material.titleObject,
+            }}>
+              Species
+            </Text>
+          </View>
+        </BaseButton>
+
         {/* Title + scroll to top + buttons */}
         <BaseButton
           style={{
@@ -179,33 +206,48 @@ export class BrowseScreen extends PureComponent<Props, State> {
               {/*   - n1: place.species often includes species that aren't in the app (e.g. CR place in US app) */}
               {/*   - n2: allData is that minus species that aren't in the app */}
               {/*   - n3: data is that minus species that don't match the searchFilter */}
-              {this.props.place.name} ({data.length}/{allData.length}/{this.props.place.species.length} species)
+              Place: {this.props.place.name} ({data.length}/{allData.length}/{this.props.place.species.length} species)
             </Text>
 
             {/* Reset button */}
-            <RectButton
-              style={{
-                justifyContent: 'center', // Vertical
-                alignItems:     'center', // Horizontal
-                width:          35,
-                height:         35,
-              }}
-              onPress={() => {
-                this.props.app.setState({
-                  excludeSpecies:       new Set(),
-                  includeSpecies:       new Set(),
-                  excludeSpeciesGroups: new Set(),
-                  includeSpeciesGroups: new Set(),
-                });
-              }}
-            >
-              <Feather style={{
-                // ...material.titleObject,
-                ...material.headlineObject,
-              }}
-                name={'refresh-ccw'}
-              />
-            </RectButton>
+            {local(() => {
+              const enabled = (
+                !_.isEmpty(this.props.excludeSpecies) ||
+                !_.isEmpty(this.props.excludeSpeciesGroups) ||
+                !_.isEmpty(this.props.unexcludeSpecies)
+              );
+              return (
+                <RectButton
+                  style={{
+                    justifyContent: 'center', // Vertical
+                    alignItems:     'center', // Horizontal
+                    width:          35,
+                    height:         35,
+                  }}
+                  enabled={enabled}
+                  onPress={() => this.props.app.setState({
+                    excludeSpecies:       new Set(),
+                    excludeSpeciesGroups: new Set(),
+                    unexcludeSpecies:     new Set(),
+                  })}
+                >
+                  <Feather style={{
+                    // ...material.titleObject,
+                    ...material.headlineObject,
+                    // Have to style !enabled buttons ourselves
+                    ...(enabled ? {} : {
+                      color: iOSColors.gray,
+                    }),
+                  }}
+                    // TODO(unexclude_species): i/o resetting excludes, use this to toggle all on/off so it's easy to unexclude
+                    //  - This is the workflow substitute for includes (which we abandoned)
+                    //  - e.g. 'x-circle' -> all excludes go red -> tap a few excludes off -> filter to just a few groups
+                    // name={'refresh-ccw'}
+                    name={'x-circle'}
+                  />
+                </RectButton>
+              );
+            })}
 
           </View>
         </BaseButton>
@@ -276,32 +318,37 @@ export class BrowseScreen extends PureComponent<Props, State> {
                 species_group={species_group}
                 isFirstSection={isFirstSection(section)}
                 excluded={this.props.excludeSpeciesGroups.has(species_group)}
-                included={this.props.includeSpeciesGroups.has(species_group)}
+                // TODO(exclude_invariants): Dedupe with SearchScreen
+                unexcludedAny={
+                  Array.from(this.props.unexcludeSpecies)
+                  .map(x => this.props.ebird.speciesGroupFromSpecies(x))
+                  .includes(species_group)
+                }
                 browse={this}
                 go={this.props.go}
+                ebird={this.props.ebird}
                 app={this.props.app}
               />
             );
           }}
-          renderItem={({item: species, index, section}) => {
+          renderItem={({index, section, item: {
+            shorthand: species,
+            species_group,
+            com_name,
+            sci_name,
+          }}) => {
             return (
               <BrowseItem
-                key={species.shothand}
-                species={species} // WARNING Perf: this will trigger many unnecessary updates if object identity ever changes
+                key={species}
+                species={species}
+                species_group={species_group}
+                com_name={com_name}
+                sci_name={sci_name}
                 isLastItem={isLastItem(section, index)}
-                excluded={( // exc || group exc && !inc
-                  this.props.excludeSpecies.has(species.shorthand) || (
-                    this.props.excludeSpeciesGroups.has(species.species_group) &&
-                    !this.props.includeSpecies.has(species.shorthand)
-                  )
-                )}
-                included={( // inc || group inc && !exc
-                  this.props.includeSpecies.has(species.shorthand) || (
-                    this.props.includeSpeciesGroups.has(species.species_group) &&
-                    !this.props.excludeSpecies.has(species.shorthand)
-                  )
-                )}
+                excluded={this.props.excludeSpecies.has(species) || this.props.excludeSpeciesGroups.has(species_group)}
+                unexcluded={this.props.unexcludeSpecies.has(species)}
                 go={this.props.go}
+                ebird={this.props.ebird}
                 app={this.props.app}
               />
             );
@@ -357,9 +404,10 @@ interface BrowseSectionHeaderProps {
   species_group:  string;
   isFirstSection: boolean | undefined;
   excluded:       boolean;
-  included:       boolean;
+  unexcludedAny:  boolean;
   browse:         BrowseScreen;
   go:             Go;
+  ebird:          Ebird;
   app:            App;
 }
 
@@ -387,7 +435,7 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
 
   render = () => {
     // this.log.info('render'); // Debug
-    const {species_group} = this.props;
+    const {species_group, ebird} = this.props;
     return (
       <View
         style={[Styles.fill, {
@@ -411,32 +459,19 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
 
         <BrowseItemButton
           iconName='x'
-          activeButtonColor={iOSColors.red}
+          activeButtonColor={!this.props.unexcludedAny ? iOSColors.red : iOSColors.yellow}
           active={this.props.excluded}
           onPress={() => {
+            // TODO(exclude_invariants): Dedupe with SearchScreen
             this.props.app.setState((state, props) => {
-              const x = species_group;
-              const {excludeSpeciesGroups: exc, includeSpeciesGroups: inc} = state;
-              return {
-                excludeSpeciesGroups: !exc.has(x) ? setAdd    (exc, x) : setDelete(exc, x),
-                includeSpeciesGroups: !exc.has(x) ? setDelete (inc, x) : inc,
-              };
-            });
-          }}
-        />
-
-        <BrowseItemButton
-          iconName='plus'
-          activeButtonColor={iOSColors.green}
-          active={this.props.included}
-          onPress={() => {
-            this.props.app.setState((state, props) => {
-              const x = species_group;
-              const {excludeSpeciesGroups: exc, includeSpeciesGroups: inc} = state;
-              return {
-                includeSpeciesGroups: !inc.has(x) ? setAdd    (inc, x) : setDelete(inc, x),
-                excludeSpeciesGroups: !inc.has(x) ? setDelete (exc, x) : exc,
-              };
+              var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
+              const unAny = this.props.unexcludedAny;
+              const g     = species_group;
+              const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
+              if      (!exG.has(g)          ) { exG = setAdd  (exG, g); exS = setDiff (exS, ss); } // !exG         -> exG+g, exS-ss
+              else if ( exG.has(g) && !unAny) { exG = setDiff (exG, g);                          } //  exG, !unAny -> exG-g
+              else if ( exG.has(g) &&  unAny) { unS = setDiff (unS, ss);                         } //  exG,  unAny -> unS-ss
+              return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
             });
           }}
         />
@@ -453,12 +488,16 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
 //
 
 interface BrowseItemProps {
-  species:    SpeciesMetadata; // WARNING Perf: this will trigger many unnecessary updates if object identity ever changes
-  isLastItem: boolean | undefined;
-  excluded:   boolean;
-  included:   boolean;
-  go:         Go;
-  app:        App;
+  species:       Species;
+  species_group: SpeciesGroup;
+  com_name:      string;
+  sci_name:      string;
+  isLastItem:    boolean | undefined;
+  excluded:      boolean;
+  unexcluded:    boolean;
+  go:            Go;
+  ebird:         Ebird;
+  app:           App;
 }
 
 interface BrowseItemState {
@@ -466,7 +505,7 @@ interface BrowseItemState {
 
 export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> {
 
-  log = new Log(`BrowseItem[${this.props.species.species_group}/${this.props.species.shorthand}]`);
+  log = new Log(`BrowseItem[${this.props.species_group}/${this.props.species}]`);
 
   state: BrowseItemState = {
     searchFilter: '',
@@ -486,7 +525,7 @@ export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> 
 
   render = () => {
     // this.log.info('render'); // Debug
-    const {species} = this.props;
+    const {species, species_group, com_name, sci_name, ebird} = this.props;
     return (
       <View style={{
         flexDirection:   'row',
@@ -509,7 +548,7 @@ export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> 
           activeButtonColor={iOSColors.blue}
           active={true}
           onPress={() => {
-            this.props.go('search', {path: `/species/${encodeURIComponent(species.shorthand)}`});
+            this.props.go('search', {path: `/species/${encodeURIComponent(species)}`});
           }}
         />
 
@@ -518,41 +557,28 @@ export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> 
           paddingHorizontal: 5,
         }}>
           <Text style={[material.captionObject, {color: 'black'}]}>
-            {species.com_name}
+            {com_name}
           </Text>
           <Text style={[material.captionObject, {fontSize: 10}]}>
-            {species.sci_name}
+            {sci_name}
           </Text>
         </View>
 
         <BrowseItemButton
           iconName='x'
           activeButtonColor={iOSColors.red}
-          active={this.props.excluded}
+          active={this.props.excluded && !this.props.unexcluded}
           onPress={() => {
+            // TODO(exclude_invariants): Dedupe with SearchScreen
             this.props.app.setState((state, props) => {
-              const x = species.shorthand;
-              const {excludeSpecies: exc, includeSpecies: inc} = state;
-              return {
-                excludeSpecies: !exc.has(x) ? setAdd    (exc, x) : setDelete(exc, x),
-                includeSpecies: !exc.has(x) ? setDelete (inc, x) : inc,
-              };
-            });
-          }}
-        />
-
-        <BrowseItemButton
-          iconName='plus'
-          activeButtonColor={iOSColors.green}
-          active={this.props.included}
-          onPress={() => {
-            this.props.app.setState((state, props) => {
-              const x = species.shorthand;
-              const {excludeSpecies: exc, includeSpecies: inc} = state;
-              return {
-                includeSpecies: !inc.has(x) ? setAdd    (inc, x) : setDelete(inc, x),
-                excludeSpecies: !inc.has(x) ? setDelete (exc, x) : exc,
-              };
+              var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
+              const s = species;
+              const g = species_group;
+              if      (!exG.has(g) && !exS.has(s)) { exS = setAdd  (exS, s); } // !exG, !exS -> exS+s
+              else if (!exG.has(g) &&  exS.has(s)) { exS = setDiff (exS, s); } // !exG,  exS -> exS-s
+              else if ( exG.has(g) && !unS.has(s)) { unS = setAdd  (unS, s); } //  exG, !unS -> unS+s
+              else if ( exG.has(g) &&  unS.has(s)) { unS = setDiff (unS, s); } //  exG,  unS -> unS-s
+              return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
             });
           }}
         />

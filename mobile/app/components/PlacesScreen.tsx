@@ -187,7 +187,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
                       {/*   - place.species often includes species that aren't in the app (e.g. CR place in US app) */}
                       {/*   - Most prominently, we want to show the number of place species that are in the app */}
                       {/*   - Less prominently, we want to also show the total number of species for the place */}
-                      {place.species.length} species
+                      TODO / {place.species.length} species
                     </Text>
                     <Text style={material.caption}>
                       {yaml(place.props).slice(1, -1)}
