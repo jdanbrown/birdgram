@@ -8,8 +8,8 @@ import _ from 'lodash';
 import React, { Component, PureComponent, RefObject } from 'react';
 import shallowCompare from 'react-addons-shallow-compare';
 import {
-  ActivityIndicator, Alert, Animated, Button, Dimensions, EmitterSubscription, Image, Platform, ScrollView, StyleProp,
-  Text, TextProps, View, ViewProps,
+  ActivityIndicator, Alert, Animated, Button, Dimensions, EmitterSubscription, Image, Platform, ScrollView, Share,
+  StyleProp, Text, TextProps, View, ViewProps,
 } from 'react-native';
 import AudioRecord from 'react-native-audio-record';
 import FastImage, { ImageStyle } from 'react-native-fast-image';
@@ -477,6 +477,7 @@ export class RecordScreen extends Component<Props, State> {
           setStateProxy={this} // Had some 'undefined' trouble with passing this.setState, so passing this instead
           startRecording={this.startRecording}
           stopRecording={this.stopRecording}
+          shareRec={this.shareRec}
         />
 
       </View>
@@ -721,6 +722,20 @@ export class RecordScreen extends Component<Props, State> {
     }
   }
 
+  shareRec = async (rec: Rec) => {
+    // TODO(android): How to share file on android? Docs say url is ios only
+    //  - https://facebook.github.io/react-native/docs/share.html
+    const content = {
+      url:     `file://${Rec.audioPath(rec)}`,
+      message: Source.show(Rec.source(rec), {
+        species: null, // TODO Add this.props.xc so we can show species for xc recs
+        long:    true,
+      }),
+    };
+    log.info('shareRec', {rec, content});
+    await Share.share(content);
+  }
+
   // Method for shallowCompare in SpectroImage.shouldComponentUpdate (else excessive updates)
   spectroStyle = (spectros: EditRecordingSpectro) => (i: number): StyleProp<ImageStyle> => {
     // Fade spectro chunks outside of draftEdit.clips intervals
@@ -913,6 +928,7 @@ export interface ControlsBarProps {
   setStateProxy:     RecordScreen;
   startRecording:    typeof RecordScreen.prototype.startRecording;
   stopRecording:     typeof RecordScreen.prototype.stopRecording;
+  shareRec:          typeof RecordScreen.prototype.shareRec;
 }
 export interface ControlsBarState {}
 export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarState> {
@@ -966,6 +982,27 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
               <ActivityIndicator size='small' />
             </RectButton>
           )],
+        )}
+
+        {!this.props.editRecording ? (
+          // Toggle follow
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
+            this.props.setStateProxy.setState((state, props) => ({follow: !state.follow}))
+          }}>
+            <Feather name='chevrons-down' style={[styles.bottomControlsButtonIcon, {
+              color: this.props.follow ? iOSColors.blue : iOSColors.black,
+            }]}/>
+          </RectButton>
+        ) : (
+          // Toggle denoised
+          <RectButton style={styles.bottomControlsButton} onPress={() => {
+            this.props.setStateProxy.setState((state, props) => ({denoised: !state.denoised}))
+          }}>
+            {/* 'eye' / 'zap' / 'sun' */}
+            <Feather name='eye' style={[styles.bottomControlsButtonIcon, {
+              color: this.props.denoised ? iOSColors.blue : iOSColors.black,
+            }]}/>
+          </RectButton>
         )}
 
         {/* Go to parent rec */}
@@ -1083,26 +1120,18 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
         )}
 
-        {!this.props.editRecording ? (
-          // Toggle follow
-          <RectButton style={styles.bottomControlsButton} onPress={() => {
-            this.props.setStateProxy.setState((state, props) => ({follow: !state.follow}))
-          }}>
-            <Feather name='chevrons-down' style={[styles.bottomControlsButtonIcon, {
-              color: this.props.follow ? iOSColors.blue : iOSColors.black,
-            }]}/>
-          </RectButton>
-        ) : (
-          // Toggle denoised
-          <RectButton style={styles.bottomControlsButton} onPress={() => {
-            this.props.setStateProxy.setState((state, props) => ({denoised: !state.denoised}))
-          }}>
-            {/* 'eye' / 'zap' / 'sun' */}
-            <Feather name='eye' style={[styles.bottomControlsButtonIcon, {
-              color: this.props.denoised ? iOSColors.blue : iOSColors.black,
-            }]}/>
-          </RectButton>
-        )}
+        {/* Share */}
+        <RectButton style={styles.bottomControlsButton} onPress={() => {
+          if (this.props.editRecording) {
+            this.props.shareRec(this.props.editRecording.rec);
+          }
+        }}>
+          <Feather style={[styles.bottomControlsButtonIcon, {
+            color: !this.props.editRecording || this.props.draftEditHasEdits ? iOSColors.gray : iOSColors.black,
+          }]}
+            name='share'
+          />
+        </RectButton>
 
         {/* XXX Debug gps */}
         {/* {this.props.showDebug && (
