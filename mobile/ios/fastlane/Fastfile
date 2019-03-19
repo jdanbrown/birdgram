@@ -244,7 +244,7 @@ platform :ios do
       build_app(
         configuration: 'Release',
         include_symbols: true,
-        include_bitcode: true,
+        include_bitcode: false, # Must match ENABLE_BITCODE (in Birdgram.xcodeproj/project.pbxproj)
       )
     end
 

@@ -36,8 +36,10 @@ $ yarn jest --watch
 # Upload to TestFlight (e.g. US)
 1. `fastlane` takes ~50m to build and upload
   - ~15m build + ~33m upload (2.6GB US .ipa @ ~1.4MB/s)
+  - (CA100: ~6m build + 3m upload)
 2. Apple takes ~10h to process until it's available to internal testers and for submission for beta review
   - ~4h to show up as "Processing" ("Upload Date" in console) + ~6h until "completed processing" (via email)
+  - (CA100: ~5m until "completed processing" email)
 3. Manually submit for beta review
   - By adding the build to the external testers group
 4. Apple takes 0m to "Approve" for external testers
