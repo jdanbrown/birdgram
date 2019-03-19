@@ -34,7 +34,7 @@ import {
   SourceId, UserMetadata, UserRec, UserSource,
 } from 'app/datatypes';
 import { DB } from 'app/db';
-import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
+import { debug_print, Log, logErrors, logErrorsAsync, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import { ImageFile, NativeSpectro, NativeSpectroStats } from 'app/native/Spectro';
 import { Go, Location, locationKeyIsEqual, locationPathIsEqual } from 'app/router';
@@ -268,58 +268,71 @@ export class RecordScreen extends Component<Props, State> {
         });
 
       } else {
-
         log.info('updateForLocation', rich({location: this.props.location, prevLocation}));
+        await log.timedAsync('updateForLocation', async () => {
 
-        // Reset state
-        //  - TODO Dedupe with startRecording
-        this.setState({
-          recordingState: 'loading-for-edit',
-          spectroChunks: [],
-          nSpectroChunks: 0,
-          nSamples: 0,
-          nSpectroWidth: 0,
-          editRecording: null,
-          editClipMode: 'off',
-          draftEdit: {},
-        });
-        this._renderRate.reset();
+          // Reset state
+          //  - TODO Dedupe with startRecording
+          this.setState({
+            recordingState: 'loading-for-edit',
+            spectroChunks: [],
+            nSpectroChunks: 0,
+            nSamples: 0,
+            nSpectroWidth: 0,
+            editRecording: null,
+            editClipMode: 'off',
+            draftEdit: {},
+          });
+          this._renderRate.reset();
 
-        await matchRecordPathParams(recordPathParamsFromLocation(this.props.location), {
-          root: async () => {
-            // Show blank record screen
-            this.setState({
-              recordingState: 'stopped',
-            });
-          },
-          edit: async ({sourceId}) => {
-            // Show editRecording for sourceId
-            var editRecording: null | EditRecording; // null if audio file not found
-            if (SourceId.isOldStyleEdit(sourceId)) {
-              // Treat old-style edit recs (from history) like audio file not found
-              editRecording = null;
-            } else {
-              const source = await Source.load(sourceId);
-              if (!source) {
-                // Noisy for not found (e.g. user deleted a user rec, or xc dataset changed)
-                // log.warn('updateForLocation: Failed to load sourceId', rich({sourceId, location: this.props.location}));
-                editRecording = null; // Treat like audio file not found (else stuck on loading spinner)
+          await matchRecordPathParams(recordPathParamsFromLocation(this.props.location), {
+            root: async () => {
+              // Show blank record screen
+              this.setState({
+                recordingState: 'stopped',
+              });
+            },
+            edit: async ({sourceId}) => {
+              // Show editRecording for sourceId
+              var editRecording: null | EditRecording; // null if audio file not found
+              if (SourceId.isOldStyleEdit(sourceId)) {
+                // Treat old-style edit recs (from history) like audio file not found
+                editRecording = null;
               } else {
-                const rec = await this.props.db.loadRec(source); // null if audio file not found
-                editRecording = await mapNull(rec, async rec => await EditRecording({
-                  rec,
-                  f_bins: this.props.f_bins,
-                  doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
-                }));
+                const source = await log.timedAsync('updateForLocation: Source.load', async () => {
+                  return await Source.load(sourceId);
+                });
+                if (!source) {
+                  // Noisy for not found (e.g. user deleted a user rec, or xc dataset changed)
+                  // log.warn('updateForLocation: Failed to load sourceId', rich({sourceId, location: this.props.location}));
+                  editRecording = null; // Treat like audio file not found (else stuck on loading spinner)
+                } else {
+                  const rec = await log.timedAsync('updateForLocation: db.loadRec', async () => {
+                    return await this.props.db.loadRec(source); // null if audio file not found
+                  });
+                  editRecording = await log.timedAsync('updateForLocation: EditRecording', async () => {
+                    return await mapNull(rec, async rec => await EditRecording({
+                      rec,
+                      f_bins: this.props.f_bins,
+                      doneSpectroChunkWidth: this.props.doneSpectroChunkWidth,
+                    }));
+                  });
+                }
               }
-            }
-            this.setState({
-              recordingState: 'stopped',
-              editRecording, // null if audio file not found
-            });
-          },
-        });
+              await log.timedAsync('updateForLocation: setState', async () => {
+                // TODO Perf: This takes about as long as renderAudioPathToSpectroPath (in EditRecording)
+                //  - Profiling indicates it's because of the num-chunks SpectroImage components
+                //  - Now that we crop using css instead of img files, we can hugely cut this down to num-wraps img components
+                //  - But first we'll need to redo how the cropping controls work, since they currently rely on onPress per chunk img
+                this.setState({
+                  recordingState: 'stopped',
+                  editRecording, // null if audio file not found
+                });
+              });
+            },
+          });
 
+        });
       }
     }
   }
@@ -398,6 +411,10 @@ export class RecordScreen extends Component<Props, State> {
                 const spectros = editRecording.spectros.get(this.state.denoised);
                 return spectros && (
                   <WrappedSpectroImages
+                    single={into(spectros.single, ({path, ...props}) => ({
+                      source: {uri: path},
+                      ...props,
+                    }))}
                     spectros={spectros.chunked.map(({imageFile: {path, ...props}}) => ({
                       source: {uri: path},
                       ...props,
@@ -770,6 +787,11 @@ export class RecordScreen extends Component<Props, State> {
 }
 
 export interface WrappedSpectroImagesProps {
+  single?: {
+    source: {uri?: string},
+    width: number,
+    height: number,
+  };
   spectros: Array<{
     source: {uri?: string},
     width: number,
@@ -807,15 +829,16 @@ export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProp
     return (
       this.props.spectros.map(({source, width, height, debugTimes}, i) => (
         <SpectroImage
-          key={source.uri}
+          key={`${source.uri}[i=${i}]`}
+          single={this.props.single}
           source={source}
-          spectroScale={this.props.spectroScale}
           width={width}
           height={height}
           i={i}
           style={this.props.spectroStyle}
           onPress={this.props.onSpectroPress}
           debugTimes={debugTimes}
+          spectroScale={this.props.spectroScale}
           showDebug={this.props.showDebug}
           showMoreDebug={this.props.showMoreDebug}
         />
@@ -827,11 +850,15 @@ export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProp
 
 // Split out spectro image as component else excessive updates cause render bottleneck
 export interface SpectroImageProps {
+  single?: {
+    source: {uri?: string},
+    width: number,
+    height: number,
+  };
   source: {uri?: string};
   width: number;
   height: number;
-  // Take i as prop so that {style,onPress} can shallowCompare in shouldComponentUpdate (else excessive updates)
-  i: number;
+  i: number; // Take i as prop so that {style,onPress} can shallowCompare in shouldComponentUpdate (else excessive updates)
   style?: (i: number) => StyleProp<ImageStyle>;
   onPress?: (i: number) => (pointerInside: boolean) => void;
   debugTimes?: DebugTimes;
@@ -863,22 +890,71 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
     // this.log.info('render');
     return (
       <BaseButton onPress={this.props.onPress && this.props.onPress(this.props.i)}>
-        <FastImage
-          // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing rndebugger
-          //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
-          //  - https://github.com/DylanVann/react-native-fast-image
-          style={[this.props.style && this.props.style(this.props.i), {
+
+        {/* TODO Simplify, remove cruft, reduce coupling (EditRecording <-> SpectroImage) */}
+        {this.props.single ? (
+          // Case: static edit rec
+          //  - We have the single static spectro, so reuse it to drop all the cropped chunks (crop via css)
+          //  - This is a perf optimization: we used to compute all the separate chunk imgs on save and it was a major bottleneck
+
+          <View style={{
             width:  this.props.spectroScale * this.props.width,
             height: this.props.spectroScale * this.props.height,
             marginBottom: 1,
-            marginRight: this.props.showDebug && this.props.showMoreDebug ? 1 : 0, // Separate chunks for debug
-          }]}
-          source={this.props.source}
-          // resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
-          // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
-          resizeMode='stretch' // Scale both dims to =container, ignoring aspect
-          // resizeMode='center'  // Maintain dims and aspect
-        />
+            overflow: 'hidden',
+            backgroundColor: 'transparent',
+            // marginRight: 1, // XXX Debug: If you want a gap, use margin i/o border/padding (child Image shows through)
+          }}>
+            {(
+              // Crop full spectro image down to the (tiny) slice for this chunk
+              //  - Based on: https://github.com/walmartlabs/react-native-cropping/blob/c5b8401/index.js#L56-L66
+              //  - Use FastImage i/o Image because Image ooms on long recs (e.g. >40s rec on iphone 8)
+              //    - Not clear why, since FastImage slurps each img into ram and Image uses a cache... but it works in practice!
+              //    - https://github.com/DylanVann/react-native-fast-image/blob/89c0e2e/ios/FastImage/FFFastImageView.m#L80
+              //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/Image.ios.js#L132-L139
+              //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageView.m#L317-L324
+              //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageLoader.m#L467-L470
+              //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageCache.m#L101
+              <FastImage
+                key={`${this.props.i}/${this.props.source.uri}`}
+                style={[this.props.style && this.props.style(this.props.i), {
+                  width:    this.props.spectroScale * this.props.single.width,
+                  height:   this.props.spectroScale * this.props.single.height,
+                  position: 'absolute',
+                  left:     -this.props.i * this.props.width,
+                }]}
+                source={this.props.source}
+                resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
+                // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
+                // resizeMode='stretch' // Scale both dims to =container, ignoring aspect
+                // resizeMode='center'  // Maintain dims and aspect
+              />
+            )}
+          </View>
+
+        ) : (
+          // Case: streaming spectro
+          //  - We don't have a single static spectro, so we have to draw all the separate chunk imgs
+
+          <FastImage
+            // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing rndebugger
+            //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
+            //  - https://github.com/DylanVann/react-native-fast-image
+            style={[this.props.style && this.props.style(this.props.i), {
+              width:  this.props.spectroScale * this.props.width,
+              height: this.props.spectroScale * this.props.height,
+              marginBottom: 1,
+              marginRight: this.props.showDebug && this.props.showMoreDebug ? 1 : 0, // Separate chunks for debug
+            }]}
+            source={this.props.source}
+            // resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
+            // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
+            resizeMode='stretch' // Scale both dims to =container, ignoring aspect
+            // resizeMode='center'  // Maintain dims and aspect
+          />
+
+        )}
+
         {this.props.showDebug && this.props.showMoreDebug && (
           <this.DebugView style={{flexDirection: 'column', padding: 0, marginRight: 1}}>
             {(this.props.debugTimes || []).map(({k, v}, i) => (
@@ -886,6 +962,7 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
             ))}
           </this.DebugView>
         )}
+
       </BaseButton>
     );
   }
@@ -1172,6 +1249,7 @@ export async function EditRecording(props: {
   // Render audioPath -> spectros
   //  - null if any value is null (audio samples < nperseg)
   //  - Compute spectros for denoise=true/false (true for preds, false so user can toggle to see pre-denoise)
+  //    - In parallel, which does empirically achieve ~2x speedup
   //  - Compute spectros for single/chunked (single for preds, chunked for wrapped display)
   var _spectros: EditRecordingSpectros = await log.timedAsync('EditRecording: spectros', async () => new Map(
     await Promise.all([true, false].map(async denoise => {
@@ -1183,44 +1261,58 @@ export async function EditRecording(props: {
         denoise,
       });
 
-      // FIXME Bottleneck: skip renderAudioPathToSpectroPath + chunkImageFile entirely if we've already completed them once
-      //  - Nontrivial only because they return things to us (single + chunked) that we don't know how to compute on our own...
-      //  - I added a skip within each of the two functions, but there's still too much work happening (e.g. samplesFromAudioPath)
-
-      // Compute spectro
-      const single = await NativeSpectro.renderAudioPathToSpectroPath(
-        Rec.audioPath(props.rec),
-        await ensureParentDir(spectroCachePath),
-        {
-          f_bins: props.f_bins,
-          denoise,
-        },
-      );
-
-      // Compute spectro chunks
-      const spectros = !single ? null : {
-        single,
-        chunked: await local(async () => {
-          const imageFiles = await NativeSpectro.chunkImageFile(single.path, props.doneSpectroChunkWidth);
-
-          // Compute width/time intervals
-          var cumWidth = 0;
-          const widthIntervals = imageFiles.map(({width}) => {
-            cumWidth += width;
-            return new Interval(cumWidth, cumWidth - width);
+      // Compute spectro (cache to file)
+      const single = await local(async () => {
+        if (await log.timedAsync(`EditRecording[denoise=${denoise}]: fs.exists`, () => (
+          fs.exists(spectroCachePath)
+        ))) {
+          // Cache hit: read width/height from cache spectro file
+          return await log.timedAsync(`EditRecording[denoise=${denoise}]: Cache hit: Read spectro width/height`, async () => {
+            const path = spectroCachePath;
+            const {width, height} = await new Promise<Dim<number>>((resolve, reject) => {
+              Image.getSize(`file://${path}`, (width, height) => resolve({width, height}), reject);
+            });
+            return {path, width, height};
           });
-          const timeIntervals = widthIntervals.map(({lo, hi}) => {
-            return new Interval(
-              lo / cumWidth * props.rec.duration_s,
-              hi / cumWidth * props.rec.duration_s,
+        } else {
+          // Cache miss: compute spectro file (from audio file)
+          return await log.timedAsync(`EditRecording[denoise=${denoise}]: Cache miss: renderAudioPathToSpectroPath`, async () => {
+            return await NativeSpectro.renderAudioPathToSpectroPath(
+              Rec.audioPath(props.rec),
+              await ensureParentDir(spectroCachePath),
+              {
+                f_bins: props.f_bins,
+                denoise,
+              },
             );
           });
+        }
+      });
 
-          return _.zip(imageFiles, widthIntervals, timeIntervals).map(([imageFile, widthInterval, timeInterval]) => ({
-            imageFile,
-            widthInterval,
-            timeInterval,
-          }));
+      // Compute [old-style] spectro chunks
+      //  - This used to be a heavy computation where we cropped separate files per chunk, but it's now simplified to
+      //    just a bunch of lightweight chunk metadata over the one full spectro (single.path)
+      //  - TODO Simplify, remove cruft, reduce coupling (EditRecording <-> SpectroImage)
+      const spectros = !single ? null : {
+        single,
+        chunked: local(() => {
+          const totalWidth = single.width;
+          const chunkWidth = props.doneSpectroChunkWidth;
+          return _.range(0, totalWidth / chunkWidth).map(i => {
+            const widthInterval = new Interval(chunkWidth * i, chunkWidth * (i + 1));
+            return {
+              imageFile: {
+                path:   single.path, // Full image i/o cropped image (else very slow to compute all the tiny crops)
+                width:  chunkWidth,
+                height: single.height,
+              },
+              widthInterval,
+              timeInterval: new Interval(
+                widthInterval.lo / totalWidth * props.rec.duration_s,
+                widthInterval.hi / totalWidth * props.rec.duration_s,
+              ),
+            };
+          });
         }),
       };
 

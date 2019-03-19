@@ -50,11 +50,4 @@ RCT_EXTERN_METHOD(
   reject:(RCTPromiseRejectBlock)reject
 );
 
-RCT_EXTERN_METHOD(
-  chunkImageFile:(NSString *)path
-  chunkWidth:(NSInteger *)chunkWidth
-  resolve:(RCTPromiseResolveBlock)resolve
-  reject:(RCTPromiseRejectBlock)reject
-);
-
 @end

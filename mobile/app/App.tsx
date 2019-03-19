@@ -572,7 +572,7 @@ export default class App extends PureComponent<Props, State> {
           playingProgressEnable   = {this.state.settings!.playingProgressEnable}
           playingProgressInterval = {this.state.settings!.playingProgressInterval}
           spectroScale            = {this.state.settings!.spectroScale}
-          place                   = {this.place!}
+          place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
           places                  = {this.state.settings!.places}
           // For BrowseScreen/SearchScreen
           excludeSpecies          = {this.state.excludeSpecies}
@@ -590,7 +590,7 @@ export default class App extends PureComponent<Props, State> {
           // App globals
           go                      = {this.go}
           ebird                   = {this.state.ebird!}
-          place                   = {this.place!}
+          place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
           app                     = {this}
           // For BrowseScreen/SearchScreen
           excludeSpecies          = {this.state.excludeSpecies}
@@ -611,7 +611,7 @@ export default class App extends PureComponent<Props, State> {
           // Settings
           settings                = {this.state.settingsWrites!}
           showDebug               = {this.state.settings!.showDebug}
-          place                   = {this.place!}
+          place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
           places                  = {this.state.settings!.places}
         />
       ),

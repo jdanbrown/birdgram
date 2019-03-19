@@ -39,6 +39,11 @@ export function into<X, Y>(x: X, f: (x: X) => Y): Y {
   return f(x);
 }
 
+export function tap<X>(x: X, f: (x: X) => void): X {
+  f(x);
+  return x;
+}
+
 // Type annotation (not type assertion)
 export function typed<X>(x: X): X {
   return x;

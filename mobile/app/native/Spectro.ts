@@ -80,15 +80,6 @@ export const NativeSpectro = {
   ),
 
   // TODO Move out of NativeSpectro
-  chunkImageFile: async (
-    path: string,
-    chunkWidth: number,
-  ): Promise<Array<ImageFile>> => RNSpectro.chunkImageFile(
-    path,
-    chunkWidth,
-  ),
-
-  // TODO Move out of NativeSpectro
   editAudioPathToAudioPath: async (
     props: {
       parentAudioPath: string,

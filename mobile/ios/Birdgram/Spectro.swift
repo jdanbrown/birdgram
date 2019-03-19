@@ -141,23 +141,6 @@ class RNSpectro: RCTEventEmitter, RNProxy {
     }
   }
 
-  @objc func chunkImageFile(
-    _ path: String,
-    chunkWidth: Int,
-    resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock
-  ) -> Void {
-    withPromiseNoProxy(resolve, reject, "chunkImageFile") { () -> Array<Props> in
-      return (try Birdgram.chunkImageFile(
-        path,
-        chunkWidth: chunkWidth
-      )).map { imageFile in [
-        "path":   imageFile.path,
-        "width":  imageFile.width,
-        "height": imageFile.height,
-      ]}
-    }
-  }
-
 }
 
 // Leaned heavily on these very simple and clear examples to make this thing work
