@@ -155,7 +155,6 @@ interface Props {
   go:                      Go;
   xc:                      XC;
   ebird:                   Ebird;
-  app:                     App;
   // Settings
   settings:                SettingsWrites;
   db:                      DB;
@@ -172,7 +171,6 @@ interface Props {
   spectroScale:            number;
   place:                   Place;
   places:                  Array<Place>;
-  // For BrowseScreen/SearchScreen
   excludeSpecies:          Set<Species>;
   excludeSpeciesGroups:    Set<SpeciesGroup>;
   unexcludeSpecies:        Set<Species>;
@@ -1178,25 +1176,18 @@ export class SearchScreen extends PureComponent<Props, State> {
               iconName: 'x',
               buttonColor: iOSColors.red,
               onPress: () => {
-
-                this.props.app.setState((state: AppState, props: AppProps) => ({
-                  excludeSpecies: setAdd(state.excludeSpecies, rec.species),
-                }));
-
                 const species       = rec.species;
                 const species_group = rec.species_species_group;
                 // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
-                this.props.app.setState((state, props) => {
+                this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
                   const s = species;
                   const g = species_group;
-                  var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
                   if      (!exG.has(g) && !exS.has(s)) { exS = setAdd  (exS, s); } // !exG, !exS -> exS+s
                   else if (!exG.has(g) &&  exS.has(s)) { exS = setDiff (exS, s); } // !exG,  exS -> exS-s
                   else if ( exG.has(g) && !unS.has(s)) { unS = setAdd  (unS, s); } //  exG, !unS -> unS+s
                   else if ( exG.has(g) &&  unS.has(s)) { unS = setDiff (unS, s); } //  exG,  unS -> unS-s
                   return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
                 });
-
               },
             }, {
               ...defaults,
@@ -1231,8 +1222,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 );
                 // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
                 //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
-                this.props.app.setState((state: AppState, props: AppProps) => {
-                  var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
+                this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
                   const unAny = unexcludedAny(unS);
                   const g     = species_group;
                   const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
@@ -1265,8 +1255,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 );
                 // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
                 //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
-                this.props.app.setState((state: AppState, props: AppProps) => {
-                  var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
+                this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
                   const unAny = unexcludedAny(unS);
                   const g     = species_group;
                   const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)

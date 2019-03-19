@@ -170,10 +170,6 @@ interface State {
   nSpecies?: number;
   geo?: Geo;
   appContext?: AppContext;
-  // For BrowseScreen/SearchScreen
-  excludeSpecies: Set<Species>;
-  excludeSpeciesGroups: Set<SpeciesGroup>;
-  unexcludeSpecies: Set<Species>;
 }
 
 interface AppContext {
@@ -210,13 +206,6 @@ export default class App extends PureComponent<Props, State> {
     tabIndex: 2, // TODO
     orientation: getOrientation(),
     loading: true,
-    // For BrowseScreen/SearchScreen
-    excludeSpecies:       new Set(),
-    excludeSpeciesGroups: new Set(),
-    unexcludeSpecies:     new Set(),
-    // excludeSpecies:       new Set(['VIRA', 'COYE']), // XXX(unexclude_species): Debug
-    // excludeSpeciesGroups: new Set(['Wrens', 'Wood-Warblers']), // XXX(unexclude_species): Debug
-    // unexcludeSpecies:     new Set(['COYE', 'SWTH']), // XXX(unexclude_species): Debug
   };
 
   // Default settings.place:null to ebird.allPlace
@@ -557,7 +546,6 @@ export default class App extends PureComponent<Props, State> {
           go                      = {this.go}
           xc                      = {this.state.xc!}
           ebird                   = {this.state.ebird!}
-          app                     = {this}
           // Settings
           settings                = {this.state.settingsWrites!}
           db                      = {this.state.db!}
@@ -574,10 +562,9 @@ export default class App extends PureComponent<Props, State> {
           spectroScale            = {this.state.settings!.spectroScale}
           place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
           places                  = {this.state.settings!.places}
-          // For BrowseScreen/SearchScreen
-          excludeSpecies          = {this.state.excludeSpecies}
-          excludeSpeciesGroups    = {this.state.excludeSpeciesGroups}
-          unexcludeSpecies        = {this.state.unexcludeSpecies}
+          excludeSpecies          = {this.state.settings!.excludeSpecies}
+          excludeSpeciesGroups    = {this.state.settings!.excludeSpeciesGroups}
+          unexcludeSpecies        = {this.state.settings!.unexcludeSpecies}
           // SearchScreen
           f_bins                  = {this.state.settings!.f_bins}
         />
@@ -591,11 +578,11 @@ export default class App extends PureComponent<Props, State> {
           go                      = {this.go}
           ebird                   = {this.state.ebird!}
           place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
-          app                     = {this}
-          // For BrowseScreen/SearchScreen
-          excludeSpecies          = {this.state.excludeSpecies}
-          excludeSpeciesGroups    = {this.state.excludeSpeciesGroups}
-          unexcludeSpecies        = {this.state.unexcludeSpecies}
+          // Settings
+          settings                = {this.state.settingsWrites!}
+          excludeSpecies          = {this.state.settings!.excludeSpecies}
+          excludeSpeciesGroups    = {this.state.settings!.excludeSpeciesGroups}
+          unexcludeSpecies        = {this.state.settings!.unexcludeSpecies}
         />
       ),
     }, {
@@ -718,8 +705,8 @@ export default class App extends PureComponent<Props, State> {
                 );
               };
               const nExcludedSpecies = setDiff(
-                setAdd(this.state.excludeSpecies, groupsSpecies(this.state.excludeSpeciesGroups)),
-                this.state.unexcludeSpecies,
+                setAdd(settings.excludeSpecies, groupsSpecies(settings.excludeSpeciesGroups)),
+                settings.unexcludeSpecies,
               ).size;
               return nExcludedSpecies > 0 && (
                 <Text style={{color: iOSColors.red}}>-{nExcludedSpecies} sp</Text>

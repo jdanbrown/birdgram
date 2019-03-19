@@ -261,22 +261,44 @@ export function mapPop<K, V>(map: Map<K, V>, k: K): V | undefined {
   return v;
 }
 
-export function setAdd<X>(xs: Set<X>, ys: Set<X> | Array<X> | X): Set<X> {
-  xs = new Set(xs); // Copy so we can mutate
+export function setAdd<X>(xs: Set<X>,   ys: Set<X> | Array<X> | X): Set<X>;
+export function setAdd<X>(xs: Array<X>, ys: Set<X> | Array<X> | X): Array<X>;
+export function setAdd<X>(_xs: Set<X> | Array<X>, ys: Set<X> | Array<X> | X): Set<X> | Array<X> {
+  const xs: Set<X> = (_xs instanceof Set
+    ? new Set(_xs) // Copy so we can mutate
+    : new Set(_xs) // Promote Array->Set, and copy so we can mutate
+  );
   ys = _.isSet(ys) ? ys : _.isArray(ys) ? new Set(ys) : new Set([ys]); // Promote to Set
   ys.forEach(y => xs.add(y));
-  return xs;
+  return (_xs instanceof Set
+    ? xs
+    : Array.from(xs)
+  );
 }
 
-export function setDiff<X>(xs: Set<X>, ys: Set<X> | Array<X> | X): Set<X> {
-  xs = new Set(xs); // Copy so we can mutate
+export function setDiff<X>(xs: Set<X>,   ys: Set<X> | Array<X> | X): Set<X>;
+export function setDiff<X>(xs: Array<X>, ys: Set<X> | Array<X> | X): Array<X>;
+export function setDiff<X>(_xs: Set<X> | Array<X>, ys: Set<X> | Array<X> | X): Set<X> | Array<X> {
+  const xs: Set<X> = (_xs instanceof Set
+    ? new Set(_xs) // Copy so we can mutate
+    : new Set(_xs) // Promote Array->Set, and copy so we can mutate
+  );
   ys = _.isSet(ys) ? ys : _.isArray(ys) ? new Set(ys) : new Set([ys]); // Promote to Set
   ys.forEach(y => xs.delete(y));
-  return xs;
+  return (_xs instanceof Set
+    ? xs
+    : Array.from(xs)
+  );
 }
 
-export function setToggle<X>(xs: Set<X>, x: X): Set<X> {
-  return xs.has(x) ? setDiff(xs, x) : setAdd(xs, x);
+export function setToggle<X>(xs: Set<X>,   x: X): Set<X>;
+export function setToggle<X>(xs: Array<X>, x: X): Array<X>;
+export function setToggle<X>(_xs: Set<X> | Array<X>, x: X): Set<X> | Array<X> {
+  const xs = _xs;
+  return (xs instanceof Set
+    ? (xs.has(x)      ? setDiff(xs, x) : setAdd(xs, x))
+    : (xs.includes(x) ? setDiff(xs, x) : setAdd(xs, x))
+  );
 }
 
 export function enumerate<X>(xs: Array<X>): Array<{x: X, i: number}> {

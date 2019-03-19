@@ -25,6 +25,7 @@ import {
 import { Ebird } from 'app/ebird';
 import { debug_print, Log, puts, rich, tap } from 'app/log';
 import { Go, Histories, History, Location, locationKeyIsEqual, locationPathIsEqual } from 'app/router';
+import { SettingsWrites } from 'app/settings';
 import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
@@ -44,8 +45,8 @@ interface Props {
   go:                   Go;
   ebird:                Ebird;
   place:                Place;
-  app:                  App;
-  // For BrowseScreen/SearchScreen
+  // Settings
+  settings:             SettingsWrites;
   excludeSpecies:       Set<Species>;
   excludeSpeciesGroups: Set<SpeciesGroup>;
   unexcludeSpecies:     Set<Species>;
@@ -225,7 +226,7 @@ export class BrowseScreen extends PureComponent<Props, State> {
                     height:         35,
                   }}
                   enabled={enabled}
-                  onPress={() => this.props.app.setState({
+                  onPress={() => this.props.settings.set({
                     excludeSpecies:       new Set(),
                     excludeSpeciesGroups: new Set(),
                     unexcludeSpecies:     new Set(),
@@ -327,7 +328,7 @@ export class BrowseScreen extends PureComponent<Props, State> {
                 browse={this}
                 go={this.props.go}
                 ebird={this.props.ebird}
-                app={this.props.app}
+                settings={this.props.settings}
               />
             );
           }}
@@ -349,7 +350,7 @@ export class BrowseScreen extends PureComponent<Props, State> {
                 unexcluded={this.props.unexcludeSpecies.has(species)}
                 go={this.props.go}
                 ebird={this.props.ebird}
-                app={this.props.app}
+                settings={this.props.settings}
               />
             );
           }}
@@ -408,7 +409,7 @@ interface BrowseSectionHeaderProps {
   browse:         BrowseScreen;
   go:             Go;
   ebird:          Ebird;
-  app:            App;
+  settings:       SettingsWrites;
 }
 
 interface BrowseSectionHeaderState {
@@ -463,8 +464,7 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
           active={this.props.excluded}
           onPress={() => {
             // TODO(exclude_invariants): Dedupe with SearchScreen
-            this.props.app.setState((state, props) => {
-              var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
+            this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
               const unAny = this.props.unexcludedAny;
               const g     = species_group;
               const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
@@ -497,7 +497,7 @@ interface BrowseItemProps {
   unexcluded:    boolean;
   go:            Go;
   ebird:         Ebird;
-  app:           App;
+  settings:      SettingsWrites;
 }
 
 interface BrowseItemState {
@@ -570,8 +570,7 @@ export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> 
           active={this.props.excluded && !this.props.unexcluded}
           onPress={() => {
             // TODO(exclude_invariants): Dedupe with SearchScreen
-            this.props.app.setState((state, props) => {
-              var {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS} = state;
+            this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
               const s = species;
               const g = species_group;
               if      (!exG.has(g) && !exS.has(s)) { exS = setAdd  (exS, s); } // !exG, !exS -> exS+s

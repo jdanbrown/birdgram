@@ -5,9 +5,9 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 
 import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from 'app/components/MetadataColumns';
 import { HARDCODED_PLACES } from 'app/data/places';
-import { Place } from 'app/datatypes';
+import { Place, Species, SpeciesGroup } from 'app/datatypes';
 import { Log, puts, rich } from 'app/log';
-import { json, objectKeysTyped, typed, yaml } from 'app/utils';
+import { json, match, objectKeysTyped, typed, yaml } from 'app/utils';
 
 const log = new Log('Settings');
 
@@ -37,6 +37,10 @@ export interface Props {
   readonly playingProgressInterval: number;
   readonly spectroScale: number;
   readonly place: null | Place;
+  // For BrowseScreen/SearchScreen
+  readonly excludeSpecies:       Set<Species>;
+  readonly excludeSpeciesGroups: Set<SpeciesGroup>;
+  readonly unexcludeSpecies:     Set<Species>;
   // For PlacesScreen
   readonly places: Array<Place>;
 }
@@ -77,10 +81,14 @@ export const DEFAULTS: Props = {
   playingProgressInterval: 250,   // Usable in dev
   spectroScale: 2,
   place: null,
+  // For BrowseScreen/SearchScreen
+  excludeSpecies:       new Set(),
+  excludeSpeciesGroups: new Set(),
+  unexcludeSpecies:     new Set(),
   // For PlacesScreen
   places: HARDCODED_PLACES,
 };
-export const TYPES: {[key: string]: Array<string>} = {
+export const TYPES: {[key: string]: Array<string | Function>} = {
   // NOTE Keep attrs in sync (3/5)
   showDebug: ['boolean'],
   allowUploads: ['boolean'],
@@ -105,6 +113,10 @@ export const TYPES: {[key: string]: Array<string>} = {
   playingProgressInterval: ['number'],
   spectroScale: ['number'],
   place: ['object', 'object'], // null | Place, and typeof null -> 'object'
+  // For BrowseScreen/SearchScreen
+  excludeSpecies:       [Set],
+  excludeSpeciesGroups: [Set],
+  unexcludeSpecies:     [Set],
   // For PlacesScreen
   places: ['object'],
 };
@@ -134,12 +146,16 @@ export const KEYS = [
   'playingProgressInterval',
   'spectroScale',
   'place',
+  // For BrowseScreen/SearchScreen
+  'excludeSpecies',
+  'excludeSpeciesGroups',
+  'unexcludeSpecies',
   // For PlacesScreen
   'places',
 ];
 
 export interface SettingsWrites {
-  set(props: Partial<Props>): Promise<void>;
+  set(props: Partial<Props> | ((props: Props) => Partial<Props>)): Promise<void>;
   get<K extends keyof Props>(key: K): Promise<Props[K]>;
   update<K extends keyof Props>(key: K, f: (v: Props[K]) => Props[K]): Promise<void>;
   toggle<K extends keyof Props>(key: K): Promise<boolean>;
@@ -149,7 +165,7 @@ export class SettingsProxy implements SettingsWrites {
   constructor(
     public getProxy: () => SettingsWrites,
   ) {}
-  async set(props: Partial<Props>): Promise<void> {
+  async set(props: Partial<Props> | ((props: Props) => Partial<Props>)): Promise<void> {
     return await this.getProxy().set(props);
   }
   async get<K extends keyof Props>(key: K): Promise<Props[K]> {
@@ -193,11 +209,15 @@ export class Settings implements SettingsWrites, Props {
     public readonly playingProgressInterval: number,
     public readonly spectroScale: number,
     public readonly place: null | Place,
+    // For BrowseScreen/SearchScreen
+    public readonly excludeSpecies:       Set<Species>,
+    public readonly excludeSpeciesGroups: Set<SpeciesGroup>,
+    public readonly unexcludeSpecies:     Set<Species>,
     // For PlacesScreen
     public readonly places: Array<Place>,
   ) {}
 
-  withProps(props: object): Settings {
+  withProps(props: Partial<Props>): Settings {
     props = _.assign({}, this, props);
     // @ts-ignore (Possible to do this typesafe-ly?)
     return new Settings(
@@ -214,7 +234,10 @@ export class Settings implements SettingsWrites, Props {
     try {
       saved = (
         _.chain(await AsyncStorage.multiGet(KEYS.map(Settings.prefixKey)))
-        .map(([k, v]) => [Settings.unprefixKey(k), JSON.parse(v)])
+        .map(([key, value]) => [
+          Settings.unprefixKey(key),
+          Settings.parse(Settings.unprefixKey(key), value),
+        ])
         .fromPairs()
         .value()
       );
@@ -232,7 +255,7 @@ export class Settings implements SettingsWrites, Props {
       if (value === null) {
         // Quietly use default for missing keys (e.g. we added a new setting since the last app run)
         return def;
-      } else if (!Settings.keyHasType(key, typeof value)) {
+      } else if (!Settings.keyHasTypeOfValue(key, value)) {
         // Warn and use default for saved values with the wrong type (probably a bug)
         //  - TODO Make sure this warning doesn't show in Release builds (e.g. when we change the type for an existing key)
         log.warn(`load: Dropping saved value with invalid type: {${key}: ${value}} has type ${typeof value} != ${TYPES[key]}`);
@@ -266,8 +289,11 @@ export class Settings implements SettingsWrites, Props {
   //   await Settings.setItem(key, value);
   // }
 
-  async set(props: Partial<Props>): Promise<void> {
-    log.info('set', props);
+  async set(props: Partial<Props> | ((props: Props) => Partial<Props>)): Promise<void> {
+    // Promote input types
+    if (props instanceof Function) props = props(this);
+    // Log (after promoting)
+    log.info('set', rich(props));
     // Set locally
     //  - Before persist: faster App.state response, async persist (which has high variance runtime)
     this.appSetState(this.withProps(props));
@@ -290,10 +316,35 @@ export class Settings implements SettingsWrites, Props {
   }
 
   async toggle<K extends keyof Props>(key: K): Promise<boolean> {
-    Settings.assertKeyHasType(key, 'boolean');
+    Settings.assertKeyHasTypeOfValue(key, true);
     const value = this[key];
     await this.set({[key]: !value});
     return !value;
+  }
+
+  //
+  // Serdes
+  //
+
+  static stringify(key: string, x: any): string {
+    match(key,
+      ['excludeSpecies',       () => { x = Array.from(x); }],
+      ['excludeSpeciesGroups', () => { x = Array.from(x); }],
+      ['unexcludeSpecies',     () => { x = Array.from(x); }],
+      [match.default,          () => {}],
+    );
+    return JSON.stringify(x);
+  }
+
+  static parse(key: string, s: string): any {
+    var x = JSON.parse(s);
+    match(key,
+      ['excludeSpecies',       () => { x = new Set(x); }],
+      ['excludeSpeciesGroups', () => { x = new Set(x); }],
+      ['unexcludeSpecies',     () => { x = new Set(x); }],
+      [match.default,          () => {}],
+    );
+    return x;
   }
 
   //
@@ -312,13 +363,16 @@ export class Settings implements SettingsWrites, Props {
     return key.substr(Settings._prefix.length);
   };
 
-  static keyHasType(key: string, type: string) {
-    return TYPES[key].includes(type);
+  static keyHasTypeOfValue(key: string, value: any) {
+    return _.some(TYPES[key], t => (
+      t === typeof value ||   // e.g. 'boolean', 'object'
+      t === value.constructor // e.g. Set
+    ));
   }
 
-  static assertKeyHasType(key: string, type: string) {
-    if (!Settings.keyHasType(key, type)) {
-      throw `Expected type[${TYPES[key]}] for key[${key}], got type[${type}]`;
+  static assertKeyHasTypeOfValue(key: string, value: any) {
+    if (!Settings.keyHasTypeOfValue(key, value)) {
+      throw `Expected type[${TYPES[key]}] for key[${key}], got type[${typeof value}]`;
     }
   }
 
@@ -327,10 +381,10 @@ export class Settings implements SettingsWrites, Props {
   //  - Does json serdes
   //  - Typesafe (kind of)
   static async setItem(key: string, value: any): Promise<void> {
-    Settings.assertKeyHasType(key, typeof value);
+    Settings.assertKeyHasTypeOfValue(key, value);
     await AsyncStorage.setItem(
       Settings.prefixKey(key),
-      JSON.stringify(value),
+      Settings.stringify(key, value),
     );
   }
 
@@ -341,11 +395,11 @@ export class Settings implements SettingsWrites, Props {
   static async multiSet(props: object): Promise<void> {
     const kvs = _.toPairs(props);
     kvs.forEach(([key, value]) => {
-      Settings.assertKeyHasType(key, typeof value);
+      Settings.assertKeyHasTypeOfValue(key, value);
     });
     await AsyncStorage.multiSet(kvs.map(([key, value]) => [
       Settings.prefixKey(key),
-      JSON.stringify(value),
+      Settings.stringify(key, value),
     ]));
   }
 
@@ -363,9 +417,9 @@ export class Settings implements SettingsWrites, Props {
     const entries = await AsyncStorage.multiGet(keys
       .map(Settings.prefixKey)
     );
-    return entries.map(([k, v]: [string, string]): [string, any] => [
-      Settings.unprefixKey(k),
-      JSON.parse(v),
+    return entries.map(([key, value]: [string, string]): [string, any] => [
+      Settings.unprefixKey(key),
+      Settings.parse(Settings.unprefixKey(key), value),
     ])
   }
 
@@ -375,7 +429,7 @@ export class Settings implements SettingsWrites, Props {
 
   // Like AsyncStorage.getItem except:
   //  - No key prefixing
-  //  - Does json serdes
+  //  - Does serdes
   //  - Returns null if key not found (like AsyncStorage.getItem)
   //  - Returns null if value can't be parsed as json
   static async _getItemFromJson(key: string): Promise<any | null> {
@@ -386,7 +440,7 @@ export class Settings implements SettingsWrites, Props {
     }
     // Fail gracefully if the stored value is garbage
     try {
-      return JSON.parse(json);
+      return Settings.parse(key, json);
     } catch {
       return null;
     }
@@ -394,7 +448,7 @@ export class Settings implements SettingsWrites, Props {
 
   // Like AsyncStorage.multiGet, but keys defaults to AsyncStorage.getAllKeys()
   //  - No key prefixing
-  //  - No json serdes
+  //  - No serdes
   //  - For debugging
   static async _multiGetAll(keys?: Array<string>): Promise<object> {
     keys = keys || await AsyncStorage.getAllKeys();
