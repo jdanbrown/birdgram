@@ -5,11 +5,11 @@ import { interpolateMagma } from 'd3-scale-chromatic';
 // import Jimp from 'jimp'; // XXX Unused
 import Humanize from 'humanize-plus';
 import _ from 'lodash';
-import React, { Component, PureComponent, RefObject } from 'react';
+import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import shallowCompare from 'react-addons-shallow-compare';
 import {
-  ActivityIndicator, Alert, Animated, Button, Dimensions, EmitterSubscription, Image, Platform, ScrollView, Share,
-  StyleProp, Text, TextProps, View, ViewProps,
+  ActivityIndicator, Alert, Animated, Button, Dimensions, EmitterSubscription, Image, LayoutChangeEvent,
+  LayoutRectangle, Platform, ScrollView, Share, StyleProp, Text, TextProps, View, ViewProps,
 } from 'react-native';
 import AudioRecord from 'react-native-audio-record';
 import FastImage, { ImageStyle } from 'react-native-fast-image';
@@ -66,6 +66,10 @@ export function concatSamples(args: Samples[]): Samples { return concatTypedArra
 global.concatTypedArray = concatTypedArray; // XXX Debug
 global.concatSamples = concatSamples; // XXX Debug
 
+//
+// RecordScreen
+//
+
 export interface Props {
   // App globals
   modelsSearch: ModelsSearch;
@@ -101,6 +105,10 @@ interface State {
   nSpectroWidth: number;
   // Editing (after done recording)
   editRecording: null | EditRecording;
+  editRecordingDerived: null | {
+    single: {width: number, height: number, source: {uri: string}};
+    spectros: Array<{width: number, height: number, source: {uri: string}}>;
+  },
   editClipMode: EditClipMode;
   draftEdit: DraftEdit;
 }
@@ -152,6 +160,7 @@ export class RecordScreen extends Component<Props, State> {
     nSamples: 0,
     nSpectroWidth: 0,
     editRecording: null,
+    editRecordingDerived: null,
     editClipMode: 'off',
     draftEdit: {},
   };
@@ -160,6 +169,9 @@ export class RecordScreen extends Component<Props, State> {
   get nSamplesPerImage():  number  { return this.props.sampleRate / this.props.refreshRate; }
   get draftEditHasEdits(): boolean { return DraftEdit.hasEdits(this.state.draftEdit); }
   get draftEditHasClips(): boolean { return !_.isEmpty(this.state.draftEdit.clips); }
+
+  // State
+  _wrappedSpectrosLayout?: LayoutRectangle;
 
   // Listeners
   _listeners: Array<EmitterSubscription> = [];
@@ -323,10 +335,27 @@ export class RecordScreen extends Component<Props, State> {
                 // TODO Perf: This takes about as long as renderAudioPathToSpectroPath (in EditRecording)
                 //  - Profiling indicates it's because of the num-chunks SpectroImage components
                 //  - Now that we crop using css instead of img files, we can hugely cut this down to num-wraps img components
-                //  - But first we'll need to redo how the cropping controls work, since they currently rely on onPress per chunk img
+                //  - Blockers
+                //    - [x] Global cropping controls (many onPress per chunk SpectroImage -> one (x,y) on WrappedSpectroImages)
+                //    - [ ] Complexify opacity overlay (simple opacity per SpectroImage -> complex overlay rects within SpectroImage)
+                //    - [ ] Change doneSpectroChunkWidth-many chunks (W/5) -> screen-row-many chunk (W/375) (~75x improvement!)
                 this.setState({
                   recordingState: 'stopped',
                   editRecording, // null if audio file not found
+                  // To avoid unnecessary updates, include all the stuff derived from editRecording into state
+                  editRecordingDerived: mapNull(editRecording, editRecording => {
+                    const spectros = editRecording!.spectros.get(this.state.denoised)!;
+                    return {
+                      single: into(spectros.single, ({path, ...props}) => ({
+                        source: {uri: path},
+                        ...props,
+                      })),
+                      spectros: spectros.chunked.map(({imageFile: {path, ...props}}) => ({
+                        source: {uri: path},
+                        ...props,
+                      })),
+                    };
+                  }),
                 });
               });
             },
@@ -362,14 +391,11 @@ export class RecordScreen extends Component<Props, State> {
           <ScrollView
             ref={this._scrollViewRef}
             style={{
-              flex: 1,
+              flex:  1,
               width: '100%',
             }}
             contentContainerStyle={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              alignContent: 'flex-start',
-              alignItems: 'flex-start',
+              // (Moved to child View style)
             }}
             onScrollBeginDrag={() => {
               log.debug('render: onScrollBeginDrag');
@@ -382,53 +408,71 @@ export class RecordScreen extends Component<Props, State> {
               }
             }}
           >
-            {/* Condition on !editRecording so that the transition from recording->stop->rendered is gapless */}
-            {!this.state.editRecording ? (
-              this.state.recordingState === 'stopped' ? (
+            <TapGestureHandler onHandlerStateChange={this.onWrappedSpectrosHandlerStateChange}>
+              <Animated.View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap:      'wrap',
+                  alignContent:  'flex-start',
+                  alignItems:    'flex-start',
+                }}
+                onLayout={this.onWrappedSpectrosLayout}
+              >
+                {/* Condition on !editRecording so that the transition from recording->stop->rendered is gapless */}
+                {!this.state.editRecording ? (
+                  this.state.recordingState === 'stopped' ? (
 
-                // editRecording not found (e.g. user deleted a user rec, or xc dataset changed)
-                <View style={[Styles.center, Styles.fill, {padding: 30}]}>
-                  <Text style={material.subheading}>
-                    Recording not found
-                  </Text>
-                </View>
+                    // editRecording not found (e.g. user deleted a user rec, or xc dataset changed)
+                    <View style={[Styles.center, Styles.fill, {padding: 30}]}>
+                      <Text style={material.subheading}>
+                        Recording not found
+                      </Text>
+                    </View>
 
-              ) : (
+                  ) : (
 
-                // Recording in progress: streaming spectro chunks
-                <WrappedSpectroImages
-                  spectros={this.state.spectroChunks}
-                  spectroScale={this.state.spectroScale}
-                  showDebug={this.props.showDebug}
-                  showMoreDebug={this.state.showMoreDebug}
-                />
+                    // Recording in progress: streaming spectro chunks
+                    <WrappedSpectroImages
+                      spectros={this.state.spectroChunks}
+                      spectroScale={this.state.spectroScale}
+                      // For spectroStyle (passed as top-level props to avoid excessive updates)
+                      //  - Unused here, only used for edit rec below ("Done recording")
+                      editRecording={this.state.editRecording}
+                      denoised={this.state.denoised}
+                      draftEditHasClips={this.draftEditHasClips}
+                      draftEdit={this.state.draftEdit}
+                      // Debug
+                      showDebug={this.props.showDebug}
+                      showMoreDebug={this.state.showMoreDebug}
+                    />
 
-              )
-            ) : (
+                  )
+                ) : (
 
-              // Done recording: recorded spectro (chunks computed in stopRecording)
-              into(this.state.editRecording, editRecording => {
-                const spectros = editRecording.spectros.get(this.state.denoised);
-                return spectros && (
-                  <WrappedSpectroImages
-                    single={into(spectros.single, ({path, ...props}) => ({
-                      source: {uri: path},
-                      ...props,
-                    }))}
-                    spectros={spectros.chunked.map(({imageFile: {path, ...props}}) => ({
-                      source: {uri: path},
-                      ...props,
-                    }))}
-                    spectroScale={this.state.spectroScale}
-                    spectroStyle={this.spectroStyle(spectros)}
-                    onSpectroPress={this.onSpectroPress(spectros)}
-                    showDebug={this.props.showDebug}
-                    showMoreDebug={this.state.showMoreDebug}
-                  />
-                );
-              })
+                  // Done recording: recorded spectro (chunks computed in stopRecording)
+                  into(this.state.editRecording, editRecording => {
+                    const editRecordingDerived = this.state.editRecordingDerived!; // Defined if editRecording is
+                    const spectros = editRecording.spectros.get(this.state.denoised);
+                    return spectros && (
+                      <WrappedSpectroImages
+                        single={editRecordingDerived.single}
+                        spectros={editRecordingDerived.spectros}
+                        spectroScale={this.state.spectroScale}
+                        // For spectroStyle (passed as top-level props to avoid excessive updates)
+                        editRecording={this.state.editRecording}
+                        denoised={this.state.denoised}
+                        draftEditHasClips={this.draftEditHasClips}
+                        draftEdit={this.state.draftEdit}
+                        // Debug
+                        showDebug={this.props.showDebug}
+                        showMoreDebug={this.state.showMoreDebug}
+                      />
+                    );
+                  })
 
-            )}
+                )}
+              </Animated.View>
+            </TapGestureHandler>
           </ScrollView>
         )}
 
@@ -667,75 +711,111 @@ export class RecordScreen extends Component<Props, State> {
     }
   }
 
-  onSpectroPress = (spectros: EditRecordingSpectro) => (i: number) => async (pointerInside: boolean) => {
-    const spectro        = spectros.chunked[i];
-    const {editClipMode} = this.state; // Consistent read (outside of setState -- ok)
-    if (['lo', 'hi'].includes(editClipMode)) {
+  onWrappedSpectrosLayout = async (event: LayoutChangeEvent) => {
+    const {nativeEvent: {layout}} = event; // Unpack SyntheticEvent (before async)
+    this._wrappedSpectrosLayout = layout;
+  }
+
+  onWrappedSpectrosHandlerStateChange = async (event: Gesture.TapGestureHandlerStateChangeEvent) => {
+    const {nativeEvent: {state, oldState, x, y, absoluteX, absoluteY}} = event; // Unpack SyntheticEvent (before async)
+    if (
+      oldState === Gesture.State.ACTIVE &&
+      state !== Gesture.State.CANCELLED
+    ) {
+      // log.debug('onWrappedSpectrosHandlerStateChange', {x, y, absoluteX, absoluteY}); // Debug
+      await this.onWrappedSpectrosPress(x, y);
+    }
+  }
+
+  onWrappedSpectrosPress = async (x: number, y: number) => {
+    // TODO Propagate event to children if we don't respond to it [no children that care, currently]
+    if (this.state.editRecording) {
+      const spectros = this.state.editRecording.spectros.get(this.state.denoised);
+      if (spectros && spectros.chunked.length > 0) {
+        const {width, height} = spectros.chunked[0].imageFile; // HACK Assume all chunks have same width/height
+        const layout = this._wrappedSpectrosLayout;
+        if (layout) {
+          const row  = Math.trunc(y / height);
+          const col  = Math.trunc(x / width);
+          const cols = Math.trunc(layout.width / width);
+          const i    = row * cols + col;
+          log.debug('onWrappedSpectrosPress', {layout, width, height, x, y, row, col, cols, i});
+          await this.onSpectroPress(spectros)(i)();
+        }
+      }
+    }
+  }
+
+  onSpectroPress = (spectros: EditRecordingSpectro) => (i: number) => async () => {
+    if (i < spectros.chunked.length) {
+      const spectro        = spectros.chunked[i];
+      const {editClipMode} = this.state; // Consistent read (outside of setState -- ok)
       log.debug('onSpectroPress', {
         i,
-        pointerInside,
         editClipMode,
         draftEdit: this.state.draftEdit, // (Might observe an outdated value, but maybe bad to log inside setState?)
         timeInterval: spectro.timeInterval,
       });
-      this.setState((state, props) => {
+      if (['lo', 'hi'].includes(editClipMode)) {
+        this.setState((state, props) => {
 
-        // Update draftEdit.clips for pressed spectro
-        //  - TODO(multi_clip): Add UI for multi-clip editing, and handle multiple clips here
-        //  - Only a subset of draftEdit.clips are possible (since we don't yet support full multi-clip editing):
-        //    - No edit:         {clips: undefined} / {clips: []}
-        //    - Include {lo,hi}: {clips: [{time: {lo, hi}}]}
-        //    - Exclude {hi,lo}: {clips: [{time: {-Infinity, lo}}, {time: {hi, Infinity}}]}
+          // Update draftEdit.clips for pressed spectro
+          //  - TODO(multi_clip): Add UI for multi-clip editing, and handle multiple clips here
+          //  - Only a subset of draftEdit.clips are possible (since we don't yet support full multi-clip editing):
+          //    - No edit:         {clips: undefined} / {clips: []}
+          //    - Include {lo,hi}: {clips: [{time: {lo, hi}}]}
+          //    - Exclude {hi,lo}: {clips: [{time: {-Infinity, lo}}, {time: {hi, Infinity}}]}
 
-        // Unpack clips back to a simple {lo,hi} where lo > hi is possible
-        var clips = ifEmpty(state.draftEdit.clips || [], () => [{time: Interval.top}]); // Treat "No edit" like "Include {-inf,inf}"
-        var {lo, hi} = match<number, {lo: number, hi: number}>(clips.length,
-          [1, () => {
-            // Unpack lo < hi
-            const [{time: {lo, hi}}] = clips;
-            return {lo, hi};
-          }],
-          [2, () => {
-            // Unpack lo > hi
-            const [{time: {lo: _neginf, hi}}, {time: {lo, hi: _inf}}] = clips;
-            if (!(_neginf === -Infinity && _inf === Infinity)) throw `Invalid 2-length clips[${json(clips)}]`;
-            return {lo, hi};
-          }],
-          [match.default, n => {
-            // Nothing should be producing this shape yet
-            throw `Invalid clips.length[${n}]`;
-          }],
-        );
+          // Unpack clips back to a simple {lo,hi} where lo > hi is possible
+          var clips = ifEmpty(state.draftEdit.clips || [], () => [{time: Interval.top}]); // Treat "No edit" like "Include {-inf,inf}"
+          var {lo, hi} = match<number, {lo: number, hi: number}>(clips.length,
+            [1, () => {
+              // Unpack lo < hi
+              const [{time: {lo, hi}}] = clips;
+              return {lo, hi};
+            }],
+            [2, () => {
+              // Unpack lo > hi
+              const [{time: {lo: _neginf, hi}}, {time: {lo, hi: _inf}}] = clips;
+              if (!(_neginf === -Infinity && _inf === Infinity)) throw `Invalid 2-length clips[${json(clips)}]`;
+              return {lo, hi};
+            }],
+            [match.default, n => {
+              // Nothing should be producing this shape yet
+              throw `Invalid clips.length[${n}]`;
+            }],
+          );
 
-        // Update lo or hi, as selected by editClipMode
-        if (state.editClipMode === 'lo') lo = spectro.timeInterval.lo;
-        if (state.editClipMode === 'hi') hi = spectro.timeInterval.hi;
+          // Update lo or hi, as selected by editClipMode
+          if (state.editClipMode === 'lo') lo = spectro.timeInterval.lo;
+          if (state.editClipMode === 'hi') hi = spectro.timeInterval.hi;
 
-        // Reconstruct clips from {lo,hi}, depending on lo < hi vs. lo > hi
-        //  -
-        clips = (
-          lo < hi ? [{time: new Interval(lo, hi)}] :                                            // lo < hi -> "Include {lo,hi}"
-          lo > hi ? [{time: new Interval(-Infinity, hi)}, {time: new Interval(lo, Infinity)}] : // lo < hi -> "Exclude {hi,lo}"
-          []                                                                                    // lo = hi -> reset (weird edge case)
-        );
+          // Reconstruct clips from {lo,hi}, depending on lo < hi vs. lo > hi
+          //  -
+          clips = (
+            lo < hi ? [{time: new Interval(lo, hi)}] :                                            // lo < hi -> "Include {lo,hi}"
+            lo > hi ? [{time: new Interval(-Infinity, hi)}, {time: new Interval(lo, Infinity)}] : // lo < hi -> "Exclude {hi,lo}"
+            []                                                                                    // lo = hi -> reset (weird edge case)
+          );
 
-        // Advance editClipMode (lo -> hi -> off)
-        //  - Let user manually press the lo/hi buttons when they want to redo
-        const editClipMode = match<EditClipMode, EditClipMode>(state.editClipMode,
-          ['lo',  () => 'hi'],
-          ['hi',  () => 'off'],
-        );
+          // Advance editClipMode (lo -> hi -> off)
+          //  - Let user manually press the lo/hi buttons when they want to redo
+          const editClipMode = match<EditClipMode, EditClipMode>(state.editClipMode,
+            ['lo',  () => 'hi'],
+            ['hi',  () => 'off'],
+          );
 
-        // Return new state
-        return {
-          editClipMode,
-          draftEdit: {
-            ...state.draftEdit,
-            clips,
-          },
-        };
+          // Return new state
+          return {
+            editClipMode,
+            draftEdit: {
+              ...state.draftEdit,
+              clips,
+            },
+          };
 
-      });
+        });
+      }
     }
   }
 
@@ -751,18 +831,6 @@ export class RecordScreen extends Component<Props, State> {
     };
     log.info('shareRec', {rec, content});
     await Share.share(content);
-  }
-
-  // Method for shallowCompare in SpectroImage.shouldComponentUpdate (else excessive updates)
-  spectroStyle = (spectros: EditRecordingSpectro) => (i: number): StyleProp<ImageStyle> => {
-    // Fade spectro chunks outside of draftEdit.clips intervals
-    const spectro = spectros.chunked[i];
-    return !(
-      !this.draftEditHasClips ||
-      _.some(this.state.draftEdit.clips || [], clip => clip.time.overlaps(spectro.timeInterval))
-    ) && {
-      opacity: .333, // TODO tintColor [https://github.com/DylanVann/react-native-fast-image/issues/124]
-    }
   }
 
   // Debug components
@@ -786,23 +854,31 @@ export class RecordScreen extends Component<Props, State> {
 
 }
 
+//
+// WrappedSpectroImages
+//
+
 export interface WrappedSpectroImagesProps {
   single?: {
     source: {uri?: string},
-    width: number,
+    width:  number,
     height: number,
   };
   spectros: Array<{
-    source: {uri?: string},
-    width: number,
-    height: number,
+    source:      {uri?: string},
+    width:       number,
+    height:      number,
     debugTimes?: DebugTimes,
   }>;
-  spectroScale: number;
-  spectroStyle?: (i: number) => StyleProp<ImageStyle>;
-  onSpectroPress?: (i: number) => (pointerInside: boolean) => void;
-  showDebug: boolean;
-  showMoreDebug: boolean;
+  spectroScale:      number;
+  // For spectroStyle (passed as top-level props to avoid excessive updates)
+  editRecording:     State['editRecording'];
+  denoised:          State['denoised'];
+  draftEditHasClips: RecordScreen['draftEditHasClips'];
+  draftEdit:         State['draftEdit'];
+  // Debug
+  showDebug:         boolean;
+  showMoreDebug:     boolean;
 }
 export interface WrappedSpectroImagesState {}
 export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProps, WrappedSpectroImagesState> {
@@ -835,8 +911,7 @@ export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProp
           width={width}
           height={height}
           i={i}
-          style={this.props.spectroStyle}
-          onPress={this.props.onSpectroPress}
+          style={this.spectroStyle(i)}
           debugTimes={debugTimes}
           spectroScale={this.props.spectroScale}
           showDebug={this.props.showDebug}
@@ -846,7 +921,27 @@ export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProp
     );
   }
 
+  spectroStyle = (i: number): undefined | StyleProp<ImageStyle> => {
+    // If edit rec, fade spectro chunks outside of draftEdit.clips intervals
+    if (!this.props.editRecording) {
+      return undefined;
+    } else {
+      const spectros = this.props.editRecording.spectros.get(this.props.denoised)!;
+      const spectro  = spectros.chunked[i];
+      return !(
+        !this.props.draftEditHasClips ||
+        _.some(this.props.draftEdit.clips || [], clip => clip.time.overlaps(spectro.timeInterval))
+      ) && {
+        opacity: .333, // TODO tintColor [https://github.com/DylanVann/react-native-fast-image/issues/124]
+      }
+    }
+  }
+
 }
+
+//
+// SpectroImage
+//
 
 // Split out spectro image as component else excessive updates cause render bottleneck
 export interface SpectroImageProps {
@@ -858,9 +953,8 @@ export interface SpectroImageProps {
   source: {uri?: string};
   width: number;
   height: number;
-  i: number; // Take i as prop so that {style,onPress} can shallowCompare in shouldComponentUpdate (else excessive updates)
-  style?: (i: number) => StyleProp<ImageStyle>;
-  onPress?: (i: number) => (pointerInside: boolean) => void;
+  i: number; // Take i as prop so that style(i) can shallowCompare in shouldComponentUpdate (else excessive updates)
+  style?: StyleProp<ImageStyle>;
   debugTimes?: DebugTimes;
   spectroScale: number;
   showDebug: boolean;
@@ -888,83 +982,87 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
 
   render = () => {
     // this.log.info('render');
-    return (
-      <BaseButton onPress={this.props.onPress && this.props.onPress(this.props.i)}>
+    var x: ReactNode = (
 
-        {/* TODO Simplify, remove cruft, reduce coupling (EditRecording <-> SpectroImage) */}
-        {this.props.single ? (
-          // Case: static edit rec
-          //  - We have the single static spectro, so reuse it to drop all the cropped chunks (crop via css)
-          //  - This is a perf optimization: we used to compute all the separate chunk imgs on save and it was a major bottleneck
+      // TODO Simplify, remove cruft, reduce coupling (EditRecording <-> SpectroImage)
+      this.props.single ? (
+        // Case: static edit rec
+        //  - We have the single static spectro, so reuse it to drop all the cropped chunks (crop via css)
+        //  - This is a perf optimization: we used to compute all the separate chunk imgs on save and it was a major bottleneck
 
-          <View style={{
+        <View style={{
+          width:  this.props.spectroScale * this.props.width,
+          height: this.props.spectroScale * this.props.height,
+          marginBottom: 1,
+          overflow: 'hidden',
+          backgroundColor: 'transparent',
+          // marginRight: 1, // XXX Debug: If you want a gap, use margin i/o border/padding (child Image shows through)
+        }}>
+          {(
+            // Crop full spectro image down to the (tiny) slice for this chunk
+            //  - Based on: https://github.com/walmartlabs/react-native-cropping/blob/c5b8401/index.js#L56-L66
+            //  - Use FastImage i/o Image because Image ooms on long recs (e.g. >40s rec on iphone 8)
+            //    - Not clear why, since FastImage slurps each img into ram and Image uses a cache... but it works in practice!
+            //    - https://github.com/DylanVann/react-native-fast-image/blob/89c0e2e/ios/FastImage/FFFastImageView.m#L80
+            //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/Image.ios.js#L132-L139
+            //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageView.m#L317-L324
+            //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageLoader.m#L467-L470
+            //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageCache.m#L101
+            <FastImage
+              key={`${this.props.i}/${this.props.source.uri}`}
+              style={[this.props.style, {
+                width:    this.props.spectroScale * this.props.single.width,
+                height:   this.props.spectroScale * this.props.single.height,
+                position: 'absolute',
+                left:     -this.props.i * this.props.width,
+              }]}
+              source={this.props.source}
+              resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
+              // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
+              // resizeMode='stretch' // Scale both dims to =container, ignoring aspect
+              // resizeMode='center'  // Maintain dims and aspect
+            />
+          )}
+        </View>
+
+      ) : (
+        // Case: streaming spectro
+        //  - We don't have a single static spectro, so we have to draw all the separate chunk imgs
+
+        <FastImage
+          // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing rndebugger
+          //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
+          //  - https://github.com/DylanVann/react-native-fast-image
+          style={[this.props.style, {
             width:  this.props.spectroScale * this.props.width,
             height: this.props.spectroScale * this.props.height,
             marginBottom: 1,
-            overflow: 'hidden',
-            backgroundColor: 'transparent',
-            // marginRight: 1, // XXX Debug: If you want a gap, use margin i/o border/padding (child Image shows through)
-          }}>
-            {(
-              // Crop full spectro image down to the (tiny) slice for this chunk
-              //  - Based on: https://github.com/walmartlabs/react-native-cropping/blob/c5b8401/index.js#L56-L66
-              //  - Use FastImage i/o Image because Image ooms on long recs (e.g. >40s rec on iphone 8)
-              //    - Not clear why, since FastImage slurps each img into ram and Image uses a cache... but it works in practice!
-              //    - https://github.com/DylanVann/react-native-fast-image/blob/89c0e2e/ios/FastImage/FFFastImageView.m#L80
-              //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/Image.ios.js#L132-L139
-              //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageView.m#L317-L324
-              //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageLoader.m#L467-L470
-              //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageCache.m#L101
-              <FastImage
-                key={`${this.props.i}/${this.props.source.uri}`}
-                style={[this.props.style && this.props.style(this.props.i), {
-                  width:    this.props.spectroScale * this.props.single.width,
-                  height:   this.props.spectroScale * this.props.single.height,
-                  position: 'absolute',
-                  left:     -this.props.i * this.props.width,
-                }]}
-                source={this.props.source}
-                resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
-                // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
-                // resizeMode='stretch' // Scale both dims to =container, ignoring aspect
-                // resizeMode='center'  // Maintain dims and aspect
-              />
-            )}
-          </View>
+            marginRight: this.props.showDebug && this.props.showMoreDebug ? 1 : 0, // Separate chunks for debug
+          }]}
+          source={this.props.source}
+          // resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
+          // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
+          resizeMode='stretch' // Scale both dims to =container, ignoring aspect
+          // resizeMode='center'  // Maintain dims and aspect
+        />
 
-        ) : (
-          // Case: streaming spectro
-          //  - We don't have a single static spectro, so we have to draw all the separate chunk imgs
+      )
+    );
 
-          <FastImage
-            // HACK Using FastImage instead of Image to avoid RCTLog "Reloading image <dataUrl>" killing rndebugger
-            //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
-            //  - https://github.com/DylanVann/react-native-fast-image
-            style={[this.props.style && this.props.style(this.props.i), {
-              width:  this.props.spectroScale * this.props.width,
-              height: this.props.spectroScale * this.props.height,
-              marginBottom: 1,
-              marginRight: this.props.showDebug && this.props.showMoreDebug ? 1 : 0, // Separate chunks for debug
-            }]}
-            source={this.props.source}
-            // resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
-            // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
-            resizeMode='stretch' // Scale both dims to =container, ignoring aspect
-            // resizeMode='center'  // Maintain dims and aspect
-          />
-
-        )}
-
-        {this.props.showDebug && this.props.showMoreDebug && (
+    if (this.props.showDebug && this.props.showMoreDebug) {
+      x = (
+        <View>
+          {x}
           <this.DebugView style={{flexDirection: 'column', padding: 0, marginRight: 1}}>
             {(this.props.debugTimes || []).map(({k, v}, i) => (
               <this.DebugText key={i} style={{fontSize: 8}}>{k}:{Math.round(v * 1000)}</this.DebugText>
             ))}
           </this.DebugView>
-        )}
+        </View>
+      );
+    }
 
-      </BaseButton>
-    );
+    return x;
   }
 
   // Debug components
@@ -987,6 +1085,10 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
   );
 
 }
+
+//
+// ControlsBar
+//
 
 // Split out control buttons as component else excessive updates cause render bottleneck
 export interface ControlsBarProps {
@@ -1239,7 +1341,11 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
 }
 
-// TODO -> datatypes (along with types for EditRecording)
+//
+// EditRecording
+//  - TODO -> datatypes (along with types for EditRecording)
+//
+
 export async function EditRecording(props: {
   rec: Rec,
   f_bins: number,
@@ -1332,6 +1438,10 @@ export async function EditRecording(props: {
   }
 
 }
+
+//
+// styles
+//
 
 const styles = StyleSheet.create({
   bottomControls: {
