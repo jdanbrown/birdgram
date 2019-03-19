@@ -44,9 +44,9 @@ import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, Styles } from 'app/styles';
 import {
   assertFalse, basename, catchTry, catchTryAsync, chance, Dim, ensureParentDir, ExpWeightedMean, ExpWeightedRate,
-  fastIsEqual, finallyAsync, global, ifEmpty, ifNil, ifNull, ifUndefined, Interval, into, json, local, mapNil, mapNull,
-  mapUndefined, match, matchNil, matchNull, matchUndefined, pretty, round, setStateAsync, shallowDiffPropsState, timed,
-  Timer, tryElse, tryElseAsync, vibrateNormal, yaml, yamlPretty, zipSame,
+  fastIsEqual, finallyAsync, global, ifEmpty, ifNil, ifNull, ifUndefined, Interval, into, json, local, mapMapValues,
+  mapNil, mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined, pretty, round, setStateAsync,
+  shallowDiffPropsState, timed, Timer, tryElse, tryElseAsync, vibrateNormal, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { magSpectrogram, melSpectrogram, powerToDb, stft } from 'third-party/magenta/music/transcription/audio_utils'
 import nj from 'third-party/numjs/dist/numjs.min';
@@ -65,6 +65,13 @@ export const Samples = Int16Array;
 export function concatSamples(args: Samples[]): Samples { return concatTypedArray(Samples, ...args); }
 global.concatTypedArray = concatTypedArray; // XXX Debug
 global.concatSamples = concatSamples; // XXX Debug
+
+// Like ImageFile, but .source.uri i/o .path
+export interface ImageSource {
+  width:  number;
+  height: number;
+  source: {uri?: string};
+}
 
 //
 // RecordScreen
@@ -105,20 +112,17 @@ interface State {
   nSpectroWidth: number;
   // Editing (after done recording)
   editRecording: null | EditRecording;
-  editRecordingDerived: null | {
-    single: {width: number, height: number, source: {uri: string}};
-    spectros: Array<{width: number, height: number, source: {uri: string}}>;
-  },
+  editRecordingDerived: null | Map<Denoise, {
+    single: ImageSource;
+    chunked: Array<ImageSource>;
+  }>,
   editClipMode: EditClipMode;
   draftEdit: DraftEdit;
 }
 
 type RecordingState = 'loading-for-edit' | 'stopped' | 'recording' | 'saving';
 
-interface SpectroChunk {
-  source: {uri?: string};
-  width: number;
-  height: number;
+interface SpectroChunk extends ImageSource {
   debugTimes?: DebugTimes;
 }
 
@@ -343,19 +347,18 @@ export class RecordScreen extends Component<Props, State> {
                   recordingState: 'stopped',
                   editRecording, // null if audio file not found
                   // To avoid unnecessary updates, include all the stuff derived from editRecording into state
-                  editRecordingDerived: mapNull(editRecording, editRecording => {
-                    const spectros = editRecording!.spectros.get(this.state.denoised)!;
-                    return {
-                      single: into(spectros.single, ({path, ...props}) => ({
+                  editRecordingDerived: mapNull(editRecording, editRecording => (
+                    mapMapValues(editRecording!.spectros, ({single, chunked}) => ({
+                      single: into(single, ({path, ...props}) => ({
                         source: {uri: path},
                         ...props,
                       })),
-                      spectros: spectros.chunked.map(({imageFile: {path, ...props}}) => ({
+                      chunked: chunked.map(({imageFile: {path, ...props}}) => ({
                         source: {uri: path},
                         ...props,
                       })),
-                    };
-                  }),
+                    }))
+                  )),
                 });
               });
             },
@@ -433,7 +436,7 @@ export class RecordScreen extends Component<Props, State> {
 
                     // Recording in progress: streaming spectro chunks
                     <WrappedSpectroImages
-                      spectros={this.state.spectroChunks}
+                      chunked={this.state.spectroChunks}
                       spectroScale={this.state.spectroScale}
                       // For spectroStyle (passed as top-level props to avoid excessive updates)
                       //  - Unused here, only used for edit rec below ("Done recording")
@@ -452,11 +455,11 @@ export class RecordScreen extends Component<Props, State> {
                   // Done recording: recorded spectro (chunks computed in stopRecording)
                   into(this.state.editRecording, editRecording => {
                     const editRecordingDerived = this.state.editRecordingDerived!; // Defined if editRecording is
-                    const spectros = editRecording.spectros.get(this.state.denoised);
-                    return spectros && (
+                    const spectro = editRecordingDerived.get(this.state.denoised)!;
+                    return (
                       <WrappedSpectroImages
-                        single={editRecordingDerived.single}
-                        spectros={editRecordingDerived.spectros}
+                        single={spectro.single}
+                        chunked={spectro.chunked}
                         spectroScale={this.state.spectroScale}
                         // For spectroStyle (passed as top-level props to avoid excessive updates)
                         editRecording={this.state.editRecording}
@@ -859,15 +862,8 @@ export class RecordScreen extends Component<Props, State> {
 //
 
 export interface WrappedSpectroImagesProps {
-  single?: {
-    source: {uri?: string},
-    width:  number,
-    height: number,
-  };
-  spectros: Array<{
-    source:      {uri?: string},
-    width:       number,
-    height:      number,
+  single?: ImageSource;
+  chunked: Array<ImageSource & {
     debugTimes?: DebugTimes,
   }>;
   spectroScale:      number;
@@ -897,22 +893,19 @@ export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProp
   }
 
   componentDidUpdate = async (prevProps: WrappedSpectroImagesProps, prevState: WrappedSpectroImagesState) => {
-    // this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+    this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
   }
 
   render = () => {
     // this.log.info('render');
     return (
-      this.props.spectros.map(({source, width, height, debugTimes}, i) => (
+      this.props.chunked.map((chunk, i) => (
         <SpectroImage
-          key={`${source.uri}[i=${i}]`}
-          single={this.props.single}
-          source={source}
-          width={width}
-          height={height}
+          key={`${chunk.source.uri}[i=${i}]`}
           i={i}
+          chunk={chunk}
+          single={this.props.single}
           style={this.spectroStyle(i)}
-          debugTimes={debugTimes}
           spectroScale={this.props.spectroScale}
           showDebug={this.props.showDebug}
           showMoreDebug={this.props.showMoreDebug}
@@ -945,17 +938,12 @@ export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProp
 
 // Split out spectro image as component else excessive updates cause render bottleneck
 export interface SpectroImageProps {
-  single?: {
-    source: {uri?: string},
-    width: number,
-    height: number,
-  };
-  source: {uri?: string};
-  width: number;
-  height: number;
   i: number; // Take i as prop so that style(i) can shallowCompare in shouldComponentUpdate (else excessive updates)
+  chunk: ImageSource & {
+    debugTimes?: DebugTimes;
+  };
+  single?: ImageSource;
   style?: StyleProp<ImageStyle>;
-  debugTimes?: DebugTimes;
   spectroScale: number;
   showDebug: boolean;
   showMoreDebug: boolean;
@@ -991,8 +979,8 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
         //  - This is a perf optimization: we used to compute all the separate chunk imgs on save and it was a major bottleneck
 
         <View style={{
-          width:  this.props.spectroScale * this.props.width,
-          height: this.props.spectroScale * this.props.height,
+          width:  this.props.spectroScale * this.props.chunk.width,
+          height: this.props.spectroScale * this.props.chunk.height,
           marginBottom: 1,
           overflow: 'hidden',
           backgroundColor: 'transparent',
@@ -1009,14 +997,14 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
             //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageLoader.m#L467-L470
             //    - https://github.com/facebook/react-native/blob/62d3409/Libraries/Image/RCTImageCache.m#L101
             <FastImage
-              key={`${this.props.i}/${this.props.source.uri}`}
+              key={`${this.props.i}/${this.props.chunk.source.uri}`}
               style={[this.props.style, {
                 width:    this.props.spectroScale * this.props.single.width,
                 height:   this.props.spectroScale * this.props.single.height,
                 position: 'absolute',
-                left:     -this.props.i * this.props.width,
+                left:     -this.props.i * this.props.chunk.width,
               }]}
-              source={this.props.source}
+              source={this.props.chunk.source}
               resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
               // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
               // resizeMode='stretch' // Scale both dims to =container, ignoring aspect
@@ -1034,12 +1022,12 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
           //  - https://github.com/facebook/react-native/blob/1151c09/Libraries/Image/RCTImageView.m#L422
           //  - https://github.com/DylanVann/react-native-fast-image
           style={[this.props.style, {
-            width:  this.props.spectroScale * this.props.width,
-            height: this.props.spectroScale * this.props.height,
+            width:  this.props.spectroScale * this.props.chunk.width,
+            height: this.props.spectroScale * this.props.chunk.height,
             marginBottom: 1,
             marginRight: this.props.showDebug && this.props.showMoreDebug ? 1 : 0, // Separate chunks for debug
           }]}
-          source={this.props.source}
+          source={this.props.chunk.source}
           // resizeMode='cover'   // Scale both dims to ≥container, maintaining aspect
           // resizeMode='contain' // Scale both dims to ≤container, maintaining aspect
           resizeMode='stretch' // Scale both dims to =container, ignoring aspect
@@ -1054,7 +1042,7 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
         <View>
           {x}
           <this.DebugView style={{flexDirection: 'column', padding: 0, marginRight: 1}}>
-            {(this.props.debugTimes || []).map(({k, v}, i) => (
+            {(this.props.chunk.debugTimes || []).map(({k, v}, i) => (
               <this.DebugText key={i} style={{fontSize: 8}}>{k}:{Math.round(v * 1000)}</this.DebugText>
             ))}
           </this.DebugView>
