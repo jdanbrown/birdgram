@@ -1247,24 +1247,42 @@ export class SearchScreen extends PureComponent<Props, State> {
           {this.ActionModalButtons({actions: [
             {
               ...defaults,
+              label: rec.species,
+              iconName: 'maximize-2',
+              buttonColor: iOSColors.orange,
+              onPress: () => {
+                const {ebird} = this.props;
+                const species = rec.species;
+                // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
+                //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
+                this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
+                  const s = species;
+                  // HACK(exclude_invariants): Smash through existing state [is this good?]
+                  exS = setDiff(new Set(ebird.allSpecies), s);
+                  exG = new Set();
+                  unS = new Set();
+                  return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+                });
+              },
+            }
+          ]})}
+        </View>
+
+        <Separator/>
+        <View style={{flexDirection: 'row'}}>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
               label: rec.species_species_group,
               iconName: 'maximize-2',
               buttonColor: iOSColors.orange,
               onPress: () => {
                 const {ebird} = this.props;
                 const species_group = rec.species_species_group;
-                // TODO(exclude_invariants): Dedupe with BrowseScreen
-                const unexcludedAny = (unS: Set<Species>) => (
-                  Array.from(unS)
-                  .map(x => ebird.speciesGroupFromSpecies(x))
-                  .includes(species_group)
-                );
                 // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
                 //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
                 this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
-                  const unAny = unexcludedAny(unS);
-                  const g     = species_group;
-                  const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
+                  const g = species_group;
                   // HACK(exclude_invariants): Smash through existing state [is this good?]
                   exS = new Set();
                   exG = setDiff(new Set(ebird.allSpeciesGroups), g);
