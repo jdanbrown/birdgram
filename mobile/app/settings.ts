@@ -5,9 +5,9 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 
 import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from 'app/components/MetadataColumns';
 import { HARDCODED_PLACES } from 'app/data/places';
-import { Place, Species, SpeciesGroup } from 'app/datatypes';
-import { Log, puts, rich } from 'app/log';
-import { json, match, objectKeysTyped, typed, yaml } from 'app/utils';
+import { Place, Quality, Species, SpeciesGroup } from 'app/datatypes';
+import { debug_print, Log, puts, rich } from 'app/log';
+import { json, match, objectKeysTyped, pretty, typed, yaml } from 'app/utils';
 
 const log = new Log('Settings');
 
@@ -26,6 +26,10 @@ export interface Props {
   readonly doneSpectroChunkWidth: number
   readonly spectroChunkLimit: number;
   // For SearchScreen
+  readonly n_sp: number;
+  readonly n_per_sp: number;
+  readonly n_recs: number;
+  readonly filterQuality: Set<Quality>;
   readonly showMetadataLeft: boolean;
   readonly showMetadataBelow: boolean;
   readonly metadataColumnsLeft: Array<MetadataColumnLeft>;
@@ -58,6 +62,10 @@ export const DEFAULTS: Props = {
   doneSpectroChunkWidth: 5, // (ios dims: https://tinyurl.com/y8xsdvnk)
   spectroChunkLimit: 0, // 0 for unlimited
   // For SearchScreen
+  n_sp:     10, // For rec queries
+  n_per_sp: 3,  // For rec queries
+  n_recs:   30, // For non-rec queries
+  filterQuality: new Set<Quality>(['A', 'B']),
   showMetadataLeft: true,
   showMetadataBelow: false,
   metadataColumnsLeft: typed<Array<MetadataColumnLeft>>([
@@ -102,6 +110,10 @@ export const TYPES: {[key: string]: Array<string | Function>} = {
   doneSpectroChunkWidth: ['number'],
   spectroChunkLimit: ['number'],
   // For SearchScreen
+  n_sp: ['number'],
+  n_per_sp: ['number'],
+  n_recs: ['number'],
+  filterQuality: [Set],
   showMetadataLeft: ['boolean'],
   showMetadataBelow: ['boolean'],
   metadataColumnsLeft: ['object'],
@@ -135,6 +147,10 @@ export const KEYS = [
   'doneSpectroChunkWidth',
   'spectroChunkLimit',
   // For SearchScreen
+  'n_sp',
+  'n_per_sp',
+  'n_recs',
+  'filterQuality',
   'showMetadataLeft',
   'showMetadataBelow',
   'metadataColumnsLeft',
@@ -198,6 +214,10 @@ export class Settings implements SettingsWrites, Props {
     public readonly doneSpectroChunkWidth: number,
     public readonly spectroChunkLimit: number,
     // For SearchScreen
+    public readonly n_sp: number,
+    public readonly n_per_sp: number,
+    public readonly n_recs: number,
+    public readonly filterQuality: Set<Quality>,
     public readonly showMetadataLeft: boolean,
     public readonly showMetadataBelow: boolean,
     public readonly metadataColumnsLeft: Array<MetadataColumnLeft>,
@@ -326,24 +346,45 @@ export class Settings implements SettingsWrites, Props {
   // Serdes
   //
 
+  static conversions: Array<{
+    type:        Array<string | Function>,
+    onStringify: (x: any) => any,
+    onParse:     (x: any) => any,
+  }> = [{
+    type:        [Set],
+    onStringify: x => Array.from(x),
+    onParse:     x => new Set(x),
+  }];
+
   static stringify(key: string, x: any): string {
-    match(key,
-      ['excludeSpecies',       () => { x = Array.from(x); }],
-      ['excludeSpeciesGroups', () => { x = Array.from(x); }],
-      ['unexcludeSpecies',     () => { x = Array.from(x); }],
-      [match.default,          () => {}],
-    );
-    return JSON.stringify(x);
+    var s;
+    try {
+      const t = TYPES[key];
+      Settings.conversions.forEach(conversion => {
+        if (_.isEqual(t, conversion.type)) x = conversion.onStringify(x);
+      });
+      s = JSON.stringify(x);
+    } catch (e) {
+      const d = DEFAULTS[key as keyof Props];
+      log.warn(`stringify: For key[$key], failed to stringify x[${x}], using default[${d}]`, e);
+      s = JSON.stringify(d);
+    }
+    return s;
   }
 
   static parse(key: string, s: string): any {
-    var x = JSON.parse(s);
-    match(key,
-      ['excludeSpecies',       () => { x = new Set(x); }],
-      ['excludeSpeciesGroups', () => { x = new Set(x); }],
-      ['unexcludeSpecies',     () => { x = new Set(x); }],
-      [match.default,          () => {}],
-    );
+    var x: any;
+    try {
+      x = JSON.parse(s);
+      const t = TYPES[key];
+      Settings.conversions.forEach(conversion => {
+        if (_.isEqual(t, conversion.type)) x = conversion.onParse(x);
+      });
+    } catch (e) {
+      const d = DEFAULTS[key as keyof Props];
+      log.warn(`parse: For key[${key}], failed to parse s[${s}], using default[${d}]`, e);
+      x = d;
+    }
     return x;
   }
 

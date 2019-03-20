@@ -53,8 +53,8 @@ import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
   all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, ifEmpty, ifNull,
   into, json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait,
-  objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDiff, setToggle, shallowDiffPropsState, Style,
-  throw_, Timer, typed, yaml, yamlPretty, zipSame,
+  objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDiff, setToggle, shallowDiffPropsState, Sign,
+  Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -120,8 +120,7 @@ export const Query = {
 
 // TODO(put_all_query_state_in_location)
 export interface Filters {
-  quality?: Array<Quality>;
-  placeId?: string;
+  // quality?: Array<Quality>;
   text?:    string; // TODO(text_filter)
 }
 
@@ -129,14 +128,12 @@ export const Filters = {
 
   fromQueryString: (q: QueryString): Filters => ({
     // HACK Typing
-    quality: _.get(q, 'quality', '').split(',').filter(x => (Quality.values as Array<string>).includes(x)) as Array<Quality>,
-    placeId: _.get(q, 'placeId'),
+    // quality: _.get(q, 'quality', '').split(',').filter(x => (Quality.values as Array<string>).includes(x)) as Array<Quality>,
     text:    _.get(q, 'text'),
   }),
 
   toQueryString: (x: Filters): QueryString => _.pickBy({
-    quality: (x.quality || []).join(','),
-    placeId: x.placeId,
+    // quality: (x.quality || []).join(','),
     text:    x.text,
   }, (v, k) => v !== undefined) as {[key: string]: string} // HACK Typing
 
@@ -160,6 +157,13 @@ interface Props {
   settings:                SettingsWrites;
   db:                      DB;
   showDebug:               boolean;
+  n_sp:                    number;
+  n_per_sp:                number;
+  n_recs:                  number;
+  range_n_sp:              Array<number>;
+  range_n_per_sp:          Array<number>;
+  range_n_recs:            Array<number>;
+  filterQuality:           Set<Quality>;
   showMetadataLeft:        boolean;
   showMetadataBelow:       boolean;
   metadataColumnsLeft:     Array<MetadataColumnLeft>;
@@ -179,9 +183,6 @@ interface Props {
   f_bins:                  number;
   spectroBase:             Dim<number>;
   spectroScaleClamp:       Clamp<number>;
-  default_n_recs:          number;
-  default_n_sp:            number;
-  default_n_per_sp:        number;
   searchRecsMaxDurationS:  number;
 }
 
@@ -193,15 +194,12 @@ interface State {
   totalRecs?: number;
   non_f_preds_cols?: Array<string>;
   f_preds_cols?: Array<string>;
+  f_preds_col?: (i: number) => string; // More robust alternative to f_preds_cols[i]
   query: null | Query;
   refreshQuery: boolean; // TODO(put_all_query_state_in_location)
   // TODO Persist filters with settings
   //  - Top-level fields instead of nested object so we can use state merging when updating them in isolation
   filterQueryText?: string;
-  filterQuality: Array<Quality>;
-  n_recs: number;   // For non-rec queries
-  n_sp: number;     // For rec queries
-  n_per_sp: number; // For rec queries
   sortResults: 'slp,d_pc' | 'd_pc';
   excludeRecs: Set<string>;
   recs: StateRecs;
@@ -232,11 +230,11 @@ function matchStateRecs<X>(recs: StateRecs, cases: {
 export class SearchScreen extends PureComponent<Props, State> {
 
   static defaultProps = {
+    range_n_sp:             [1, 2, 3, 5, 10, 25, 50, 100],
+    range_n_per_sp:         _.range(1, 100 + 1),
+    range_n_recs:           [10, 25, 50, 100, 250, 500],
     spectroBase:            {height: 20, width: Dimensions.get('window').width},
     spectroScaleClamp:      {min: 1, max: 8},
-    default_n_recs:         30, // For non-rec queries
-    default_n_sp:           10, // For rec queries
-    default_n_per_sp:       3,  // For rec queries
     searchRecsMaxDurationS: 10.031,  // HACK Query max(search_recs.duration_s) from db on startup
   };
 
@@ -248,14 +246,11 @@ export class SearchScreen extends PureComponent<Props, State> {
   state: State = {
     scrollViewKey:        '',
     scrollViewState:      this._scrollViewState,
-    showGenericModal:     null,
+    // showGenericModal:     null, // TODO(more_recs): Restore
+    showGenericModal:     () => this.FiltersModal(),
     showHelp:             false,
     query:                null,
     refreshQuery:         false,
-    filterQuality:        ['A', 'B'],
-    n_recs:               this.props.default_n_recs,
-    n_sp:                 this.props.default_n_sp,
-    n_per_sp:             this.props.default_n_per_sp,
     sortResults:          'slp,d_pc',
     excludeRecs:          new Set(),
     recs:                 'loading',
@@ -362,10 +357,12 @@ export class SearchScreen extends PureComponent<Props, State> {
       const [rec] = results.rows.raw();
       const non_f_preds_cols = Object.keys(rec).filter(k => !k.startsWith('f_preds_'));
       var   f_preds_cols     = Object.keys(rec).filter(k => k.startsWith('f_preds_'));
-      f_preds_cols = _.range(f_preds_cols.length).map(i => `f_preds_${i}`); // Reconstruct array to ensure ordering
+      const f_preds_col      = (i: number) => `f_preds_${i}`;
+      f_preds_cols = _.range(f_preds_cols.length).map(i => f_preds_col(i)); // Reconstruct array to ensure ordering
       this.setState({
         non_f_preds_cols,
         f_preds_cols,
+        f_preds_col,
       });
     });
 
@@ -411,9 +408,6 @@ export class SearchScreen extends PureComponent<Props, State> {
       log.info('componentDidUpdate: Reset view state');
       this.setState({
         filterQueryText:      undefined,
-        n_recs:               this.props.default_n_recs,
-        n_sp:                 this.props.default_n_sp,
-        n_per_sp:             this.props.default_n_per_sp,
         // TODO Confusing UX: excludeRecs resets on each search, but exclude/include species/groups persists
         //  - If we switch to persisting excludeRecs, then we need to also make it more visible/editable somehow
         excludeRecs:          new Set(),
@@ -496,18 +490,31 @@ export class SearchScreen extends PureComponent<Props, State> {
     };
   }
 
-  edit_n_sp = (sign: number) => {
-    this.setState((state, props) => ({
-      n_sp:         state.n_sp + sign * this.props.default_n_sp,
-      refreshQuery: true, // XXX(put_all_query_state_in_location)
+  edit_n_sp     = (sign: Sign) => this._edit_n(sign, 'n_sp',     'range_n_sp');
+  edit_n_per_sp = (sign: Sign) => this._edit_n(sign, 'n_per_sp', 'range_n_per_sp');
+  edit_n_recs   = (sign: Sign) => this._edit_n(sign, 'n_recs',   'range_n_recs');
+
+  _edit_n = async (
+    sign:    Sign,
+    k:       'n_sp'       | 'n_per_sp'       | 'n_recs',
+    range_k: 'range_n_sp' | 'range_n_per_sp' | 'range_n_recs',
+  ): Promise<void> => {
+    await this.props.settings.set(settings => ({
+      [k]: this._next_n(sign, settings[k], this.props[range_k]),
     }));
   }
 
-  edit_n_per_sp = (sign: number) => {
-    this.setState((state, props) => ({
-      n_per_sp:     state.n_per_sp + sign * 1,
-      refreshQuery: true, // XXX(put_all_query_state_in_location)
-    }));
+  _next_n = (sign: Sign, n: number, ns: Array<number>): number => {
+    ns = _.sortBy(ns); // (i/o Array.sort, which sorts by .toString)
+    // Find insertion index of n within ns
+    //  - "Insertion index" so we're robust to n not being in ns
+    //  - If n is in ns, then insertion index is just index
+    const i = match<number>(_.findIndex(ns, m => n <= m),
+      [-1,            i => ns.length], // Not found
+      [match.default, i => i],         // Found
+    );
+    // Return number at -1/+1 index relative to n
+    return ns[_.clamp(i + sign, 0, ns.length - 1)];
   }
 
   get queryDesc(): string {
@@ -550,13 +557,18 @@ export class SearchScreen extends PureComponent<Props, State> {
         !fastIsEqual(this.props.excludeSpecies,       _.get(prevProps, 'excludeSpecies')) ||
         !fastIsEqual(this.props.excludeSpeciesGroups, _.get(prevProps, 'excludeSpeciesGroups')) ||
         !fastIsEqual(this.props.unexcludeSpecies,     _.get(prevProps, 'unexcludeSpecies')) ||
+        !fastIsEqual(this.props.n_sp,                 _.get(prevProps, 'n_sp')) ||
+        !fastIsEqual(this.props.n_per_sp,             _.get(prevProps, 'n_per_sp')) ||
+        !fastIsEqual(this.props.n_recs,               _.get(prevProps, 'n_recs')) ||
+        !fastIsEqual(this.props.filterQuality,        _.get(prevProps, 'filterQuality')) ||
         !fastIsEqual(this.state.sortResults,          _.get(prevState, 'sortResults')) ||
         !fastIsEqual(this.state.excludeRecs,          _.get(prevState, 'excludeRecs'))
       ) && (
         // Noop if location didn't change
         locationPathIsEqual(this.props.location, _.get(prevProps, 'location')) ||
-        // Noop if we don't know f_preds_cols yet (assume we'll be called again once we do)
-        !this.state.f_preds_cols
+        // Noop if we don't know f_preds_cols (et al.) yet (assume we'll be called again once we do)
+        !this.state.f_preds_cols ||
+        !this.state.f_preds_col
       )
     ) {
       log.info('updateForLocation: Skipping');
@@ -600,7 +612,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       // Global filters
       //  - TODO(put_all_query_state_in_location)
       const qualityFilter = (table: string) => (
-        sqlf`and ${SQL.raw(table)}.quality in (${this.state.filterQuality})`
+        sqlf`and ${SQL.raw(table)}.quality in (${Array.from(this.props.filterQuality)})`
       );
       const placeFilter   = (table: string) => (
         sqlf`and ${SQL.raw(table)}.species in (${this.props.place.species})`
@@ -644,7 +656,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 ${SQL.raw(speciesGroupFilter('S'))}
               order by
                 random()
-              limit ${this.state.n_recs}
+              limit ${this.props.n_recs}
             )
             order by
               taxon_order_num asc,
@@ -672,7 +684,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 ${SQL.raw(qualityFilter('S'))}
               order by
                 source_id desc
-              limit ${this.state.n_recs}
+              limit ${this.props.n_recs}
             )
             order by
               taxon_order_num asc,
@@ -703,10 +715,9 @@ export class SearchScreen extends PureComponent<Props, State> {
             //      - (... where species=? order by d_pc limit n_per_sp) union all (...) ...
 
             // Params
-            const f_preds_cols = this.state.f_preds_cols || [];
-            const n_sp         = this.state.n_sp;
-            const n_per_sp     = this.state.n_per_sp;
-            const n_recs       = n_sp * n_per_sp + 1;
+            const f_preds_cols = this.state.f_preds_cols!; // Guarded above
+            const f_preds_col  = this.state.f_preds_col!;  // Guarded above
+            const {n_sp, n_per_sp, n_recs} = this.props;
 
             // Load query_rec from db
             const query_rec = await this.props.db.loadRec(source);
@@ -743,14 +754,14 @@ export class SearchScreen extends PureComponent<Props, State> {
             const slp = (sp_p: number): number => Math.abs(-Math.log(sp_p)) // (abs for 1->0 i/o -0)
             const slps: Map<string, number> = mapMapValues(sp_ps, slp);
 
-            // Compute in sql: cosine_distance(S.f_preds_*, Q.f_preds_*)
+            // Compute in sql: cosine_distance(S.f_preds_*, query_rec.f_preds)
             //  - cosine_distance(x,y) = 1 - dot(x,y) / norm(x) / norm(y)
-            const sqlDot = (f_preds_cols
+            const sqlDot = (_.range(f_preds_cols.length)
               // .slice(0, 2) // XXX Debug: smaller query
-              .map(c => sqlf`S.${SQL.raw(c)}*Q.${SQL.raw(c)}`).join(' + ') || '0'
+              .map(i => sqlf`S.${SQL.raw(f_preds_col(i))}*${query_rec.f_preds[i]}`).join(' + ') || '0'
             );
             const sqlCosineDist = sqlf`
-              1 - (${SQL.raw(sqlDot)}) / S.norm_f_preds / Q.norm_f_preds
+              1 - (${SQL.raw(sqlDot)}) / S.norm_f_preds / ${Rec.norm_f_preds(query_rec)}
             `;
 
             // Query which species are left after applying filters
@@ -788,7 +799,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               .map(([species, slp]) => ({species, slp}))
               .filter(({species}) => filteredSpecies.has(species))
               .sortBy(({slp}) => slp)
-              .slice(0, n_sp + 1) // FIXME +1 else we get n_sp-1 species -- why?
+              .slice(0, n_sp)
               .value()
             );
 
@@ -803,30 +814,30 @@ export class SearchScreen extends PureComponent<Props, State> {
                 {species: '_XXX', slp: 1e38},
               ])
               // .slice(0, 2) // XXX Debug: smaller query
-              .map(({species, slp}) => sqlf`
-                select *, ${ifNull(slp, () => 1e38)} as slp
-                from S_filter_dist
-                where species = ${species}
-                order by d_pc asc
-                limit ${n_per_sp}
-              `)
+              .map(({species, slp}) => {
+                if (!_.isNumber(slp) || _.isNaN(slp)) {
+                  log.error(`updateForLocation: null/nan slp[${slp}] for species[${species}]`);
+                }
+                return sqlf`
+                  select *, ${slp} as slp
+                  from S_filter_dist
+                  where species = ${species}
+                  order by d_pc asc
+                  limit ${topSlps.length > 1
+                    ? n_per_sp // If we're showing multiple sp
+                    : n_recs   // Else "max recs" if only one sp
+                  }
+                `;
+              })
             );
             const sql = sqlf`
               with
-                -- For sqlCosineDist ('Q' = query_rec)
-                Q as (
-                  select *
-                  from search_recs
-                  where source_id = ${query_rec.source_id}
-                  limit 1 -- Should always be ≤1, but safeguard perf in case of data bugs
-                ),
                 -- For nested sqlPerSpecies queries
                 S_filter_dist as (
                   select
                     ${SQL.raw(non_f_preds_cols.map(x => `S.${x}`).join(', '))},
                     ${SQL.raw(sqlCosineDist)} as d_pc
                   from search_recs S
-                    left join Q on true -- (1 row)
                   where true
                     -- Filters duplicated above (in filteredSpecies query)
                     ${SQL.raw(placeFilter('S'))}
@@ -841,10 +852,10 @@ export class SearchScreen extends PureComponent<Props, State> {
                 -- Must wrap subqueries in 'select * from (...)' else union complains about nested order by
                 ${SQL.raw(sqlPerSpecies.map(x => `select * from (${x})`).join(' union all '))}
               )
-              order by
-                slp asc,
-                d_pc asc
-              limit ${n_recs}
+              order by ${SQL.raw(puts(puts(this.state.sortResults) === 'slp,d_pc'
+                ? 'slp asc, d_pc asc'
+                : 'd_pc asc'
+              ))}
             `;
 
             // Run query
@@ -860,9 +871,24 @@ export class SearchScreen extends PureComponent<Props, State> {
               //   .map(rec => yaml(rec))
               // ));
 
-              // HACK Inject query_rec as first result so it's visible at top
+              // Validate
+              //  - slp shouldn't be null/nan (else species order is junk)
+              //  - d_pc shouldn't be null/nan (else rec order is junk)
+              recs.forEach(rec => {
+                typed<Array<keyof typeof rec>>(['slp', 'd_pc']).forEach(k => {
+                  const x = rec[k];
+                  if (!_.isNumber(x) || _.isNaN(x)) {
+                    log.error(`updateForLocation: null/nan ${k}[${x}] for rec: ${rec.source_id} (${rec.species})`);
+                  }
+                });
+              });
+
+              // Inject query_rec as first result so it's visible at top
               //  - TODO Replace this with a proper display of query_rec at the top
-              return {recs: [query_rec, ...recs]};
+              return {recs: [
+                query_rec,
+                ...recs,
+              ]};
 
             });
 
@@ -1079,21 +1105,94 @@ export class SearchScreen extends PureComponent<Props, State> {
     const Separator = () => (
       <View style={{height: 5}}/>
     );
+    const buttonStyle = {
+      width:  40,
+      height: 40,
+    };
     return (
       <this.GenericModal>
         <this.GenericModalTitle title='Filters' />
 
         <Separator/>
-        <View>
-          <Text
-            style={{
-              ...material.body1Object,
-            }}
-          >
-            Place: {this.props.place.name} ({yaml(this.props.place.props).slice(1, -1)}),
-          </Text>
-        <View>
+        <View style={{
+          flexDirection:  'column',
+          justifyContent: 'center',     // Main axis
+          alignItems:     'flex-start', // Cross axis (unless wrapped)
+          alignContent:   'flex-start', // Cross axis (if wrapped)
+        }}>
+          {typed<Array<[number, (sign: Sign) => Promise<void>, string]>>([
+            [this.props.n_sp,     this.edit_n_sp,     'species'],
+            [this.props.n_per_sp, this.edit_n_per_sp, 'recs per species'],
+            [this.props.n_recs,   this.edit_n_recs,   'recs'],
+          ]).map(([n, edit_n, label], i) => (
+            <View
+              key={i}
+              style={{
+                flexDirection:  'row',
+                justifyContent: 'center', // Main axis
+                alignItems:     'center', // Cross axis (unless wrapped)
+                alignContent:   'center', // Cross axis (if wrapped)
+              }}
+            >
+              <Separator/>
+              <this.ActionModalButton
+                iconName={'minus'}
+                textColor={iOSColors.black}
+                buttonColor={iOSColors.customGray}
+                buttonStyle={buttonStyle}
+                dismiss={false}
+                onPress={() => edit_n(-1)}
+              />
+              <View style={{
+                width: 30,
+                alignItems: 'center', // Cross axis (unless wrapped)
+              }}>
+                <Text>{n}</Text>
+              </View>
+              <this.ActionModalButton
+                iconName={'plus'}
+                textColor={iOSColors.black}
+                buttonColor={iOSColors.customGray}
+                buttonStyle={buttonStyle}
+                dismiss={false}
+                onPress={() => edit_n(+1)}
+              />
+              <Text>{label}</Text>
+            </View>
+          ))}
+        </View>
 
+        <Separator/>
+        <Separator/>
+        <View style={{
+          flexDirection:  'row',
+          justifyContent: 'flex-start', // Main axis
+          alignItems:     'center',     // Cross axis (unless wrapped)
+          alignContent:   'center',     // Cross axis (if wrapped)
+        }}>
+          <Text>Quality: {}</Text>
+          {Quality.values.map(quality => (
+            <this.ActionModalButton
+              key={quality}
+              label={match<Quality, string>(quality,
+                ['no score',    () => 'no'], // Short label to fit inside small square button
+                [match.default, () => quality],
+              )}
+              textColor={iOSColors.black}
+              buttonColor={this.props.filterQuality.has(quality) ? iOSColors.tealBlue : iOSColors.customGray}
+              buttonStyle={{
+                ...buttonStyle,
+                marginHorizontal: 1,
+              }}
+              dismiss={false}
+              onPress={() => this.props.settings.set(settings => ({
+                filterQuality: setToggle(settings.filterQuality, quality),
+              }))}
+            />
+          ))}
+        </View>
+
+        {/* XXX Example of <TextInput>
         <Separator/>
         <View style={{flexDirection: 'row'}}>
           <Text>
@@ -1117,12 +1216,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             returnKeyType='search'
           />
         </View>
-
-        <Separator/>
-        </View>
-          <Text>[TODO quality]</Text>
-          <Text>[TODO text search]</Text>
-        </View>
+        */}
 
       </this.GenericModal>
     );
@@ -1133,7 +1227,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       sourceIdForActionModal: rec.source_id,
       showGenericModal: () => (
         this.RecActionModal(rec)
-      )
+      ),
     });
   }
 
@@ -1325,56 +1419,6 @@ export class SearchScreen extends PureComponent<Props, State> {
           ]})}
         </View>
 
-        {/* TODO(more_results) Put these in the footer of the ScrollView */}
-        {/* <Separator/>
-        <View style={{flexDirection: 'row'}}>
-          {this.ActionModalButtons({actions: [
-            {
-              ...defaults,
-              label: 'More species',
-              iconName: 'plus-circle',
-              buttonColor: iOSColors.purple,
-              onPress: () => {},
-            }, {
-              ...defaults,
-              label: 'Fewer species',
-              iconName: 'minus-circle',
-              buttonColor: iOSColors.purple,
-              onPress: () => {},
-            },
-          ]})}
-        </View>
-        <Separator/>
-        <View style={{flexDirection: 'row'}}>
-          {this.ActionModalButtons({actions: [
-            {
-              ...defaults,
-              label: 'More recs per species',
-              iconName: 'plus-circle',
-              buttonColor: iOSColors.purple,
-              onPress: () => {},
-            }, {
-              ...defaults,
-              label: 'Fewer recs per species',
-              iconName: 'minus-circle',
-              buttonColor: iOSColors.purple,
-              onPress: () => {},
-            },
-          ]})}
-        </View>
-        <Separator/>
-        <View style={{flexDirection: 'row'}}>
-          {this.ActionModalButtons({actions: [
-            {
-              ...defaults,
-              label: 'Add a species manually',
-              iconName: 'plus-circle',
-              buttonColor: iOSColors.purple,
-              onPress: () => {},
-            },
-          ]})}
-        </View> */}
-
         {/* TODO(saved_lists) */}
         {/* <Separator/>
         {this.ActionModalButtons({actions: [
@@ -1479,14 +1523,53 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   BottomControls = (props: {}) => (
     <View style={styles.bottomControls}>
+      {/* Random recs */}
+      <this.BottomControlsButton
+        help='Random'
+        // iconProps={{name: 'refresh-ccw'}}
+        iconProps={{name: 'shuffle'}}
+        onPress={() => this.props.go('search', {path: this.randomPath()})}
+      />
+      {/* Reset filters */}
+      <this.BottomControlsButton
+        help='Reset'
+        // iconProps={{name: 'refresh-ccw'}}
+        iconProps={{name: 'rotate-ccw'}}
+        disabled={true
+          // If no active filters
+          && this.props.excludeSpecies.size       === 0
+          && this.props.excludeSpeciesGroups.size === 0
+          && this.props.unexcludeSpecies.size     === 0
+          && !this.state.filterQueryText
+          && this.state.excludeRecs.size === 0
+        }
+        onPress={() => {
+          log.info('Reset filters');
+          this.props.settings.set({
+            excludeSpecies:       new Set(),
+            excludeSpeciesGroups: new Set(),
+            unexcludeSpecies:     new Set(),
+          });
+          this.setState({
+            filterQueryText:      undefined,
+            excludeRecs:          new Set(),
+          });
+        }}
+      />
       {/* Filters */}
       <this.BottomControlsButton
         help='Filters'
         iconProps={{name: 'filter'}}
         onPress={() => this.setState({
-          showGenericModal: () => this.FiltersModal()
+          showGenericModal: () => this.FiltersModal(),
         })}
       />
+      {/* XXX Dev: Query that returns no results */}
+      {/* <this.BottomControlsButton
+        help='Blank'
+        iconProps={{name: 'power'}}
+        onPress={() => this.props.go('search', {path: `/species/${encodeURIComponent('_BLANK')}`})} // HACK No results via junk species
+      /> */}
       {/* Toggle sort: species probs / rec dist */}
       <this.BottomControlsButton
         help='Sort'
@@ -1516,21 +1599,8 @@ export class SearchScreen extends PureComponent<Props, State> {
                 })
               },
             ]} />
-          )
+          ),
         })}
-      />
-      {/* Query that returns no results [XXX For dev] */}
-      <this.BottomControlsButton
-        help='Blank'
-        iconProps={{name: 'power'}}
-        onPress={() => this.props.go('search', {path: `/species/${encodeURIComponent('_BLANK')}`})} // HACK No results via junk species
-      />
-      {/* Random recs */}
-      <this.BottomControlsButton
-        help='Random'
-        // iconProps={{name: 'refresh-ccw'}}
-        iconProps={{name: 'shuffle'}}
-        onPress={() => this.props.go('search', {path: this.randomPath()})}
       />
       {/* Toggle metadata: left */}
       <this.BottomControlsButton
@@ -1564,7 +1634,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 )),
               }))
             } />
-          )
+          ),
         })}
       />
       {/* Toggle metadata: below */}
@@ -1593,7 +1663,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 )),
               }))
             } />
-          )
+          ),
         })}
       />
       {/* Toggle seekOnPlay crosshairs */}
@@ -1815,7 +1885,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   ActionModalButtons = (props: {
     actions: Array<{
-      label: string,
+      label?: string,
       iconName?: string,
       buttonColor?: string,
       textColor?: string,
@@ -1823,58 +1893,67 @@ export class SearchScreen extends PureComponent<Props, State> {
       dismiss?: boolean,
       onPress: () => void,
     }>,
+  }) => props.actions.map((props, i) => (
+    <this.ActionModalButton
+      key={i}
+      {...props}
+    />
+  ));
+
+  ActionModalButton = (props: {
+    label?: string,
+    iconName?: string,
+    buttonColor?: string,
+    textColor?: string,
+    buttonStyle?: ViewStyle,
+    dismiss?: boolean,
+    onPress: () => void,
   }) => (
-    props.actions.map(({
-      label,
-      iconName,
-      buttonColor,
-      textColor,
-      buttonStyle,
-      dismiss,
-      onPress,
-    }, i) => (
-      <RectButton
-        key={i}
-        style={{
-          // flex:             1, // Makes everything big
-          flexDirection:    'row',
-          alignItems:       'center',
-          padding:          10,
-          marginHorizontal: 10,
-          marginVertical:   2,
-          backgroundColor:  _.defaultTo(buttonColor, iOSColors.customGray),
-          ..._.defaultTo(buttonStyle, {}),
-        }}
-        onPress={() => {
-          if (_.defaultTo(dismiss, true)) {
-            this.setState({
-              showGenericModal: null, // Dismiss modal
-            });
-          }
-          onPress();
-        }}
-      >
-        {iconName && (
-          <Feather
-            style={{
-              // ...material.headlineObject,
-              ...material.buttonObject,
-              marginRight: 5,
-              color: _.defaultTo(textColor, iOSColors.white),
-            }}
-            name={iconName}
-          />
-        )}
+    <RectButton
+      style={{
+        // flex:             1, // Makes everything big
+        flexDirection:    'row',
+        justifyContent:   'center', // Main axis
+        alignItems:       'center', // Cross axis (unless wrapped)
+        padding:          10,
+        marginHorizontal: 10,
+        marginVertical:   2,
+        backgroundColor:  _.defaultTo(props.buttonColor, iOSColors.customGray),
+        ..._.defaultTo(props.buttonStyle, {}),
+      }}
+      onPress={() => {
+        if (_.defaultTo(props.dismiss, true)) {
+          this.setState({
+            showGenericModal: null, // Dismiss modal
+          });
+        }
+        props.onPress();
+      }}
+    >
+      {props.iconName && (
+        <Feather
+          style={{
+            // ...material.headlineObject,
+            ...material.buttonObject,
+            color: _.defaultTo(props.textColor, iOSColors.white),
+          }}
+          name={props.iconName}
+        />
+      )}
+      {props.iconName && props.label && (
+        <View style={{width: 5}} />
+      )}
+      {props.label && (
         <Text
           style={{
             // ...material.buttonObject,
             ...material.body2Object,
-            color: _.defaultTo(textColor, iOSColors.white),
+            color: _.defaultTo(props.textColor, iOSColors.white),
           }}
-          children={label}
+          children={props.label}
         />
-      </RectButton>
-    ))
+      )}
+    </RectButton>
   );
 
   // Assign color sequentially to species
@@ -1984,9 +2063,6 @@ export class SearchScreen extends PureComponent<Props, State> {
 
             // TODO Sticky headers: manually calculate indices of species header rows
             // stickyHeaderIndices={!this.props.showMetadataBelow ? undefined : ...}
-
-            // TODO Add footer with "Load more" button
-            //  - Mimic SectionList.ListFooterComponent [https://facebook.github.io/react-native/docs/sectionlist#listfootercomponent]
 
           >
             {/* Mimic a FlatList */}
@@ -2213,42 +2289,6 @@ export class SearchScreen extends PureComponent<Props, State> {
 
                 ])
               )}
-            </View>
-
-            {/* Footer */}
-            <View style={{
-              ...Styles.center,
-              width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
-              paddingVertical: 5,
-              flexDirection: 'row',
-            }}>
-              {/* Add more results */}
-              <BorderlessButton style={{marginHorizontal: 5}} onPress={() => this.edit_n_sp(+1)}>
-                <Feather
-                  style={styles.bottomControlsButtonIcon}
-                  name='plus'
-                />
-              </BorderlessButton>
-              <BorderlessButton style={{marginHorizontal: 5}} onPress={() => this.edit_n_sp(-1)}>
-                <Feather
-                  style={styles.bottomControlsButtonIcon}
-                  name='minus'
-                />
-              </BorderlessButton>
-              {/* Add more results per sp */}
-              {/* - TODO Move to per sp (use rec long press) */}
-              <BorderlessButton style={{marginHorizontal: 5}} onPress={() => this.edit_n_per_sp(+1)}>
-                <Feather
-                  style={styles.bottomControlsButtonIcon}
-                  name='plus-circle'
-                />
-              </BorderlessButton>
-              <BorderlessButton style={{marginHorizontal: 5}} onPress={() => this.edit_n_per_sp(-1)}>
-                <Feather
-                  style={styles.bottomControlsButtonIcon}
-                  name='minus-circle'
-                />
-              </BorderlessButton>
             </View>
 
           </ScrollView>

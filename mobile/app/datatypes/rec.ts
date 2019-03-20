@@ -9,6 +9,7 @@ import {
 import { debug_print, Log, rich } from 'app/log';
 import { NativeSpectro } from 'app/native/Spectro';
 import { NativeTagLib } from 'app/native/TagLib';
+import { nj, nj_norm } from 'app/numjs';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifError, ifNil, ifNull, ifUndefined, json,
   jsonSafeError, JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchError, matchNull,
@@ -185,6 +186,12 @@ export const Rec = {
   }): Promise<void> => {
     Rec.log.debug('writeMetadata', rich({audioPath, versionedMetadata}));
     await NativeTagLib.writeComment(audioPath, json(versionedMetadata));
+  },
+
+  // Like norm_f_preds in py model.payloads.df_cache_hybrid
+  //  - df['norm_f_preds'] = df['f_preds'].map(np.linalg.norm)
+  norm_f_preds: (rec: Has_f_preds): number => {
+    return nj_norm(rec.f_preds);
   },
 
   hasCoords: (rec: Rec): boolean => {
@@ -481,7 +488,7 @@ export const UserRec = {
     return (
       (await fs.ls(await ensureDir(dir)))
       .filter(x => !_.some(excludes, exclude => exclude.test(x)))
-      .sort()
+      .sort() // (Safe: Array.sort sorts by .toString)
     );
   },
 

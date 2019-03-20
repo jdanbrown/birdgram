@@ -710,7 +710,12 @@
   resolved "https://registry.yarnpkg.com/@types/memoize-one/-/memoize-one-4.1.0.tgz#62119f26055b3193ae43ca1882c5b29b88b71ece"
   integrity sha512-cmSgi6JMX/yBwgpVm4GooNWIH+vEeJoa8FAa6ExOhpJbC0Juq32/uYKiKb3VPSqrEA0aOnjvwZanla3O1WZMbw==
 
-"@types/ndarray@*", "@types/ndarray@^1.0.6":
+"@types/ndarray@*":
+  version "1.0.7"
+  resolved "https://registry.yarnpkg.com/@types/ndarray/-/ndarray-1.0.7.tgz#046c4391220b61557b0779790c556018608d890d"
+  integrity sha512-PdCzZlZPWB4D467RrDIz79WbthmH8miN/rY8zrlKyX0IejKtGcMUpfQTrJI8jvrazGPNmRuo+qbim1HUHSUhEQ==
+
+"@types/ndarray@^1.0.6":
   version "1.0.6"
   resolved "https://registry.yarnpkg.com/@types/ndarray/-/ndarray-1.0.6.tgz#47d716dce58b51bf26496f042df2d22a3a860fb7"
   integrity sha512-io2nhBWE7J1fOZswmey3MmkCnuyqGcZZfJYo0MnQ9XY56J2YbIm2I0qONoLGgHGkYTzhkWy7de6A0W45pPlv9w==

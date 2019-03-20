@@ -389,6 +389,8 @@ export class ExpWeightedRate {
   get value(): number { return 1 / this._mean.value }
 }
 
+export type Sign = -1 | 1;
+
 export type Point = {
   x: number;
   y: number;
