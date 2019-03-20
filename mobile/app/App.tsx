@@ -55,6 +55,10 @@ import { XC } from 'app/xc';
 
 const log = new Log('App');
 
+//
+// Globals
+//
+
 log.info('config', pretty(config));
 
 // // XXX Debug: log bridge msgs
@@ -143,6 +147,10 @@ timed('url-parse',          () => global.urlParse        = require('url-parse'))
 global.base64 = global.RNFB.base64;
 global.fs = global.RNFB.fs;
 
+//
+// App
+//
+
 export type AppProps = Props;
 export type AppState = State;
 
@@ -170,6 +178,8 @@ interface State {
   nSpecies?: number;
   geo?: Geo;
   appContext?: AppContext;
+  // From SearchScreen
+  nExcludeRecs: null | number;
 }
 
 interface AppContext {
@@ -206,6 +216,7 @@ export default class App extends PureComponent<Props, State> {
     tabIndex: 2, // TODO
     orientation: getOrientation(),
     loading: true,
+    nExcludeRecs: null,
   };
 
   // Default settings.place:null to ebird.allPlace
@@ -546,6 +557,7 @@ export default class App extends PureComponent<Props, State> {
           go                      = {this.go}
           xc                      = {this.state.xc!}
           ebird                   = {this.state.ebird!}
+          app                     = {this}
           // Settings
           settings                = {this.state.settingsWrites!}
           db                      = {this.state.db!}
@@ -689,7 +701,11 @@ export default class App extends PureComponent<Props, State> {
       undefined: ()       => null,
       x:         settings => matchTabName(tab, {
         record:   () => null,
-        search:   () => null,
+        search:   () => this.state.nExcludeRecs && this.state.nExcludeRecs > 0 && (
+          <Text style={{color: iOSColors.red}}>
+            -{this.state.nExcludeRecs} rec
+          </Text>
+        ),
         recent:   () => null,
         saved:    () => null,
         browse:   () => (
@@ -709,7 +725,9 @@ export default class App extends PureComponent<Props, State> {
                 settings.unexcludeSpecies,
               ).size;
               return nExcludedSpecies > 0 && (
-                <Text style={{color: iOSColors.red}}>-{nExcludedSpecies} sp</Text>
+                <Text style={{color: iOSColors.red}}>
+                  -{nExcludedSpecies} sp
+                </Text>
               );
             })
           ))
@@ -737,6 +755,10 @@ export default class App extends PureComponent<Props, State> {
 }
 
 export {App};
+
+//
+// styles
+//
 
 const styles = StyleSheet.create({
   container: {

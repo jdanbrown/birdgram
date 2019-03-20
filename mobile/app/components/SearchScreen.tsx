@@ -155,6 +155,7 @@ interface Props {
   go:                      Go;
   xc:                      XC;
   ebird:                   Ebird;
+  app:                     App;
   // Settings
   settings:                SettingsWrites;
   db:                      DB;
@@ -368,6 +369,9 @@ export class SearchScreen extends PureComponent<Props, State> {
       });
     });
 
+    // Propagate state.excludeRecs.length -> App.state.nExcludeRecs
+    await this.propagateExcludeRecsToApp(null, null);
+
     // Show this.props.location
     await this.updateForLocation(null, null);
 
@@ -410,8 +414,8 @@ export class SearchScreen extends PureComponent<Props, State> {
         n_recs:               this.props.default_n_recs,
         n_sp:                 this.props.default_n_sp,
         n_per_sp:             this.props.default_n_per_sp,
-        // TODO(exclude_recs): Confusing UX: excludeRecs resets on each search, but exclude/include species/groups persists
-        //  - If we switch to persisting excludeRecs, then we need to also make it visible/editable somewhere in the UI
+        // TODO Confusing UX: excludeRecs resets on each search, but exclude/include species/groups persists
+        //  - If we switch to persisting excludeRecs, then we need to also make it more visible/editable somehow
         excludeRecs:          new Set(),
       });
     }
@@ -426,6 +430,9 @@ export class SearchScreen extends PureComponent<Props, State> {
     if (this.state._spectroScale !== prevState._spectroScale) {
       noawait(this.props.settings.set({spectroScale: this.state._spectroScale}));
     }
+
+    // Propagate state.excludeRecs.length -> App.state.nExcludeRecs
+    await this.propagateExcludeRecsToApp(prevProps, prevState);
 
     // Show this.props.location
     await this.updateForLocation(prevProps, prevState);
@@ -515,6 +522,17 @@ export class SearchScreen extends PureComponent<Props, State> {
         }),
       }),
     });
+  }
+
+  // HACK A circuitous way to make state.excludeRecs.length available in App.badgeForTab
+  propagateExcludeRecsToApp = async (prevProps: null | Props, prevState: null | State) => {
+    const prevNExcludeRecs = mapNull(prevState, x => x.excludeRecs.size);
+    const nExcludeRecs     = this.state.excludeRecs.size;
+    if (prevNExcludeRecs !== nExcludeRecs) {
+      this.props.app.setState({
+        nExcludeRecs,
+      });
+    }
   }
 
   updateForLocation = async (prevProps: null | Props, prevState: null | State) => {
