@@ -51,8 +51,8 @@ import { SQL, sqlf } from 'app/sql';
 import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
-  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, ifNull, into,
-  json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait,
+  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, ifEmpty, ifNull,
+  into, json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait,
   objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDiff, setToggle, shallowDiffPropsState, Style,
   throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
@@ -587,12 +587,14 @@ export class SearchScreen extends PureComponent<Props, State> {
       const placeFilter   = (table: string) => (
         sqlf`and ${SQL.raw(table)}.species in (${this.props.place.species})`
       );
-      // TODO(unexclude_species): Incorporate unexcludeSpecies into filter(s)
       const speciesFilter = (table: string) => (
         sqlf`and ${SQL.raw(table)}.species not in (${Array.from(this.props.excludeSpecies)})`
       );
       const speciesGroupFilter = (table: string) => (
-        sqlf`and ${SQL.raw(table)}.species_species_group not in (${Array.from(this.props.excludeSpeciesGroups)})`
+        sqlf`and (false
+          or ${SQL.raw(table)}.species_species_group not in (${Array.from(this.props.excludeSpeciesGroups)})
+          or ${SQL.raw(table)}.species in (${Array.from(this.props.unexcludeSpecies)})
+        )`
       );
       const recFilter = (table: string) => (
         sqlf`and ${SQL.raw(table)}.source_id not in (${Array.from(this.state.excludeRecs)})`
@@ -777,7 +779,11 @@ export class SearchScreen extends PureComponent<Props, State> {
             //  - Perf: We exclude .f_preds_* cols for faster load (ballpark ~2x)
             //  - TODO this.state.sortResults ('slp,d_pc' / 'd_pc')
             const non_f_preds_cols = this.state.non_f_preds_cols!; // Set in componentDidMount
-            const sqlPerSpecies = (topSlps
+            const sqlPerSpecies = (
+              ifEmpty(topSlps, () => [
+                // Mock ≥1 species, else we generate bad sql: `select * from ()`
+                {species: '_XXX', slp: 1e38},
+              ])
               // .slice(0, 2) // XXX Debug: smaller query
               .map(({species, slp}) => sqlf`
                 select *, ${ifNull(slp, () => 1e38)} as slp

@@ -37,6 +37,10 @@ import {
 
 const log = new Log('BrowseScreen');
 
+//
+// BrowseScreen
+//
+
 interface Props {
   // App globals
   location:             Location;
@@ -210,43 +214,34 @@ export class BrowseScreen extends PureComponent<Props, State> {
               Place: {this.props.place.name} ({data.length}/{allData.length}/{this.props.place.species.length} species)
             </Text>
 
-            {/* Reset button */}
+            {/* Toggle-all button */}
             {local(() => {
-              const enabled = (
-                !_.isEmpty(this.props.excludeSpecies) ||
-                !_.isEmpty(this.props.excludeSpeciesGroups) ||
-                !_.isEmpty(this.props.unexcludeSpecies)
+              const {allSpeciesGroups} = this.props.ebird;
+              const noneExcluded = (true
+                && this.props.excludeSpecies.size       === 0
+                && this.props.excludeSpeciesGroups.size === 0
+                && this.props.unexcludeSpecies.size     === 0
+              );
+              const allExcluded = (true
+                && this.props.excludeSpecies.size       === 0
+                && this.props.excludeSpeciesGroups.size === allSpeciesGroups.length // HACK Briefly breaks on ebird metadata update
+                && this.props.unexcludeSpecies.size     === 0
               );
               return (
-                <RectButton
-                  style={{
-                    justifyContent: 'center', // Vertical
-                    alignItems:     'center', // Horizontal
-                    width:          35,
-                    height:         35,
-                  }}
-                  enabled={enabled}
-                  onPress={() => this.props.settings.set({
+                <BrowseItemButton
+                  iconName='x'
+                  activeButtonColor={allExcluded ? iOSColors.red : iOSColors.yellow}
+                  active={!noneExcluded}
+                  onPress={() => this.props.settings.set(!noneExcluded ? {
                     excludeSpecies:       new Set(),
                     excludeSpeciesGroups: new Set(),
                     unexcludeSpecies:     new Set(),
+                  } : {
+                    excludeSpecies:       new Set(),
+                    excludeSpeciesGroups: new Set(this.props.ebird.allSpeciesGroups),
+                    unexcludeSpecies:     new Set(),
                   })}
-                >
-                  <Feather style={{
-                    // ...material.titleObject,
-                    ...material.headlineObject,
-                    // Have to style !enabled buttons ourselves
-                    ...(enabled ? {} : {
-                      color: iOSColors.gray,
-                    }),
-                  }}
-                    // TODO(unexclude_species): i/o resetting excludes, use this to toggle all on/off so it's easy to unexclude
-                    //  - This is the workflow substitute for includes (which we abandoned)
-                    //  - e.g. 'x-circle' -> all excludes go red -> tap a few excludes off -> filter to just a few groups
-                    // name={'refresh-ccw'}
-                    name={'x-circle'}
-                  />
-                </RectButton>
+                />
               );
             })}
 
@@ -367,35 +362,6 @@ export class BrowseScreen extends PureComponent<Props, State> {
 
 }
 
-function BrowseItemButton(props: {
-  iconName:          string,
-  activeButtonColor: string,
-  active:            boolean,
-  onPress:           () => void,
-}) {
-  return (
-    <RectButton
-      style={{
-        backgroundColor:  !props.active ? iOSColors.gray : props.activeButtonColor,
-        justifyContent:   'center',
-        alignItems:       'center',
-        width:            30,
-        height:           30,
-        borderRadius:     15,
-        marginHorizontal: 2,
-      }}
-      onPress={props.onPress}
-    >
-        <Feather style={{
-          ...material.buttonObject,
-          color: iOSColors.white,
-        }}
-        name={props.iconName}
-      />
-    </RectButton>
-  );
-}
-
 //
 // BrowseSectionHeader
 //  - Split out component so that it stays mounted across updates
@@ -470,7 +436,7 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
               const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
               if      (!exG.has(g)          ) { exG = setAdd  (exG, g); exS = setDiff (exS, ss); } // !exG         -> exG+g, exS-ss
               else if ( exG.has(g) && !unAny) { exG = setDiff (exG, g);                          } //  exG, !unAny -> exG-g
-              else if ( exG.has(g) &&  unAny) { unS = setDiff (unS, ss);                         } //  exG,  unAny -> unS-ss
+              else if ( exG.has(g) &&  unAny) { exG = setDiff (exG, g); unS = setDiff (unS, ss); } //  exG,  unAny -> exG-g, unS-ss
               return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
             });
           }}
@@ -587,6 +553,47 @@ export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> 
   };
 
 }
+
+//
+// BrowseItemButton
+//
+
+function BrowseItemButton(props: {
+  iconName:           string,
+  active:             boolean,
+  activeButtonColor:  string,
+  activeButtonStyle?: StyleProp<ViewStyle>,
+  onPress:            () => void,
+}) {
+  return (
+    <RectButton
+      style={[
+        {
+          backgroundColor:  !props.active ? iOSColors.gray : props.activeButtonColor,
+          justifyContent:   'center',
+          alignItems:       'center',
+          width:            30,
+          height:           30,
+          borderRadius:     15,
+          marginHorizontal: 2,
+        },
+        !props.active ? null : props.activeButtonStyle,
+      ]}
+      onPress={props.onPress}
+    >
+        <Feather style={{
+          ...material.buttonObject,
+          color: iOSColors.white,
+        }}
+        name={props.iconName}
+      />
+    </RectButton>
+  );
+}
+
+//
+// styles
+//
 
 const styles = StyleSheet.create({
 });
