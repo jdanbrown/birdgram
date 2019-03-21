@@ -4,6 +4,7 @@ import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from 'app/components/MetadataColumns';
+import { SortListResults, SortSearchResults } from 'app/components/SearchScreen';
 import { HARDCODED_PLACES } from 'app/data/places';
 import { Place, Quality, Species, SpeciesGroup } from 'app/datatypes';
 import { debug_print, Log, puts, rich } from 'app/log';
@@ -30,6 +31,8 @@ export interface Props {
   readonly n_per_sp: number;
   readonly n_recs: number;
   readonly filterQuality: Set<Quality>;
+  readonly sortListResults: SortListResults;
+  readonly sortSearchResults: SortSearchResults;
   readonly showMetadataLeft: boolean;
   readonly showMetadataBelow: boolean;
   readonly metadataColumnsLeft: Array<MetadataColumnLeft>;
@@ -66,6 +69,8 @@ export const DEFAULTS: Props = {
   n_per_sp: 3,  // For rec queries
   n_recs:   30, // For non-rec queries
   filterQuality: new Set<Quality>(['A', 'B']),
+  sortListResults: 'taxon_order',
+  sortSearchResults: 'slp__d_pc',
   showMetadataLeft: true,
   showMetadataBelow: false,
   metadataColumnsLeft: typed<Array<MetadataColumnLeft>>([
@@ -114,6 +119,8 @@ export const TYPES: {[key: string]: Array<string | Function>} = {
   n_per_sp: ['number'],
   n_recs: ['number'],
   filterQuality: [Set],
+  sortListResults: ['string'],
+  sortSearchResults: ['string'],
   showMetadataLeft: ['boolean'],
   showMetadataBelow: ['boolean'],
   metadataColumnsLeft: ['object'],
@@ -151,6 +158,8 @@ export const KEYS = [
   'n_per_sp',
   'n_recs',
   'filterQuality',
+  'sortListResults',
+  'sortSearchResults',
   'showMetadataLeft',
   'showMetadataBelow',
   'metadataColumnsLeft',
@@ -218,6 +227,8 @@ export class Settings implements SettingsWrites, Props {
     public readonly n_per_sp: number,
     public readonly n_recs: number,
     public readonly filterQuality: Set<Quality>,
+    public readonly sortListResults: SortListResults,
+    public readonly sortSearchResults: SortSearchResults,
     public readonly showMetadataLeft: boolean,
     public readonly showMetadataBelow: boolean,
     public readonly metadataColumnsLeft: Array<MetadataColumnLeft>,

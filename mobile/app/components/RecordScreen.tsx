@@ -1195,15 +1195,16 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
         {/* Clip lo/hi */}
         <RectButton style={styles.bottomControlsButton} onPress={() => {
-          if (this.props.editRecording) {
-            this.props.setStateProxy.setState((state, props) => ({
-              editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
-                ['off', () => 'lo'],
-                ['lo',  () => 'off'],
-                ['hi',  () => 'lo'],
-              ),
-            }))
-          }
+          // Don't auto-advance the controls, for the common case where you tap multiple times to get the clip right
+          // if (this.props.editRecording) {
+          //   this.props.setStateProxy.setState((state, props) => ({
+          //     editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
+          //       ['off', () => 'lo'],
+          //       ['lo',  () => 'off'],
+          //       ['hi',  () => 'lo'],
+          //     ),
+          //   }))
+          // }
         }}>
           <Feather style={[styles.bottomControlsButtonIcon, {
             color: (
@@ -1232,15 +1233,16 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           />
         </RectButton>
         <RectButton style={styles.bottomControlsButton} onPress={() => {
-          if (this.props.editRecording) {
-            this.props.setStateProxy.setState((state, props) => ({
-              editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
-                ['off', () => 'hi'],
-                ['lo',  () => 'hi'],
-                ['hi',  () => 'off'],
-              ),
-            }))
-          }
+          // Don't auto-advance the controls, for the common case where you tap multiple times to get the clip right
+          // if (this.props.editRecording) {
+          //   this.props.setStateProxy.setState((state, props) => ({
+          //     editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
+          //       ['off', () => 'hi'],
+          //       ['lo',  () => 'hi'],
+          //       ['hi',  () => 'off'],
+          //     ),
+          //   }))
+          // }
         }}>
           <Feather style={[styles.bottomControlsButtonIcon, Styles.rotate180, {
             color: (

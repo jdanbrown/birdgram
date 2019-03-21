@@ -190,7 +190,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
                       TODO / {place.species.length} species
                     </Text>
                     <Text style={material.caption}>
-                      {yaml(place.props).slice(1, -1)}
+                      {yaml(place.props || '').slice(1, -1)}
                     </Text>
                   </View>
                 </View>

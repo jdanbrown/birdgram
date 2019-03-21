@@ -519,7 +519,7 @@ export default class App extends PureComponent<Props, State> {
     );
   }
 
-  defaultPath:  string             = '/help';    // Which tab to open on first app launch
+  defaultPath:  string             = '/record';  // Which tab to open on first app launch
   priorityTabs: Array<TabRouteKey> = ['record']; // If one of these tabs opens at launch, lazy-load other tabs
   makeRoutes = (): Array<TabRoute> => [          // Must be a function, else screens won't update on App props/state change
     {
@@ -566,6 +566,8 @@ export default class App extends PureComponent<Props, State> {
           n_per_sp                = {this.state.settings!.n_per_sp}
           n_recs                  = {this.state.settings!.n_recs}
           filterQuality           = {this.state.settings!.filterQuality}
+          sortListResults         = {this.state.settings!.sortListResults}
+          sortSearchResults       = {this.state.settings!.sortSearchResults}
           showMetadataLeft        = {this.state.settings!.showMetadataLeft}
           showMetadataBelow       = {this.state.settings!.showMetadataBelow}
           metadataColumnsLeft     = {this.state.settings!.metadataColumnsLeft}

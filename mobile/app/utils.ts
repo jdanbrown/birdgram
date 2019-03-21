@@ -147,6 +147,13 @@ export function match<X, Y = X, X0 extends X = X>(x0: X0, ...cases: Array<[X | M
   throw new Error(`No cases matched: ${x0} not in ${cases}`);
 }
 
+export function matchKey<K extends string, X>(key: K, cases: {[key in K]: (key: K) => X}): X {
+  return matchUndefined(cases[key], {
+    undefined: () => { throw new Error(`No cases match: ${key} not in ${cases}`); },
+    x:         f  => f(key),
+  });
+}
+
 // Singleton match.default
 enum Match { Default }
 match.default = Match.Default;

@@ -52,9 +52,9 @@ import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
   all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, ifEmpty, ifNull,
-  into, json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait,
-  objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDiff, setToggle, shallowDiffPropsState, Sign,
-  Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
+  into, json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchKey, matchNull, matchUndefined,
+  noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDiff, setToggle, shallowDiffPropsState,
+  Sign, Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -139,6 +139,20 @@ export const Filters = {
 
 };
 
+export type SortListResults =
+  | 'taxon_order'
+  | 'xc_id'
+  | 'month_day'
+  | 'date'
+  | 'lat'
+  | 'lng'
+  | 'country__state'
+  | 'quality'
+
+export type SortSearchResults =
+  | 'slp__d_pc'
+  | 'd_pc'
+
 //
 // SearchScreen
 //
@@ -164,6 +178,8 @@ interface Props {
   range_n_per_sp:          Array<number>;
   range_n_recs:            Array<number>;
   filterQuality:           Set<Quality>;
+  sortListResults:         SortListResults;
+  sortSearchResults:       SortSearchResults;
   showMetadataLeft:        boolean;
   showMetadataBelow:       boolean;
   metadataColumnsLeft:     Array<MetadataColumnLeft>;
@@ -200,7 +216,6 @@ interface State {
   // TODO Persist filters with settings
   //  - Top-level fields instead of nested object so we can use state merging when updating them in isolation
   filterQueryText?: string;
-  sortResults: 'slp,d_pc' | 'd_pc';
   excludeRecs: Set<string>;
   recs: StateRecs;
   recsQueryTime?: number;
@@ -232,7 +247,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   static defaultProps = {
     range_n_sp:             [1, 2, 3, 5, 10, 25, 50, 100],
     range_n_per_sp:         _.range(1, 100 + 1),
-    range_n_recs:           [10, 25, 50, 100, 250, 500],
+    range_n_recs:           [10, 25, 50, 100, 250], // Stop at 250 b/c no build currently has >250 recs per sp
     spectroBase:            {height: 20, width: Dimensions.get('window').width},
     spectroScaleClamp:      {min: 1, max: 8},
     searchRecsMaxDurationS: 10.031,  // HACK Query max(search_recs.duration_s) from db on startup
@@ -246,12 +261,12 @@ export class SearchScreen extends PureComponent<Props, State> {
   state: State = {
     scrollViewKey:        '',
     scrollViewState:      this._scrollViewState,
-    // showGenericModal:     null, // TODO(more_recs): Restore
-    showGenericModal:     () => this.FiltersModal(),
+    showGenericModal:     null,
+    // showGenericModal:     () => this.FiltersModal(), // XXX Debug
+    // showGenericModal:     () => this.SortModal(), // XXX Debug
     showHelp:             false,
     query:                null,
     refreshQuery:         false,
-    sortResults:          'slp,d_pc',
     excludeRecs:          new Set(),
     recs:                 'loading',
     _spectroScale:        this.props.spectroScale, // Sync from/to Settings (2/3)
@@ -433,7 +448,16 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   }
 
-  randomPath = (seed?: number): string => {
+  // Make these both randomSpeciesPath i/o randomRecsPath because randomSpeciesPath is surprisingly more fun
+  //  - Also, randomRecsPath is really slow (TODO(slow_random)), so avoid it at least for defaultPath (else slow first UX)
+  defaultPath = (): string => this.randomSpeciesPath(); // On a blank path, e.g. when the app loads for the first time
+  shufflePath = (): string => this.randomSpeciesPath(); // On the 'shuffle' button
+
+  randomSpeciesPath = (): string => {
+    return `/species/${encodeURIComponent(chance.pickone(this.props.ebird.allSpecies))}`;
+  }
+
+  randomRecsPath = (seed?: number): string => {
     seed = seed !== undefined ? seed : chance.natural({max: 1e6});
     return `/random/${seed}`;
   }
@@ -561,7 +585,8 @@ export class SearchScreen extends PureComponent<Props, State> {
         !fastIsEqual(this.props.n_per_sp,             _.get(prevProps, 'n_per_sp')) ||
         !fastIsEqual(this.props.n_recs,               _.get(prevProps, 'n_recs')) ||
         !fastIsEqual(this.props.filterQuality,        _.get(prevProps, 'filterQuality')) ||
-        !fastIsEqual(this.state.sortResults,          _.get(prevState, 'sortResults')) ||
+        !fastIsEqual(this.props.sortListResults,      _.get(prevProps, 'sortListResults')) ||
+        !fastIsEqual(this.props.sortSearchResults,    _.get(prevProps, 'sortSearchResults')) ||
         !fastIsEqual(this.state.excludeRecs,          _.get(prevState, 'excludeRecs'))
       ) && (
         // Noop if location didn't change
@@ -638,6 +663,8 @@ export class SearchScreen extends PureComponent<Props, State> {
           return {recs: 'notfound'};
         },
 
+        // TODO(slow_random): Perf: Very slow (~5s on US) b/c full table scan
+        //  - Needs some kind of index, which probably means we need to replace random() with a materialized `random` col
         // TODO Weight species uniformly (e.g. select random species, then select random recs)
         // TODO Get deterministic results from seed [how? sqlite doesn't support random(seed) or hash()]
         random: async ({filters, seed}) => {
@@ -659,10 +686,20 @@ export class SearchScreen extends PureComponent<Props, State> {
               limit ${this.props.n_recs}
             )
             order by
-              taxon_order_num asc,
-              source_id desc
+              ${SQL.raw(matchKey(this.props.sortListResults, {
+                taxon_order:    () => 'taxon_order_num asc, random()',
+                xc_id:          () => 'xc_id desc',
+                month_day:      () => 'month_day asc',
+                date:           () => 'date desc',
+                lat:            () => 'lat desc', // +90 N -> -90 S
+                lng:            () => 'lng asc',  // -180 ~HI -> +180 ~NZ
+                country__state: () => 'country asc, state asc',
+                quality:        () => 'quality desc',
+              }))},
+              xc_id desc
           `, {
-            // logTruncate: null, // XXX Debug
+            logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
+            // logQueryPlan: true, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
             return {recs};
@@ -672,25 +709,30 @@ export class SearchScreen extends PureComponent<Props, State> {
         species: async ({filters, species}) => {
           log.info('updateForLocation: Querying recs for species', {species});
           return await this.props.db.query<XCRec>(sqlf`
-            select *
-            from (
-              select
-                *,
-                cast(taxon_order as real) as taxon_order_num
-              from search_recs S
-              where true
-                and species in (${species.split(',').map(x => _.trim(x).toUpperCase())})
-                ${SQL.raw(placeFilter('S'))} -- No results if selected species is outside of placeFilter
-                ${SQL.raw(qualityFilter('S'))}
-              order by
-                source_id desc
-              limit ${this.props.n_recs}
-            )
+            select
+              *,
+              cast(taxon_order as real) as taxon_order_num
+            from search_recs S
+            where true
+              and species in (${species.split(',').map(x => _.trim(x).toUpperCase())})
+              ${SQL.raw(placeFilter('S'))} -- No results if selected species is outside of placeFilter
+              ${SQL.raw(qualityFilter('S'))}
             order by
-              taxon_order_num asc,
-              source_id desc
+              ${SQL.raw(matchKey(this.props.sortListResults, {
+                taxon_order:    () => 'taxon_order_num asc, random()',
+                xc_id:          () => 'xc_id desc',
+                month_day:      () => 'month_day asc',
+                date:           () => 'date desc',
+                lat:            () => 'lat desc', // +90 N -> -90 S
+                lng:            () => 'lng asc',  // -180 ~HI -> +180 ~NZ
+                country__state: () => 'country asc, state asc',
+                quality:        () => 'quality desc',
+              }))},
+              xc_id desc
+            limit ${this.props.n_recs}
           `, {
-            // logTruncate: null, // XXX Debug
+            logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
+            // logQueryPlan: true, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
             return {recs};
@@ -806,7 +848,6 @@ export class SearchScreen extends PureComponent<Props, State> {
             // Construct query
             //  - Union `limit n` queries per species (b/c we don't have windowing)
             //  - Perf: We exclude .f_preds_* cols for faster load (ballpark ~2x)
-            //  - TODO this.state.sortResults ('slp,d_pc' / 'd_pc')
             const non_f_preds_cols = this.state.non_f_preds_cols!; // Set in componentDidMount
             const sqlPerSpecies = (
               ifEmpty(topSlps, () => [
@@ -852,10 +893,10 @@ export class SearchScreen extends PureComponent<Props, State> {
                 -- Must wrap subqueries in 'select * from (...)' else union complains about nested order by
                 ${SQL.raw(sqlPerSpecies.map(x => `select * from (${x})`).join(' union all '))}
               )
-              order by ${SQL.raw(puts(puts(this.state.sortResults) === 'slp,d_pc'
-                ? 'slp asc, d_pc asc'
-                : 'd_pc asc'
-              ))}
+              order by ${SQL.raw(matchKey(this.props.sortSearchResults, {
+                slp__d_pc: () => 'slp asc, d_pc asc',
+                d_pc:      () => 'd_pc asc',
+              }))}
             `;
 
             // Run query
@@ -1105,9 +1146,11 @@ export class SearchScreen extends PureComponent<Props, State> {
     const Separator = () => (
       <View style={{height: 5}}/>
     );
-    const buttonStyle = {
-      width:  40,
-      height: 40,
+    const buttonStyle: StyleProp<ViewStyle> = {
+      width:          40,
+      height:         40,
+      justifyContent: 'center', // Main axis
+      alignItems:     'center', // Cross axis (unless wrapped)
     };
     return (
       <this.GenericModal>
@@ -1222,6 +1265,104 @@ export class SearchScreen extends PureComponent<Props, State> {
     );
   }
 
+  SortModal = () => {
+    return (
+      <this.ActionModal title='Sort' actions={local(() => {
+        const buttonProps = (active: boolean) => ({
+          textColor:   iOSColors.black,
+          buttonColor: active ? iOSColors.orange : iOSColors.customGray,
+        });
+        return matchNull(this.state.query, {
+          null: ()    => [],
+          x:    query => matchQuery(query, {
+            none: () => [],
+            random: () => [
+              {
+                ...buttonProps(this.props.sortListResults === 'taxon_order'),
+                onPress: () => this.props.settings.set({sortListResults: 'taxon_order'}),
+                label: 'Taxo, then random',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'xc_id'),
+                onPress: () => this.props.settings.set({sortListResults: 'xc_id'}),
+                label: 'XC ID (new→old)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'month_day'),
+                onPress: () => this.props.settings.set({sortListResults: 'month_day'}),
+                label: 'Season (Jan→Dec)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'date'),
+                onPress: () => this.props.settings.set({sortListResults: 'date'}),
+                label: 'Date (new→old)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'lat'),
+                onPress: () => this.props.settings.set({sortListResults: 'lat'}),
+                label: 'Latitude (N→S)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'lng'),
+                onPress: () => this.props.settings.set({sortListResults: 'lng'}),
+                label: 'Longitude (W→E)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'country__state'),
+                onPress: () => this.props.settings.set({sortListResults: 'country__state'}),
+                label: 'Country/state (alphabetical)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'quality'),
+                onPress: () => this.props.settings.set({sortListResults: 'quality'}),
+                label: 'Quality (good→bad)',
+              },
+            ],
+            species: () => [
+              {
+                ...buttonProps(this.props.sortListResults === 'taxon_order'),
+                onPress: () => this.props.settings.set({sortListResults: 'taxon_order'}),
+                label: 'Random',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'xc_id'),
+                onPress: () => this.props.settings.set({sortListResults: 'xc_id'}),
+                label: 'XC ID (new→old)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'month_day'),
+                onPress: () => this.props.settings.set({sortListResults: 'month_day'}),
+                label: 'Season (Jan→Dec)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'date'),
+                onPress: () => this.props.settings.set({sortListResults: 'date'}),
+                label: 'Date (new→old)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'lat'),
+                onPress: () => this.props.settings.set({sortListResults: 'lat'}),
+                label: 'Latitude (N→S)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'lng'),
+                onPress: () => this.props.settings.set({sortListResults: 'lng'}),
+                label: 'Longitude (W→E)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'country__state'),
+                onPress: () => this.props.settings.set({sortListResults: 'country__state'}),
+                label: 'Country/state (alphabetical)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'quality'),
+                onPress: () => this.props.settings.set({sortListResults: 'quality'}),
+                label: 'Quality (good→bad)',
+              },
+            ],
+            rec: () => [
+              {
+                ...buttonProps(this.props.sortSearchResults === 'slp__d_pc'),
+                onPress: () => this.props.settings.set({sortSearchResults: 'slp__d_pc'}),
+                label: 'Species match, then similar recs',
+              }, {
+                ...buttonProps(this.props.sortSearchResults === 'd_pc'),
+                onPress: () => this.props.settings.set({sortSearchResults: 'd_pc'}),
+                label: 'Similar recs only (ignore species match)',
+              },
+            ],
+          }),
+        });
+      })} />
+    );
+  }
+
   showRecActionModal = async (rec: Rec) => {
     this.setState({
       sourceIdForActionModal: rec.source_id,
@@ -1241,7 +1382,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         marginHorizontal: 5,
         paddingVertical: 2,
         paddingHorizontal: 5,
-      } as ViewStyle,
+      },
     };
     return (
       <this.GenericModal>
@@ -1525,10 +1666,9 @@ export class SearchScreen extends PureComponent<Props, State> {
     <View style={styles.bottomControls}>
       {/* Random recs */}
       <this.BottomControlsButton
-        help='Random'
-        // iconProps={{name: 'refresh-ccw'}}
+        help='Shuffle'
         iconProps={{name: 'shuffle'}}
-        onPress={() => this.props.go('search', {path: this.randomPath()})}
+        onPress={() => this.props.go('search', {path: this.shufflePath()})}
       />
       {/* Reset filters */}
       <this.BottomControlsButton
@@ -1570,7 +1710,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         iconProps={{name: 'power'}}
         onPress={() => this.props.go('search', {path: `/species/${encodeURIComponent('_BLANK')}`})} // HACK No results via junk species
       /> */}
-      {/* Toggle sort: species probs / rec dist */}
+      {/* Toggle sort */}
       <this.BottomControlsButton
         help='Sort'
         iconProps={{name: 'chevrons-down'}}
@@ -1578,28 +1718,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         // iconProps={{name: 'arrow-down'}}
         // iconProps={{name: 'arrow-down-circle'}}
         onPress={() => this.setState({
-          showGenericModal: () => (
-            <this.ActionModal title='Sort' actions={[
-              // this.state.queryRec ? [ // TODO queryRec
-              {
-                label: 'Species match, then similar recs',
-                iconName: 'chevrons-down',
-                textColor: iOSColors.black,
-                buttonColor: this.state.sortResults === 'slp,d_pc' ? iOSColors.orange : iOSColors.customGray,
-                onPress: () => this.setState({
-                  sortResults: 'slp,d_pc',
-                })
-              }, {
-                label: 'Similar recs only (ignore species match)',
-                iconName: 'chevrons-down',
-                textColor: iOSColors.black,
-                buttonColor: this.state.sortResults === 'd_pc' ? iOSColors.orange : iOSColors.customGray,
-                onPress: () => this.setState({
-                  sortResults: 'd_pc',
-                })
-              },
-            ]} />
-          ),
+          showGenericModal: () => this.SortModal(),
         })}
       />
       {/* Toggle metadata: left */}
@@ -1872,7 +1991,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       iconName?: string,
       buttonColor?: string,
       textColor?: string,
-      buttonStyle?: ViewStyle,
+      buttonStyle?: StyleProp<ViewStyle>,
       dismiss?: boolean,
       onPress: () => void,
     }>,
@@ -1889,7 +2008,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       iconName?: string,
       buttonColor?: string,
       textColor?: string,
-      buttonStyle?: ViewStyle,
+      buttonStyle?: StyleProp<ViewStyle>,
       dismiss?: boolean,
       onPress: () => void,
     }>,
@@ -1905,7 +2024,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     iconName?: string,
     buttonColor?: string,
     textColor?: string,
-    buttonStyle?: ViewStyle,
+    buttonStyle?: StyleProp<ViewStyle>,
     dismiss?: boolean,
     onPress: () => void,
   }) => (
@@ -1913,8 +2032,8 @@ export class SearchScreen extends PureComponent<Props, State> {
       style={{
         // flex:             1, // Makes everything big
         flexDirection:    'row',
-        justifyContent:   'center', // Main axis
-        alignItems:       'center', // Cross axis (unless wrapped)
+        justifyContent:   'flex-start', // Main axis
+        alignItems:       'center',     // Cross axis (unless wrapped)
         padding:          10,
         marginHorizontal: 10,
         marginVertical:   2,
@@ -2003,9 +2122,9 @@ export class SearchScreen extends PureComponent<Props, State> {
         flex: 1,
       }}>
 
-        {/* Redirect: '/' -> '/random/:seed' */}
+        {/* Redirect: '/' -> default */}
         <Route exact path='/' render={() => (
-          <Redirect to={this.randomPath()} />
+          <Redirect to={this.defaultPath()} />
         )}/>
 
         {/* Loading spinner */}
