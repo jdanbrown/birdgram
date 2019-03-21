@@ -675,15 +675,16 @@ export default class App extends PureComponent<Props, State> {
           playingProgressInterval = {this.state.settings!.playingProgressInterval}
         />
       ),
-    }, {
-      key: 'help', route: {path: '/help'}, label: 'Help', iconName: iconForTab['help'],
-      badge: this.badgeForTab('help'),
-      render: props => (
-        <HelpScreen {...props}
-          // App globals
-          go = {this.go}
-        />
-      ),
+    // TODO(help_screen): Make HelpScreen useful
+    // }, {
+    //   key: 'help', route: {path: '/help'}, label: 'Help', iconName: iconForTab['help'],
+    //   badge: this.badgeForTab('help'),
+    //   render: props => (
+    //     <HelpScreen {...props}
+    //       // App globals
+    //       go = {this.go}
+    //     />
+    //   ),
     },
   ];
 
