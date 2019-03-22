@@ -639,7 +639,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         sqlf`and ${SQL.raw(table)}.quality in (${Array.from(this.props.filterQuality)})`
       );
       const placeFilter   = (table: string) => (
-        sqlf`and ${SQL.raw(table)}.species in (${this.props.place.species})`
+        sqlf`and ${SQL.raw(table)}.species in (${this.props.place.knownSpecies})`
       );
       const speciesFilter = (table: string) => (
         sqlf`and ${SQL.raw(table)}.species not in (${Array.from(this.props.excludeSpecies)})`

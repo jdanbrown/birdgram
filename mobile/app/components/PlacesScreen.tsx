@@ -61,16 +61,17 @@ interface State {
 
 export type PlaceItem = Place | PlaceLoading
 export interface PlaceLoading {
-  name:    string;            // Same as Place
-  // species: Array<Species>; // No species
-  props:   BarchartProps;     // props always defined, since we don't allow ebird.allPlace
+  name:    string;        // Same as Place
+  props:   BarchartProps; // props always defined, since we don't allow ebird.allPlace
+  // knownSpecies         // No species
+  // allSpeciesCodes      // No species
 }
 export function matchPlaceItem<X>(item: PlaceItem, cases: {
   place:        (place:        Place)        => X,
   placeLoading: (placeLoading: PlaceLoading) => X,
 }): X {
   return (
-    'species' in item ? cases.place(item) :
+    'knownSpecies' in item ? cases.place(item) :
     cases.placeLoading(item)
   );
 }
@@ -302,8 +303,12 @@ export class PlacesScreen extends PureComponent<Props, State> {
 
   placeFromPlaceLoading = async (placeLoading: PlaceLoading): Promise<Place> => {
     const {ebird} = this.props;
-    const species = await ebird.barchartSpecies(placeLoading.props);
-    return {...placeLoading, species};
+    const {allSpeciesCodes, knownSpecies} = await ebird.barchartSpecies(placeLoading.props);
+    return {
+      ...placeLoading,
+      allSpeciesCodes,
+      knownSpecies,
+    };
   }
 
   render = () => {
@@ -674,19 +679,20 @@ export class PlacesScreen extends PureComponent<Props, State> {
                               {place.name}
                             </Text>
                             <Text style={[material.caption, {color: iOSColors.black}]}>
-                              {/* TODO(place_n_species): Make this less confusing (n1/n2/n3) */}
-                              {/*   - place.species often includes species that aren't in the app (e.g. CR place in US app) */}
-                              {/*   - Most prominently, we want to show the number of place species that are in the app */}
-                              {/*   - Less prominently, we want to also show the total number of species for the place */}
-                              TODO / {matchPlaceItem(place, {
-                                place: place => (
-                                  <Text>
-                                    {place.species.length} species
-                                  </Text>
-                                ),
+                              {matchPlaceItem(place, {
                                 placeLoading: ()    => (
                                   <Text style={{color: iOSColors.red}}>
                                     (Loading...)
+                                  </Text>
+                                ),
+                                place: place => (
+                                  <Text>
+                                    {place.knownSpecies.length} species
+                                    {place.allSpeciesCodes.length - place.knownSpecies.length > 0 && (
+                                      <Text style={{color: material.captionObject.color}}>
+                                        {} (+{place.allSpeciesCodes.length - place.knownSpecies.length} not in app)
+                                      </Text>
+                                    )}
                                   </Text>
                                 ),
                               })}
@@ -737,13 +743,19 @@ export class PlacesScreen extends PureComponent<Props, State> {
   // Jam multi-select places through the existing settings.state.place code
   //  - TODO Expand settings.state .place -> .places for other screens [will require a small amount of refactoring]
   mergePlaces = (places: Array<Place>): null | Place => {
-    return (places.length === 0
-      ? null // -> ebird.allPlace (via App.place)
-      : {
-        species: _.uniq(_.flatMap(places, x => x.species)), // Here's what we're actually after
-        name:    `${places.length} places`,                 // Good enough
-        props:   {r: 'XXX'},                                // Hopefully this doesn't break anything...
-      }
+    return (
+      places.length === 0 ? (
+        null // -> ebird.allPlace (via App.place)
+      ) : places.length === 1 ? (
+        places[0]
+      ) : (
+        {
+          knownSpecies:    _.uniq(_.flatMap(places, x => x.knownSpecies)),    // What we're actually after
+          allSpeciesCodes: _.uniq(_.flatMap(places, x => x.allSpeciesCodes)), // What we're actually after
+          name:            `${places.length} places`,                         // Good enough
+          props:           {r: 'XXX'},                                        // Hopefully this doesn't break anything...
+        }
+      )
     );
   }
 

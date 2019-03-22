@@ -113,23 +113,16 @@ export class BrowseScreen extends PureComponent<Props, State> {
 
     // Precompute sections so we can figure out various indexes
     type Section = SectionListData<SpeciesMetadata>;
-    const allData = log.timed('allData', () => typed<SpeciesMetadata[]>(_.sortBy(
-      (_(this.props.place.species)
-        .flatMap(species => matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
-          undefined: () => [],
-          x:         m  => [m],
-        }))
-        .value()
-      ),
-      m => parseFloat(m.taxon_order),
-    )));
-    const data = log.timed('data', () => typed<SpeciesMetadata[]>(_.sortBy(
-      (_(allData)
-        .filter(m => matchesSearchFilter(m))
-        .value()
-      ),
-      m => parseFloat(m.taxon_order),
-    )));
+    const data = log.timed('data', () => typed<SpeciesMetadata[]>(
+      _(this.props.place.knownSpecies)
+      .flatMap(s => matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(s), {
+        undefined: () => [], // Should never happen, but degrade gracefully if it does
+        x:         m  => [m],
+      }))
+      .filter(m => matchesSearchFilter(m))
+      .sortBy(m => parseFloat(m.taxon_order))
+      .value()
+    ));
     const sections: Array<Section> = log.timed('sections', () => (
       _(data)
       .groupBy(m => m.species_group)
@@ -207,11 +200,7 @@ export class BrowseScreen extends PureComponent<Props, State> {
               ...material.body2Object,
               marginHorizontal: 5,
             }}>
-              {/* TODO(place_n_species): Make this less confusing (n1/n2/n3) */}
-              {/*   - n1: place.species often includes species that aren't in the app (e.g. CR place in US app) */}
-              {/*   - n2: allData is that minus species that aren't in the app */}
-              {/*   - n3: data is that minus species that don't match the searchFilter */}
-              Place: {this.props.place.name} ({data.length}/{allData.length}/{this.props.place.species.length} species)
+              Place: {this.props.place.name} ({data.length}/{this.props.place.knownSpecies.length} species)
             </Text>
 
             {/* Toggle-all button */}

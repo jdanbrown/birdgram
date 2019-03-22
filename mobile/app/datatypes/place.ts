@@ -1,13 +1,14 @@
 import jsonStableStringify from 'json-stable-stringify';
 import _ from 'lodash';
 
-import { Species } from 'app/datatypes';
+import { Species, SpeciesCode } from 'app/datatypes';
 import { BarchartProps } from 'app/ebird';
 
 export interface Place {
-  name:    string;
-  species: Array<Species>;
-  props:   BarchartProps | null; // null to allow ebird.allPlace
+  name:            string;
+  allSpeciesCodes: Array<SpeciesCode>;   // All species_code's from the ebird place (some of which we might not know)
+  knownSpecies:    Array<Species>;       // Species that could be resolved by the app (in country + known mappings)
+  props:           null | BarchartProps; // null to allow ebird.allPlace
 }
 
 export type PlaceId = string;

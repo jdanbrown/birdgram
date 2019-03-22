@@ -76,6 +76,7 @@ export class Ebird {
   ];
 
   allSpecies:                 Array<Species>;
+  allSpeciesCodes:            Array<SpeciesCode>;
   allSpeciesGroups:           Array<SpeciesGroup>;
   speciesFromSpeciesCode:     Map<SpeciesCode, Species>;
   speciesMetadataFromSpecies: Map<Species, SpeciesMetadata>;
@@ -85,6 +86,7 @@ export class Ebird {
     public metadataSpecies: MetadataSpecies,
   ) {
     this.allSpecies       = metadataSpecies.map(x => x.shorthand);
+    this.allSpeciesCodes  = metadataSpecies.map(x => x.species_code);
     this.allSpeciesGroups = _.uniq(metadataSpecies.map(x => x.species_group));
     // Manually map species_code -> species
     //  - XXX after we add species_code to datasets.metadata_from_dataset, which requires rebuilding the load._metadata
@@ -111,9 +113,10 @@ export class Ebird {
 
   get allPlace(): Place {
     return {
-      name:    config.env.APP_REGION,
-      species: this.allSpecies,
-      props:   null,
+      name:            config.env.APP_REGION,
+      knownSpecies:    this.allSpecies, // All species are known for the allPlace
+      allSpeciesCodes: this.allSpeciesCodes,
+      props:           null,
     };
   }
 
@@ -121,16 +124,21 @@ export class Ebird {
     return mapUndefined(this.speciesMetadataFromSpecies.get(species), x => x.species_group);
   }
 
-  barchartSpecies = async (props: BarchartProps): Promise<Array<Species>> => {
-    return _.flatMap(await Ebird.barchartSpeciesCodes(props), species_code => {
+  barchartSpecies = async (props: BarchartProps): Promise<{
+    allSpeciesCodes: Array<SpeciesCode>,
+    knownSpecies:    Array<Species>,
+  }> => {
+    const allSpeciesCodes = await Ebird.barchartSpeciesCodes(props);
+    const knownSpecies    = _.flatMap(allSpeciesCodes, species_code => {
       const species = this.speciesFromSpeciesCode.get(species_code);
       if (species === undefined) {
-        log.info(`barchartSpecies: Ignoring unknown species_code[${species_code}] ${yaml(props)}`);
+        log.info(`barchartSpecies: Unknown species_code[${species_code}] ${yaml(props)}`);
         return [];
       } else {
         return [species];
       }
     });
+    return {allSpeciesCodes, knownSpecies};
   }
 
   // Example:

@@ -362,6 +362,27 @@ export class Settings implements SettingsWrites, Props {
   // Serdes
   //
 
+  // Migrate data to/from older persisted versions
+  static migrations: Array<{
+    key:     keyof Props,
+    onParse: (x: any) => any,
+  }> = [
+    // 2018-03-22: Changed Place {name, props, species} -> {name, props, knownSpecies, allSpeciesCodes}
+    //  - Trash old versions
+    {
+      key: 'place', onParse: place => (
+        'knownSpecies' in place ? place : null
+      ),
+    }, {
+      key: 'savedPlaces', onParse: savedPlaces => (
+        _(savedPlaces)
+        .filter(item => 'knownSpecies' in item)
+        .value()
+      ),
+    },
+  ];
+
+  // Convert datatypes to/from json
   static conversions: Array<{
     type:        Array<string | Function>,
     onStringify: (x: any) => any,
@@ -376,9 +397,7 @@ export class Settings implements SettingsWrites, Props {
     var s;
     try {
       const t = TYPES[key];
-      Settings.conversions.forEach(conversion => {
-        if (_.isEqual(t, conversion.type)) x = conversion.onStringify(x);
-      });
+      Settings.conversions.forEach(f => { if (_.isEqual(t, f.type)) x = f.onStringify(x); });
       s = JSON.stringify(x);
     } catch (e) {
       const d = DEFAULTS[key as keyof Props];
@@ -393,9 +412,8 @@ export class Settings implements SettingsWrites, Props {
     try {
       x = JSON.parse(s);
       const t = TYPES[key];
-      Settings.conversions.forEach(conversion => {
-        if (_.isEqual(t, conversion.type)) x = conversion.onParse(x);
-      });
+      Settings.migrations  .forEach(f => { if (_.isEqual(key, f.key))  x = f.onParse(x); });
+      Settings.conversions .forEach(f => { if (_.isEqual(t,   f.type)) x = f.onParse(x); });
     } catch (e) {
       const d = DEFAULTS[key as keyof Props];
       log.warn(`parse: For key[${key}], failed to parse s[${s}], using default[${d}]`, e);

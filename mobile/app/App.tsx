@@ -720,7 +720,7 @@ export default class App extends PureComponent<Props, State> {
         browse:   () => (
           mapNull(this.place, place => (
             mapUndefined(this.state.ebird, ebird => {
-              const placeSpecies = new Set(place.species);
+              const placeSpecies = new Set(place.knownSpecies);
               const groupsSpecies = (groups: Set<string>): Array<Species> => {
                 return (
                   _(Array.from(groups))
@@ -745,7 +745,7 @@ export default class App extends PureComponent<Props, State> {
           <Text>
             {matchNull(this.place, {
               null: ()    => this.state.nSpecies,
-              x:    place => place.species.length,
+              x:    place => place.knownSpecies.length,
             })}
             {} sp
           </Text>
