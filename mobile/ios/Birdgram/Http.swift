@@ -46,6 +46,10 @@ class RNHttp: RCTEventEmitter, RNProxy {
 // TODO Expose more args
 // TODO Add non-String responses (e.g. Data/Json)
 //
+// TODO Increase timeout (e.g. ebird /barchart/CR failed at default 60s timeout)
+//  - https://github.com/Alamofire/Alamofire/issues/1644
+//  - https://stackoverflow.com/questions/41803856/set-timeout-in-alamofire
+//
 public func httpFetch(
   _ url: String
 ) -> Promise<String> {

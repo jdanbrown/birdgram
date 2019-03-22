@@ -7,16 +7,18 @@ import { BarchartProps } from 'app/ebird';
 export interface Place {
   name:    string;
   species: Array<Species>;
-  props:   BarchartProps | null;
+  props:   BarchartProps | null; // null to allow ebird.allPlace
 }
+
+export type PlaceId = string;
 
 export const Place = {
 
-  id: ({props}: Place): string => {
+  id: ({props}: Place): PlaceId => {
     return jsonStableStringify(props); // A bit verbose in our locations, but simple and sound
   },
 
-  find: (id: string, places: Array<Place>): Place | undefined => {
+  find: (id: PlaceId, places: Array<Place>): Place | undefined => {
     return _.find(places, place => id === Place.id(place))
   },
 

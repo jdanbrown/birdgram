@@ -4,8 +4,9 @@ import { AsyncStorage } from 'react-native';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from 'app/components/MetadataColumns';
+import { PlaceLoading } from 'app/components/PlacesScreen';
 import { SortListResults, SortSearchResults } from 'app/components/SearchScreen';
-import { Place, Quality, Species, SpeciesGroup } from 'app/datatypes';
+import { Place, PlaceId, Quality, Species, SpeciesGroup } from 'app/datatypes';
 import { debug_print, Log, puts, rich } from 'app/log';
 import { json, match, objectKeysTyped, pretty, typed, yaml } from 'app/utils';
 
@@ -48,8 +49,8 @@ export interface Props {
   readonly excludeSpeciesGroups: Set<SpeciesGroup>;
   readonly unexcludeSpecies:     Set<Species>;
   // For PlacesScreen
-  readonly savedPlaces: Array<Place>;
-  readonly places:      Set<Place>;
+  readonly savedPlaces: Array<Place | PlaceLoading>;
+  readonly places:      Set<PlaceId>;
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
@@ -248,8 +249,8 @@ export class Settings implements SettingsWrites, Props {
     public readonly excludeSpeciesGroups: Set<SpeciesGroup>,
     public readonly unexcludeSpecies:     Set<Species>,
     // For PlacesScreen
-    public readonly savedPlaces: Array<Place>,
-    public readonly places:      Set<Place>,
+    public readonly savedPlaces: Array<Place | PlaceLoading>,
+    public readonly places:      Set<PlaceId>,
   ) {}
 
   withProps(props: Partial<Props>): Settings {

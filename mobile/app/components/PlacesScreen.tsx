@@ -17,7 +17,7 @@ import Feather from 'react-native-vector-icons/Feather';
 
 import { config } from 'app/config';
 import { Geo, GeoCoords, GeoError } from 'app/components/Geo';
-import { matchSearchPathParams, Place, Species } from 'app/datatypes';
+import { matchSearchPathParams, Place, PlaceId, Species } from 'app/datatypes';
 import { BarchartProps, Ebird, HotspotFindResult, HotspotGeoResult, RegionFindResult } from 'app/ebird';
 import { debug_print, Log, puts, rich } from 'app/log';
 import { Go, Histories, History, Location } from 'app/router';
@@ -26,7 +26,7 @@ import { normalizeStyle, Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
   fastIsEqual, Fun, global, ifNull, json, local, mapNull, mapPop, mapUndefined, match, matchKey, matchNull,
-  parseFloatElseNaN, pretty, setAdd, setToggle, shallowDiffPropsState, typed, yaml, yamlPretty,
+  Omit, parseFloatElseNaN, pretty, setAdd, setToggle, shallowDiffPropsState, typed, yaml, yamlPretty,
 } from 'app/utils';
 
 const log = new Log('PlacesScreen');
@@ -44,8 +44,8 @@ interface Props {
   settings:        SettingsWrites;
   showDebug:       boolean;
   place:           Place; // TODO Replace settings .place->.places everywhere (small refactor)
-  savedPlaces:     Array<Place>;
-  places:          Set<Place>;
+  savedPlaces:     Array<Place | PlaceLoading>;
+  places:          Set<PlaceId>;
 }
 
 interface State {
@@ -57,6 +57,29 @@ interface State {
   // For debugging gps
   debugShowGeoCoords: GeoCoords | null;
   debugShowGeoError:  GeoError  | null;
+}
+
+export type PlaceItem = Place | PlaceLoading
+export interface PlaceLoading {
+  name:    string;            // Same as Place
+  // species: Array<Species>; // No species
+  props:   BarchartProps;     // props always defined, since we don't allow ebird.allPlace
+}
+export function matchPlaceItem<X>(item: PlaceItem, cases: {
+  place:        (place:        Place)        => X,
+  placeLoading: (placeLoading: PlaceLoading) => X,
+}): X {
+  return (
+    'species' in item ? cases.place(item) :
+    cases.placeLoading(item)
+  );
+}
+
+export function filterLoadedPlaces(items: Array<PlaceItem>): Array<Place> {
+  return _.flatMap(items, item => matchPlaceItem(item, {
+    place:        x => [x],
+    placeLoading: x => [],
+  }));
 }
 
 export interface PlaceSearchResult {
@@ -267,16 +290,20 @@ export class PlacesScreen extends PureComponent<Props, State> {
     );
   }
 
-  placeFromResult = async (result: PlaceSearchResult): Promise<Place> => {
-    const {ebird} = this.props;
+  placeLoadingFromResult = (result: PlaceSearchResult): PlaceLoading => {
     const {r, name} = result;
     const props: BarchartProps = {
       r,
       // TODO Let user control month/year (bmo,emo,byr,eyr)
       byr: 2008, // Hardcode last ~10y
     };
-    const species = await ebird.barchartSpecies(props);
-    return {name, species, props};
+    return {name, props};
+  }
+
+  placeFromPlaceLoading = async (placeLoading: PlaceLoading): Promise<Place> => {
+    const {ebird} = this.props;
+    const species = await ebird.barchartSpecies(placeLoading.props);
+    return {...placeLoading, species};
   }
 
   render = () => {
@@ -461,26 +488,47 @@ export class PlacesScreen extends PureComponent<Props, State> {
                     )
                   }
                   renderItem={({item: result, index}) => (
+
+                    // Add search result to saved places
                     <RectButton
                       onPress={async () => {
-                        const place = await this.placeFromResult(result);
+
                         // Hide search results
-                        //  - Easy to pull them back up (by tapping back in search bar)
+                        //  - (Easy to get them back: tap search bar)
                         this.setState({
                           showSearchResults: false,
                         });
-                        // Add place
-                        //  - TODO Show some indication that loading is happening
+
+                        // Add loading placeholder for fast user feedback
+                        //  - Loading the real place takes ~seconds and is confusing without feedback
+                        //  - (A PlaceLoading is a Place that doesn't know its species list yet)
+                        const placeLoading = await this.placeLoadingFromResult(result);
+                        this.props.settings.set(settings => ({
+                          savedPlaces: [
+                            // Add placeLoading (to top of list)
+                            placeLoading,
+                            // Remove place (id'd by barchart props) if already exists (e.g. further down in list)
+                            ...settings.savedPlaces.filter(x => !_.isEqual(x.props, placeLoading.props)),
+                          ],
+                        }));
+
+                        // Query ebird species for place (slow, ~seconds), and add place to savedPlaces
+                        //  - FIXME Surface failures to user (e.g. timeout after 60s on /barchart/CR)
+                        //    - Workaround: user is stuck with "(Loading...)" forever, which they can delete/retry
+                        const place = await this.placeFromPlaceLoading(placeLoading);
                         this.props.settings.set(settings => ({
                           savedPlaces: [
                             // Add place (to top of list)
                             place,
-                            // Remove place (id'd by barchart props) if already exists (e.g. further down in list)
+                            // Remove placeLoading (from top of list)
                             ...settings.savedPlaces.filter(x => !_.isEqual(x.props, place.props)),
                           ],
                         }));
+
                       }}
                     >
+
+                      {/* Search result */}
                       <View style={{
                         flex: 1,
                         flexDirection: 'column',
@@ -500,7 +548,9 @@ export class PlacesScreen extends PureComponent<Props, State> {
                           </Text>
                         </View>
                       </View>
+
                     </RectButton>
+
                   )}
                 />
               );
@@ -517,7 +567,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
                     top:    -1, // Hide top elem border under bottom border of title bar
                     bottom: -1, // Hide bottom elem border under top border of tab bar
                   }}
-                  data={typed<Array<Place>>([
+                  data={typed<Array<PlaceItem>>([
                     this.props.ebird.allPlace,
                     ...this.props.savedPlaces,
                   ])}
@@ -530,6 +580,8 @@ export class PlacesScreen extends PureComponent<Props, State> {
                     </View>
                   )}
                   renderItem={({item: place, index}) => (
+
+                    // Swipe to delete saved place
                     <Swipeable
                       // TODO Make content backgroundColor:red (like Overcast)
                       //  - Upgrade 1.0.8 -> 1.1.0 so we can try childrenContainerStyle
@@ -550,7 +602,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
                               this.props.settings.set(settings => ({
                                 savedPlaces: settings.savedPlaces.filter(x => !_.isEqual(x.props, place.props)),
                                 places:      new Set(), // HACK(place_id): Only way to clear orphaned junk, until place.id
-                                place:       this.mergePlaces(new Set()), // XXX Back compat (until we settings .place->.places)
+                                place:       this.mergePlaces([]), // XXX Back compat (until we settings .place->.places)
                               }));
                             }}
                           >
@@ -562,27 +614,51 @@ export class PlacesScreen extends PureComponent<Props, State> {
                         )
                       }
                     >
+
+                      {/* Button to select/unselect saved place */}
                       <RectButton
-                        onPress={() => {
-                          // FIXME(slow_places): Perf: really slow in dev (but no log.timed surfaces the bottleneck...)
-                          //  - Looks like BrowseScreen.render is the culprit -> make it not update in the bg
-                          this.props.settings.set(settings => {
-                            const places = setToggle(settings.places, place); // FIXME(place_id): Add place.id to do this correctly
-                            return {
-                              places,
-                              place: this.mergePlaces(places), // XXX Back compat (until we settings .place->.places)
-                            };
-                          });
-                          // this.props.go('search'); // TODO Helpful or not helpful?
-                        }}
+                        onPress={() => matchPlaceItem(place, {
+                          placeLoading: ()    => {},
+                          place:        place => {
+                            // FIXME(slow_places): Perf: really slow in dev (but no log.timed surfaces the bottleneck...)
+                            //  - Looks like BrowseScreen.render is the culprit -> make it not update in the bg
+                            this.props.settings.set(settings => {
+                              if (index === 0) { // ebird.allPlace
+                                const places = new Set();
+                                return {
+                                  places,
+                                  place: this.mergePlaces(Array.from(places)), // XXX Back compat (until we settings .place->.places)
+                                };
+                              } else {
+                                const placeId = Place.id(place);
+                                const places  = setToggle(settings.places, placeId);
+                                return {
+                                  places,
+                                  place: this.mergePlaces( // XXX Back compat (until we settings .place->.places)
+                                    _(settings.savedPlaces)
+                                    .thru(filterLoadedPlaces)
+                                    .filter(x => places.has(Place.id(x))) // places (new), not settings.places (old)
+                                    .value()
+                                  ),
+                                };
+                              }
+                            });
+                            // this.props.go('search'); // TODO Helpful or not helpful?
+                          },
+                        })}
                       >
+
+                        {/* Saved place */}
                         <View style={{
                           flex: 1,
                           flexDirection: 'column',
                           // FIXME(place_id): Add place.id to do this correctly
                           backgroundColor: (
                             this.props.places.size === 0 && index === 0 // ebird.allPlace
-                            || this.props.places.has(place)
+                            || matchPlaceItem(place, {
+                              placeLoading: ()    => false,
+                              place:        place => this.props.places.has(Place.id(place)),
+                            })
                             ? iOSColors.lightGray : iOSColors.white
                           ),
                           padding: 5,
@@ -602,15 +678,29 @@ export class PlacesScreen extends PureComponent<Props, State> {
                               {/*   - place.species often includes species that aren't in the app (e.g. CR place in US app) */}
                               {/*   - Most prominently, we want to show the number of place species that are in the app */}
                               {/*   - Less prominently, we want to also show the total number of species for the place */}
-                              TODO / {place.species.length} species
+                              TODO / {matchPlaceItem(place, {
+                                place: place => (
+                                  <Text>
+                                    {place.species.length} species
+                                  </Text>
+                                ),
+                                placeLoading: ()    => (
+                                  <Text style={{color: iOSColors.red}}>
+                                    (Loading...)
+                                  </Text>
+                                ),
+                              })}
                             </Text>
                             <Text style={material.caption}>
                               {yaml(place.props || '').slice(1, -1)}
                             </Text>
                           </View>
                         </View>
+
                       </RectButton>
+
                     </Swipeable>
+
                   )}
                 />
               );
@@ -646,13 +736,13 @@ export class PlacesScreen extends PureComponent<Props, State> {
 
   // Jam multi-select places through the existing settings.state.place code
   //  - TODO Expand settings.state .place -> .places for other screens [will require a small amount of refactoring]
-  mergePlaces = (places: Set<Place>): null | Place => {
-    return (places.size === 0
+  mergePlaces = (places: Array<Place>): null | Place => {
+    return (places.length === 0
       ? null // -> ebird.allPlace (via App.place)
       : {
-        species: _.uniq(_.flatMap(Array.from(places), x => x.species)), // Here's what we're actually after
-        name:    `${places.size} places`,                               // Good enough
-        props:   {r: 'XXX'},                                            // Hopefully this doesn't break anything...
+        species: _.uniq(_.flatMap(places, x => x.species)), // Here's what we're actually after
+        name:    `${places.length} places`,                 // Good enough
+        props:   {r: 'XXX'},                                // Hopefully this doesn't break anything...
       }
     );
   }

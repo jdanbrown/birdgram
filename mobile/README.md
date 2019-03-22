@@ -41,7 +41,7 @@ $ yarn jest --watch
   - ~4h to show up as "Processing" ("Upload Date" in console) + ~6h until "completed processing" (via email)
   - (CA100: ~5m until "completed processing" email)
 3. Manually submit for beta review
-  - By adding the build to the external testers group
+  - By adding the build to the external testers group ("Group: public testers")
 4. Apple takes 0m to "Approve" for external testers
   - Takes ~days for the first build of a new app (e.g. 41h for US, 30h for CR)
 ```sh
