@@ -801,12 +801,13 @@ export class RecordScreen extends Component<Props, State> {
             []                                                                                    // lo = hi -> reset (weird edge case)
           );
 
-          // Advance editClipMode (lo -> hi -> off)
-          //  - Let user manually press the lo/hi buttons when they want to redo
-          const editClipMode = match<EditClipMode, EditClipMode>(state.editClipMode,
-            ['lo',  () => 'hi'],
-            ['hi',  () => 'off'],
-          );
+          // XXX Don't auto-advance the controls, for the common case where you tap multiple times to get the clip right
+          // // Advance editClipMode (lo -> hi -> off)
+          // //  - Let user manually press the lo/hi buttons when they want to redo
+          // const editClipMode = match<EditClipMode, EditClipMode>(state.editClipMode,
+          //   ['lo',  () => 'hi'],
+          //   ['hi',  () => 'off'],
+          // );
 
           // Return new state
           return {
@@ -1195,16 +1196,15 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
 
         {/* Clip lo/hi */}
         <RectButton style={styles.bottomControlsButton} onPress={() => {
-          // Don't auto-advance the controls, for the common case where you tap multiple times to get the clip right
-          // if (this.props.editRecording) {
-          //   this.props.setStateProxy.setState((state, props) => ({
-          //     editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
-          //       ['off', () => 'lo'],
-          //       ['lo',  () => 'off'],
-          //       ['hi',  () => 'lo'],
-          //     ),
-          //   }))
-          // }
+          if (this.props.editRecording) {
+            this.props.setStateProxy.setState((state, props) => ({
+              editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
+                ['off', () => 'lo'],
+                ['lo',  () => 'off'],
+                ['hi',  () => 'lo'],
+              ),
+            }))
+          }
         }}>
           <Feather style={[styles.bottomControlsButtonIcon, {
             color: (
@@ -1233,16 +1233,15 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           />
         </RectButton>
         <RectButton style={styles.bottomControlsButton} onPress={() => {
-          // Don't auto-advance the controls, for the common case where you tap multiple times to get the clip right
-          // if (this.props.editRecording) {
-          //   this.props.setStateProxy.setState((state, props) => ({
-          //     editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
-          //       ['off', () => 'hi'],
-          //       ['lo',  () => 'hi'],
-          //       ['hi',  () => 'off'],
-          //     ),
-          //   }))
-          // }
+          if (this.props.editRecording) {
+            this.props.setStateProxy.setState((state, props) => ({
+              editClipMode: match<EditClipMode, EditClipMode>(state.editClipMode,
+                ['off', () => 'hi'],
+                ['lo',  () => 'hi'],
+                ['hi',  () => 'off'],
+              ),
+            }))
+          }
         }}>
           <Feather style={[styles.bottomControlsButtonIcon, Styles.rotate180, {
             color: (
