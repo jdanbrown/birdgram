@@ -79,6 +79,7 @@ export interface ImageSource {
 
 export interface Props {
   // App globals
+  visible: boolean; // Manual visible/dirty to avoid background updates
   modelsSearch: ModelsSearch;
   location: Location;
   go: Go;
@@ -99,6 +100,7 @@ export interface Props {
 }
 
 interface State {
+  dirtyUpdateForLocation: boolean;
   showMoreDebug: boolean;
   recordingState: RecordingState;
   recordingUserMetadata: UserMetadata | null;
@@ -152,6 +154,7 @@ export class RecordScreen extends Component<Props, State> {
   };
 
   state: State = {
+    dirtyUpdateForLocation: false,
     showMoreDebug: false,
     recordingState: 'stopped',
     recordingUserMetadata: null,
@@ -231,6 +234,7 @@ export class RecordScreen extends Component<Props, State> {
   }
 
   shouldComponentUpdate = (nextProps: Props, nextState: State): boolean => {
+    // log.info('shouldComponentUpdate', () => rich(shallowDiffPropsState(nextProps, nextState, this.props, this.state))); // Debug
 
     // Throttle update/render if NativeSpectro has produced more spectros than we have consumed
     //  - Not a foolproof approach to keeping the UI responsive, but it seems to be a good first step
@@ -264,12 +268,34 @@ export class RecordScreen extends Component<Props, State> {
     }
 
     // Show this.props.location
-    await this.updateForLocation(prevProps.location);
+    await this.updateForLocation(prevProps);
 
   }
 
-  updateForLocation = async (prevLocation: null | Location) => {
-    if (!locationPathIsEqual(this.props.location, prevLocation)) {
+  updateForLocation = async (prevProps: null | Props) => {
+    const {visible} = this.props;
+    const dirty     = this.state.dirtyUpdateForLocation;
+    if (
+      !(
+        // Don't noop if we're visible and dirty (i.e. we just became visible, and some props/state changed in the meantime)
+        visible && dirty
+      ) && (
+        // Noop if location didn't change
+        locationPathIsEqual(this.props.location, _.get(prevProps, 'location'))
+      )
+    ) {
+      log.info('updateForLocation: Skipping');
+    } else {
+
+      // Manual visible/dirty to avoid background updates (type 2: updateFor*)
+      //  - If some props/state changed, mark dirty
+      if (!visible && !dirty) this.setState({dirtyUpdateForLocation: true});
+      //  - If we just became visible, mark undirty
+      if (visible && dirty) this.setState({dirtyUpdateForLocation: false});
+      //  - If we aren't visible, noop
+      if (!visible) return;
+
+      const prevLocation = _.get(prevProps, 'location');
       if (![
         'stopped',          // Safe: no recording in progress
         'loading-for-edit', // Safe: no recording in progress [else we drop transitions on go->go races]
@@ -366,6 +392,7 @@ export class RecordScreen extends Component<Props, State> {
 
         });
       }
+
     }
   }
 

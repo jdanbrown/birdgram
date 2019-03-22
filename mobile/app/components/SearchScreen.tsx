@@ -159,6 +159,7 @@ export type SortSearchResults =
 
 interface Props {
   // App globals
+  visible:                 boolean; // Manual visible/dirty to avoid background updates
   serverConfig:            ServerConfig;
   modelsSearch:            ModelsSearch;
   location:                Location;
@@ -202,6 +203,7 @@ interface Props {
 }
 
 interface State {
+  dirtyUpdateForLocation: boolean;
   scrollViewKey: string;
   scrollViewState: ScrollViewState;
   showGenericModal: null | (() => ReactNode);
@@ -258,17 +260,18 @@ export class SearchScreen extends PureComponent<Props, State> {
   };
 
   state: State = {
-    scrollViewKey:        '',
-    scrollViewState:      this._scrollViewState,
-    showGenericModal:     null,
-    // showGenericModal:     () => this.FiltersModal(), // XXX Debug
-    // showGenericModal:     () => this.SortModal(), // XXX Debug
-    showHelp:             false,
-    query:                null,
-    refreshQuery:         false,
-    excludeRecs:          new Set(),
-    recs:                 'loading',
-    _spectroScale:        this.props.spectroScale, // Sync from/to Settings (2/3)
+    dirtyUpdateForLocation: false,
+    scrollViewKey:          '',
+    scrollViewState:        this._scrollViewState,
+    showGenericModal:       null,
+    // showGenericModal:       () => this.FiltersModal(), // XXX Debug
+    // showGenericModal:       () => this.SortModal(), // XXX Debug
+    showHelp:               false,
+    query:                  null,
+    refreshQuery:           false,
+    excludeRecs:            new Set(),
+    recs:                   'loading',
+    _spectroScale:          this.props.spectroScale, // Sync from/to Settings (2/3)
   };
 
   // Getters for props
@@ -566,12 +569,16 @@ export class SearchScreen extends PureComponent<Props, State> {
   }
 
   updateForLocation = async (prevProps: null | Props, prevState: null | State) => {
+    const {visible} = this.props;
+    const dirty     = this.state.dirtyUpdateForLocation;
     log.debug('updateForLocation', () => (prevProps === null && prevState === null
       ? rich({prevProps, prevState, props: '[OMITTED]', state: '[OMITTED]'}) // null->{props,state} is very noisy (e.g. xcode logs)
       : rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state))
     ));
     if (
       !(
+        // Don't noop if we're visible and dirty (i.e. we just became visible, and some props/state changed in the meantime)
+        visible && dirty ||
         // Don't noop if any filters/limits changed [XXX(put_all_query_state_in_location)]
         //  - Use refreshQuery as a proxy for various filters/limits changing
         this.state.refreshQuery ||
@@ -598,6 +605,14 @@ export class SearchScreen extends PureComponent<Props, State> {
       log.info('updateForLocation: Skipping');
     } else {
       const timer = new Timer();
+
+      // Manual visible/dirty to avoid background updates (type 2: updateFor*)
+      //  - If some props/state changed, mark dirty
+      if (!visible && !dirty) this.setState({dirtyUpdateForLocation: true});
+      //  - If we just became visible, mark undirty
+      if (visible && dirty) this.setState({dirtyUpdateForLocation: false});
+      //  - If we aren't visible, noop
+      if (!visible) return;
 
       // Set loading state
       //  - TODO Fade previous recs instead of showing a blank screen while loading

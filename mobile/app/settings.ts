@@ -371,12 +371,12 @@ export class Settings implements SettingsWrites, Props {
     //  - Trash old versions
     {
       key: 'place', onParse: place => (
-        'knownSpecies' in place ? place : null
+        _.has(place, 'knownSpecies') ? place : null
       ),
     }, {
       key: 'savedPlaces', onParse: savedPlaces => (
         _(savedPlaces)
-        .filter(item => 'knownSpecies' in item)
+        .filter(item => _.has(item, 'knownSpecies'))
         .value()
       ),
     },
@@ -400,6 +400,7 @@ export class Settings implements SettingsWrites, Props {
       Settings.conversions.forEach(f => { if (_.isEqual(t, f.type)) x = f.onStringify(x); });
       s = JSON.stringify(x);
     } catch (e) {
+      // console.warn(e); // XXX Debug
       const d = DEFAULTS[key as keyof Props];
       log.warn(`stringify: For key[$key], failed to stringify x[${x}], using default[${d}]`, e);
       s = JSON.stringify(d);
@@ -415,6 +416,7 @@ export class Settings implements SettingsWrites, Props {
       Settings.migrations  .forEach(f => { if (_.isEqual(key, f.key))  x = f.onParse(x); });
       Settings.conversions .forEach(f => { if (_.isEqual(t,   f.type)) x = f.onParse(x); });
     } catch (e) {
+      // console.warn(e); // XXX Debug
       const d = DEFAULTS[key as keyof Props];
       log.warn(`parse: For key[${key}], failed to parse s[${s}], using default[${d}]`, e);
       x = d;
@@ -441,7 +443,7 @@ export class Settings implements SettingsWrites, Props {
   static keyHasTypeOfValue(key: string, value: any) {
     return _.some(TYPES[key], t => (
       t === typeof value ||   // e.g. 'boolean', 'object'
-      t === value.constructor // e.g. Set
+      t === _.get(value, 'constructor') // e.g. Set
     ));
   }
 

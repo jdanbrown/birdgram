@@ -39,8 +39,9 @@ import { NativeSpectro } from 'app/native/Spectro';
 import { NativeTagLib } from 'app/native/TagLib';
 import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import {
-  createDefaultHistories, getTabLocations, go, Go, GoTo, Histories, HistoryConsumer, loadHistories, locationPathIsEqual,
-  matchTabName, ObserveHistory, RouterWithHistory, saveHistories, TabHistories, TabLocations, TabName,
+  createDefaultHistories, getTabLocations, go, Go, GoTo, Histories, History, HistoryConsumer, loadHistories, Location,
+  locationPathIsEqual, matchTabName, ObserveHistory, RouterWithHistory, saveHistories, TabHistories, TabLocations,
+  TabName,
 } from 'app/router';
 import { Settings, SettingsProxy, SettingsWrites } from 'app/settings';
 import { querySql } from 'app/sql';
@@ -487,7 +488,7 @@ export default class App extends PureComponent<Props, State> {
                       <TabRoutes
                         tabLocation={location}
                         histories={this.state.histories!}
-                        routes={this.makeRoutes()}
+                        routes={this.makeRoutes(locationTabs, historyTabs)}
                         defaultPath={this.defaultPath}
                         priorityTabs={this.priorityTabs}
                       />
@@ -519,17 +520,21 @@ export default class App extends PureComponent<Props, State> {
     );
   }
 
-  defaultPath:  string             = '/record';  // Which tab to open on first app launch
-  priorityTabs: Array<TabRouteKey> = ['record',  // If one of these tabs opens at launch, lazy-load other tabs
-    'places', // XXX(place_search): Faster dev
+  // Which tab to open on first app launch
+  defaultPath:  string             = '/record';
+  // If one of these tabs opens at launch, lazy-load other tabs
+  priorityTabs: Array<TabRouteKey> = [
+    'record',
   ];
-  makeRoutes = (): Array<TabRoute> => [          // Must be a function, else screens won't update on App props/state change
+  // Must be a function, else screens won't update on App props/state change
+  makeRoutes = (locationTabs: Location, historyTabs: History): Array<TabRoute> => [
     {
       key: 'record', route: {path: '/record'}, label: 'Record', iconName: iconForTab['record'],
       badge: this.badgeForTab('record'),
       render: props => (
         <RecordScreen {...props}
           // App globals
+          visible                 = {locationTabs.pathname === '/record'} // Requires dirty* to avoid excessive updates
           modelsSearch            = {this.state.modelsSearch!}
           go                      = {this.go}
           geo                     = {this.state.geo!}
@@ -554,6 +559,7 @@ export default class App extends PureComponent<Props, State> {
       render: props => (
         <SearchScreen {...props}
           // App globals
+          visible                 = {locationTabs.pathname === '/search'} // Manual visible/dirty to avoid background updates
           serverConfig            = {this.state.serverConfig!}
           modelsSearch            = {this.state.modelsSearch!}
           go                      = {this.go}
@@ -594,6 +600,7 @@ export default class App extends PureComponent<Props, State> {
       render: props => (
         <BrowseScreen {...props}
           // App globals
+          visible                 = {locationTabs.pathname === '/browse'} // Manual visible/dirty to avoid background updates
           go                      = {this.go}
           ebird                   = {this.state.ebird!}
           place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)

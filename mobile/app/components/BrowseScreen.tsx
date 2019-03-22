@@ -1,5 +1,6 @@
 import _ from 'lodash';
 import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
+import shallowCompare from 'react-addons-shallow-compare';
 import RN, {
   ActivityIndicator, Dimensions, FlatList, FlexStyle, GestureResponderEvent, Image, ImageStyle,
   LayoutChangeEvent, Modal, Platform, RegisteredStyle, ScrollView, SectionList, SectionListData,
@@ -43,6 +44,7 @@ const log = new Log('BrowseScreen');
 
 interface Props {
   // App globals
+  visible:              boolean; // Requires shouldComponentUpdate to avoid excessive updates
   location:             Location;
   history:              History;
   histories:            Histories;
@@ -60,7 +62,7 @@ interface State {
   searchFilter: string;
 }
 
-export class BrowseScreen extends PureComponent<Props, State> {
+export class BrowseScreen extends Component<Props, State> {
 
   log = new Log('BrowseScreen');
 
@@ -82,6 +84,20 @@ export class BrowseScreen extends PureComponent<Props, State> {
   componentWillUnmount = () => {
     this.log.info('componentWillUnmount');
   };
+
+  shouldComponentUpdate = (nextProps: Props, nextState: State): boolean => {
+    log.info('shouldComponentUpdate', () => rich(shallowDiffPropsState(nextProps, nextState, this.props, this.state))); // Debug
+
+    // Manual visible/dirty to avoid background updates (type 1: shouldComponentUpdate)
+    //  - If not visible, never update
+    //  - If just became visible, always update
+    if (!nextProps.visible) return false;
+    if (nextProps.visible && !this.props.visible) return true;
+
+    // Else mimic PureComponent
+    return shallowCompare(this, nextProps, nextState);
+
+  }
 
   componentDidUpdate = (prevProps: Props, prevState: State) => {
     // Noisy (in xcode)

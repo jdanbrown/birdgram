@@ -625,8 +625,6 @@ export class PlacesScreen extends PureComponent<Props, State> {
                         onPress={() => matchPlaceItem(place, {
                           placeLoading: ()    => {},
                           place:        place => {
-                            // FIXME(slow_places): Perf: really slow in dev (but no log.timed surfaces the bottleneck...)
-                            //  - Looks like BrowseScreen.render is the culprit -> make it not update in the bg
                             this.props.settings.set(settings => {
                               if (index === 0) { // ebird.allPlace
                                 const places = new Set();
@@ -648,7 +646,6 @@ export class PlacesScreen extends PureComponent<Props, State> {
                                 };
                               }
                             });
-                            // this.props.go('search'); // TODO Helpful or not helpful?
                           },
                         })}
                       >

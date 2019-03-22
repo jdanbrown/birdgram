@@ -112,6 +112,8 @@ export class TabRoutes extends PureComponent<Props, State> {
 
   render = () => {
     log.info('render');
+    const matchedRouteIndex = this.matchedRouteIndex(this.props.routes, this.props.tabLocation);
+    const matchedRoute      = this.matchedRoute(this.props.routes, this.props.tabLocation);
     return (
       <View style={{flex: 1}}>
 
@@ -122,7 +124,7 @@ export class TabRoutes extends PureComponent<Props, State> {
         <Route exact path='/' component={this.RedirectToDefaultPath} />
 
         {/* NOTE Don't warn on unknown route, else we'd warn on every redirect (because we can't use Switch -- see above) */}
-        {/* {this.matchedRouteIndex(this.props.routes, this.props.tabLocation) === -1 && (
+        {/* {matchedRouteIndex === -1 && (
           <Warn msg={`No route for tabLocation[${yaml(this.props.tabLocation)}]`}>
             <this.RedirectToDefaultPath/>
           </Warn>
@@ -137,7 +139,7 @@ export class TabRoutes extends PureComponent<Props, State> {
           animationEnabled={false}
           onIndexChange={index => {}} // WARNING Ignored b/c <TabBar/> would call it, but we override it in renderTabBar
           navigationState={{
-            index: this.matchedRouteIndex(this.props.routes, this.props.tabLocation),
+            index: matchedRouteIndex,
             routes: this.props.routes.map(route => ({
               key: route.key,
               label: route.label,
