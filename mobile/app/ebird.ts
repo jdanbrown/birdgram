@@ -55,18 +55,24 @@ export class Ebird {
   static api_key = 'jfekjedvescr' // HACK Rudely copied from ebird.org source (and we'll break when they rotate it)
 
   static extraMappingsForSpeciesCode: Array<ExtraMapping<SpeciesCode>> = [
-    // Map changes from lumps/splits
-    //  - cf. py metadata.ebird.com_names_to_species
-    {k: 'mexduc', toK: 'mallar'}, // https://en.wikipedia.org/wiki/Mexican_duck
+
     // Map changes in species_code
     {k: 'mallar3', toK: 'mallar'},
     {k: 'reevir1', toK: 'reevir'},
+
     // TODO Maybe these waterbirds are missing b/c no recs in xc?
     //  - I forget whether I include or exclude sp's with no xc recs...
     // {k: 'hergul', toK: TODO}, // Why missing? Herring gull [https://birdsna.org/Species-Account/bna/species/hergul]
     // {k: 'y00478', toK: TODO}, // Why missing? Iceland gull [https://birdsna.org/Species-Account/bna/species/y00478]
     // {k: 'norgan', toK: TODO}, // Why missing? Northern gannet [https://birdsna.org/Species-Account/bna/species/norgan]
     // TODO Find more...
+
+    // XXX Have to lump/split upstream in paylods.py -- trying to do it here causes bad side effects
+    //  - e.g. BrowseScreen -> multiple items with the same key error (e.g. Mallard row shows up twice, b/c mexduc -> mallar)
+    // Map changes from lumps/splits
+    //  - cf. py metadata.ebird.com_names_to_species
+    // {k: 'mexduc', toK: 'mallar'}, // https://en.wikipedia.org/wiki/Mexican_duck
+
   ];
 
   allSpecies:                 Array<Species>;

@@ -26,7 +26,7 @@ import { normalizeStyle, Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
   fastIsEqual, Fun, global, ifNull, json, local, mapNull, mapPop, mapUndefined, match, matchKey, matchNull,
-  parseFloatElseNaN, pretty, shallowDiffPropsState, typed, yaml, yamlPretty,
+  parseFloatElseNaN, pretty, setAdd, setToggle, shallowDiffPropsState, typed, yaml, yamlPretty,
 } from 'app/utils';
 
 const log = new Log('PlacesScreen');
@@ -43,8 +43,9 @@ interface Props {
   // Settings
   settings:        SettingsWrites;
   showDebug:       boolean;
-  place:           Place;
-  places:          Array<Place>;
+  place:           Place; // TODO Replace settings .place->.places everywhere (small refactor)
+  savedPlaces:     Array<Place>;
+  places:          Set<Place>;
 }
 
 interface State {
@@ -471,11 +472,11 @@ export class PlacesScreen extends PureComponent<Props, State> {
                         // Add place
                         //  - TODO Show some indication that loading is happening
                         this.props.settings.set(settings => ({
-                          places: [
+                          savedPlaces: [
                             // Add place (to top of list)
                             place,
                             // Remove place (id'd by barchart props) if already exists (e.g. further down in list)
-                            ...settings.places.filter(x => !_.isEqual(x.props, place.props)),
+                            ...settings.savedPlaces.filter(x => !_.isEqual(x.props, place.props)),
                           ],
                         }));
                       }}
@@ -518,7 +519,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
                   }}
                   data={typed<Array<Place>>([
                     this.props.ebird.allPlace,
-                    ...this.props.places,
+                    ...this.props.savedPlaces,
                   ])}
                   keyExtractor={(place, index) => yaml(place.props)}
                   ListEmptyComponent={(
@@ -547,7 +548,9 @@ export class PlacesScreen extends PureComponent<Props, State> {
                             onPress={() => {
                               // Remove place (id'd by barchart props)
                               this.props.settings.set(settings => ({
-                                places: settings.places.filter(x => !_.isEqual(x.props, place.props)),
+                                savedPlaces: settings.savedPlaces.filter(x => !_.isEqual(x.props, place.props)),
+                                places:      new Set(), // HACK(place_id): Only way to clear orphaned junk, until place.id
+                                place:       this.mergePlaces(new Set()), // XXX Back compat (until we settings .place->.places)
                               }));
                             }}
                           >
@@ -562,14 +565,25 @@ export class PlacesScreen extends PureComponent<Props, State> {
                       <RectButton
                         onPress={() => {
                           // FIXME Perf: really slow in dev (but no log.timed surfaces the bottleneck...)
-                          this.props.settings.set({place});
+                          this.props.settings.set(settings => {
+                            const places = setToggle(settings.places, place); // FIXME(place_id): Add place.id to do this correctly
+                            return {
+                              places,
+                              place: this.mergePlaces(places), // XXX Back compat (until we settings .place->.places)
+                            };
+                          });
                           // this.props.go('search'); // TODO Helpful or not helpful?
                         }}
                       >
                         <View style={{
                           flex: 1,
                           flexDirection: 'column',
-                          backgroundColor: fastIsEqual(place, this.props.place) ? iOSColors.lightGray : iOSColors.white,
+                          // FIXME(place_id): Add place.id to do this correctly
+                          backgroundColor: (
+                            this.props.places.size === 0 && index === 0 // ebird.allPlace
+                            || this.props.places.has(place)
+                            ? iOSColors.lightGray : iOSColors.white
+                          ),
                           padding: 5,
                           // Bottom border on all items, top border on first item
                           borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'black',
@@ -627,6 +641,19 @@ export class PlacesScreen extends PureComponent<Props, State> {
   // Debounce search bar edits to throttle ebird api calls
   debounceOnSearchChange = <F extends Fun>(onSearchChange: F): F => {
     return _.debounce(onSearchChange, 250);
+  }
+
+  // Jam multi-select places through the existing settings.state.place code
+  //  - TODO Expand settings.state .place -> .places for other screens [will require a small amount of refactoring]
+  mergePlaces = (places: Set<Place>): null | Place => {
+    return (places.size === 0
+      ? null // -> ebird.allPlace (via App.place)
+      : {
+        species: _.uniq(_.flatMap(Array.from(places), x => x.species)), // Here's what we're actually after
+        name:    `${places.size} places`,                               // Good enough
+        props:   {r: 'XXX'},                                            // Hopefully this doesn't break anything...
+      }
+    );
   }
 
   // Debug components

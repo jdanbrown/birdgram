@@ -48,7 +48,8 @@ export interface Props {
   readonly excludeSpeciesGroups: Set<SpeciesGroup>;
   readonly unexcludeSpecies:     Set<Species>;
   // For PlacesScreen
-  readonly places: Array<Place>;
+  readonly savedPlaces: Array<Place>;
+  readonly places:      Set<Place>;
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
@@ -98,7 +99,8 @@ export const DEFAULTS: Props = {
   excludeSpeciesGroups: new Set(),
   unexcludeSpecies:     new Set(),
   // For PlacesScreen
-  places: [],
+  savedPlaces: [],
+  places:      new Set(),
 };
 export const TYPES: {[key: string]: Array<string | Function>} = {
   // NOTE Keep attrs in sync (3/5)
@@ -136,7 +138,8 @@ export const TYPES: {[key: string]: Array<string | Function>} = {
   excludeSpeciesGroups: [Set],
   unexcludeSpecies:     [Set],
   // For PlacesScreen
-  places: ['object'],
+  savedPlaces: ['object'],
+  places:      [Set],
 };
 export const KEYS = [
   // NOTE Keep attrs in sync (4/5)
@@ -175,6 +178,7 @@ export const KEYS = [
   'excludeSpeciesGroups',
   'unexcludeSpecies',
   // For PlacesScreen
+  'savedPlaces',
   'places',
 ];
 
@@ -244,7 +248,8 @@ export class Settings implements SettingsWrites, Props {
     public readonly excludeSpeciesGroups: Set<SpeciesGroup>,
     public readonly unexcludeSpecies:     Set<Species>,
     // For PlacesScreen
-    public readonly places: Array<Place>,
+    public readonly savedPlaces: Array<Place>,
+    public readonly places:      Set<Place>,
   ) {}
 
   withProps(props: Partial<Props>): Settings {

@@ -581,7 +581,6 @@ export default class App extends PureComponent<Props, State> {
           playingProgressInterval = {this.state.settings!.playingProgressInterval}
           spectroScale            = {this.state.settings!.spectroScale}
           place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
-          places                  = {this.state.settings!.places}
           excludeSpecies          = {this.state.settings!.excludeSpecies}
           excludeSpeciesGroups    = {this.state.settings!.excludeSpeciesGroups}
           unexcludeSpecies        = {this.state.settings!.unexcludeSpecies}
@@ -619,6 +618,7 @@ export default class App extends PureComponent<Props, State> {
           settings                = {this.state.settingsWrites!}
           showDebug               = {this.state.settings!.showDebug}
           place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
+          savedPlaces             = {this.state.settings!.savedPlaces}
           places                  = {this.state.settings!.places}
         />
       ),

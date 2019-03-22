@@ -191,7 +191,6 @@ interface Props {
   playingProgressInterval: number;
   spectroScale:            number;
   place:                   Place;
-  places:                  Array<Place>;
   excludeSpecies:          Set<Species>;
   excludeSpeciesGroups:    Set<SpeciesGroup>;
   unexcludeSpecies:        Set<Species>;
