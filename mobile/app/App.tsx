@@ -520,7 +520,9 @@ export default class App extends PureComponent<Props, State> {
   }
 
   defaultPath:  string             = '/record';  // Which tab to open on first app launch
-  priorityTabs: Array<TabRouteKey> = ['record']; // If one of these tabs opens at launch, lazy-load other tabs
+  priorityTabs: Array<TabRouteKey> = ['record',  // If one of these tabs opens at launch, lazy-load other tabs
+    'places', // XXX(place_search): Faster dev
+  ];
   makeRoutes = (): Array<TabRoute> => [          // Must be a function, else screens won't update on App props/state change
     {
       key: 'record', route: {path: '/record'}, label: 'Record', iconName: iconForTab['record'],

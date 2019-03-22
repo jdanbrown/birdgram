@@ -1,7 +1,6 @@
 // Based on https://github.com/react-navigation/react-navigation-tabs/blob/v0.5.1/src/views/BottomTabBar.js
 
 import _ from 'lodash';
-import memoizeOne from 'memoize-one';
 import React, { Component, ComponentClass, PureComponent, ReactNode } from 'React';
 import { ActivityIndicator, Dimensions, Platform, Text, TouchableWithoutFeedback, View } from 'react-native';
 import IconBadge from 'react-native-icon-badge';
@@ -11,6 +10,7 @@ import Feather from 'react-native-vector-icons/Feather';
 import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-router-native';
 
 import { Log, puts, rich } from 'app/log';
+import { memoizeOne, memoizeOneDeep } from 'app/memoize';
 import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import { Histories, History, HistoryConsumer, Location, ObserveHistory, RouterWithHistory, TabName } from 'app/router';
 import { Styles } from 'app/styles';
@@ -72,11 +72,11 @@ export class TabRoutes extends PureComponent<Props, State> {
 
   // Getters for props/state
   routeByKey = (tab: TabRouteKey): TabRoute => this._routeByKey(this.props.routes)(tab);
-  _routeByKey: (routes: Array<TabRoute>) => (tab: TabRouteKey) => TabRoute = (
-    memoizeOne((routes: Array<TabRoute>) => {
+  _routeByKey = memoizeOne(
+    (routes: Array<TabRoute>): (tab: TabRouteKey) => TabRoute => {
       const m = new Map(routes.map<[TabRouteKey, TabRoute]>(route => [route.key, route]));
-      return (tab: TabRouteKey) => m.get(tab) || throw_(`Unknown tab: ${tab}`);
-    })
+      return tab => m.get(tab) || throw_(`Unknown tab: ${tab}`);
+    }
   );
 
   componentDidMount = async () => {

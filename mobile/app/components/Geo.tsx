@@ -114,12 +114,12 @@ export class Geo {
       throw `Already watching: ${this._watchId}`;
     }
     this._watchId = geolocation.watchPosition(
-      coords => {
+      (coords: GeoCoords) => {
         log.debug('watchPosition: coords', rich(coords));
         this.state.coords = coords;
         this.emitter.emit('coords', coords);
       },
-      error => {
+      (error: GeoError) => {
         log.warn('watchPosition: error', rich(error));
         this.emitter.emit('error', error);
       },

@@ -10,7 +10,7 @@ import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
   jsonSafeError, JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchNull,
   matchUndefined, NoKind, Omit, parseDate, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane,
-  requireSafePath, safeParseInt, safeParseIntOrNull, safePath, showDate, showSuffix, splitFirst, stringifyDate,
+  requireSafePath, safeParseInt, safeParseIntElseNull, safePath, showDate, showSuffix, splitFirst, stringifyDate,
   stripExt, throw_, tryElse, typed, unjson,
 } from 'app/utils';
 

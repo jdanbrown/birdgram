@@ -249,7 +249,7 @@ export class BrowseScreen extends PureComponent<Props, State> {
         </BaseButton>
 
         {/* Search bar */}
-        <SearchBar
+        <SearchBar // (cf. SearchBar in PlacesScreen)
           // Listeners
           onSearchChange={searchFilter => this.setState({
             searchFilter,
@@ -268,7 +268,7 @@ export class BrowseScreen extends PureComponent<Props, State> {
           // Disable back button
           //  - By: always showing back button and making it look and behave like the search icon
           alwaysShowBackButton={true}
-          iconBackName='md-search'
+          iconBackComponent={(<Feather size={18} color={iOSColors.gray} name={'search'} />)}
           onBackPress={() => {}}
           // TextInputProps
           inputProps={{

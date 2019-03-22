@@ -5,7 +5,6 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 
 import { MetadataColumnBelow, MetadataColumnLeft, MetadataColumnsBelow, MetadataColumnsLeft } from 'app/components/MetadataColumns';
 import { SortListResults, SortSearchResults } from 'app/components/SearchScreen';
-import { HARDCODED_PLACES } from 'app/data/places';
 import { Place, Quality, Species, SpeciesGroup } from 'app/datatypes';
 import { debug_print, Log, puts, rich } from 'app/log';
 import { json, match, objectKeysTyped, pretty, typed, yaml } from 'app/utils';
@@ -99,7 +98,7 @@ export const DEFAULTS: Props = {
   excludeSpeciesGroups: new Set(),
   unexcludeSpecies:     new Set(),
   // For PlacesScreen
-  places: HARDCODED_PLACES,
+  places: [],
 };
 export const TYPES: {[key: string]: Array<string | Function>} = {
   // NOTE Keep attrs in sync (3/5)

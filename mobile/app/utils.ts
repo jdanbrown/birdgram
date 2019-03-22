@@ -135,11 +135,11 @@ export async function catchTryAsync<X>(
 // TODO Change cases to functions, like the other ADT matchFoo functions
 // `X0 extends X` so that x0 can't (quietly) generalize the type of the case patterns (e.g. to include null)
 //  - e.g. fail on `match(X | null, ...)` if the case patterns don't include null
-export function match<X, Y = X, X0 extends X = X>(x0: X0, ...cases: Array<[X | Match, (x0: X0) => Y]>): Y {
+export function match<X, Y = X, X0 extends X = X>(x0: X0, ...cases: Array<[X | MatchDefault, (x0: X0) => Y]>): Y {
   for (let [x, f] of cases) {
     if (
       x === x0 || // Shallow equality
-      x === Match.Default
+      x === match.default
     ) {
       return f(x0);
     }
@@ -154,9 +154,9 @@ export function matchKey<K extends string, X>(key: K, cases: {[key in K]: (key: 
   });
 }
 
-// Singleton match.default
-enum Match { Default }
-match.default = Match.Default;
+// Singleton match.default (compared by object identity)
+class MatchDefault {}
+match.default = new MatchDefault();
 
 export function matchNull<X, Y>(x: null | X, cases: {x: (x: X) => Y, null: () => Y}): Y {
   switch (x) {
@@ -233,12 +233,17 @@ export function safeParseInt(s: string): number {
   return x;
 }
 
-export function safeParseIntOrNull(s: string): number | null {
+export function safeParseIntElseNull(s: string): number | null {
   try {
     return safeParseInt(s);
   } catch {
     return null;
   }
+}
+
+export function parseFloatElseNaN(s: string): number {
+  s = s || 'NaN'; // Avoid nonsensical Number('') -> 0
+  return Number(s);
 }
 
 export function round(x: number, prec: number = 0): number {
@@ -395,6 +400,9 @@ export class ExpWeightedRate {
   mark  = () => { this._mean.add(this._timer.lap()); }
   get value(): number { return 1 / this._mean.value }
 }
+
+// Note: use f.apply(...args) since you can't do f(...args)
+export type Fun<XS extends any[] = any[], Y = any> = (...args: XS) => Y;
 
 export type Sign = -1 | 1;
 

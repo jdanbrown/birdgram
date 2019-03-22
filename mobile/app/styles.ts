@@ -14,8 +14,8 @@ export const Styles = {
     height: '100%',
   } as ViewProps,
   center: {
-    justifyContent: 'center', // Vertical
-    alignItems: 'center', // Horizontal
+    justifyContent: 'center', // Main axis
+    alignItems:     'center', // Cross axis (unless wrapped)
   } as ViewProps,
   rotate45:       {transform: [{rotate: '45deg'}]},
   rotate90:       {transform: [{rotate: '90deg'}]},

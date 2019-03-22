@@ -130,7 +130,7 @@ export function tap<X>(x: X, f: (x: X) => void): X {
 }
 
 export function puts<X>(x: X, ...args: any[]): X {
-  log.debug('puts', x, ...args);
+  log.debug('PRINT puts', x, ...args);
   return x;
 }
 

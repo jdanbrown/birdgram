@@ -12,8 +12,8 @@ import { Location } from 'app/router';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
   JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchNull, matchUndefined, NoKind,
-  Omit, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane, requireSafePath, safeParseInt, safeParseIntOrNull,
-  safePath, showDate, showSuffix, splitFirst, stripExt, throw_, tryElse, typed, unjson,
+  Omit, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane, requireSafePath, safeParseInt,
+  safeParseIntElseNull, safePath, showDate, showSuffix, splitFirst, stripExt, throw_, tryElse, typed, unjson,
 } from 'app/utils';
 
 export * from 'app/datatypes/edit';
