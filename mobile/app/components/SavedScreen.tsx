@@ -125,7 +125,7 @@ export class SavedScreen extends PureComponent<Props, State> {
 
     // Load user recs
     //  - Current representation of "saved" is all user recs in the fs
-    //  - TODO Add a delete/unsave button so user can clean up unwanted recs
+    //  - TODO(delete_user_rec): Add a delete/unsave button so user can clean up unwanted recs
     //  - TODO(cache_user_metadata): Perf: limit num results to avoid unbounded readMetadata operations
     const userRecSources = await UserRec.listAudioSources();
 

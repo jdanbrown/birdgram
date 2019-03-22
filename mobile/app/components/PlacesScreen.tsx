@@ -564,7 +564,8 @@ export class PlacesScreen extends PureComponent<Props, State> {
                     >
                       <RectButton
                         onPress={() => {
-                          // FIXME Perf: really slow in dev (but no log.timed surfaces the bottleneck...)
+                          // FIXME(slow_places): Perf: really slow in dev (but no log.timed surfaces the bottleneck...)
+                          //  - Looks like BrowseScreen.render is the culprit -> make it not update in the bg
                           this.props.settings.set(settings => {
                             const places = setToggle(settings.places, place); // FIXME(place_id): Add place.id to do this correctly
                             return {
