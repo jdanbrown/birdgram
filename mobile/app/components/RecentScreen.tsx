@@ -390,11 +390,15 @@ export class RecentScreen extends PureComponent<Props, State> {
                       flexDirection: 'column',
                       paddingLeft: 5,
                     }}>
-                      <Text style={{
-                        ...material.body1Object,
-                      }}>
+                      {/* TODO Dedupe with SavedScreen.render */}
+                      <Text style={material.body1}>
 
-                        {/* TODO Dedupe with SavedScreen.render */}
+                        {
+                          // TODO Show user rec titles (UserSource.metadata.title)
+                          //  - Will require reloading history when user edits a rec title from SavedScreen
+                          //  - Which will require some refactoring, since we don't reload history items at all right now...
+                        }
+
                         {matchRecent(recent, {
                           record: recent => matchRecordPath(recent.recordPath, {
                             root: ()         => '[Root]',

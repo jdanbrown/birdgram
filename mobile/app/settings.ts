@@ -60,7 +60,7 @@ export const DEFAULTS: Props = {
   f_bins: 80, // Show higher-res spectros for user recs than model uses to query xc recs (f_bins=40)
   // For Geo
   geoHighAccuracy: true,
-  geoWarnIfNoCoords: true,
+  geoWarnIfNoCoords: false, // TODO(fix_gps): Revert false->true after fixing gps
   // For RecordScreen
   refreshRate: 8,
   doneSpectroChunkWidth: 5, // (ios dims: https://tinyurl.com/y8xsdvnk)

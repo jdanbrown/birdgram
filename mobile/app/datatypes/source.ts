@@ -11,7 +11,7 @@ import { debug_print, log, Log, rich } from 'app/log';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
   JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchError, matchErrorAsync,
-  matchNull, matchUndefined, Omit, parseDate, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane,
+  matchNil, matchNull, matchUndefined, Omit, parseDate, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane,
   requireSafePath, safeParseInt, safeParseIntElseNull, safePath, showDate, showSuffix, splitFirst, stringifyDate,
   stripExt, throw_, tryElse, typed, unjson,
 } from 'app/utils';
@@ -36,8 +36,9 @@ export interface UserMetadata {
   creator: null | Creator,   // null if unknown creator
   coords:  null | GeoCoords; // null if unknown gps
   // Mutable user data
+  //  - TODO Add more fields (basically the same ones that xc uses)
+  title:   null | string;
   species: UserSpecies;
-  // comment: null | string; // TODO
 }
 
 export interface Creator {
@@ -48,8 +49,9 @@ export interface Creator {
   appVersionBuild: string,
 }
 
-export type UserSpecies = // TODO Make proper ADT with matchUserSpecies
-  | {kind: 'unknown'}
+export type UserSpecies = // TODO Make proper ADT with matchUserSpecies [extract from UserSpecies.show, which has back compats]
+  | {kind: 'no-opinion'}
+  | {kind: 'mystery'}
   | {kind: 'maybe', species: Array<Species>} // Not yet used
   | {kind: 'known', species: Species};
 
@@ -91,6 +93,7 @@ export const UserMetadata = {
     edit:     UserMetadata['edit'],
     creator?: UserMetadata['creator'],
     coords:   UserMetadata['coords'],
+    title?:   UserMetadata['title'],
     species?: UserMetadata['species'],
   }): UserMetadata => {
     return {
@@ -101,7 +104,8 @@ export const UserMetadata = {
       creator: ifUndefined(props.creator, () => Creator.get()),
       coords:  props.coords,
       // Mutable user data (initial values)
-      species: ifUndefined(props.species, () => typed<UserSpecies>({kind: 'unknown'})),
+      title:   ifUndefined(props.title,   () => null),
+      species: ifUndefined(props.species, () => typed<UserSpecies>({kind: 'no-opinion'})),
     };
   },
 
@@ -115,6 +119,7 @@ export const UserMetadata = {
       edit:    mapNull(metadata.edit,    Edit.jsonSafe),
       creator: mapNull(metadata.creator, Creator.jsonSafe),
       coords:  metadata.coords,
+      title:   metadata.title,
       species: UserSpecies.jsonSafe(metadata.species),
     });
   },
@@ -122,9 +127,10 @@ export const UserMetadata = {
     return {
       created: parseDate(x.created),
       uniq:    x.uniq,
-      edit:    mapNull(x.edit,    Edit.unjsonSafe),
-      creator: mapNull(x.creator, Creator.unjsonSafe),
-      coords:  x.coords,
+      edit:    mapNull(ifUndefined(x.edit,    () => null), Edit.unjsonSafe),
+      creator: mapNull(ifUndefined(x.creator, () => null), Creator.unjsonSafe),
+      coords:  ifUndefined(x.coords, () => null),
+      title:   ifUndefined(x.title,  () => null),
       species: UserSpecies.unjsonSafe(x.species),
     };
   },
@@ -151,11 +157,20 @@ export const UserSpecies = {
   jsonSafe:   (x: UserSpecies): any         => x,
   unjsonSafe: (x: any):         UserSpecies => x as UserSpecies, // HACK Type
 
-  show: (userSpecies: UserSpecies): string => {
+  // TODO Extract this (+ back compats) into a matchUserSpecies
+  show: (userSpecies: UserSpecies): null | string => {
     switch (userSpecies.kind) {
-      case 'unknown': return '?';
-      case 'maybe':   return `${userSpecies.species.join('/')}?`;
-      case 'known':   return userSpecies.species;
+      case 'no-opinion': return null;
+      case 'mystery':    return '?';
+      case 'maybe':      return `${userSpecies.species.join('/')}?`;
+      case 'known':      return userSpecies.species;
+      // Back compat (metadata persisted in user rec files)
+      default: switch ((userSpecies as UserSpecies).kind as any) {
+        case 'unknown':    return null;
+        default:
+          log.warn('UserSpecies.show: Unknown userSpecies.kind[${userSpecies.kind}]');
+          return null;
+      }
     }
   },
 
@@ -266,8 +281,9 @@ export const Source = {
       xc: ({xc_id}) => {
         const xc = opts.species;
         return [
+          !xc ? '' : `${xc.speciesFromXCID.get(xc_id) || '?'}/`, // e.g. "NOMO/XC1234"
           `XC${xc_id}`,
-          !xc ? '' : ` (${xc.speciesFromXCID.get(xc_id) || '?'})`,
+          // !xc ? '' : ` (${xc.speciesFromXCID.get(xc_id) || '?'})`, // e.g. "XC1234 (NOMO)"
         ].join('');
       },
       user: ({ext, metadata}) => {
@@ -275,11 +291,11 @@ export const Source = {
         //  - TODO Rethink after rec sharing (e.g. add usernames to avoid collisions)
         const parts = (
           metadata && metadata.edit ? [
-            !opts.long || !metadata ? '' : `[${UserSpecies.show(metadata.species)}]`,
+            !opts.long || !metadata ? '' : matchNull(UserSpecies.show(metadata.species), {null: () => '', x: x => `[${x}]`}),
             !opts.long              ? '' : 'Edit:',
             Edit.show(metadata.edit, opts),
           ] : [
-            !opts.long || !metadata ? '' : `[${UserSpecies.show(metadata.species)}]`,
+            !opts.long || !metadata ? '' : matchNull(UserSpecies.show(metadata.species), {null: () => '', x: x => `[${x}]`}),
             !opts.long              ? '' : 'Recording:',
             (opts.showDate || showDate)(metadata.created),
           ]

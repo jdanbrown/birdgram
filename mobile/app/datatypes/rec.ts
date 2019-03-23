@@ -330,10 +330,11 @@ export const UserRec = {
       return {
         created,
         uniq,
-        edit:    null,              // Not an edit of another rec
-        creator: null,              // Unknown creator
-        coords:  null,              // Unknown gps
-        species: {kind: 'unknown'}, // Unknown species
+        edit:    null,                 // Not an edit of another rec
+        creator: null,                 // Unknown creator
+        coords:  null,                 // Unknown gps
+        title:   null,                 // No title
+        species: {kind: 'no-opinion'}, // Unknown species
       };
     });
 
@@ -426,7 +427,7 @@ export const UserRec = {
         uniq:    chance.hash({length: 8}),
         edit,
         coords: null, // TODO Copy coords from XCRec (.lat,.lng) / UserRec (.metadata.coords)
-        species: {kind: 'unknown'}, // 'unknown' species even if parent is known, e.g. clipping down to an unknown bg species
+        species: {kind: 'no-opinion'}, // Unknown species even if parent is known, e.g. clipping down to an unknown bg species
       }),
     });
     UserRec.log.info('newFromEdit', rich({userSource}));

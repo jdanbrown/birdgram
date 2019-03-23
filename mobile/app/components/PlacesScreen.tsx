@@ -611,7 +611,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
                               }));
                             }}
                           >
-                            <Feather name={'trash-2'} style={{
+                            <Feather name='trash-2' style={{
                               color: iOSColors.white,
                               fontSize: 30,
                             }}/>

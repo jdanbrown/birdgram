@@ -525,6 +525,12 @@ export default class App extends PureComponent<Props, State> {
   // If one of these tabs opens at launch, lazy-load other tabs
   priorityTabs: Array<TabRouteKey> = [
     'record',
+    // 'search',   // XXX Dev
+    // 'browse',   // XXX Dev
+    // 'places',   // XXX Dev
+    // 'recent',   // XXX Dev
+    // 'saved',    // XXX Dev
+    // 'settings', // XXX Dev
   ];
   // Must be a function, else screens won't update on App props/state change
   makeRoutes = (locationTabs: Location, historyTabs: History): Array<TabRoute> => [

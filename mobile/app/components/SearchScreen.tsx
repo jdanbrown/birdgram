@@ -664,7 +664,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       // Global filters
       //  - TODO(put_all_query_state_in_location)
       const qualityFilter = (table: string) => (
-        sqlf`and ${SQL.raw(table)}.quality in (${Array.from(this.props.filterQuality)})`
+        sqlf`and ${SQL.raw(table)}.quality in (${ifEmpty(Array.from(this.props.filterQuality), () => Quality.values)})`
       );
       const placeFilter   = (table: string) => (
         sqlf`and ${SQL.raw(table)}.species in (${this.props.place.knownSpecies})`
@@ -1415,9 +1415,9 @@ export class SearchScreen extends PureComponent<Props, State> {
       <this.GenericModal>
 
         <this.GenericModalTitle
-          title={`${rec.species}/${Source.show(Rec.source(rec), {
+          title={Source.show(Rec.source(rec), {
             species: this.props.xc,
-          })}`}
+          })}
         />
 
         {/* Spectro */}

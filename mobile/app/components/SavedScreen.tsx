@@ -2,18 +2,21 @@ import _ from 'lodash';
 import moment from 'moment';
 import React, { Component, RefObject, PureComponent } from 'react';
 import {
-  ActivityIndicator, Dimensions, FlatList, Image, LayoutChangeEvent, Platform, ScrollView, SectionList, SectionListData,
-  Text, TouchableWithoutFeedback, View, WebView,
+  ActivityIndicator, Alert, AlertIOS, Dimensions, FlatList, Image, LayoutChangeEvent, Platform, ScrollView, SectionList,
+  SectionListData, Text, TouchableWithoutFeedback, View, WebView,
 } from 'react-native';
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
+import RNFB from 'rn-fetch-blob';
+const fs = RNFB.fs;
 
 import { matchQuery, Query } from 'app/components/SearchScreen';
 import {
   matchRecordPathParams, matchSearchPathParams, matchSource, recordPathParamsFromLocation, Rec,
-  searchPathParamsFromLocation, Source, SourceId, UserRec, XCRec,
+  searchPathParamsFromLocation, Source, SourceId, UserRec, UserSource, XCRec,
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
 import { debug_print, Log, puts, rich } from 'app/log';
@@ -21,8 +24,8 @@ import { Go, Location, locationKeyIsEqual, locationPathIsEqual, TabLocations, Ta
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
-  global, into, json, local, mapNil, mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined, mergeArraysWith,
-  pretty, shallowDiffPropsState, showDate, showDateNoTime, showTime, throw_, typed, yaml,
+  global, ifEmpty, ifNull, into, json, local, mapNil, mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined,
+  mergeArraysWith, pretty, shallowDiffPropsState, showDate, showDateNoTime, showTime, throw_, typed, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -125,7 +128,6 @@ export class SavedScreen extends PureComponent<Props, State> {
 
     // Load user recs
     //  - Current representation of "saved" is all user recs in the fs
-    //  - TODO(delete_user_rec): Add a delete/unsave button so user can clean up unwanted recs
     //  - TODO(cache_user_metadata): Perf: limit num results to avoid unbounded readMetadata operations
     const userRecSources = await UserRec.listAudioSources();
 
@@ -181,6 +183,51 @@ export class SavedScreen extends PureComponent<Props, State> {
   // searchSavedFromSource = (source: Source): SearchSaved => {
   //   ...
   // }
+
+  // Edit user rec
+  //  - Reload saveds when done
+  editUserRec = async (source: UserSource): Promise<void> => {
+    const audioPath = UserRec.audioPath(source);
+    const metadata  = await UserRec.readMetadata(audioPath);
+    const title     = await new Promise<null | string>((resolve, reject) => {
+      // Docs: https://facebook.github.io/react-native/docs/alertios#prompt
+      //  - TODO(android): Won't work on android
+      AlertIOS.prompt(
+        'Title',      // title
+        undefined,    // message
+        [             // callbackOrButtons
+          {text: 'Cancel', style: 'cancel',  onPress: () => resolve(null)},
+          {text: 'Save',   style: 'default', onPress: s  => resolve(s)},
+        ],
+        'plain-text', // type ('plain-text' | 'secure-text' | 'login-password')
+        ifNull(metadata.title, () => undefined), // defaultValue
+        'default',    // keyboardType (see https://facebook.github.io/react-native/docs/alertios#prompt)
+      );
+    });
+    if (title !== null) {
+      UserRec.writeMetadata(audioPath, {...metadata,
+        title,
+      });
+      await this.loadSavedsFromFs();
+    }
+  }
+
+  // Delete user rec
+  //  - Reload saveds when done
+  deleteUserRec = async (source: UserSource): Promise<void> => {
+    const audioPath = UserRec.audioPath(source);
+    log.info('deleteUserRec', {source, audioPath});
+    const confirm = await new Promise<boolean>((resolve, reject) => {
+      Alert.alert('Delete this recording?', "This can't be undone.", [
+        {style: 'cancel',  text: 'Cancel', onPress: () => resolve(false)},
+        {style: 'default', text: 'Delete', onPress: () => resolve(true)},
+      ]);
+    });
+    if (confirm) {
+      await fs.unlink(audioPath);
+      await this.loadSavedsFromFs();
+    }
+  }
 
   componentWillUnmount = async () => {
     log.info('componentWillUnmount');
@@ -294,80 +341,164 @@ export class SavedScreen extends PureComponent<Props, State> {
                 </View>
               )}
               renderItem={({item: saved, index, section}: {item: Saved, index: number, section: Section}) => (
-                <RectButton
-                  onPress={() => {
-                    this.props.go(saved.tab, {path: saved.location.pathname});
-                  }}
-                >
-                  <View style={{
-                    flex: 1,
-                    flexDirection: 'row',
-                    ...Styles.center,
-                    padding: 5,
-                    // Highlight active location per tab
-                    backgroundColor: (Saved.isOpenInTab(saved, this.props.tabLocations)
-                      ? `${tabProps[saved.tab].color}22`
-                      : undefined
-                    ),
-                    // Vertical borders
-                    //  - Internal borders: top border on non-first items per section
-                    //  - Plus bottom border on last item of last section
-                    borderTopWidth: 1,
-                    borderTopColor: iOSColors.lightGray,
-                    ...(!isLastItem(section, index) ? {} : {
-                      borderBottomWidth: 1,
-                      borderBottomColor: iOSColors.lightGray,
-                    }),
-                  }}>
-                    <Feather style={{
-                      ...material.titleObject,
-                      color: iOSColors.gray,
-                    }}
-                      name={this.props.iconForTab[saved.tab]}
-                    />
-                    <View style={{
-                      flex: 1,
-                      flexDirection: 'column',
-                      paddingLeft: 5,
-                    }}>
-                      <Text style={{
-                        ...material.body1Object,
-                      }}>
 
-                        {/* TODO Dedupe with RecentScreen.render */}
-                        {matchSaved(saved, {
-                          record: saved => Source.show(saved.source, {
-                            species:  this.props.xc,
-                            long:     true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                            showDate: showTime,
-                          }),
-                          search: saved => matchQuery(saved.query, {
-                            none: () => (
-                              '[None]' // [Does this ever happen?]
-                            ),
-                            random: ({filters, seed}) => (
-                              `Random`
-                            ),
-                            species: ({filters, species}) => (
-                              species === '_BLANK' ? '[BLANK]' :
-                              matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
-                                undefined: () => `${species} (?)`,
-                                x:         x  => `${species} (${x.com_name})`,
-                              })
-                            ),
-                            rec: ({filters, source}) => (
-                              Source.show(source, {
-                                species: this.props.xc,
-                                long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                              })
-                            ),
-                          }),
-                        })}
+                // Swipe to delete/edit
+                local(() => {
+                  const swipeableRef: RefObject<Swipeable> = React.createRef();
+                  return (
+                    <Swipeable
+                      ref={swipeableRef}
+                      // TODO Make content backgroundColor:red (like Overcast)
+                      //  - Upgrade 1.0.8 -> 1.1.0 so we can try childrenContainerStyle
+                      //    - https://github.com/kmagiera/react-native-gesture-handler/releases
+                      useNativeAnimations={true} // (Blindly enabled, not sure if helpful)
+                      renderLeftActions={(progress, dragX) => (
+                        <RectButton
+                          style={[Styles.center, {
+                            width: 60, // Approximate, since height flows from text contents
+                            backgroundColor: iOSColors.purple,
+                          }]}
+                          onPress={async () => {
+                            const swipeable = swipeableRef.current!; // (Before await, else ref becomes null)
+                            swipeable.close(); // .close before update (via loadSavedsFromFs) else react errors
+                            await matchSaved(saved, {
+                              search: async saved => {}, // TODO Is it meaningful to edit a saved search? [don't have saved searches yet]
+                              record: async saved => await matchSource(saved.source, {
+                                xc:   async source => {}, // TODO Is it meaningful to edit a saved xc rec? [don't have saved xc recs yet]
+                                user: async source => await this.editUserRec(source),
+                              }),
+                            });
+                          }}
+                        >
+                          <Feather name='edit' style={{
+                            color: iOSColors.white,
+                            fontSize: 30,
+                          }}/>
+                        </RectButton>
+                      )}
+                      renderRightActions={(progress, dragX) => (
+                        <RectButton
+                          style={[Styles.center, {
+                            width: 60, // Approximate, since height flows from text contents
+                            backgroundColor: iOSColors.red,
+                          }]}
+                          onPress={async () => {
+                            const swipeable = swipeableRef.current!; // (Before await, else ref becomes null)
+                            swipeable.close(); // .close before update (via loadSavedsFromFs) else react errors
+                            await matchSaved(saved, {
+                              search: async saved => {}, // TODO Unsave search [don't have saved searches yet]
+                              record: async saved => await matchSource(saved.source, {
+                                xc:   async source => {}, // TODO Unsave xc rec [don't have saved xc recs yet]
+                                user: async source => await this.deleteUserRec(source),
+                              }),
+                            });
+                          }}
+                        >
+                          <Feather name='trash-2' style={{
+                            color: iOSColors.white,
+                            fontSize: 30,
+                          }}/>
+                        </RectButton>
+                      )}
+                    >
 
-                      </Text>
-                    </View>
-                  </View>
-                </RectButton>
+                      {/* Tap to edit/view rec (in RecordScreen) */}
+                      <RectButton
+                        style={{
+                          backgroundColor: iOSColors.white, // Opaque bg so swipe buttons don't show through during swipe
+                        }}
+                        onPress={() => {
+                          this.props.go(saved.tab, {path: saved.location.pathname});
+                        }}
+                      >
+                        <View style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          ...Styles.center,
+                          padding: 5,
+                          // Highlight active location per tab
+                          backgroundColor: (Saved.isOpenInTab(saved, this.props.tabLocations)
+                            ? `${tabProps[saved.tab].color}22`
+                            : undefined
+                          ),
+                          // Vertical borders
+                          //  - Internal borders: top border on non-first items per section
+                          //  - Plus bottom border on last item of last section
+                          borderTopWidth: 1,
+                          borderTopColor: iOSColors.lightGray,
+                          ...(!isLastItem(section, index) ? {} : {
+                            borderBottomWidth: 1,
+                            borderBottomColor: iOSColors.lightGray,
+                          }),
+                        }}>
+                          <Feather style={{
+                            ...material.titleObject,
+                            color: iOSColors.gray,
+                          }}
+                            name={this.props.iconForTab[saved.tab]}
+                          />
+                          <View style={{
+                            flex: 1,
+                            flexDirection: 'column',
+                            paddingLeft: 5,
+                          }}>
+                            {/* TODO Dedupe with RecentScreen.render */}
+                            <Text style={material.body1}>
+
+                              {/* Item title */}
+                              {matchSaved(saved, {
+                                record: saved => matchSource(saved.source, {
+                                  xc:   source => 'XC', // TODO [we don't yet save xc recs]
+                                  user: source => (
+                                    // TODO Show more metadata fields: species, ...
+                                    ifEmpty(puts(source.metadata.title), () => 'Untitled')
+                                  ),
+                                }),
+                                search: saved => matchQuery(saved.query, {
+                                  none: () => (
+                                    '[None]' // [Does this ever happen?]
+                                  ),
+                                  random: ({filters, seed}) => (
+                                    `Random`
+                                  ),
+                                  species: ({filters, species}) => (
+                                    species === '_BLANK' ? '[BLANK]' :
+                                    matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+                                      undefined: () => `${species} (?)`,
+                                      x:         x  => `${species} (${x.com_name})`,
+                                    })
+                                  ),
+                                  rec: ({filters, source}) => (
+                                    Source.show(source, {
+                                      species: this.props.xc,
+                                      long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                    })
+                                  ),
+                                }),
+                              })}
+
+                            </Text>
+                            <Text style={material.caption}>
+
+                              {/* Item caption */}
+                              {matchSaved(saved, {
+                                record: saved => Source.show(saved.source, {
+                                  species:  this.props.xc,
+                                  long:     true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                  showDate: showTime,
+                                }),
+                                search: saved => null,
+                              })}
+
+                            </Text>
+                          </View>
+                        </View>
+                      </RectButton>
+
+                    </Swipeable>
+                  );
+                })
+
               )}
             />
           )}
