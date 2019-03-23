@@ -456,7 +456,20 @@ export class SearchScreen extends PureComponent<Props, State> {
   shufflePath = (): string => this.randomSpeciesPath(); // On the 'shuffle' button
 
   randomSpeciesPath = (): string => {
-    return `/species/${encodeURIComponent(chance.pickone(this.props.ebird.allSpecies))}`;
+    const {props} = this;
+    // HACK Mimic sql filters in updateForLocation ("Global filters")
+    const metadata = (
+      _(props.ebird.allSpeciesMetadata)
+      // placeFilter
+      .filter(m => props.place.knownSpecies.includes(m.shorthand))
+      // speciesFilter
+      .filter(m => !props.excludeSpecies.has(m.shorthand))
+      // speciesGroupFilter
+      .filter(m => !props.excludeSpeciesGroups.has(m.species_group) || props.unexcludeSpecies.has(m.shorthand))
+      .value()
+    );
+    const species = metadata.map(x => x.shorthand);
+    return `/species/${encodeURIComponent(chance.pickone(species))}`;
   }
 
   randomRecsPath = (seed?: number): string => {

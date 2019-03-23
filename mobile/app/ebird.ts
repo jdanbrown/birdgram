@@ -75,6 +75,7 @@ export class Ebird {
 
   ];
 
+  allSpeciesMetadata:         Array<SpeciesMetadata>;
   allSpecies:                 Array<Species>;
   allSpeciesCodes:            Array<SpeciesCode>;
   allSpeciesGroups:           Array<SpeciesGroup>;
@@ -85,9 +86,10 @@ export class Ebird {
   constructor(
     public metadataSpecies: MetadataSpecies,
   ) {
-    this.allSpecies       = metadataSpecies.map(x => x.shorthand);
-    this.allSpeciesCodes  = metadataSpecies.map(x => x.species_code);
-    this.allSpeciesGroups = _.uniq(metadataSpecies.map(x => x.species_group));
+    this.allSpeciesMetadata = metadataSpecies;
+    this.allSpecies         = metadataSpecies.map(x => x.shorthand);
+    this.allSpeciesCodes    = metadataSpecies.map(x => x.species_code);
+    this.allSpeciesGroups   = _.uniq(metadataSpecies.map(x => x.species_group));
     // Manually map species_code -> species
     //  - XXX after we add species_code to datasets.metadata_from_dataset, which requires rebuilding the load._metadata
     //    cache, which takes ~overnight (see metadata_from_dataset)
