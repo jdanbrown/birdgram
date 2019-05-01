@@ -64,6 +64,8 @@
 	<string>Birdgram saves the GPS location of each recording you make</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Birdgram saves the GPS location of each recording you make</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Birdgram saves the GPS location of each recording you make</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Birdgram uses the microphone to record bird calls</string>
 	<key>NSMotionUsageDescription</key>
