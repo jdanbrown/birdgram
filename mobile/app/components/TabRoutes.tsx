@@ -112,8 +112,8 @@ export class TabRoutes extends PureComponent<Props, State> {
 
   render = () => {
     log.info('render');
+    // const matchedRoute   = this.matchedRoute(this.props.routes, this.props.tabLocation); // WARNING Throws if path='/'
     const matchedRouteIndex = this.matchedRouteIndex(this.props.routes, this.props.tabLocation);
-    const matchedRoute      = this.matchedRoute(this.props.routes, this.props.tabLocation);
     return (
       <View style={{flex: 1}}>
 
