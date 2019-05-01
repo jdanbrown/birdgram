@@ -259,12 +259,15 @@ export class Ebird {
   static addExtraMappings = <K, V>(mappings: Array<ExtraMapping<K>>, xs: Map<K, V>): Map<K, V> => {
     xs = _.clone(xs); // Copy so we can mutate
     mappings.forEach(({k, toK}) => {
-      const v = ifUndefined(xs.get(toK), () => {
-        throw new Error(
-          `Ebird.addExtraMappings: Key not found: toK[${toK}], for k[${k}] in keys[${yaml(Array.from(xs.keys()).sort())}]`,
-        );
-      });
-      xs.set(k, v);
+      const v = xs.get(toK);
+      if (v !== undefined) {
+        xs.set(k, v);
+      } else {
+        // log.info i/o throw/error/warn
+        //  - e.g. CA100 would throw/error/warn on most mappings, since it's a trimmed-down species set
+        //  - e.g. US would throw/error/warn on CR mappings, and vice versa
+        log.info(`addExtraMappings: Ignoring unknown key: toK[${toK}], for k[${k}] in keys[${yaml(Array.from(xs.keys()).sort())}]`);
+      };
     });
     return xs;
   }
