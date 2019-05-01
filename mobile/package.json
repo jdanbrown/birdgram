@@ -54,6 +54,7 @@
     "react-native-material-design-searchbar": "^1.8.0",
     "react-native-microphone-stream": "git://github.com/chadsmith/react-native-microphone-stream.git#4cca1e7",
     "react-native-permissions": "^1.1.1",
+    "react-native-sentry": "^0.42.0",
     "react-native-settings-list": "^1.8.0",
     "react-native-sound": "^0.10.9",
     "react-native-sqlite-storage": "^3.3.7",

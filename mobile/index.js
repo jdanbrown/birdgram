@@ -29,3 +29,10 @@ import App from './app/App';
 import {name as appName} from './app.json';
 
 AppRegistry.registerComponent(appName, () => App);
+
+//
+// From https://sentry.io/onboarding/dan-brown/birdgram/configure/react-native/
+//
+
+import { Sentry } from 'react-native-sentry';
+Sentry.config('https://6b4de643283f430990ecb17abddc3fcb@sentry.io/1450183').install();

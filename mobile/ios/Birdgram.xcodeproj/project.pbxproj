@@ -38,6 +38,7 @@
 		8007C45C489E4E25A5749D3F /* Feather.ttf in Resources */ = {isa = PBXBuildFile; fileRef = DE94A016F63348E785A58055 /* Feather.ttf */; };
 		832341BD1AAA6AB300B99B32 /* libRCTText.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 832341B51AAA6A8300B99B32 /* libRCTText.a */; };
 		8738F8A6FE6340C39347B683 /* Foundation.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4C301D1697624C7A851CBCED /* Foundation.ttf */; };
+		8D407BB4DE6746D38295F1C6 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = BB716088852249058AA231AA /* libz.tbd */; };
 		922E0830077B4A16A660A8E1 /* Ionicons.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8245462B264A4B53849196AC /* Ionicons.ttf */; };
 		96428B6A26274CE9A6FC9156 /* FontAwesome5_Solid.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 945DEC247A05462C804E0C32 /* FontAwesome5_Solid.ttf */; };
 		96CD35BCC1BD4151A53A42DF /* test-auto-assets in Resources */ = {isa = PBXBuildFile; fileRef = 7EE2EADEA0C24559BD626FAB /* test-auto-assets */; };
@@ -563,6 +564,7 @@
 		B7FF150A21EEA00900919F28 /* Pods_Bubo.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Pods_Bubo.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B7FF150D21EEA42600919F28 /* Birdgram.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = Birdgram.entitlements; path = Birdgram/Birdgram.entitlements; sourceTree = "<group>"; };
 		B8ED9E6567504A149A09641B /* SQLite.xcodeproj */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "wrapper.pb-project"; name = SQLite.xcodeproj; path = "../node_modules/react-native-sqlite-storage/src/ios/SQLite.xcodeproj"; sourceTree = "<group>"; };
+		BB716088852249058AA231AA /* libz.tbd */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
 		C6B6829AB2D043BB990531DD /* FontAwesome.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = FontAwesome.ttf; path = "../node_modules/react-native-vector-icons/Fonts/FontAwesome.ttf"; sourceTree = "<group>"; };
 		DCA049B7438047599F841446 /* libRNAudioRecord.a */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = archive.ar; path = libRNAudioRecord.a; sourceTree = "<group>"; };
 		DE94A016F63348E785A58055 /* Feather.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = Feather.ttf; path = "../node_modules/react-native-vector-icons/Fonts/Feather.ttf"; sourceTree = "<group>"; };
@@ -619,6 +621,7 @@
 				2F655C400EBF4F368515A26B /* libRNFetchBlob.a in Frameworks */,
 				D196A135E78641ADA2BE2B29 /* libRNGestureHandler.a in Frameworks */,
 				76C840EB92AF487FBA6F0BD0 /* libRNAudioRecord.a in Frameworks */,
+				8D407BB4DE6746D38295F1C6 /* libz.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -774,6 +777,7 @@
 				B7019D5821A1FA6300F6E12B /* Bubo.framework */,
 				2D16E6891FA4F8E400B85C8A /* libReact.a */,
 				84DD8563EA53EA75065B87DD /* Pods_Birdgram.framework */,
+				BB716088852249058AA231AA /* libz.tbd */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -1065,6 +1069,7 @@
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				B72CC80D21A34706009D8690 /* Embed Frameworks */,
 				566F0755AA0DF6EED2C65ACD /* [CP] Embed Pods Frameworks */,
+				1A2B5B5EBC1141D88D1D9C98 /* Upload Debug Symbols to Sentry */,
 			);
 			buildRules = (
 			);
@@ -1650,7 +1655,21 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# From https://facebook.github.io/react-native/docs/running-on-device\n# - Like https://github.com/facebook/react-native/blob/v0.57.2/scripts/react-native-xcode.sh#L17\n#if [[ \"${CONFIGURATION}\" = *Debug* ]]; then export SKIP_BUNDLING=true; fi\n\nexport NODE_BINARY=node\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
+			shellScript = "# From https://sentry.io/onboarding/dan-brown/birdgram/configure/react-native/\nexport SENTRY_PROPERTIES=sentry.properties\n../node_modules/@sentry/cli/bin/sentry-cli react-native xcode\n\n# From https://facebook.github.io/react-native/docs/running-on-device\n# - Like https://github.com/facebook/react-native/blob/v0.57.2/scripts/react-native-xcode.sh#L17\n#if [[ \"${CONFIGURATION}\" = *Debug* ]]; then export SKIP_BUNDLING=true; fi\n\nexport NODE_BINARY=node\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
+		};
+		1A2B5B5EBC1141D88D1D9C98 /* Upload Debug Symbols to Sentry */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Upload Debug Symbols to Sentry";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "export SENTRY_PROPERTIES=sentry.properties\n../node_modules/@sentry/cli/bin/sentry-cli upload-dsym\n";
 		};
 		2AFC3E054FFDE9C2372E7D8B /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;

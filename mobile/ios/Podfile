@@ -76,6 +76,9 @@ target 'Birdgram' do
   # Disabled from `react-native link react-native-device-info`
   # pod 'RNDeviceInfo', :path => '../node_modules/react-native-device-info'
 
+  # From https://sentry.io/onboarding/dan-brown/birdgram/configure/react-native/
+  pod 'SentryReactNative', :path => '../node_modules/react-native-sentry'
+
   # This causes warnings. Commented out for now.
   # target 'BirdgramTests' do
   #   inherit! :search_paths
