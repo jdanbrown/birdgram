@@ -69,6 +69,7 @@
 		B7A49DE121B318120076B0A2 /* Image.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A49DE021B318120076B0A2 /* Image.swift */; };
 		B7B1EB0321AAEC5C003EE032 /* Surge.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0221AAEC5C003EE032 /* Surge.framework */; };
 		B7B1EB0421AAEC5C003EE032 /* Surge.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B7B1EB0221AAEC5C003EE032 /* Surge.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B7D0707C22796FAB0036BE26 /* libRNSentry.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B7D0707522796F740036BE26 /* libRNSentry.a */; };
 		B7D1BCC421C1C877006B9677 /* Http.m in Sources */ = {isa = PBXBuildFile; fileRef = B7D1BCC321C1C877006B9677 /* Http.m */; };
 		B7FC736C21F8361A0058EBEF /* TagLib.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7FC736A21F8361A0058EBEF /* TagLib.swift */; };
 		B7FC736D21F8361A0058EBEF /* TagLib.m in Sources */ = {isa = PBXBuildFile; fileRef = B7FC736B21F8361A0058EBEF /* TagLib.m */; };
@@ -455,6 +456,20 @@
 			remoteGlobalIDString = 134814201AA4EA6300B7C361;
 			remoteInfo = RNAudioRecord;
 		};
+		B7D0707422796F740036BE26 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B7D0703E22796F740036BE26 /* RNSentry.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 134814201AA4EA6300B7C361;
+			remoteInfo = RNSentry;
+		};
+		B7D0707622796F740036BE26 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B7D0703E22796F740036BE26 /* RNSentry.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 274692C321B4414400BF91A8;
+			remoteInfo = "RNSentry-tvOS";
+		};
 		B7FEBF4621796C8400FA487B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 3DB7677A7FCE4E6886B3F6B8 /* RNSound.xcodeproj */;
@@ -557,6 +572,7 @@
 		B7A49DDB21B20CDA0076B0A2 /* ImageHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ImageHelper.h; path = Birdgram/ImageHelper.h; sourceTree = "<group>"; };
 		B7A49DE021B318120076B0A2 /* Image.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Image.swift; path = Birdgram/Image.swift; sourceTree = "<group>"; };
 		B7B1EB0221AAEC5C003EE032 /* Surge.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = Surge.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B7D0703E22796F740036BE26 /* RNSentry.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RNSentry.xcodeproj; path = "../node_modules/react-native-sentry/ios/RNSentry.xcodeproj"; sourceTree = "<group>"; };
 		B7D1BCC321C1C877006B9677 /* Http.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Http.m; path = Birdgram/Http.m; sourceTree = "<group>"; };
 		B7FC736A21F8361A0058EBEF /* TagLib.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = TagLib.swift; path = Birdgram/TagLib.swift; sourceTree = "<group>"; };
 		B7FC736B21F8361A0058EBEF /* TagLib.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = TagLib.m; path = Birdgram/TagLib.m; sourceTree = "<group>"; };
@@ -622,6 +638,7 @@
 				D196A135E78641ADA2BE2B29 /* libRNGestureHandler.a in Frameworks */,
 				76C840EB92AF487FBA6F0BD0 /* libRNAudioRecord.a in Frameworks */,
 				8D407BB4DE6746D38295F1C6 /* libz.tbd in Frameworks */,
+				B7D0707C22796FAB0036BE26 /* libRNSentry.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -850,6 +867,7 @@
 				AA1F90226BC44ACE94E2E1CD /* RNFetchBlob.xcodeproj */,
 				95FD82E165E44F2FB09395D9 /* RNGestureHandler.xcodeproj */,
 				71E00DAC45944927ACF700A6 /* RNAudioRecord.xcodeproj */,
+				B7D0703E22796F740036BE26 /* RNSentry.xcodeproj */,
 			);
 			name = Libraries;
 			sourceTree = "<group>";
@@ -1007,6 +1025,15 @@
 			isa = PBXGroup;
 			children = (
 				B7B6A95D219D210C008DDDBC /* libRNAudioRecord.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B7D0703F22796F740036BE26 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B7D0707522796F740036BE26 /* libRNSentry.a */,
+				B7D0707722796F740036BE26 /* libRNSentry-tvOS.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1217,6 +1244,10 @@
 				{
 					ProductGroup = B70F80C2217FAA0D006CDF36 /* Products */;
 					ProjectRef = 95FD82E165E44F2FB09395D9 /* RNGestureHandler.xcodeproj */;
+				},
+				{
+					ProductGroup = B7D0703F22796F740036BE26 /* Products */;
+					ProjectRef = B7D0703E22796F740036BE26 /* RNSentry.xcodeproj */;
 				},
 				{
 					ProductGroup = B7FEBF4321796C8400FA487B /* Products */;
@@ -1598,6 +1629,20 @@
 			remoteRef = B7B6A95C219D210C008DDDBC /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		B7D0707522796F740036BE26 /* libRNSentry.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libRNSentry.a;
+			remoteRef = B7D0707422796F740036BE26 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		B7D0707722796F740036BE26 /* libRNSentry-tvOS.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = "libRNSentry-tvOS.a";
+			remoteRef = B7D0707622796F740036BE26 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 		B7FEBF4721796C8400FA487B /* libRNSound.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
@@ -1655,7 +1700,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# From https://sentry.io/onboarding/dan-brown/birdgram/configure/react-native/\nexport SENTRY_PROPERTIES=sentry.properties\n../node_modules/@sentry/cli/bin/sentry-cli react-native xcode\n\n# From https://facebook.github.io/react-native/docs/running-on-device\n# - Like https://github.com/facebook/react-native/blob/v0.57.2/scripts/react-native-xcode.sh#L17\n#if [[ \"${CONFIGURATION}\" = *Debug* ]]; then export SKIP_BUNDLING=true; fi\n\nexport NODE_BINARY=node\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
+			shellScript = "# From https://facebook.github.io/react-native/docs/running-on-device\n# - Like https://github.com/facebook/react-native/blob/v0.57.2/scripts/react-native-xcode.sh#L17\n#if [[ \"${CONFIGURATION}\" = *Debug* ]]; then export SKIP_BUNDLING=true; fi\n\n# Before https://sentry.io/onboarding/dan-brown/birdgram/configure/react-native/\n# export NODE_BINARY=node\n# ../node_modules/react-native/scripts/react-native-xcode.sh\n\n# After https://sentry.io/onboarding/dan-brown/birdgram/configure/react-native/\nexport NODE_BINARY=node\nexport SENTRY_PROPERTIES=sentry.properties\n../node_modules/@sentry/cli/bin/sentry-cli react-native xcode \\\n  ../node_modules/react-native/scripts/react-native-xcode.sh\n";
 		};
 		1A2B5B5EBC1141D88D1D9C98 /* Upload Debug Symbols to Sentry */ = {
 			isa = PBXShellScriptBuildPhase;
