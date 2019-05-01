@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/sh
 # Can't rely on shebang line [why?]
 set -eux
 set -o pipefail
