@@ -453,9 +453,13 @@ export class RecordScreen extends Component<Props, State> {
                   this.state.recordingState === 'stopped' ? (
 
                     // editRecording not found (e.g. user deleted a user rec, or xc dataset changed)
+                    //  - This also shows on first app launch, so let's do "Start a recording" instead of "Recording not found"
+                    //  - TODO Show both by switching on this.props.location.pathname === '/'
+                    //    - Requires testing
                     <View style={[Styles.center, Styles.fill, {padding: 30}]}>
                       <Text style={material.subheading}>
-                        Recording not found
+                        {/* Recording not found */}
+                        Start a recording
                       </Text>
                     </View>
 
