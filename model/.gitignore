@@ -1,0 +1,4 @@
+# data
+# - HACK Not needed for git, but helpful for atom which tries to follow the data/ symlink without this
+data/*
+!data/hand-labels/

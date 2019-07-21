@@ -1,0 +1,3 @@
+# Paylod symlinks
+# - HACK Not needed for git, but helpful for atom which tries to follow the */ dir symlinks without this
+*/
