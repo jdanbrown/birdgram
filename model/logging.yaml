@@ -36,6 +36,10 @@ loggers:
   sh:                     {level: WARN} # Noisy at info
   urllib3.connectionpool: {level: INFO} # Conn logging at debug -- and you have to set debug, even with root:debug [why?]
 
+  # potoo.bqq: Reduce noise
+  datalab:      {level: INFO} # Noisy at debug
+  oauth2client: {level: WARN} # Noisy at info
+
   # gunicorn does something weird with its logging such that we _have_ to specify [qualname, handlers, propagate]:
   # - handlers, else loggers use their own default handler and formatter, somehow
   #   - [This is definitely true]
