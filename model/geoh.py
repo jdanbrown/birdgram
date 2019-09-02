@@ -6,10 +6,11 @@ API adapter for python-geohash
 """
 
 from functools import partial
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from more_itertools import first, one, unique_everseen
 import numpy as np
+from tqdm import tqdm
 
 import geohash as _geohash
 from util import generator_to, np_vectorize_asscalar
@@ -139,3 +140,33 @@ def str_to_int(x: str, precision_bits: int) -> int:
 
 def int_to_str(x: int, precision_bits: int) -> str:
     return str_encode(*int_decode_origin(x), precision_bits)
+
+
+def all_geohashes_with_expand(precision_bits: int, progress=True) -> Mapping[str, Iterable[str]]:
+    """
+    Enumerate all geohash strs with their expands (= neighbors + self), at the given precision
+    - Return a dict: geohash -> expand(geohash)
+    - This approach is really dumb and slow, but works well enough for now
+    - Approx runtimes:
+        - precision_bits=1  -> len[   2] time[0s]
+        - precision_bits=3  -> len[   8] time[0s]
+        - precision_bits=5  -> len[  32] time[0s]
+        - ...
+        - precision_bits=13 -> len[  8k] time[1.2s]
+        - precision_bits=15 -> len[ 32k] time[2.8s]
+        - precision_bits=17 -> len[128k] time[11s]
+        - precision_bits=19 -> len[512k] time[42s]
+        - precision_bits=21 -> len[  2m] time[TODO (~160s)]
+        - precision_bits=23 -> len[  8m] time[TODO (~640s)]
+    """
+    expands = {}
+    to_expand = str_expand('0', precision_bits)  # '0' isn't necessarily at right precision, so don't include in output
+    progress = progress and tqdm(total=2**precision_bits)
+    while to_expand:
+        x = to_expand.pop(0)
+        if x not in expands:
+            expands[x] = str_expand(x, precision_bits)
+            to_expand.extend(expands[x])
+            progress and progress.update()
+    progress and progress.close()
+    return expands

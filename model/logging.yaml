@@ -39,6 +39,8 @@ loggers:
   # potoo.bqq: Reduce noise
   datalab:      {level: INFO} # Noisy at debug
   oauth2client: {level: WARN} # Noisy at info
+  gcsfs.core:   {level: INFO} # Noisy at debug
+  google.auth:  {level: INFO} # Noisy at debug
 
   # gunicorn does something weird with its logging such that we _have_ to specify [qualname, handlers, propagate]:
   # - handlers, else loggers use their own default handler and formatter, somehow

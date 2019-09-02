@@ -101,6 +101,9 @@ from viz import *
 from xgb_sklearn_hack import *
 from xgb_util import *
 
+# HACK Redo this import last so that theme_minimal/theme_void aren't overwritten by other modules exporting plotnine.*
+from potoo.plot import *
+
 #
 # Mimic the relevant bits of ~/.pythonrc
 #   - cf. api.app.init_potoo
