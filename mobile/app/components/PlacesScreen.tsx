@@ -25,8 +25,9 @@ import { SettingsWrites } from 'app/settings';
 import { normalizeStyle, Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
-  fastIsEqual, Fun, global, ifNull, json, local, mapNull, mapPop, mapUndefined, match, matchKey, matchNull,
-  Omit, parseFloatElseNaN, pretty, setAdd, setToggle, shallowDiffPropsState, typed, yaml, yamlPretty,
+  fastIsEqual, Fun, global, ifNull, json, local, mapNull, mapPop, mapUndefined, match, matchKey,
+  matchNull, Omit, parseFloatElseNaN, pretty, setAdd, setToggle, shallowDiffPropsState, typed,
+  yaml, yamlPretty,
 } from 'app/utils';
 
 const log = new Log('PlacesScreen');
@@ -324,7 +325,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
         }}>
           <Text style={{
             alignSelf: 'center',
-            marginTop: 30 - getStatusBarHeight(), // No status bar
+            marginTop: Styles.tabBarText.marginTop,
             marginBottom: 10,
             ...material.titleObject,
           }}>

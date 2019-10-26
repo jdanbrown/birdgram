@@ -30,10 +30,11 @@ import { SettingsWrites } from 'app/settings';
 import { StyleSheet } from 'app/stylesheet';
 import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
-  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, ifNull, into,
-  json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchNull, matchUndefined, noawait,
-  objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDiff, setToggle, shallowDiffPropsState, Style,
-  throw_, Timer, typed, yaml, yamlPretty, zipSame,
+  all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet,
+  global, ifNull, into, json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty,
+  matchNull, matchUndefined, noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round,
+  setAdd, setDiff, setToggle, shallowDiffPropsState, Style, throw_, Timer, typed, yaml, yamlPretty,
+  zipSame,
 } from 'app/utils';
 
 const log = new Log('BrowseScreen');
@@ -176,7 +177,7 @@ export class BrowseScreen extends Component<Props, State> {
           }}>
             <Text style={{
               alignSelf: 'center',
-              marginTop: 30 - getStatusBarHeight(), // No status bar
+              marginTop: Styles.tabBarText.marginTop,
               marginBottom: 10,
               ...material.titleObject,
             }}>

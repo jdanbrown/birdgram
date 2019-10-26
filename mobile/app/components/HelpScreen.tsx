@@ -5,6 +5,7 @@ import { human, iOSColors, material, materialColors, systemWeights } from 'react
 
 import { Log, rich } from 'app/log';
 import { Go, Histories, History, Location } from 'app/router';
+import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import { global, json, shallowDiffPropsState, yaml } from 'app/utils';
 
@@ -54,7 +55,7 @@ export class HelpScreen extends PureComponent<Props, State> {
         }}>
           <Text style={{
             alignSelf: 'center',
-            marginTop: 30 - getStatusBarHeight(), // No status bar
+            marginTop: Styles.tabBarText.marginTop,
             marginBottom: 10,
             ...material.titleObject,
           }}>

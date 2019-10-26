@@ -1,7 +1,12 @@
+import _ from 'lodash';
 import { TextProps, ViewProps } from 'react-native'
+import DeviceInfo from 'react-native-device-info';
+import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
 import { StyleSheet } from 'app/stylesheet';
+
+const iOSDefaultBackgroundColor = '#f7f7f7'; // Default background color (in iOS 10)
 
 // Generic styles
 //  - TODO How to put in a StyleSheet.create without losing type info?
@@ -25,11 +30,21 @@ export const Styles = {
   flipVertical:   {transform: [{scaleY: -1}]},
   flipBoth:       {transform: [{scaleX: -1}, {scaleY: -1}]},
 
+  app: {
+    backgroundColor: iOSDefaultBackgroundColor, // Match app bg to tabBar bg (only matters on notched ios)
+  },
+
   // For TabRoutes, and reused by others (e.g. screen headers)
   tabBar: {
-    backgroundColor: '#f7f7f7', // Default background color in iOS 10
+    backgroundColor: iOSDefaultBackgroundColor, // Match app bg to tabBar bg (only matters on notched ios)
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(0,0,0,.3)',
+  },
+  tabBarText: {
+    marginTop: (!DeviceInfo.hasNotch()
+      ? 30 - getStatusBarHeight() // Adjust up b/c we hide the status bar
+      : 0                         // HACK Fudge the adjustment on notched ios [why?]
+    ),
   },
 
   // Debug styles

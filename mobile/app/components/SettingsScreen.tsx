@@ -81,7 +81,7 @@ export class SettingsScreen extends PureComponent<Props, State> {
         }}>
           <Text style={{
             alignSelf: 'center',
-            marginTop: 30 - getStatusBarHeight(), // No status bar
+            marginTop: Styles.tabBarText.marginTop,
             marginBottom: 10,
             ...material.titleObject,
           }}>

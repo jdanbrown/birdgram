@@ -23,9 +23,9 @@ import { Settings } from 'app/settings';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
-  enumerate, global, into, json, local, mapNil, mapNull, mapUndefined, match, matchNull, matchUndefined,
-  mergeArraysWith, objectKeysTyped, pretty, shallowDiffPropsState, showDate, showDateNoTime, showTime, throw_, typed,
-  yaml,
+  enumerate, global, into, json, local, mapNil, mapNull, mapUndefined, match, matchNull,
+  matchUndefined, mergeArraysWith, objectKeysTyped, pretty, shallowDiffPropsState, showDate,
+  showDateNoTime, showTime, throw_, typed, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -283,7 +283,7 @@ export class RecentScreen extends PureComponent<Props, State> {
           }}>
             <Text style={{
               alignSelf: 'center',
-              marginTop: 30 - getStatusBarHeight(), // No status bar
+              marginTop: Styles.tabBarText.marginTop,
               marginBottom: 10,
               ...material.titleObject,
             }}>

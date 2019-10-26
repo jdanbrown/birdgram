@@ -24,8 +24,9 @@ import { Go, Location, locationKeyIsEqual, locationPathIsEqual, TabLocations, Ta
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
-  global, ifEmpty, ifNull, into, json, local, mapNil, mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined,
-  mergeArraysWith, pretty, shallowDiffPropsState, showDate, showDateNoTime, showTime, throw_, typed, yaml,
+  global, ifEmpty, ifNull, into, json, local, mapNil, mapNull, mapUndefined, match, matchNil,
+  matchNull, matchUndefined, mergeArraysWith, pretty, shallowDiffPropsState, showDate,
+  showDateNoTime, showTime, throw_, typed, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -279,11 +280,12 @@ export class SavedScreen extends PureComponent<Props, State> {
           }}>
             <Text style={{
               alignSelf: 'center',
-              marginTop: 30 - getStatusBarHeight(), // No status bar
+              marginTop: Styles.tabBarText.marginTop,
               marginBottom: 10,
               ...material.titleObject,
             }}>
-              Saved
+              {/* TODO */}
+              Saved [WIP v3]
             </Text>
           </View>
         </BaseButton>

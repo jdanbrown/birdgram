@@ -45,6 +45,7 @@ import {
 } from 'app/router';
 import { Settings, SettingsProxy, SettingsWrites } from 'app/settings';
 import { querySql } from 'app/sql';
+import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import { urlpack } from 'app/urlpack';
 import {
@@ -441,7 +442,7 @@ export default class App extends PureComponent<Props, State> {
       //  - https://facebook.github.io/react-native/docs/safeareaview
       <SafeAreaView style={{
         flex: 1,
-        backgroundColor: '#ffffff',
+        backgroundColor: Styles.app.backgroundColor,
       }}>
 
         {/* For onLayout -> orientation */}
