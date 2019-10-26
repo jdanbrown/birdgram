@@ -33,6 +33,21 @@ $ yarn jest
 $ yarn jest --watch
 ```
 
+# Submit to App Store
+- Overview
+  - https://developer.apple.com/app-store/launch/
+  - https://developer.apple.com/app-store/product-page/
+  - https://developer.apple.com/app-store/search/
+  - https://developer.apple.com/app-store/review/
+  - https://developer.apple.com/app-store/review/guidelines/
+  - https://developer.apple.com/app-store/review/#common-app-rejections
+- Screenshot size specs
+  - https://help.apple.com/app-store-connect/#/devd274dd925
+- Keyword SEO
+  - https://developer.apple.com/app-store/search/
+  - https://stage.tune.com/blog/top-3-ios-app-store-optimization-tricks/ (2012)
+    - App Store maybe doesn't do stemming? (wat)
+
 # Upload to TestFlight (e.g. US)
 1. `fastlane` takes ~50m to build and upload
   - ~15m build + ~33m upload (2.6GB US .ipa @ ~1.4MB/s)
