@@ -8,13 +8,13 @@ import { PlaceLoading } from 'app/components/PlacesScreen';
 import { SortListResults, SortSearchResults } from 'app/components/SearchScreen';
 import { Place, PlaceId, Quality, Species, SpeciesGroup } from 'app/datatypes';
 import { debug_print, Log, puts, rich } from 'app/log';
-import { json, match, objectKeysTyped, pretty, typed, yaml } from 'app/utils';
+import { json, mapPairsTyped, match, objectKeysTyped, pretty, typed, yaml } from 'app/utils';
 
 const log = new Log('Settings');
 
 // All 5 of these lists of attrs (4 here + constructor) must be kept in sync, else load/setItem/etc. aren't typesafe
 export interface Props {
-  // NOTE Keep attrs in sync (1/5)
+  // NOTE Keep attrs in sync (1/6)
   readonly showSettingsTab: boolean;
   readonly showDebug: boolean;
   readonly allowUploads: boolean;
@@ -54,7 +54,7 @@ export interface Props {
   readonly places:      Set<PlaceId>;
 }
 export const DEFAULTS: Props = {
-  // NOTE Keep attrs in sync (2/5)
+  // NOTE Keep attrs in sync (2/6)
   showSettingsTab: false,
   showDebug: false,
   allowUploads: true,
@@ -105,8 +105,12 @@ export const DEFAULTS: Props = {
   savedPlaces: [],
   places:      new Set(),
 };
+export const VALIDATE: {[K in keyof Props]?: (x: Props[K]) => boolean} = {
+  // NOTE Keep attrs in sync (3/6)
+  filterQuality: x => x.size > 0, // Disallow an empty set of quality filters
+};
 export const TYPES: {[key: string]: Array<string | Function>} = {
-  // NOTE Keep attrs in sync (3/5)
+  // NOTE Keep attrs in sync (4/6)
   showSettingsTab: ['boolean'],
   showDebug: ['boolean'],
   allowUploads: ['boolean'],
@@ -145,8 +149,8 @@ export const TYPES: {[key: string]: Array<string | Function>} = {
   savedPlaces: ['object'],
   places:      [Set],
 };
-export const KEYS = [
-  // NOTE Keep attrs in sync (4/5)
+export const KEYS: Array<keyof Props> = [
+  // NOTE Keep attrs in sync (5/6)
   //  - Keys in the order expected by the constructor
   'showSettingsTab',
   'showDebug',
@@ -218,7 +222,7 @@ export class Settings implements SettingsWrites, Props {
   constructor(
     // Callback to trigger App.setState when settings change
     public readonly appSetState: (settings: Settings) => void,
-    // NOTE Keep attrs in sync (5/5)
+    // NOTE Keep attrs in sync (6/6)
     public readonly showSettingsTab: boolean,
     public readonly showDebug: boolean,
     public readonly allowUploads: boolean,
@@ -289,17 +293,20 @@ export class Settings implements SettingsWrites, Props {
 
     // Convert to a Settings, taking care to avoid introducing any values with invalid types
     //  - Careful: iterate over KEYS, not keys from saved, else we might load an outdated set of keys
-    //  - Fallback to default values for any values that are missing or have the wrong type
+    //  - Fallback to default values for any values that are missing, have the wrong type, or fail validation
     const values: Array<any> = KEYS.map(key => {
       const value = saved[key];
       const def = (DEFAULTS as {[key: string]: any})[key];
+      const validate = _.get(VALIDATE, key, (x: any) => true) as (x: any) => boolean;
       if (value === null) {
         // Quietly use default for missing keys (e.g. we added a new setting since the last app run)
         return def;
       } else if (!Settings.keyHasTypeOfValue(key, value)) {
         // Warn and use default for saved values with the wrong type (probably a bug)
-        //  - TODO Make sure this warning doesn't show in Release builds (e.g. when we change the type for an existing key)
         log.warn(`load: Dropping saved value with invalid type: {${key}: ${value}} has type ${typeof value} != ${TYPES[key]}`);
+        return def;
+      } else if (!validate(value)) {
+        // Quietly use default to values that fail validation (e.g. user deselects all quality filters)
         return def;
       } else {
         // Else this key:value should be safe to use
@@ -333,8 +340,14 @@ export class Settings implements SettingsWrites, Props {
   async set(props: Partial<Props> | ((props: Props) => Partial<Props>)): Promise<void> {
     // Promote input types
     if (props instanceof Function) props = props(this);
-    // Log (after promoting)
+    // Log (after promoting, before validation)
     log.info('set', rich(props));
+    // Validate
+    props = mapPairsTyped(props, ([key, value]) => {
+      const def = (DEFAULTS as {[key: string]: any})[key];
+      const validate = _.get(VALIDATE, key, (x: any) => true) as (x: any) => boolean;
+      return validate(value) ? [key, value] : [key, def];
+    });
     // Set locally
     //  - Before persist: faster App.state response, async persist (which has high variance runtime)
     this.appSetState(this.withProps(props));

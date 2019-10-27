@@ -281,7 +281,6 @@ export class SearchScreen extends PureComponent<Props, State> {
   }}
 
   // Getters for state
-  get filters(): object { return _.pickBy(this.state, (v, k) => k.startsWith('filter')); }
   get recsOrEmpty(): Array<Rec> {
     return matchStateRecs(this.state.recs, {
       loading:  ()   => [],
@@ -2449,7 +2448,12 @@ export class SearchScreen extends PureComponent<Props, State> {
               : `${this.state.recs.length}/${this.state.totalRecs || '?'} (${sprintf('%.3f', this.state.recsQueryTime)}s)`
             }
           </this.DebugText>
-          <this.DebugText>Filters: {yaml(this.filters)}</this.DebugText>
+          <this.DebugText>
+            Filters: {yaml({
+              filterQuality:   Array.from(this.props.filterQuality),
+              filterQueryText: this.state.filterQueryText,
+            })}
+          </this.DebugText>
         </this.DebugView>
 
         {/* Bottom controls */}

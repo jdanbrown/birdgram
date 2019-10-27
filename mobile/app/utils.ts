@@ -364,6 +364,23 @@ export function objectKeysTyped<X extends {}>(x: X): Array<keyof X> {
   return Object.keys(x) as unknown as Array<keyof X>;
 }
 
+// Stronger typing for: _(x).toPairs().map(f).fromPairs()
+export function mapPairsTyped<X extends {}, K extends keyof X>(x: X, f: (kv: [K, X[K]]) => [K, X[K]]): X {
+  let kvs: Array<[K, X[K]]> = toPairsTyped(x);
+  kvs = _.map(kvs, f);
+  return fromPairsTyped(kvs);
+}
+
+// Stronger typing for _.toPairs
+export function toPairsTyped<X extends {}, K extends keyof X>(x: X): Array<[K, X[K]]> {
+  return _.toPairs(x) as Array<[K, X[K]]>;
+}
+
+// Stronger typing for _.fromPairs
+export function fromPairsTyped<X extends {}, K extends keyof X>(x: Array<[K, X[K]]>): X {
+  return _.fromPairs(x) as X;
+}
+
 // Useful for debugging shouldComponentUpdate
 export function shallowDiff(x: object, y: object): {[key: string]: boolean} {
   return _.assignWith<{[key: string]: boolean}>(
