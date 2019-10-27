@@ -154,9 +154,7 @@ export class BrowseScreen extends Component<Props, State> {
 
     return (
       <View style={{
-        width: '100%', height: '100%', // Full screen
-        backgroundColor: iOSColors.white, // Opaque overlay (else SearchScreen shows through) [XXX Defunct?]
-        flexDirection: 'column',
+        flex: 1,
       }}>
 
         {/* NOTE BaseButton b/c TouchableWithoutFeedback wouldn't trigger onPress during FlatList scroll animation */}
@@ -186,176 +184,182 @@ export class BrowseScreen extends Component<Props, State> {
           </View>
         </BaseButton>
 
-        {/* Title + scroll to top + buttons */}
-        <BaseButton
-          style={{
-            // flex: 1,
-          }}
-          onPress={() => {
-            // Scroll to top
-            mapNull(this.sectionListRef.current, sectionList => { // Avoid transient nulls [why do they happen?]
-              if (sectionList.scrollToLocation) { // (Why typed as undefined? I think only for old versions of react-native?)
-                sectionList.scrollToLocation({
-                  sectionIndex: 0, itemIndex: 0,              // First section, first item
-                  viewOffset: this._firstSectionHeaderHeight, // Else first item covered by first section header
-                });
-              }
-            });
-          }}
-        >
-          <View style={{
-            flexDirection:     'row',
-            alignItems:        'center', // Vertical (row i/o column)
-            backgroundColor:   Styles.tabBar.backgroundColor,
-            borderBottomWidth: Styles.tabBar.borderTopWidth,
-            borderBottomColor: Styles.tabBar.borderTopColor,
-          }}>
+        <View style={{
+          flex: 1,
+        }}>
 
-            {/* Title */}
-            <Text style={{
-              flexGrow: 1,
-              ...material.body2Object,
-              marginHorizontal: 5,
+          {/* Title + scroll to top + buttons */}
+          <BaseButton
+            style={{
+              // flex: 1,
+            }}
+            onPress={() => {
+              // Scroll to top
+              mapNull(this.sectionListRef.current, sectionList => { // Avoid transient nulls [why do they happen?]
+                if (sectionList.scrollToLocation) { // (Why typed as undefined? I think only for old versions of react-native?)
+                  sectionList.scrollToLocation({
+                    sectionIndex: 0, itemIndex: 0,              // First section, first item
+                    viewOffset: this._firstSectionHeaderHeight, // Else first item covered by first section header
+                  });
+                }
+              });
+            }}
+          >
+            <View style={{
+              flexDirection:     'row',
+              alignItems:        'center', // Vertical (row i/o column)
+              backgroundColor:   Styles.tabBar.backgroundColor,
+              borderBottomWidth: Styles.tabBar.borderTopWidth,
+              borderBottomColor: Styles.tabBar.borderTopColor,
             }}>
-              Place: {this.props.place.name} ({data.length}/{this.props.place.knownSpecies.length} species)
-            </Text>
 
-            {/* Toggle-all button */}
-            {local(() => {
-              const {allSpeciesGroups} = this.props.ebird;
-              const noneExcluded = (true
-                && this.props.excludeSpecies.size       === 0
-                && this.props.excludeSpeciesGroups.size === 0
-                && this.props.unexcludeSpecies.size     === 0
-              );
-              const allExcluded = (true
-                && this.props.excludeSpecies.size       === 0
-                && this.props.excludeSpeciesGroups.size === allSpeciesGroups.length // HACK Briefly breaks on ebird metadata update
-                && this.props.unexcludeSpecies.size     === 0
-              );
+              {/* Title */}
+              <Text style={{
+                flexGrow: 1,
+                ...material.body2Object,
+                marginHorizontal: 5,
+              }}>
+                Place: {this.props.place.name} ({data.length}/{this.props.place.knownSpecies.length} species)
+              </Text>
+
+              {/* Toggle-all button */}
+              {local(() => {
+                const {allSpeciesGroups} = this.props.ebird;
+                const noneExcluded = (true
+                  && this.props.excludeSpecies.size       === 0
+                  && this.props.excludeSpeciesGroups.size === 0
+                  && this.props.unexcludeSpecies.size     === 0
+                );
+                const allExcluded = (true
+                  && this.props.excludeSpecies.size       === 0
+                  && this.props.excludeSpeciesGroups.size === allSpeciesGroups.length // HACK Briefly breaks on ebird metadata update
+                  && this.props.unexcludeSpecies.size     === 0
+                );
+                return (
+                  <BrowseItemButton
+                    iconName='x'
+                    activeButtonColor={allExcluded ? iOSColors.red : iOSColors.yellow}
+                    active={!noneExcluded}
+                    onPress={() => this.props.settings.set(!noneExcluded ? {
+                      excludeSpecies:       new Set(),
+                      excludeSpeciesGroups: new Set(),
+                      unexcludeSpecies:     new Set(),
+                    } : {
+                      excludeSpecies:       new Set(),
+                      excludeSpeciesGroups: new Set(this.props.ebird.allSpeciesGroups),
+                      unexcludeSpecies:     new Set(),
+                    })}
+                  />
+                );
+              })}
+
+            </View>
+          </BaseButton>
+
+          {/* Search bar */}
+          <SearchBar // (cf. SearchBar in PlacesScreen)
+            // Listeners
+            onSearchChange={searchFilter => this.setState({
+              searchFilter,
+            })}
+            // Style
+            height={40}
+            padding={0}
+            inputStyle={{
+              // Disable border from SearchBar (styles.searchBar)
+              borderWidth:       0,
+              // Replace with a border that matches the title bar border
+              backgroundColor:   Styles.tabBar.backgroundColor,
+              borderBottomWidth: Styles.tabBar.borderTopWidth,
+              borderBottomColor: Styles.tabBar.borderTopColor,
+            }}
+            // Disable back button
+            //  - By: always showing back button and making it look and behave like the search icon
+            alwaysShowBackButton={true}
+            iconBackComponent={(<Feather size={18} color={iOSColors.gray} name={'search'} />)}
+            onBackPress={() => {}}
+            // TextInputProps
+            inputProps={{
+              autoCorrect:                   false,
+              autoCapitalize:                'none',
+              // enablesReturnKeyAutomatically: true,
+              placeholder:                   'Species',
+              defaultValue:                  this.state.searchFilter,
+              returnKeyType:                 'done',
+              selectTextOnFocus:             true,
+              keyboardType:                  'default',
+            }}
+            // TODO Prevent dismissing keyboard on X button, so that it only clears the input
+            iconCloseComponent={(<View/>)} // Disable close button [TODO Nope, keep so we can easily clear text]
+            // onClose={() => this.setState({searchFilter: ''})} // FIXME Why doesn't this work?
+          />
+
+          {/* SectionList */}
+          <SectionList
+            ref={this.sectionListRef as any} // HACK Is typing for SectionList busted? Can't make it work
+            style={{
+              flexGrow: 1,
+            }}
+            sections={sections}
+            // Disable lazy loading, else fast scrolling down hits a lot of partial bottoms before the real bottom
+            initialNumToRender={data.length}
+            maxToRenderPerBatch={data.length}
+            keyExtractor={species => species.shorthand} // [Why needed in addition to key props below? key warning without this]
+            ListEmptyComponent={(
+              <View style={[Styles.center, {padding: 30}]}>
+                <Text style={material.subheading}>
+                  No species
+                </Text>
+              </View>
+            )}
+            // Perf: split out section/item components so that it stays mounted across updates
+            //  - (Why does it sometimes unmount/mount anyway?)
+            renderSectionHeader={({section}) => {
+              const {species_group} = section.data[0];
               return (
-                <BrowseItemButton
-                  iconName='x'
-                  activeButtonColor={allExcluded ? iOSColors.red : iOSColors.yellow}
-                  active={!noneExcluded}
-                  onPress={() => this.props.settings.set(!noneExcluded ? {
-                    excludeSpecies:       new Set(),
-                    excludeSpeciesGroups: new Set(),
-                    unexcludeSpecies:     new Set(),
-                  } : {
-                    excludeSpecies:       new Set(),
-                    excludeSpeciesGroups: new Set(this.props.ebird.allSpeciesGroups),
-                    unexcludeSpecies:     new Set(),
-                  })}
+                <BrowseSectionHeader
+                  key={species_group}
+                  species_group={species_group}
+                  isFirstSection={isFirstSection(section)}
+                  excluded={this.props.excludeSpeciesGroups.has(species_group)}
+                  // TODO(exclude_invariants): Dedupe with SearchScreen
+                  unexcludedAny={
+                    Array.from(this.props.unexcludeSpecies)
+                    .map(x => this.props.ebird.speciesGroupFromSpecies(x))
+                    .includes(species_group)
+                  }
+                  browse={this}
+                  go={this.props.go}
+                  ebird={this.props.ebird}
+                  settings={this.props.settings}
                 />
               );
-            })}
+            }}
+            renderItem={({index, section, item: {
+              shorthand: species,
+              species_group,
+              com_name,
+              sci_name,
+            }}) => {
+              return (
+                <BrowseItem
+                  key={species}
+                  species={species}
+                  species_group={species_group}
+                  com_name={com_name}
+                  sci_name={sci_name}
+                  isLastItem={isLastItem(section, index)}
+                  excluded={this.props.excludeSpecies.has(species) || this.props.excludeSpeciesGroups.has(species_group)}
+                  unexcluded={this.props.unexcludeSpecies.has(species)}
+                  go={this.props.go}
+                  ebird={this.props.ebird}
+                  settings={this.props.settings}
+                />
+              );
+            }}
+          />
 
-          </View>
-        </BaseButton>
-
-        {/* Search bar */}
-        <SearchBar // (cf. SearchBar in PlacesScreen)
-          // Listeners
-          onSearchChange={searchFilter => this.setState({
-            searchFilter,
-          })}
-          // Style
-          height={40}
-          padding={0}
-          inputStyle={{
-            // Disable border from SearchBar (styles.searchBar)
-            borderWidth:       0,
-            // Replace with a border that matches the title bar border
-            backgroundColor:   Styles.tabBar.backgroundColor,
-            borderBottomWidth: Styles.tabBar.borderTopWidth,
-            borderBottomColor: Styles.tabBar.borderTopColor,
-          }}
-          // Disable back button
-          //  - By: always showing back button and making it look and behave like the search icon
-          alwaysShowBackButton={true}
-          iconBackComponent={(<Feather size={18} color={iOSColors.gray} name={'search'} />)}
-          onBackPress={() => {}}
-          // TextInputProps
-          inputProps={{
-            autoCorrect:                   false,
-            autoCapitalize:                'none',
-            // enablesReturnKeyAutomatically: true,
-            placeholder:                   'Species',
-            defaultValue:                  this.state.searchFilter,
-            returnKeyType:                 'done',
-            selectTextOnFocus:             true,
-            keyboardType:                  'default',
-          }}
-          // TODO Prevent dismissing keyboard on X button, so that it only clears the input
-          iconCloseComponent={(<View/>)} // Disable close button [TODO Nope, keep so we can easily clear text]
-          // onClose={() => this.setState({searchFilter: ''})} // FIXME Why doesn't this work?
-        />
-
-        {/* SectionList */}
-        <SectionList
-          ref={this.sectionListRef as any} // HACK Is typing for SectionList busted? Can't make it work
-          style={{
-            flexGrow: 1,
-          }}
-          sections={sections}
-          // Disable lazy loading, else fast scrolling down hits a lot of partial bottoms before the real bottom
-          initialNumToRender={data.length}
-          maxToRenderPerBatch={data.length}
-          keyExtractor={species => species.shorthand} // [Why needed in addition to key props below? key warning without this]
-          ListEmptyComponent={(
-            <View style={[Styles.center, {padding: 30}]}>
-              <Text style={material.subheading}>
-                No species
-              </Text>
-            </View>
-          )}
-          // Perf: split out section/item components so that it stays mounted across updates
-          //  - (Why does it sometimes unmount/mount anyway?)
-          renderSectionHeader={({section}) => {
-            const {species_group} = section.data[0];
-            return (
-              <BrowseSectionHeader
-                key={species_group}
-                species_group={species_group}
-                isFirstSection={isFirstSection(section)}
-                excluded={this.props.excludeSpeciesGroups.has(species_group)}
-                // TODO(exclude_invariants): Dedupe with SearchScreen
-                unexcludedAny={
-                  Array.from(this.props.unexcludeSpecies)
-                  .map(x => this.props.ebird.speciesGroupFromSpecies(x))
-                  .includes(species_group)
-                }
-                browse={this}
-                go={this.props.go}
-                ebird={this.props.ebird}
-                settings={this.props.settings}
-              />
-            );
-          }}
-          renderItem={({index, section, item: {
-            shorthand: species,
-            species_group,
-            com_name,
-            sci_name,
-          }}) => {
-            return (
-              <BrowseItem
-                key={species}
-                species={species}
-                species_group={species_group}
-                com_name={com_name}
-                sci_name={sci_name}
-                isLastItem={isLastItem(section, index)}
-                excluded={this.props.excludeSpecies.has(species) || this.props.excludeSpeciesGroups.has(species_group)}
-                unexcluded={this.props.unexcludeSpecies.has(species)}
-                go={this.props.go}
-                ebird={this.props.ebird}
-                settings={this.props.settings}
-              />
-            );
-          }}
-        />
+        </View>
       </View>
     );
 
