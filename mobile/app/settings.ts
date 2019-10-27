@@ -15,6 +15,7 @@ const log = new Log('Settings');
 // All 5 of these lists of attrs (4 here + constructor) must be kept in sync, else load/setItem/etc. aren't typesafe
 export interface Props {
   // NOTE Keep attrs in sync (1/5)
+  readonly showSettingsTab: boolean;
   readonly showDebug: boolean;
   readonly allowUploads: boolean;
   readonly maxHistory: number;
@@ -54,6 +55,7 @@ export interface Props {
 }
 export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/5)
+  showSettingsTab: false,
   showDebug: false,
   allowUploads: true,
   maxHistory: 100, // 0 for unlimited
@@ -105,6 +107,7 @@ export const DEFAULTS: Props = {
 };
 export const TYPES: {[key: string]: Array<string | Function>} = {
   // NOTE Keep attrs in sync (3/5)
+  showSettingsTab: ['boolean'],
   showDebug: ['boolean'],
   allowUploads: ['boolean'],
   maxHistory: ['number'],
@@ -145,6 +148,7 @@ export const TYPES: {[key: string]: Array<string | Function>} = {
 export const KEYS = [
   // NOTE Keep attrs in sync (4/5)
   //  - Keys in the order expected by the constructor
+  'showSettingsTab',
   'showDebug',
   'allowUploads',
   'maxHistory',
@@ -214,7 +218,8 @@ export class Settings implements SettingsWrites, Props {
   constructor(
     // Callback to trigger App.setState when settings change
     public readonly appSetState: (settings: Settings) => void,
-    // NOTE Keep attrs in sync (4/5)
+    // NOTE Keep attrs in sync (5/5)
+    public readonly showSettingsTab: boolean,
     public readonly showDebug: boolean,
     public readonly allowUploads: boolean,
     public readonly maxHistory: number,

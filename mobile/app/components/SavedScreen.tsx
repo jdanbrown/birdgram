@@ -284,8 +284,7 @@ export class SavedScreen extends PureComponent<Props, State> {
               marginBottom: 10,
               ...material.titleObject,
             }}>
-              {/* TODO */}
-              Saved [WIP v3]
+              Saved
             </Text>
           </View>
         </BaseButton>

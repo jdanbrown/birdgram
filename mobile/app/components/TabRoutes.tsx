@@ -3,6 +3,8 @@
 import _ from 'lodash';
 import React, { Component, ComponentClass, PureComponent, ReactNode } from 'React';
 import { ActivityIndicator, Dimensions, Platform, Text, TouchableWithoutFeedback, View } from 'react-native';
+import * as Gesture from 'react-native-gesture-handler';
+import { FlingGestureHandler } from 'react-native-gesture-handler';
 import IconBadge from 'react-native-icon-badge';
 import { TabView, TabBar, SceneMap } from 'react-native-tab-view';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
@@ -13,6 +15,7 @@ import { Log, puts, rich } from 'app/log';
 import { memoizeOne, memoizeOneDeep } from 'app/memoize';
 import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import { Histories, History, HistoryConsumer, Location, ObserveHistory, RouterWithHistory, TabName } from 'app/router';
+import { SettingsWrites } from 'app/settings';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
@@ -28,6 +31,7 @@ const log = new Log('TabRoutes');
 export interface Props {
   tabLocation: Location; // Location to select tab (for the global tab router)
   histories: Histories;
+  settings: SettingsWrites;
   routes: Array<TabRoute>;
   defaultPath: string;
   priorityTabs: Array<TabRouteKey>;
@@ -70,12 +74,17 @@ export class TabRoutes extends PureComponent<Props, State> {
     shouldLoad: {},
   };
 
+  tabRouteUnknown = (tabRoute: TabRoute, msg: string): TabRoute => {
+    log.error(msg);
+    return tabRoute;
+  }
+
   // Getters for props/state
   routeByKey = (tab: TabRouteKey): TabRoute => this._routeByKey(this.props.routes)(tab);
   _routeByKey = memoizeOne(
     (routes: Array<TabRoute>): (tab: TabRouteKey) => TabRoute => {
       const m = new Map(routes.map<[TabRouteKey, TabRoute]>(route => [route.key, route]));
-      return tab => m.get(tab) || throw_(`Unknown tab: ${tab}`);
+      return tab => m.get(tab) || this.tabRouteUnknown(ix(routes, 0)!, `Unknown tab: ${tab}`);
     }
   );
 
@@ -197,31 +206,49 @@ export class TabRoutes extends PureComponent<Props, State> {
 
   // Instead of TabView's default material-style TabBar
   TabBarLikeIOS = () => (
-    <View
-      style={[styles.tabBar, matchOrientation(this.state.orientation, {
-        portrait:  () => styles.tabBarPortrait,
-        landscape: () => styles.tabBarLandscape,
-      })]}
-      onLayout={this.onLayout} // For orientation
+    <FlingGestureHandler
+      direction={Gesture.Directions.LEFT}
+      onHandlerStateChange={event => event.nativeEvent.state === Gesture.State.ACTIVE && (
+        this.props.settings.set(settings => ({
+          showSettingsTab: true,
+        }))
+      )}
     >
-      {this.props.routes.map(route => (
+      <FlingGestureHandler
+        direction={Gesture.Directions.RIGHT}
+        onHandlerStateChange={event => event.nativeEvent.state === Gesture.State.ACTIVE && (
+          this.props.settings.set(settings => ({
+            showSettingsTab: false,
+          }))
+        )}
+      >
         <View
-          key={route.key}
-          style={styles.tab}
+          style={[styles.tabBar, matchOrientation(this.state.orientation, {
+            portrait:  () => styles.tabBarPortrait,
+            landscape: () => styles.tabBarLandscape,
+          })]}
+          onLayout={this.onLayout} // For orientation
         >
-          <Route children={({location}) => (
-            <TabLink
-              focused={routeMatchesLocation(route.route, location)}
-              orientation={this.state.orientation}
-              to={route.route.path}
-              label={route.label}
-              iconName={route.iconName}
-              badge={route.badge}
-            />
-          )}/>
+          {this.props.routes.map(route => (
+            <View
+              key={route.key}
+              style={styles.tab}
+            >
+              <Route children={({location}) => (
+                <TabLink
+                  focused={routeMatchesLocation(route.route, location)}
+                  orientation={this.state.orientation}
+                  to={route.route.path}
+                  label={route.label}
+                  iconName={route.iconName}
+                  badge={route.badge}
+                />
+              )}/>
+            </View>
+          ))}
         </View>
-      ))}
-    </View>
+      </FlingGestureHandler>
+    </FlingGestureHandler>
   );
 
   onLayout = () => {
@@ -232,8 +259,10 @@ export class TabRoutes extends PureComponent<Props, State> {
 
   matchedRoute = (routes: Array<TabRoute>, tabLocation: Location): TabRoute => {
     return ix(routes, this.matchedRouteIndex(routes, tabLocation)) || (
-      throw_(`TabRoutes.matchedRoute: No routes for tabLocation[${json(tabLocation)}]`)
-    )
+      this.tabRouteUnknown(ix(routes, 0)!,
+        `TabRoutes.matchedRoute: No routes for tabLocation[${json(tabLocation)}]`,
+      )
+    );
   }
 
   // NOTE O(n), but n is very small (~5 tabs)

@@ -23,7 +23,7 @@ import { RecordScreen } from 'app/components/RecordScreen';
 import { SavedScreen } from 'app/components/SavedScreen';
 import { SearchScreen } from 'app/components/SearchScreen';
 import { SettingsScreen } from 'app/components/SettingsScreen';
-import { TabRoute, TabRouteKey, TabRoutes, TabLink } from 'app/components/TabRoutes';
+import { TabRoute, TabRouteKey, TabRouteProps, TabRoutes, TabLink } from 'app/components/TabRoutes';
 import * as Colors from 'app/colors';
 import { config } from 'app/config';
 import {
@@ -51,7 +51,7 @@ import { urlpack } from 'app/urlpack';
 import {
   assert, dirname, fastIsEqual, global, Interval, ifNil, ifNull, ifUndefined, into, json, local, mapNull, mapUndefined,
   match, matchNil, matchNull, matchUndefined, Omit, pretty, qsSane, readJsonFile, setAdd, setDiff, shallowDiff,
-  shallowDiffPropsState, Style, Timer, yaml,
+  shallowDiffPropsState, Style, Timer, typed, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -489,6 +489,7 @@ export default class App extends PureComponent<Props, State> {
                       <TabRoutes
                         tabLocation={location}
                         histories={this.state.histories!}
+                        settings={this.state.settingsWrites!}
                         routes={this.makeRoutes(locationTabs, historyTabs)}
                         defaultPath={this.defaultPath}
                         priorityTabs={this.priorityTabs}
@@ -534,11 +535,11 @@ export default class App extends PureComponent<Props, State> {
     // 'settings', // XXX Dev
   ];
   // Must be a function, else screens won't update on App props/state change
-  makeRoutes = (locationTabs: Location, historyTabs: History): Array<TabRoute> => [
+  makeRoutes = (locationTabs: Location, historyTabs: History): Array<TabRoute> => typed<Array<false | TabRoute>>([
     {
       key: 'record', route: {path: '/record'}, label: 'Record', iconName: iconForTab['record'],
       badge: this.badgeForTab('record'),
-      render: props => (
+      render: (props: TabRouteProps) => (
         <RecordScreen {...props}
           // App globals
           visible                 = {locationTabs.pathname === '/record'} // Requires dirty* to avoid excessive updates
@@ -560,10 +561,11 @@ export default class App extends PureComponent<Props, State> {
           bitsPerSample           = {this.props.bitsPerSample}
         />
       ),
-    }, {
+    },
+    {
       key: 'search', route: {path: '/search'}, label: 'Search', iconName: iconForTab['search'],
       badge: this.badgeForTab('search'),
-      render: props => (
+      render: (props: TabRouteProps) => (
         <SearchScreen {...props}
           // App globals
           visible                 = {locationTabs.pathname === '/search'} // Manual visible/dirty to avoid background updates
@@ -601,10 +603,11 @@ export default class App extends PureComponent<Props, State> {
           f_bins                  = {this.state.settings!.f_bins}
         />
       ),
-    }, {
+    },
+    {
       key: 'browse', route: {path: '/browse'}, label: 'Browse', iconName: iconForTab['browse'],
       badge: this.badgeForTab('browse'),
-      render: props => (
+      render: (props: TabRouteProps) => (
         <BrowseScreen {...props}
           // App globals
           visible                 = {locationTabs.pathname === '/browse'} // Manual visible/dirty to avoid background updates
@@ -618,10 +621,11 @@ export default class App extends PureComponent<Props, State> {
           unexcludeSpecies        = {this.state.settings!.unexcludeSpecies}
         />
       ),
-    }, {
+    },
+    {
       key: 'places', route: {path: '/places'}, label: 'Places', iconName: iconForTab['places'],
       badge: this.badgeForTab('places'),
-      render: props => (
+      render: (props: TabRouteProps) => (
         <PlacesScreen {...props}
           // App globals
           go                      = {this.go}
@@ -636,10 +640,11 @@ export default class App extends PureComponent<Props, State> {
           places                  = {this.state.settings!.places}
         />
       ),
-    }, {
+    },
+    {
       key: 'recent', route: {path: '/recent'}, label: 'Recent', iconName: iconForTab['recent'],
       badge: this.badgeForTab('recent'),
-      render: props => (
+      render: (props: TabRouteProps) => (
         <RecentScreen {...props}
           // App globals
           go                      = {this.go}
@@ -653,10 +658,11 @@ export default class App extends PureComponent<Props, State> {
           iconForTab              = {iconForTab}
         />
       ),
-    }, {
+    },
+    {
       key: 'saved', route: {path: '/saved'}, label: 'Saved', iconName: iconForTab['saved'],
       badge: this.badgeForTab('saved'),
-      render: props => (
+      render: (props: TabRouteProps) => (
         <SavedScreen {...props}
           // App globals
           go                      = {this.go}
@@ -667,10 +673,11 @@ export default class App extends PureComponent<Props, State> {
           iconForTab              = {iconForTab}
         />
       ),
-    }, {
+    },
+    this.state.settings!.showSettingsTab && {
       key: 'settings', route: {path: '/settings'}, label: 'Settings', iconName: iconForTab['settings'],
       badge: this.badgeForTab('settings'),
-      render: props => (
+      render: (props: TabRouteProps) => (
         <SettingsScreen {...props}
           // Settings
           serverConfig            = {this.state.serverConfig!}
@@ -691,18 +698,24 @@ export default class App extends PureComponent<Props, State> {
           playingProgressInterval = {this.state.settings!.playingProgressInterval}
         />
       ),
-    // TODO(help_screen): Make HelpScreen useful
-    // }, {
-    //   key: 'help', route: {path: '/help'}, label: 'Help', iconName: iconForTab['help'],
-    //   badge: this.badgeForTab('help'),
-    //   render: props => (
-    //     <HelpScreen {...props}
-    //       // App globals
-    //       go = {this.go}
-    //     />
-    //   ),
     },
-  ];
+    // TODO(help_screen): Make HelpScreen useful
+    false && {
+      key: 'help', route: {path: '/help'}, label: 'Help', iconName: iconForTab['help'],
+      badge: this.badgeForTab('help'),
+      render: (props: TabRouteProps) => (
+        <HelpScreen {...props}
+          // App globals
+          go = {this.go}
+        />
+      ),
+    },
+  ])
+    // Filter out {}/false/null/undefined
+    //  - So that tabs can be easily disabled above
+    .filter((x: false | TabRoute) => x !== false)
+    .map(x => x as TabRoute) // HACK Typing
+    ;
 
   onLayout = () => {
     // log.info('onLayout');
