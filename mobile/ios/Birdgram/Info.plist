@@ -58,6 +58,8 @@
 	<string>Birdgram uses your media library to import and export your audio recordings</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Birdgram connects to your bluetooth audio devices for recording and playback</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Birdgram connects to your bluetooth audio devices for recording and playback</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>Oops! Birdgram doesn't use your calendars. If you see this message please report a bug.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
