@@ -251,7 +251,7 @@ android
   - But if I get stuck on this again, try these:
     - https://github.com/facebook/react-native/issues/14382#issuecomment-424516909
     - https://github.com/facebook/react-native/issues/20774
-      - `(cd node_modules/react-native/third-party/glog-0.3.5 && ../../scripts/ios-configure-glog.sh)`
+      - ✅ `(cd node_modules/react-native/third-party/glog-0.3.5 && ../../scripts/ios-configure-glog.sh)`
       - Xcode -> Build
 - Can't import modules `fs`, `net`, or `dgram`
   - Finish installing them via node-libs-react-native (skipped because they have native code)
