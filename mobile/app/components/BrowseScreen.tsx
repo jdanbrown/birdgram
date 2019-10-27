@@ -215,7 +215,7 @@ export class BrowseScreen extends Component<Props, State> {
 
               {/* Title */}
               <Text style={{
-                flexGrow: 1,
+                flex: 1,
                 ...material.body2Object,
                 marginHorizontal: 5,
               }}>
