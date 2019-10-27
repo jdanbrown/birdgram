@@ -147,6 +147,17 @@ android
   - TODO
 
 # Troubleshooting (newest to oldest)
+- App Store warning about deprecated UIWebView (but app upload is still accepted)
+  - ITMS-90809: Deprecated API Usage - Apple will stop accepting submissions of apps that use UIWebView APIs. See
+    https://developer.apple.com/documentation/uikit/uiwebview for more information.
+  - Not useful for me, but relevant context
+    - https://github.com/react-native-community/react-native-webview/issues/819
+    - https://github.com/apache/cordova-ios/issues/661
+  - Solution to my problem (react-native-device-info)
+    - https://stackoverflow.com/a/58201802/397334
+    - https://www.devsbedevin.net/react-native-itms-90809-warning-from-apple/
+    - https://github.com/react-native-community/react-native-device-info/issues/756
+    - ✅ Update react-native-device-info
 - Debug app starts failing to connect to remote debugger at startup, after previously being able to
   - e.g. after plugging in usb and getting the dreaded "A software update is required to connect to iPhone" runaround
   - Solution [maybe worked once?]

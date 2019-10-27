@@ -7192,10 +7192,10 @@ react-native-debugger-open@^0.3.17:
     minimist "^1.2.0"
     semver "^5.4.1"
 
-react-native-device-info@^0.25.1:
-  version "0.25.1"
-  resolved "https://registry.yarnpkg.com/react-native-device-info/-/react-native-device-info-0.25.1.tgz#bde3be9fe0e06d0c07ab5837e4fc1af90f66696b"
-  integrity sha512-KW4Mf0CVEy10sbWsrnP7dMiB+FhFa46r11+JPdXWu1hHoSy8B/DR5Cb29kHHZSCPftHPzEhfMDflRe4IOgHrVw==
+react-native-device-info@^5.2.1:
+  version "5.2.1"
+  resolved "https://registry.yarnpkg.com/react-native-device-info/-/react-native-device-info-5.2.1.tgz#065ee39e1a0c2e814c03e2a4c0fd82d3e9d2baa1"
+  integrity sha512-GqKi2Q0rBZLZsJBF/cZCrKTNXXhqCunIqd3AaaNgmHhgUIru0mqp+bv4yulI+yx4QgpMoRZVo5yug52lbN/Jow==
 
 react-native-elements@*, react-native-elements@^0.19.1:
   version "0.19.1"

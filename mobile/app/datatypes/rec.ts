@@ -422,7 +422,7 @@ export const UserRec = {
     // Make userSource <- metadata <- edit
     const userSource = UserSource.new({
       ext:      UserRec.audioExt,
-      metadata: UserMetadata.new({
+      metadata: await UserMetadata.new({
         created: new Date(),
         uniq:    chance.hash({length: 8}),
         edit,

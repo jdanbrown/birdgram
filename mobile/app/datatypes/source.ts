@@ -57,9 +57,9 @@ export type UserSpecies = // TODO Make proper ADT with matchUserSpecies [extract
 
 export const Creator = {
 
-  get: (): Creator => {
+  get: async (): Promise<Creator> => {
     return {
-      deviceName:      DeviceInfo.getDeviceName(),
+      deviceName:      await DeviceInfo.getDeviceName(),
       appBundleId:     config.env.APP_BUNDLE_ID,
       appVersion:      config.env.APP_VERSION,
       appVersionBuild: config.env.APP_VERSION_BUILD,
@@ -87,7 +87,7 @@ export const Creator = {
 
 export const UserMetadata = {
 
-  new: (props: {
+  new: async (props: {
     created:  UserMetadata['created'],
     uniq:     UserMetadata['uniq'],
     edit:     UserMetadata['edit'],
@@ -95,13 +95,16 @@ export const UserMetadata = {
     coords:   UserMetadata['coords'],
     title?:   UserMetadata['title'],
     species?: UserMetadata['species'],
-  }): UserMetadata => {
+  }): Promise<UserMetadata> => {
     return {
       // Immutable facts
       created: props.created,
       uniq:    props.uniq,
       edit:    props.edit,
-      creator: ifUndefined(props.creator, () => Creator.get()),
+      creator: await matchUndefined(props.creator, {
+        x:         async x  => x,
+        undefined: async () => await Creator.get(),
+      }),
       coords:  props.coords,
       // Mutable user data (initial values)
       title:   ifUndefined(props.title,   () => null),

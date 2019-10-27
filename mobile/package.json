@@ -45,7 +45,7 @@
     "react-native-config": "^0.11.7",
     "react-native-console-time-polyfill": "^0.0.6",
     "react-native-debug-stylesheet": "^0.1.1",
-    "react-native-device-info": "^0.25.1",
+    "react-native-device-info": "^5.2.1",
     "react-native-elements": "^0.19.1",
     "react-native-fast-image": "^5.0.10",
     "react-native-gesture-handler": "^1.0.8",

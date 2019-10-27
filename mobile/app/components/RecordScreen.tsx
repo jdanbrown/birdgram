@@ -619,7 +619,7 @@ export class RecordScreen extends Component<Props, State> {
         } else {
 
           // Initial UserMetadata, as of record time
-          const recordingUserMetadata = UserMetadata.new({
+          const recordingUserMetadata = await UserMetadata.new({
             created: new Date(),
             uniq:    chance.hash({length: 8}), // Long enough to be unique across users
             edit:    null, // Not an edit of another rec
