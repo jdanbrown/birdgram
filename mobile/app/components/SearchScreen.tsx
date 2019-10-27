@@ -4,7 +4,7 @@ import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import RN, {
   ActivityIndicator, Animated, Dimensions, FlatList, FlexStyle, GestureResponderEvent, Image, ImageStyle, Keyboard,
   KeyboardAvoidingView, LayoutChangeEvent, Modal, Platform, RegisteredStyle, ScrollView, SectionList, SectionListData,
-  StyleProp, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle, WebView,
+  StyleProp, Text, TextInput, TextStyle, TouchableHighlight, View, ViewStyle,
 } from 'react-native';
 import ActionSheet from 'react-native-actionsheet'; // [Must `import ActionSheet` i/o `import { ActionSheet }`, else barf]
 import FastImage from 'react-native-fast-image';

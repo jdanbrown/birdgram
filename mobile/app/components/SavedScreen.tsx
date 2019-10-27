@@ -3,7 +3,7 @@ import moment from 'moment';
 import React, { Component, RefObject, PureComponent } from 'react';
 import {
   ActivityIndicator, Alert, AlertIOS, Dimensions, FlatList, Image, LayoutChangeEvent, Platform, ScrollView, SectionList,
-  SectionListData, Text, TouchableWithoutFeedback, View, WebView,
+  SectionListData, Text, TouchableWithoutFeedback, View,
 } from 'react-native';
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/Swipeable';

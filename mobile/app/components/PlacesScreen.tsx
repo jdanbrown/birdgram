@@ -6,7 +6,7 @@ import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import {
   ActivityIndicator, Animated, Dimensions, FlatList, FlexStyle, GestureResponderEvent, Image, ImageStyle, Keyboard,
   KeyboardAvoidingView, LayoutChangeEvent, Modal, Platform, RegisteredStyle, ScrollView, SectionList, SectionListData,
-  StyleProp, Text, TextInput, TextProps, TextStyle, TouchableHighlight, View, ViewProps, ViewStyle, WebView,
+  StyleProp, Text, TextInput, TextProps, TextStyle, TouchableHighlight, View, ViewProps, ViewStyle,
 } from 'react-native';
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/Swipeable';

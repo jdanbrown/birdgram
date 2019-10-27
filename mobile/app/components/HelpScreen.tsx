@@ -1,5 +1,5 @@
 import React, { PureComponent } from 'react';
-import { Dimensions, Image, Platform, ScrollView, Text, View, WebView } from 'react-native';
+import { Dimensions, Image, Platform, ScrollView, Text, View } from 'react-native';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 

@@ -2,7 +2,7 @@ import _ from 'lodash';
 import React, { RefObject, PureComponent } from 'react';
 import {
   ActivityIndicator, Dimensions, FlatList, Image, LayoutChangeEvent, Platform, SectionList, SectionListData, Text,
-  TouchableWithoutFeedback, View, WebView,
+  TouchableWithoutFeedback, View,
 } from 'react-native';
 import { BaseButton, BorderlessButton, RectButton } from 'react-native-gesture-handler';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
