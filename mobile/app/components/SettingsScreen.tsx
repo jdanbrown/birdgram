@@ -72,12 +72,12 @@ export class SettingsScreen extends PureComponent<Props, State> {
     return (
       <View style={{
         flex: 1,
-        backgroundColor: iOSColors.white,
       }}>
 
         <View style={{
-          borderBottomWidth: 1,
-          borderColor: iOSColors.midGray,
+          backgroundColor:   Styles.tabBar.backgroundColor,
+          borderBottomWidth: Styles.tabBar.borderTopWidth,
+          borderBottomColor: Styles.tabBar.borderTopColor,
         }}>
           <Text style={{
             alignSelf: 'center',
