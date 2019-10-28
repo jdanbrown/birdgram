@@ -1,45 +1,46 @@
 PODS:
-  - Alamofire (4.8.0)
-  - AudioKit (4.5.5):
-    - AudioKit/Core (= 4.5.5)
-    - AudioKit/UI (= 4.5.5)
-  - AudioKit/Core (4.5.5)
-  - AudioKit/UI (4.5.5):
+  - Alamofire (4.9.1)
+  - AudioKit (4.9.1):
+    - AudioKit/Core (= 4.9.1)
+    - AudioKit/UI (= 4.9.1)
+  - AudioKit/Core (4.9.1)
+  - AudioKit/UI (4.9.1):
     - AudioKit/Core
-  - PromisesObjC (1.2.4)
-  - PromisesSwift (1.2.4):
-    - PromisesObjC (= 1.2.4)
-  - SigmaSwiftStatistics (8.0.1)
-  - SwiftyJSON (4.2.0)
-  - Yams (1.0.1)
+  - PromisesObjC (1.2.8)
+  - PromisesSwift (1.2.8):
+    - PromisesObjC (= 1.2.8)
+  - SigmaSwiftStatistics (9.0.2)
+  - SwiftyJSON (5.0.0)
+  - Yams (2.0.0)
 
 DEPENDENCIES:
-  - Alamofire (~> 4.8.0)
-  - AudioKit (~> 4.5)
-  - PromisesSwift (~> 1.2.4)
-  - SigmaSwiftStatistics (~> 8.0)
-  - SwiftyJSON (~> 4.0)
-  - Yams (~> 1.0.1)
+  - Alamofire (~> 4.9)
+  - AudioKit (~> 4.9)
+  - PromisesSwift (~> 1.2.8)
+  - SigmaSwiftStatistics (~> 9.0)
+  - SwiftyJSON (~> 5.0)
+  - Yams (~> 2.0)
 
 SPEC REPOS:
-  https://github.com/cocoapods/specs.git:
-    - Alamofire
+  https://github.com/CocoaPods/Specs.git:
     - AudioKit
     - PromisesObjC
     - PromisesSwift
-    - SigmaSwiftStatistics
     - SwiftyJSON
+  trunk:
+    - Alamofire
+    - SigmaSwiftStatistics
     - Yams
 
 SPEC CHECKSUMS:
-  Alamofire: 3ec537f71edc9804815215393ae2b1a8ea33a844
-  AudioKit: fa163632454ff463d5f02c479e4c1fb99f2c9d44
-  PromisesObjC: 4a3f2e30a0eb793e9bbb32cd367b625d4a14de5a
-  PromisesSwift: 8e1d2cdbc3cafb4f09d4b82df12f645bc19ab64e
-  SigmaSwiftStatistics: 063591f136428920b3083e3d9c181c9c6b1a9dec
-  SwiftyJSON: c4bcba26dd9ec7a027fc8eade48e2c911f229e96
-  Yams: 572f625a8b719b73e0b57fd313c680f3e2161fe9
+  Alamofire: 85e8a02c69d6020a0d734f6054870d7ecb75cf18
+  AudioKit: 6e5a830b92b1fb295d7efb81ad33fcd1e540712b
+  PromisesObjC: c119f3cd559f50b7ae681fa59dc1acd19173b7e6
+  PromisesSwift: 37bad6f4daddb02f7c9c531efe91e8b21c13ee2f
+  SigmaSwiftStatistics: 4ec81cd50b0f397baddba05fe88ce228a66edd8c
+  SwiftyJSON: 36413e04c44ee145039d332b4f4e2d3e8d6c4db7
+  Yams: cb96472112d99e4b368f8dae9ab62e8a3eb8a3f9
 
-PODFILE CHECKSUM: af9bdd3725ed788fb14589952c8c685df6a05533
+PODFILE CHECKSUM: dffdfaee0876f28ed32bbce300b584cf14a2f369
 
-COCOAPODS: 1.5.3
+COCOAPODS: 1.8.4

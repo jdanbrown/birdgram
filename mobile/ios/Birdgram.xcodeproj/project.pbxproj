@@ -73,7 +73,6 @@
 		B7D1BCC421C1C877006B9677 /* Http.m in Sources */ = {isa = PBXBuildFile; fileRef = B7D1BCC321C1C877006B9677 /* Http.m */; };
 		B7FC736C21F8361A0058EBEF /* TagLib.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7FC736A21F8361A0058EBEF /* TagLib.swift */; };
 		B7FC736D21F8361A0058EBEF /* TagLib.m in Sources */ = {isa = PBXBuildFile; fileRef = B7FC736B21F8361A0058EBEF /* TagLib.m */; };
-		B7FF150B21EEA00900919F28 /* Pods_Bubo.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B7FF150A21EEA00900919F28 /* Pods_Bubo.framework */; };
 		B7FF150C21EEA00900919F28 /* Pods_Bubo.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B7FF150A21EEA00900919F28 /* Pods_Bubo.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BF7C9911FA9C4338B0BF698C /* AntDesign.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E0D3CAC7BEF84537A4FD221A /* AntDesign.ttf */; };
 		C62C1AB9427E46D2BA340C1F /* libFastImage.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 15ACA59D541D436B8793C522 /* libFastImage.a */; };
@@ -606,7 +605,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B7FF150B21EEA00900919F28 /* Pods_Bubo.framework in Frameworks */,
 				B72CC80B21A34706009D8690 /* Bubo.framework in Frameworks */,
 				7A245EFCCB59431FB0ADAD55 /* Pods_Birdgram.framework in Frameworks */,
 				B7B1EB0321AAEC5C003EE032 /* Surge.framework in Frameworks */,
@@ -1740,7 +1738,7 @@
 			files = (
 			);
 			inputPaths = (
-				"${SRCROOT}/Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram-frameworks.sh",
+				"${PODS_ROOT}/Target Support Files/Pods-Birdgram/Pods-Birdgram-frameworks.sh",
 				"${BUILT_PRODUCTS_DIR}/Alamofire-iOS/Alamofire.framework",
 				"${BUILT_PRODUCTS_DIR}/SigmaSwiftStatistics-iOS/SigmaSwiftStatistics.framework",
 				"${BUILT_PRODUCTS_DIR}/SwiftyJSON-iOS/SwiftyJSON.framework",
@@ -1759,7 +1757,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/Pods/Target Support Files/Pods-Birdgram/Pods-Birdgram-frameworks.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Birdgram/Pods-Birdgram-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		B720681821E96A48000EA80B /* Copy app/assets/payloads/$SCHEME_SUFFIX/ -> payloads/ */ = {
