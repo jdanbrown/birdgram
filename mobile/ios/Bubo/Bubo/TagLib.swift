@@ -22,7 +22,7 @@ public enum TagLib {
 
   public static func _read(
     _ path: String,
-    _ read: (UnsafePointer<TagLib_Tag>?) -> UnsafeMutablePointer<Int8>?
+    _ read: @escaping (UnsafePointer<TagLib_Tag>?) -> UnsafeMutablePointer<Int8>?
   ) throws -> String? {
     let file = try _file(path)
     defer { taglib_file_free(file) }
