@@ -539,6 +539,13 @@ export class RecordScreen extends Component<Props, State> {
             {this.state.nSpectroWidth} w × {this.props.f_bins} h ({this.state.spectroChunks.length} images)
           </this.DebugText>
           <this.DebugText>
+            geo: {}
+            {yamlPretty({
+              coords: this.props.geo.coords,
+              opts: this.props.geo.opts,
+            })}
+          </this.DebugText>
+          <this.DebugText>
             {yamlPretty({
               editRecording: mapNull(this.state.editRecording, ({rec}) => matchSource<{}>(Rec.source(rec), {
                 // HACK Get coords on the debug screen (add more fields later)
@@ -1333,7 +1340,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
         </RectButton>
 
         {/* XXX Debug gps */}
-        {/* {this.props.showDebug && (
+        {this.props.showDebug && (
           // Manually refresh geo.coords
           <RectButton style={styles.bottomControlsButton} onPress={async () => {
             log.debug('[geo] getCurrentCoords...');
@@ -1342,7 +1349,7 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           }}>
             <Feather name='at-sign' style={[styles.bottomControlsButtonIcon, {color: iOSColors.black}]}/>
           </RectButton>
-        )} */}
+        )}
 
         {this.props.showDebug && (
           // Toggle showMoreDebug
