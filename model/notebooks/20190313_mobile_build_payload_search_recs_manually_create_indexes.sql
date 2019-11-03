@@ -1,3 +1,4 @@
+-- XXX(manually_create_indexes): I synced the api/ dirs so this should be fixed now -- try rebuilding mobile paylods to verify
 -- FIXME(manually_create_indexes): We can't locally rebuild mobile payloads for US/CR because we never synced their
 -- payload/*/api/ dirs from remote
 --  - (i.e. running notebooks/mobile_build_payload_search_recs locally will barf)

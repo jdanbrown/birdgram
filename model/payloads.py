@@ -221,7 +221,9 @@ def df_cache_hybrid(
                 'f_preds',
             ]
             # NOTE Add a stable 'search_recs/' dir at the end of mobile_dir because xcode resolves dirnames through symlinks
-            mobile_dir = ensure_dir(path / f'mobile-version[{config.payloads.mobile.version}]' / 'search_recs')
+            # NOTE(train_us): Use 'k(v)' instead of 'k[v]' b/c gsutil doesn't support wildcard chars like []
+            #   - https://github.com/GoogleCloudPlatform/gsutil/issues/290
+            mobile_dir = ensure_dir(path / f'mobile-version({config.payloads.mobile.version})' / 'search_recs')
             mobile_db_path = mobile_dir / f'{desc}.sqlite3'
             mobile_files_dir = lambda kind: mobile_dir / kind
             mobile_file_path = lambda kind, species, xc_id, format: (
@@ -374,6 +376,7 @@ def df_cache_hybrid(
                         #   - But include both since recreating payload indexes is a pita
                         dict(unique=True, cols=['species', 'species_species_group', 'quality', 'source_id']),
                         dict(unique=True, cols=['species_species_group', 'species', 'quality', 'source_id']),
+                        # XXX(manually_create_indexes): I synced the api/ dirs so this should be fixed now -- try rebuilding mobile paylods to verify
                         # FIXME(manually_create_indexes): We can't locally rebuild mobile payloads for US/CR because we
                         # never synced their payload/*/api/ dirs from remote
                         #   - (i.e. running notebooks/mobile_build_payload_search_recs locally will barf)
@@ -411,6 +414,7 @@ def df_cache_hybrid(
             #   - For: mobile/app/ebird.ts
             #   - Perf: trim down to just the species in mobile_df
             #       - Faster app startup: ~0.65s for 10k sp -> ~0.089s for 770 sp (US)
+            #   - XXX(manually_create_indexes): I synced the api/ dirs so this should be fixed now -- try rebuilding mobile paylods to verify
             #   - HACK(manually_create_indexes): These were manually built for US/CR:
             #       $ cd app/assets/payloads/.../search_recs/
             #       $ cat /tmp/species-all.json \
@@ -441,6 +445,7 @@ def df_cache_hybrid(
             #   - For: mobile/app/xc.ts
             #   - What: a json object with the xc_id->species mapping from the db
             #   - Why: faster to load from json file (~0.5s) i/o db query (~1.2s)
+            #   - XXX(manually_create_indexes): I synced the api/ dirs so this should be fixed now -- try rebuilding mobile paylods to verify
             #   - HACK(manually_create_indexes): These were manually built for US/CR:
             #       $ cd app/assets/payloads/.../search_recs/
             #       $ sqlite3 -csv search_recs.sqlite3 \

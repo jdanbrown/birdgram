@@ -53,21 +53,21 @@ config = AttrDict(
     server_globals=dict(
         sg_load=dict(
 
-            # CA100
-            search=dict(
-                experiment_id='comp-l1-l2-na-ca',
-                cv_str='split_i=0,train=34875,test=331,classes=331',
-                search_params_str='n_species=331,n_recs=1.0',
-                classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
-                random_state=0,
-                fix_missing_skm_projection_id='peterson-v0-26bae1c',
-            ),
-            xc_meta=dict(
-                limit=100,
-                # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
-                countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
-                # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
-            ),
+            # # CA100
+            # search=dict(
+            #     experiment_id='comp-l1-l2-na-ca',
+            #     cv_str='split_i=0,train=34875,test=331,classes=331',
+            #     search_params_str='n_species=331,n_recs=1.0',
+            #     classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
+            #     random_state=0,
+            #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
+            # ),
+            # xc_meta=dict(
+            #     limit=100,
+            #     # countries_k='na', com_names_k='dan5', num_recs=10,    # XXX Faster dev
+            #     countries_k='na', com_names_k='ca',   num_recs=None,  # NA/CA
+            #     # countries_k=None, com_names_k=None,   num_recs=None,  # All xc.metadata
+            # ),
 
             # # CA3500
             # search=dict(
@@ -96,25 +96,26 @@ config = AttrDict(
             #     countries_k='na', com_names_k='ca', num_recs=None,  # NA/CA
             # ),
 
+            # XXX(manually_create_indexes): I synced the api/ dirs so this should be fixed now -- try rebuilding mobile paylods to verify
             # TODO(manually_create_indexes): Sync US/CR payload/*/api/ dirs from remote
             #   - Until then, we can't locally rebuild mobile payloads b/c they cache hit from the api payload
             #   - [Or is it simple enough to just rebuild the api payload locally?]
             #   - (cf. payloads.py, notebooks/mobile_build_payload_search_recs_manually_create_indexes)
 
-            # # US
-            # search=dict(
-            #     experiment_id='train-na-us-v0-na-us',
-            #     cv_str='split_i=0,train=51883,test=743,classes=739',
-            #     search_params_str='n_species=743,n_recs=1.0',
-            #     classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
-            #     random_state=0,
-            #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
-            # ),
-            # xc_meta=dict(
-            #     # countries_k='am', com_names_k='us', num_recs=None,  # TODO All Americas i/o just US/CA/MX? Only +16%: 53k->63k recs
-            #     # countries_k='na', com_names_k='us', num_recs=None,  # 52705 recs [TODO How big?]
-            #     countries_k='na', com_names_k='us', num_recs=200,     # 47367 recs [chosen based on ballpark match ~2.92gb CR payload]
-            # ),
+            # US
+            search=dict(
+                experiment_id='train-na-us-v0-na-us',
+                cv_str='split_i=0,train=51883,test=743,classes=739',
+                search_params_str='n_species=743,n_recs=1.0',
+                classifier_str='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',
+                random_state=0,
+                fix_missing_skm_projection_id='peterson-v0-26bae1c',
+            ),
+            xc_meta=dict(
+                # countries_k='am', com_names_k='us', num_recs=None,  # TODO All Americas i/o just US/CA/MX? Only +16%: 53k->63k recs
+                # countries_k='na', com_names_k='us', num_recs=None,  # 52705 recs [TODO How big is this?]
+                countries_k='na', com_names_k='us', num_recs=200,     # 47367 recs [chosen based on ballpark match ~2.92g CR payload] -- Birdgram US
+            ),
 
             # # CR
             # search=dict(
@@ -126,10 +127,10 @@ config = AttrDict(
             #     fix_missing_skm_projection_id='peterson-v0-26bae1c',
             # ),
             # xc_meta=dict(
-            #     # countries_k='am', com_names_k='cr_ebird', num_recs=None,  # ~4.26 gb mobile payload (69285 recs) [XXX Too big]
-            #     # countries_k='am', com_names_k='cr_ebird', num_recs=150,   # ~3.46 gb mobile payload
-            #     countries_k='am', com_names_k='cr_ebird', num_recs=100,     # ~2.92 gb mobile payload (47558 recs, 3.27gb as per iPhone Storage)
-            #     # countries_k='am', com_names_k='cr_ebird', num_recs=75,    # ~2.51 gb mobile payload
+            #     # countries_k='am', com_names_k='cr_ebird', num_recs=None,  # ~4.26g mobile payload (69285 recs) [XXX Too big]
+            #     # countries_k='am', com_names_k='cr_ebird', num_recs=150,   # ~3.46g mobile payload
+            #     countries_k='am', com_names_k='cr_ebird', num_recs=100,     # ~2.92g mobile payload (47558 recs, 3.27g in ios Storage) -- Birdgram CR
+            #     # countries_k='am', com_names_k='cr_ebird', num_recs=75,    # ~2.51g mobile payload
             # ),
 
         )

@@ -7,33 +7,13 @@ code_dir="`"$bin"/normpath "$bin"/..`"
 data_dir="$code_dir/data"
 gs_data_dir='gs://bubo-data/v0/data'
 
-# WARNING Careful with -d (delete) -- it'd be easy to make a typo that wipes out all of our cloud data...
+# WARNING Careful with -d (delete) -- it'd be easy to make a typo that wipes out all of our local data...
 sync_safe() {
   src="$1"; shift
   dest="$1"; shift
   mkdir -p "$dest"  # gsutil doesn't do this for us when dest is a local dir :/
   time gsutil -m rsync -r "$@" "$src" "$dest"
 }
-
-# # Mobile payload for US
-# # - HACK FIXME(train_us): gsutil doesn't support [] chars (UGH)
-# # - search_recs-audio_s[10],version[8],com_names_k[us],countries_k[na],num_recs[200]-4a07700
-# # - search_recs-audio_s-10,version-8,com_names_k-us,countries_k-na,num_recs-200-4a07700
-# sync_safe {"$gs_data_dir","$data_dir"}/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-us,countries_k-na,num_recs-200-4a07700/mobile-version-2/
-# mkdir -p "$data_dir"/cache/payloads/'search_recs-audio_s[10],version[8],com_names_k[us],countries_k[na],num_recs[200]-4a07700'/
-# mv -v \
-#   "$data_dir"/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-us,countries_k-na,num_recs-200-4a07700/mobile-version-2/ \
-#   "$data_dir"/cache/payloads/'search_recs-audio_s[10],version[8],com_names_k[us],countries_k[na],num_recs[200]-4a07700/mobile-version[2]'/
-
-# # Mobile payload for CR
-# # - HACK FIXME(train_us): gsutil doesn't support [] chars (UGH)
-# # - search_recs-audio_s[10],version[8],com_names_k[cr_ebird],countries_k[am],num_recs[100]-1deedc2
-# # - search_recs-audio_s-10,version-8,com_names_k-cr_ebird,countries_k-am,num_recs-100-1deedc2
-# sync_safe {"$gs_data_dir","$data_dir"}/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-cr_ebird,countries_k-am,num_recs-100-1deedc2/mobile-version-2/
-# mkdir -p "$data_dir"/cache/payloads/'search_recs-audio_s[10],version[8],com_names_k[cr_ebird],countries_k[am],num_recs[100]-1deedc2'/
-# mv -v \
-#   "$data_dir"/cache/payloads/search_recs-audio_s-10,version-8,com_names_k-cr_ebird,countries_k-am,num_recs-100-1deedc2/mobile-version-2/ \
-#   "$data_dir"/cache/payloads/'search_recs-audio_s[10],version[8],com_names_k[cr_ebird],countries_k[am],num_recs[100]-1deedc2/mobile-version[2]'/
 
 # # Models with best eval scores: notebooks/20181211_train_cr.ipynb
 # sync_safe {"$gs_data_dir","$data_dir"}/artifacts/train-am-cr-v0-am-cr_ebird/"split_i=0,train=34450,test=759,classes=758,estimator=Search(n_species=759,n_recs=1.0,classifier='cls=ovr-logreg_ovr,solver=liblinear,C=0.001,class_weight=balanced',random_state=0)"/
@@ -55,6 +35,7 @@ sync_safe() {
 # sync_safe {"$gs_data_dir","$data_dir"}/artifacts/comp-l1-l2-na-ca/"split_i=0,train=28164,test=7042,classes=331,estimator=Search(n_species=9,n_recs=1.0,classifier='cls=ovr-logreg_ovr,solver=liblinear,C=1,class_weight=balanced',random_state=0)"/
 
 # Whole high-level dirs
+# sync_safe {"$gs_data_dir","$data_dir"}/cache/payloads/
 # sync_safe {"$gs_data_dir","$data_dir"}/ebird/ # TODO
 # sync_safe {"$gs_data_dir","$data_dir"}/artifacts/  # Big, don't need all of
 # sync_safe {"$gs_data_dir","$data_dir"}/cache/joblib/sp14/model/feat\(version=0\)/

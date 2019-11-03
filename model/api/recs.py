@@ -603,7 +603,9 @@ def get_search_recs(
 
     # Compute key
     key_show = ','.join(
-        '%s[%s]' % (k, v)
+        # NOTE(train_us): Use 'k(v)' instead of 'k[v]' b/c gsutil doesn't support wildcard chars like []
+        #   - https://github.com/GoogleCloudPlatform/gsutil/issues/290
+        '%s(%s)' % (k, v)
         for expr in config.api.recs.search_recs.cache.key.show
         for (k, v) in [(expr.split('.')[-1], eval(expr))]
         for (k, v) in ([(k, v)] if not isinstance(v, dict) else sorted(v.items()))
@@ -1518,7 +1520,7 @@ def recs_view(
 
 def recs_view_cols(
     df: pd.DataFrame,
-    dev: bool,
+    dev: bool = defaults.dev,
     sort_bys: str = [],
     prepend: Iterable[str] = [],
     append: Iterable[str] = [],
