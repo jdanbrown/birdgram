@@ -374,14 +374,9 @@ def df_cache_hybrid(
                         # A covering index for filters in mobile/Search (see SearchScreen.tsx:filteredSpecies)
                         #   - (sp, group) appears better than (group, sp) since the former avoids a `USE TEMP B-TREE FOR DISTINCT`
                         #   - But include both since recreating payload indexes is a pita
+                        #   - Howto `show create index` (also tables): `select * from sqlite_master`
                         dict(unique=True, cols=['species', 'species_species_group', 'quality', 'source_id']),
                         dict(unique=True, cols=['species_species_group', 'species', 'quality', 'source_id']),
-                        # XXX(manually_create_indexes): I synced the api/ dirs so this should be fixed now -- try rebuilding mobile paylods to verify
-                        # FIXME(manually_create_indexes): We can't locally rebuild mobile payloads for US/CR because we
-                        # never synced their payload/*/api/ dirs from remote
-                        #   - (i.e. running notebooks/mobile_build_payload_search_recs locally will barf)
-                        #   - TODO Sync remote data/cache/payloads/*/api/ -> gs -> local
-                        #   - (cf. config.py, notebooks/mobile_build_payload_search_recs_manually_create_indexes)
                     ]:
                         index_name = '__'.join([f'ix_{table}', *index['cols']])
                         index_cols = ', '.join(index['cols'])
@@ -414,17 +409,6 @@ def df_cache_hybrid(
             #   - For: mobile/app/ebird.ts
             #   - Perf: trim down to just the species in mobile_df
             #       - Faster app startup: ~0.65s for 10k sp -> ~0.089s for 770 sp (US)
-            #   - XXX(manually_create_indexes): I synced the api/ dirs so this should be fixed now -- try rebuilding mobile paylods to verify
-            #   - HACK(manually_create_indexes): These were manually built for US/CR:
-            #       $ cd app/assets/payloads/.../search_recs/
-            #       $ cat /tmp/species-all.json \
-            #           | jq "map(select(.shorthand | in(`
-            #               sqlite3 -csv search_recs.sqlite3 \
-            #               <<< 'select distinct species from search_recs' \
-            #               | csvjson \
-            #               | jq -c 'map({key: .species, value: null}) | from_entries'
-            #           `)))" \
-            #           > metadata/species.json
             with log_time_context(f'Mobile: Write {rel(mobile_metadata_species_path)}',
                 lambda: naturalsize_path(mobile_metadata_species_path),
             ):
@@ -445,14 +429,6 @@ def df_cache_hybrid(
             #   - For: mobile/app/xc.ts
             #   - What: a json object with the xc_id->species mapping from the db
             #   - Why: faster to load from json file (~0.5s) i/o db query (~1.2s)
-            #   - XXX(manually_create_indexes): I synced the api/ dirs so this should be fixed now -- try rebuilding mobile paylods to verify
-            #   - HACK(manually_create_indexes): These were manually built for US/CR:
-            #       $ cd app/assets/payloads/.../search_recs/
-            #       $ sqlite3 -csv search_recs.sqlite3 \
-            #           <<< 'select distinct xc_id, species from search_recs' \
-            #           | csvjson \
-            #           | jq 'map({key: (.xc_id | tostring), value: .species}) | from_entries' \
-            #           > metadata/xc_ids.json
             with log_time_context(f'Mobile: Write {rel(mobile_metadata_xc_ids_path)}',
                 lambda: naturalsize_path(mobile_metadata_xc_ids_path),
             ):
