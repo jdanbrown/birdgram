@@ -688,9 +688,12 @@ def _compute_search_recs() -> pd.DataFrame:
         )
         return pd.DataFrame([])  # Must return DF for pd.concat (below)
 
-    random_state   = 10  # XXX(train_us): Debug
-    subset_batches = (int(os.environ['SUBSET']) - 1, 16)  # XXX(train_us): Manual par procs
-    debug_print(_lines=True, subset_batches=subset_batches)  # XXX(train_us): Manual par procs
+    random_state = 10  # XXX(train_us): Debug
+
+    # XXX(train_us): Manual par procs
+    SUBSET = int(os.environ.get('SUBSET', '') or '-1')  # Map: unset, '' -> '-1'
+    subset_batches = None if SUBSET < 0 else (SUBSET - 1, 16)
+    debug_print(_lines=True, subset_batches=subset_batches)
 
     # Batch for mem safety + resumability
     #   - NOTE Do all of recs_cache_audio_slices before any recs_featurize_pre_rank to avoid growing process mem which
@@ -734,7 +737,7 @@ def _compute_search_recs() -> pd.DataFrame:
                 #     # use='dask', scheduler='threads',  # Spent a lot of time (and ram) forking before starting work (32 cores)
                 #     # use='dask', scheduler='threads', get_kwargs=dict(num_workers=4),  # XXX Same fork() rate as baseline :(
                 # ),
-                # subset_batches=subset_batches  # XXX-XXX(train_us): Manual par procs [TODO(train_us): Disable and use 1 proc to proceed]
+                subset_batches=subset_batches  # XXX-XXX(train_us): Manual par procs [TODO(train_us): Disable and use 1 proc to proceed]
             ))
         ))
 
