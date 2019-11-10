@@ -1110,6 +1110,7 @@ import textwrap
 import types
 from typing import *
 import urllib.parse
+import uuid
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -1712,16 +1713,20 @@ def display_with_style(x: 'Displayable', style_css: str) -> 'Displayable':
     if not style_css:
         return x
     else:
+        # Scope style to x_html via a unique class name
+        #   - https://stackoverflow.com/a/16899879/397334
+        scoped_class = 'uid-%s' % uuid.uuid4().hex
         x_html = ipy_formats_to_html(x)
         return HTML(dedent_and_strip('''
-            <div>
+            <div class="%(scoped_class)s">
                 <style type="text/css">
                     %(style_css)s
                 </style>
                 %(x_html)s
             </div>
         ''') % dict(
-            style_css=style_css,
+            scoped_class=scoped_class,
+            style_css=style_css(scoped_class),
             x_html=x_html,
         ))
 

@@ -1138,10 +1138,17 @@ def recs_featurize_spectro_disp(
                         pil_img_open_from_bytes(rec.spectro_bytes),  # (Infers image format from bytes)
                         # TODO Make scale a recs_view concern
                         #   - TODO Restore multiples of 40px, to avoid pixel blurring [defer until mobile app]
-                        style_css=scale and '.bubo-audio-container img { height: %s; }' % (
-                            # '%spx' % int(40 * scale),  # XXX Switched px->rem for responsive style, but this was multiples of 40px
-                            '%.3frem' % (1.5 * scale),  # Good on mobile, good enough on desktop (but not multiples of 40px)
-                        ),
+                        #   - HACK !important to override `.notebook-result-container .notebook-result img` in notebook
+                        style_css=scale and (lambda scoped_class: '''
+                            .%(scoped_class)s img {
+                                height: %(height)s !important;
+                                max-width: inherit !important;
+                            }
+                        ''' % dict(
+                            scoped_class=scoped_class,
+                            # height='%spx' % int(40 * scale),  # XXX Switched px->rem for responsive style, but this was multiples of 40px
+                            height='%.3frem' % (1.5 * scale),  # Good on mobile, good enough on desktop (but not multiples of 40px)
+                        )),
                     ),
                     audio_bytes=rec.audio_bytes,
                     mimetype=rec.audio_bytes_mimetype,
@@ -1551,6 +1558,10 @@ def recs_view_cols(
             ] if c not in sort_bys],
             *append,
         ] if c in df]]
+
+        # Drop duplicated cols
+        #   - e.g. if prepend/append overlap with the cols we use above
+        .loc[:, lambda df: ~df.columns.duplicated()]
 
         # Hide dev cols if not dev
         [lambda df: [c for c in df if dev or c not in [
