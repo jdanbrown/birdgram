@@ -3,6 +3,9 @@
 # bubo
 # - Sync .py.ipynb, which are for running (but watch out for huge saved outputs)
 # - Don't sync .ipynb, since they're fair game to have huge outputs
+# - FIXME .py.ipynb don't always sync to container even though other code changes do [why?]
+#   - Doesn't work: `bin/gcloud-run --reuse=bubo-0 --disk-mode=rw --container-pull --container-push` with existing vm
+#   - Workaround: `bin/ssh-container-with-rsync` to existing container (from a previous, still-running bin/gcloud-run)
 + *.py.ipynb
 - *.ipynb
 

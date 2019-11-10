@@ -465,7 +465,9 @@ def main(
                 _end_args=[
                     '--',
                     '-tq',
-                    '-L', '8888:localhost:8888',  # Tunnel port 8888
+                    # Tunnel local 8889 -> remote 8888 (jupyter kernel gateway)
+                    #   - Avoid local 8888 else we can't run a local kernel gateway concurrently with a listening ssh
+                    '-L', '8889:localhost:8888',
                     docker_attach if container_op == 'attach' else
                         docker_exec if container_op == 'exec' else
                         docker_run,

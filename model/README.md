@@ -34,3 +34,16 @@ $ bin/api-run-dev
 # Run prod api remotely (example)
 $ bin/gcloud-run --reuse=bubo-0 --disk-mode=rw --preemptible --machine-type=n1-standard-4 --container-pull --container-push 'time bin/api-cache-warm && bin/api-run-prod'
 ```
+
+# HOWTO
+
+## Hunt down recent data/cache/ (or data/xc/) files written recently
+- Oops, I just wrote many gigs of intermediate cache data on my laptop that I meant to keep on the remote
+- (And only sync the final api/mobile payloads to my laptop)
+- (osx only)
+```sh
+mdfind -onlyin data/ 'kMDItemContentType != public.folder && kMDItemContentModificationDate >= $time.now(-86400)' \
+  | sort \
+  | sed -E ' s#(.*/(audio/xc/data|api/recs/recs_cache_audio_slices|joblib/datasets/com_name_to_species_dict|joblib/load/_metadata|joblib/load/recs|payloads/search_recs)[^/]*/).*$#\1#; ' \
+  | uniq -c
+```
