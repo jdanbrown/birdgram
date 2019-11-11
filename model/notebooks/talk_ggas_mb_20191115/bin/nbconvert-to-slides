@@ -1,0 +1,35 @@
+#!/bin/bash -eux
+#
+# Example usage:
+#   bin/nbconvert-to-slides talk.ipynb
+
+# Docs
+# - https://nbconvert.readthedocs.io/en/latest/usage.html#convert-revealjs
+# - https://nbconvert.readthedocs.io/en/latest/config_options.html
+# - https://github.com/jupyter/nbconvert/blob/5.6.1/nbconvert/exporters/slides.py -- ref for cell.metadata.slideshow
+#
+# Examples
+# - jupyter
+#   - https://medium.com/learning-machine-learning/present-your-data-science-projects-with-jupyter-slides-75f20735eb0f
+#   - https://gist.githubusercontent.com/Tahsin-Mayeesha/092b5d02f7f2eef6983746680de31581/raw/60ed1b84f81692fcec906a74c6811525aece1460/dino_viz.ipynb
+# - revealjs
+#   - https://github.com/hakimel/reveal.js -- docs
+#   - https://revealjs.com -- example preso with tutorial!
+#   - https://revealjs.com/#/themes -- themes
+#     - https://github.com/hakimel/reveal.js/tree/master/css/theme
+#
+cmd=(
+  jupyter-nbconvert
+
+    --to slides
+    --SlidesExporter.reveal_transition=none # Disable slide transitions
+    --SlidesExporter.reveal_scroll=True
+    # --SlidesExporter.reveal_theme=black # XXX Busted, make do with custom.css instead
+    # --reveal-prefix reveal.js # XXX Required for 'speaker notes' (key: s) to work, but don't need it
+
+    # TODO How to pass fragmentInURL:true into Reveal.initialize({...})?
+    # - https://github.com/hakimel/reveal.js
+
+    "$@"
+)
+"${cmd[@]}"

@@ -79,6 +79,8 @@ class ebird:
     def com_names_to_species(self, com_names: Iterable[str], check=True) -> Iterable[str]:
         manual_renames = {
             # Any com_name (e.g. a newer ebird taxo than self.df) -> com_name in self.df
+            #   - TODO search_recs has GGSH (Great Gray Shrike) i/o NOSH (Northern Shrike) -- check if this is where we need to remap
+            #       - https://birdsna.org/Species-Account/bna/species/norshr4
             "Canada Jay": "Gray Jay",  # https://www.allaboutbirds.org/guide/Canada_Jay/
             "Cinnamon-rumped Seedeater": "White-collared Seedeater",  # https://ebird.org/camerica/news/taxonomy-update-central-america-2018
             "Morelet's Seedeater": "White-collared Seedeater",  # https://en.wikipedia.org/wiki/White-collared_seedeater

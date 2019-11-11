@@ -1,0 +1,15 @@
+#!/bin/bash -eux
+
+bin="`dirname "$0"`"
+
+talk_dir="$bin/.."
+s3_talk_dir='s3://jdanbrown.org/talks/ggas-mb'
+
+# NOTE Using -d (delete)
+cmd=(
+  gsutil -m rsync -r -d
+    "$@"
+    "$talk_dir/web"
+    "$s3_talk_dir"
+)
+time "${cmd[@]}"

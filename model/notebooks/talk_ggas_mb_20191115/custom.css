@@ -1,0 +1,88 @@
+/* Hide progress bar */
+.progress {
+  display: none !important;
+}
+
+/* Hide controls */
+.controls {
+  display: none !important;
+}
+
+/* Hide scrollbars */
+/*  - When using: --SlidesExporter.reveal_scroll=True */
+/*  - https://stackoverflow.com/a/38994837/397334 */
+section.present {
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+  scrollbar-width: none; /* Firefox */
+}
+section.present::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}
+
+/* jupyter styling */
+.cell .prompt { display: none; }
+.cell .input { display: none; }
+.cell .output_text { display: none; }
+div.output_subarea {
+  max-width: 100% !important;
+}
+div.output_area .rendered_html table {
+  margin-left: auto;
+  margin-right: auto;
+}
+.rendered_html table {
+  color: inherit;
+}
+.reveal table th,
+.reveal table td {
+  border-bottom: inherit;
+}
+.rendered_html * + table {
+  margin-top: 0 !important;
+}
+
+/* reveal.js styling */
+.slides {
+  width: 100% !important;
+  height: 100% !important;
+  zoom: inherit !important;
+}
+.reveal .slides > section,
+.reveal .slides > section > section {
+  padding: 0;
+}
+.section.present {
+  margin-top: 0 !important;
+}
+.reveal ul ul,
+.reveal ul ol,
+.reveal ol ol,
+.reveal ol ul {
+  margin-left: 1ex;
+}
+.rendered_html ul:not(.list-inline),
+.rendered_html ol:not(.list-inline) {
+  padding-left: 1em;
+}
+
+/* Extra jupyter styling to compensate for reveal.js */
+.cell .text_cell_render {
+  width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.dataframe td {
+  padding: 0 !important;
+  border: 1px solid black !important;
+}
+.dataframe img {
+  margin: 0 !important;
+}
+.dataframe tr th:first-child {
+  display: none;
+}
+.dataframe tr th,
+.dataframe tr td {
+  white-space: nowrap;
+}
