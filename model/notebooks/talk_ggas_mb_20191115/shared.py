@@ -11,7 +11,43 @@ sg.init(None)  # Computes search_recs, if cache miss
 
 search_recs = sg.search_recs
 
+# XXX Very slow to run over all 45k recs, do lazily instead
+# recs = (search_recs
+#     .pipe(df_inspect, lambda df: (df.shape,))
+#     .pipe(talk_recs_show)  # [Defined below]
+#     .pipe(df_inspect, lambda df: (df.shape,))
+# )
+
 ## Utils
+
+
+def talk_hide_index(df) -> HTML:
+    return display_with_style(df, style_css=lambda scoped_class: '''
+        .%(scoped_class)s .dataframe tr th:first-child { display: none; }
+    ''' % locals())
+
+
+def talk_hide_columns(df) -> HTML:
+    return display_with_style(df, style_css=lambda scoped_class: '''
+        .%(scoped_class)s .dataframe thead { display: none; }
+    ''' % locals())
+
+
+def talk_hide_index_and_columns(df) -> HTML:
+    return display_with_style(df, style_css=lambda scoped_class: '''
+        .%(scoped_class)s .dataframe tr th:first-child { display: none; }
+        .%(scoped_class)s .dataframe thead             { display: none; }
+    ''' % locals())
+
+
+def talk_show_refs(s: str) -> HTML:
+    return HTML(
+        '<div class="talk-refs text_cell_render">%s</div>' % '\n'.join([
+            '<div>%s</div>' % line
+            for line in s.split('\n')
+        ]),
+    )
+
 
 def talk_recs_show(
     df,
@@ -23,12 +59,13 @@ def talk_recs_show(
         'type',
         'state', 'elevation', 'lat', 'lng', 'place',
         'remarks',
+        'species_com_name',
         'quality', 'recordist', 'background_species', 'date',
     ],
+    append=[],
     drop=['license', 'bird_seen', 'playback_used'],
     astype={'year': int},
     replace={'subspecies': {'': '—'}},
-    **kwargs,
 ):
     return (df
         # Drop any indexes (e.g. from filter/sort)
@@ -36,19 +73,13 @@ def talk_recs_show(
         # Featurize
         .pipe(recs_featurize_spectro_disp, scale=scale)
         # View
-        .pipe(recs_view_cols, append=order)  # append= to ensure all requested cols are included
+        .pipe(recs_view_cols, append=[*order, *append])  # append= to ensure all requested cols are included
         .pipe(df_reorder_cols, last=order)  # last= so that unknown cols show up loudly in the front
         .drop(columns=drop)
         .astype(astype)
         .replace(replace)
     )
 
-# XXX Very slow to run over all 45k recs, do lazily instead
-# recs = (search_recs
-#     .pipe(df_inspect, lambda df: (df.shape,))
-#     .pipe(talk_recs_show)
-#     .pipe(df_inspect, lambda df: (df.shape,))
-# )
 
 def talk_recs_show_seasonal(
     species,
@@ -125,52 +156,4 @@ def talk_recs_show_seasonal(
         .pipe(df_inspect, lambda df: (df.shape,))
         [:n]
         .pipe(df_inspect, lambda df: (df.shape,))
-    )
-
-def talk_wraa_calls():
-    """All the damn wraa calls"""
-    return (search_recs
-        .pipe(df_inspect, lambda df: (df.shape,))
-        # Filter
-        [lambda df: reduce(lambda x, y: x | y, [
-
-            (df.species == 'SPTO') & df.xc_id.isin([127012]),
-            (df.species == 'EATO') & df.xc_id.isin([293823]),
-
-            (df.species == 'HUVI') & df.xc_id.isin([297120]),
-            # (df.species == 'HUVI') & df.xc_id.isin([348987]),
-            (df.species == 'WAVI') & df.xc_id.isin([159366]),
-            # (df.species == 'WAVI') & df.xc_id.isin([381527]),
-
-            (df.species == 'HETH') & df.xc_id.isin([314303]),
-            # (df.species == 'HETH') & df.xc_id.isin([131636]),
-
-            (df.species == 'BEWR') & df.xc_id.isin([163209]),
-            # (df.species == 'BEWR') & df.xc_id.isin([141349]),
-            (df.species == 'HOWR') & df.xc_id.isin([265810]),
-
-            (df.species == 'BANO') & df.xc_id.isin([294969]),  # Juv shriek [PFGBS]
-            (df.species == 'GHOW') & df.xc_id.isin([154990]),  # Juv shriek [PFGBS]
-
-            (df.species == 'BGGN') & df.xc_id.isin([376229]),
-            # (df.species == 'BGGN') & df.xc_id.isin([81059]),
-            (df.species == 'BCGN') & df.xc_id.isin([30087]),
-            (df.species == 'BTGN') & df.xc_id.isin([253889]),
-            (df.species == 'CAGN') & df.xc_id.isin([17808]),
-
-            (df.species == 'LOSH') & df.xc_id.isin([255158]),
-            # (df.species == 'LOSH') & df.xc_id.isin([255145]),
-            (df.species == 'GGSH') & df.xc_id.isin([91968]),  # NOSH (Northern Shrike) used to be GGSH (Great Gray Shrike)
-
-            (df.species == 'CASJ') & df.xc_id.isin([347904]),
-            (df.species == 'STJA') & df.xc_id.isin([146610]),
-
-        ])]
-        .pipe(df_inspect, lambda df: (df.shape,))
-        # View
-        .pipe(talk_recs_show,
-            scale=2.9,
-        )
-        .pipe(df_ordered_cats_like, species=metadata.ebird.df.shorthand)
-        .sort_values(['species'])
     )

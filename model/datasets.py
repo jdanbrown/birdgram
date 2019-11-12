@@ -892,7 +892,8 @@ def xc_meta_to_raw_recs(
     # Checks
     #   - HACK Bypass if user_rec, so we can get the to_paths behavior
     if not is_user_rec:
-        assert 'duration_s' not in xc_meta  # TODO Make this function idempotent (currently, barfs on non-obvious errors)
+        # TODO Make this function idempotent (currently, barfs on non-obvious errors)
+        assert 'duration_s' not in xc_meta, f'xc_meta.columns[{xc_meta.columns.tolist()}]'
 
     to_paths = to_paths or (lambda xc_meta: [xc_meta_to_path(row) for row in df_rows(xc_meta)])
     paths = list(to_paths(xc_meta))

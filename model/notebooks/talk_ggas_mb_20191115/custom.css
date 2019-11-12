@@ -1,12 +1,10 @@
-/* Hide progress bar */
-.progress {
-  display: none !important;
-}
+/*
+ * reveal.js
+ */
 
-/* Hide controls */
-.controls {
-  display: none !important;
-}
+ /* Hide controls + progress bar */
+.controls { display: none !important; }
+.progress { display: none !important; }
 
 /* Hide scrollbars */
 /*  - When using: --SlidesExporter.reveal_scroll=True */
@@ -19,12 +17,39 @@ section.present::-webkit-scrollbar {
   display: none; /* Safari and Chrome */
 }
 
-/* jupyter styling */
+.slides {
+  width: 100% !important;
+  height: 100% !important;
+  zoom: inherit !important;
+}
+.reveal .slides > section,
+.reveal .slides > section > section {
+  padding: 0;
+}
+section.present {
+  margin-top: 0 !important;
+}
+.reveal ul ul,
+.reveal ul ol,
+.reveal ol ol,
+.reveal ol ul {
+  margin-left: 1ex;
+}
+.rendered_html ul:not(.list-inline),
+.rendered_html ol:not(.list-inline) {
+  padding-left: 1em;
+}
+
+/*
+ * jupyter
+ */
+
 .cell .prompt { display: none; }
 .cell .input { display: none; }
 .cell .output_text { display: none; }
 div.output_subarea {
   max-width: 100% !important;
+  padding: 0 !important;
 }
 div.output_area .rendered_html table {
   margin-left: auto;
@@ -40,32 +65,19 @@ div.output_area .rendered_html table {
 .rendered_html * + table {
   margin-top: 0 !important;
 }
-
-/* reveal.js styling */
-.slides {
-  width: 100% !important;
-  height: 100% !important;
-  zoom: inherit !important;
+/* Don't color bg of alternating df rows */
+.rendered_html tbody tr:nth-child(odd) {
+  background: inherit !important;
 }
-.reveal .slides > section,
-.reveal .slides > section > section {
-  padding: 0;
-}
-.section.present {
-  margin-top: 0 !important;
-}
-.reveal ul ul,
-.reveal ul ol,
-.reveal ol ol,
-.reveal ol ul {
-  margin-left: 1ex;
-}
-.rendered_html ul:not(.list-inline),
-.rendered_html ol:not(.list-inline) {
-  padding-left: 1em;
+/* Don't highlight df rows on hover */
+.rendered_html tbody tr:hover {
+  background: inherit !important;
 }
 
-/* Extra jupyter styling to compensate for reveal.js */
+/*
+ * More jupyter to compensate for reveal.js
+ */
+
 .cell .text_cell_render {
   width: 960px;
   margin-left: auto;
@@ -73,16 +85,37 @@ div.output_area .rendered_html table {
 }
 
 .dataframe td {
-  padding: 0 !important;
   border: 1px solid black !important;
 }
 .dataframe img {
   margin: 0 !important;
 }
-.dataframe tr th:first-child {
-  display: none;
-}
+
+/* Overridden below
 .dataframe tr th,
 .dataframe tr td {
   white-space: nowrap;
+}
+*/
+
+/*
+ * Talk
+ */
+
+.dataframe td {
+  padding: 0 !important; /* HACK Kill td padding for spectros */
+}
+
+body {
+  font-size: 175%;
+}
+
+body .talk-refs {
+  font-size: 50%;
+}
+
+.dataframe tr th,
+.dataframe tr td {
+  white-space: normal;
+  font-size: 150%;
 }

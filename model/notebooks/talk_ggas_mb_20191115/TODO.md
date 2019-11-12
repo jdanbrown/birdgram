@@ -2,7 +2,7 @@
 
 General / Title
 - [x] make font way bigger (e.g. first 1-2 slides)
-- [ ] get rid of all banding codes
+- [x] get rid of all banding codes
 
 Outline
 - [ ] talk for less time
@@ -16,53 +16,45 @@ Outline
   - Spectrograms are an interesting way to understand them
 
 How to read a spectogram
-- [ ] let's look at gender/WREN
-By gender (WREN) — [keep! intro to spectros]
+- [x] trim to 5s
+- [x] bigger font
+
+By gender (WREN) — [keep! intro to spectros] — [XXX added a dedicated intro to spectros]
 - [x] keep the ~two bullets from BNA
   - male: accelerating
   - female: slower, more even rhythm
-- [ ] explain before playing
-- [ ] make the spectrogram REALLY BIG (only one spectro here)
-
-Age: RTHA
-- [x] [skip? not about spectros]
-- adult: scream (1 spectro)
-- juv/imm: squeal (2 spectros)
-- transitional parts (2 spectros)
-
-Dawn/day
-- [x] [skip? not about spectros]
-- these spectros aren't even a great example of spectros being helpful ("not helping your point" — alex)
+- [-] explain before playing
+- [-] make the spectrogram REALLY BIG (only one spectro here)
 
 HUVI — [yay, this is about spectros!]
-- [ ] steady repetition of single note, ~1s apart, for minutes at a time
-- [ ] notes vary across separate vocalizations
-- [ ] show big table of spectros
-- [ ] ~15 spectros, as BIG AS POSSIBLE (keep as 10s)
-- [ ] explain sampling: random within HUVI
+- [x] steady repetition of single note, ~1s apart, for minutes at a time
+- [x] notes vary across separate vocalizations
+- [x] show big table of spectros
+- [x] ~15 spectros, as BIG AS POSSIBLE (keep as 10s)
+- [x] explain sampling: random within HUVI
 
-Season
-- [ ] cut SPTO (hard to see + we do it later)
-- [ ] only do WIWA (multiple examples not as interesting as geo next)
-- [ ] ~15 spectros, as BIG AS POSSIBLE, maybe crop to ~5s
+Season: WIWA
+- [x] cut SPTO (hard to see + we do it later)
+- [x] only do WIWA (multiple examples not as interesting as geo next)
+- [x] ~15 spectros, as BIG AS POSSIBLE, maybe crop to ~5s
 - [ ] if spare time later, add counterexample of bird that sings all year
-- [ ] explain sampling: Mar–Aug vs. Sep–Feb, random within groups
+- [x] explain sampling: Mar–Aug vs. Sep–Feb, random within groups
 
 Geo: SPTO
-- [ ] west coast vs. interior
-- [ ] fast/slow vs. slow only
-- [ ] no intro notes vs. intro notes
-- [ ] zoom to 10-15 rows (x2 cols), maybe crop to ~5s for taller
-- [ ] explain sampling: split west coast (~CA) vs. interior (~AZ/CO/MX), ignored stuff in the middle because lots of overlap
+- [x] west coast vs. interior
+- [x] fast/slow vs. slow only
+- [x] no intro notes vs. intro notes
+- [x] zoom to 10-15 rows (x2 cols), maybe crop to ~5s for taller
+- [x] explain sampling: split west coast (~CA) vs. interior (~AZ/CO/MX), ignored stuff in the middle because lots of overlap
 
 All the wraa calls
 - [x] tell don't quiz (esp interactive), present with labels
 - [ ] "spectros to help clear up field confusion" better message than "here's a bunch of stuff you've never encountered in
-  the field that looks similar as spectros"
-- [ ] trim down to ~5 species i have found confusing in the field
+      the field that looks similar as spectros"
+- [x] trim down to ~5 species i have found confusing in the field
   - e.g. BGGN has wiggly/polyphonic stuff vs. BEWR has none
   - e.g. HETH is more wheezy than SPTO
-- [ ] make spectros WAY BIGGER
+- [x] make spectros WAY BIGGER
 
 Credits
-- [ ] generate list/table of XC copyrights programmatically
+- [ ] generate list/table of XC copyrights (programmatically)

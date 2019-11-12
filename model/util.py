@@ -1706,7 +1706,7 @@ def display_with_audio_bytes(x: 'Displayable', audio_bytes: bytes, mimetype: str
     )
 
 
-def display_with_style(x: 'Displayable', style_css: str) -> 'Displayable':
+def display_with_style(x: 'Displayable', style_css: Callable[[str], str]) -> 'Displayable':
     """
     Wrap an (ipy) `display`-able with an inline style
     """
