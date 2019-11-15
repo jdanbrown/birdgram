@@ -86,7 +86,7 @@ div.output_area .rendered_html table {
 }
 
 .dataframe td {
-  border: 1px solid black !important;
+  border: 2px solid black !important;
 }
 .dataframe img {
   margin: 0 !important;
@@ -103,12 +103,40 @@ div.output_area .rendered_html table {
  * Talk
  */
 
-.dataframe td {
-  padding: 0 !important; /* HACK Kill td padding for spectros */
-}
-
 body {
   font-size: 175%;
+  font-family: Lato, sans-serif !important;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-family: inherit !important;
+}
+h1 {
+  font-size: 175% !important;
+}
+a {
+  color: inherit !important;
+}
+
+.talk-title-title {
+  padding-top: 8ex !important;
+}
+.talk-title-subtitle {
+  font-size: 120% !important;
+  padding-top: 1ex !important;
+}
+.talk-title-name,
+.talk-title-links {
+  padding-top: 8ex !important;
+}
+.talk-title-name {
+  color: #444;
+}
+.talk-title-links {
+  color: #888;
+}
+
+.dataframe td {
+  padding: 0 !important; /* HACK Kill td padding for spectros */
 }
 
 body .talk-refs {
@@ -118,5 +146,18 @@ body .talk-refs {
 .dataframe tr th,
 .dataframe tr td {
   white-space: normal;
-  font-size: 150%;
+  /* font-size: 150%; */
+  font-size: 175%;
+}
+
+.talk-credits {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  font-size: 40% !important;
+  height: 68em;
+  color: #888;
+}
+.talk-credits-credit {
+  /* width: 25%; */
 }
