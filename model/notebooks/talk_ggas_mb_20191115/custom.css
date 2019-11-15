@@ -28,6 +28,7 @@ section.present::-webkit-scrollbar {
 }
 section.present {
   margin-top: 0 !important;
+  height: inherit !important;
 }
 .reveal ul ul,
 .reveal ul ol,
