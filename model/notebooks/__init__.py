@@ -51,6 +51,7 @@ import pandas as pd
 import PIL
 import potoo
 from potoo.debug_print import *
+from potoo.humanize import *
 from potoo.ipython import *
 from potoo.numpy import *
 from potoo.pandas import *
