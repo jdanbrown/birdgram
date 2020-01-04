@@ -160,6 +160,14 @@ android
     - We write .wav metadata using taglib, which is apparently nonstandard enough that nothing else can read it
       - https://taglib.org/
       - https://en.wikipedia.org/wiki/WAV#Metadata
+- Xcode run on device fails with:
+  - `Swift class extensions and categories on Swift classes are not allowed to have +load methods`
+  - Problem
+    - Our react-native version (0.57.x) is too old for our ios (≥13) / Xcode (≥11) / swift (≥5) versions
+  - Solution
+    - Apply 3 backports from react-native 0.59.3, 0.59.10, and 0.61.1
+    - `git show --stat 7643d8b2 92d4cc99 0f4f1b87`
+    - `git cherry-pick 7643d8b2 92d4cc99 0f4f1b87`
 - App Store warning about deprecated UIWebView (but app upload is still accepted)
   - ITMS-90809: Deprecated API Usage - Apple will stop accepting submissions of apps that use UIWebView APIs. See
     https://developer.apple.com/documentation/uikit/uiwebview for more information.
