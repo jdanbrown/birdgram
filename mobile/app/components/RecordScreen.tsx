@@ -361,6 +361,11 @@ export class RecordScreen extends Component<Props, State> {
                   });
                 }
               }
+              if (editRecording) {
+                log.info('updateForLocation: Rec.source(editRecording.rec)', () => pretty(Rec.source(editRecording.rec)));
+              } else {
+                log.info('updateForLocation: No editRecording', () => pretty(editRecording));
+              }
               await log.timedAsync('updateForLocation: setState', async () => {
                 // TODO Perf: This takes about as long as renderAudioPathToSpectroPath (in EditRecording)
                 //  - Profiling indicates it's because of the num-chunks SpectroImage components

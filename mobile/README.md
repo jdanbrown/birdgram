@@ -147,6 +147,19 @@ android
   - TODO
 
 # Troubleshooting (newest to oldest)
+- How to read .wav tags outside of Birdgram app
+  - Solution
+    - `pyprinttags3 <file.wav>`
+  - Requires pytaglib
+    - `pip install pytaglib` (https://github.com/supermihi/pytaglib)
+    - Might have to manually create `pyprinttags3`: https://gist.github.com/jdanbrown/fa8f9ed214f014873efcd57b96976de1
+  - Problem
+    - None of these work: ffmpeg, soxi, exiftool, id3info
+      - http://ffmpeg.org/ffmpeg-formats.html#Metadata-1
+      - https://stackoverflow.com/questions/51869859/get-duration-of-wav-from-sox-in-python
+    - We write .wav metadata using taglib, which is apparently nonstandard enough that nothing else can read it
+      - https://taglib.org/
+      - https://en.wikipedia.org/wiki/WAV#Metadata
 - App Store warning about deprecated UIWebView (but app upload is still accepted)
   - ITMS-90809: Deprecated API Usage - Apple will stop accepting submissions of apps that use UIWebView APIs. See
     https://developer.apple.com/documentation/uikit/uiwebview for more information.
