@@ -22,26 +22,16 @@ export class DB {
   static newAsync = async (
     filename: string = SearchRecs.dbPath,
   ): Promise<DB> => {
-    // if (!await fs.exists(`${fs.dirs.MainBundleDir}/${filename}`)) {
-    //   throw `DB file not found: ${filename}`;
-    // }
-    // const createFromLocation = `~/${filename}`; // Relative to app bundle (copied into the bundle root by react-native-asset) // TODO TODO XXX Old
+    const absolutePath = `${fs.dirs.MainBundleDir}/${filename}`;
+    if (!await fs.exists(absolutePath)) {
+      throw `DB file not found: ${absolutePath}`;
+    }
     const sqlite = await SQLite.openDatabase({
 
-      // TODO TODO Old
-      // name: filename,     // Just for SQLite bookkeeping, I think
-      // readOnly: true,     // Else it will copy the (huge!) db file from the app bundle to the documents dir // TODO TODO Is this now ignored?
-      // createFromLocation, // Else readOnly will silently not work // TODO TODO XXX Defunct interface (now int i/o str)
-
-      // TODO TODO New
-      name: filename, location: 'default', createFromLocation: 1, // TODO TODO Verify that this avoids copying the (huge!) db file from app bundle to documents dir
-      // name: filename, location: 'default',
-      // name: filename, location: 'docs',
-      // name: 'name-xxx', location: 'location-xxx',
-      // name: 'demo.db', location: 'default',
-      // name: 'demo.db',
-      // name: 'xxx.sqlite3', iosDatabaseLocation: 'Documents', // TODO TODO HACK Need symlink from Docs
-      // name: 'search_recs.sqlite3', location: 'default',
+      // TODO TODO This works! (with a small vendored patch)
+      //  - TODO TODO Test on US build to make sure it doesn't segfault like Mon Mar 11 (see notes/birdgram.md)
+      name: absolutePath,
+      location: 'default', // This is ignored when name is an abs path
 
     });
     return new DB(
