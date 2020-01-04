@@ -1,10 +1,10 @@
 PODS:
   - Alamofire (4.9.1)
-  - AudioKit (4.9.1):
-    - AudioKit/Core (= 4.9.1)
-    - AudioKit/UI (= 4.9.1)
-  - AudioKit/Core (4.9.1)
-  - AudioKit/UI (4.9.1):
+  - AudioKit (4.9.3):
+    - AudioKit/Core (= 4.9.3)
+    - AudioKit/UI (= 4.9.3)
+  - AudioKit/Core (4.9.3)
+  - AudioKit/UI (4.9.3):
     - AudioKit/Core
   - PromisesObjC (1.2.8)
   - PromisesSwift (1.2.8):
@@ -15,7 +15,7 @@ PODS:
 
 DEPENDENCIES:
   - Alamofire (~> 4.9)
-  - AudioKit (~> 4.9)
+  - AudioKit (~> 4.9.3)
   - PromisesSwift (~> 1.2.8)
   - SigmaSwiftStatistics (~> 9.0)
   - SwiftyJSON (~> 5.0)
@@ -23,24 +23,24 @@ DEPENDENCIES:
 
 SPEC REPOS:
   https://github.com/CocoaPods/Specs.git:
-    - AudioKit
     - PromisesObjC
     - PromisesSwift
     - SwiftyJSON
   trunk:
     - Alamofire
+    - AudioKit
     - SigmaSwiftStatistics
     - Yams
 
 SPEC CHECKSUMS:
   Alamofire: 85e8a02c69d6020a0d734f6054870d7ecb75cf18
-  AudioKit: 6e5a830b92b1fb295d7efb81ad33fcd1e540712b
+  AudioKit: d025ecbb68f567bba15dab7ea80b8991155729f9
   PromisesObjC: c119f3cd559f50b7ae681fa59dc1acd19173b7e6
   PromisesSwift: 37bad6f4daddb02f7c9c531efe91e8b21c13ee2f
   SigmaSwiftStatistics: 4ec81cd50b0f397baddba05fe88ce228a66edd8c
   SwiftyJSON: 36413e04c44ee145039d332b4f4e2d3e8d6c4db7
   Yams: cb96472112d99e4b368f8dae9ab62e8a3eb8a3f9
 
-PODFILE CHECKSUM: dffdfaee0876f28ed32bbce300b584cf14a2f369
+PODFILE CHECKSUM: 221a4a3c09c49c5235ebec4341d7e056c3d37447
 
 COCOAPODS: 1.8.4

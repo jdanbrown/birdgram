@@ -33,7 +33,7 @@ def bubo_pods
 end
 
 def birdgram_pods
-  pod 'AudioKit', '~> 4.9'
+  pod 'AudioKit', '~> 4.9.3'
   pod 'PromisesSwift', '~> 1.2.8' # Moved here b/c it gave me trouble in the Bubo-macos target
 end
 
