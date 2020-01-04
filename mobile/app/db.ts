@@ -29,7 +29,7 @@ export class DB {
     const sqlite = await SQLite.openDatabase({
 
       // TODO TODO This works! (with a small vendored patch)
-      //  - TODO TODO Test on US build to make sure it doesn't segfault like Mon Mar 11 (see notes/birdgram.md)
+      //  - TODO TODO US Debug build works! Doesn't segfault like Mon Mar 11 (see notes/birdgram.md)
       name: absolutePath,
       location: 'default', // This is ignored when name is an abs path
 

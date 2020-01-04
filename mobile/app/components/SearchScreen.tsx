@@ -776,21 +776,33 @@ export class SearchScreen extends PureComponent<Props, State> {
           });
         },
 
-        // TODO TODO How to sort by species? (e.g. query all species rec_id's and then re-query k per species?)
+        // TODO TODO Sort by species works -- thanks to window functions!!
         species_group: async ({filters, species_group}) => {
           log.info('updateForLocation: Querying recs for species_group', {species_group});
           return await this.props.db.query<XCRec>(sqlf`
-            select
-              *,
-              cast(taxon_order as real) as taxon_order_num
-            from search_recs S
-            where true
-              and species_species_group in (${species_group.split(';').map(x => _.trim(x))}) -- HACK species_group can contain ','
-              ${SQL.raw(placeFilter('S'))}        -- NOTE No results if species_group's species are all outside of placeFilter
-              ${SQL.raw(qualityFilter('S'))}
-              ${SQL.raw(speciesFilter('S'))}      -- NOTE No results if species_group's species are all excluded
-              ${SQL.raw(speciesGroupFilter('S'))} -- NOTE No results if species_group is excluded
-              ${SQL.raw(recFilter('S'))}
+            with
+              xs_0 as (
+                select
+                  *,
+                  cast(taxon_order as real) as taxon_order_num,
+                  row_number() over (partition by species order by random()) as i
+                from search_recs S
+                where true
+                  and species_species_group in (${species_group.split(';').map(x => _.trim(x))}) -- HACK species_group can contain ','
+                  ${SQL.raw(placeFilter('S'))}        -- NOTE No results if species_group's species are all outside of placeFilter
+                  ${SQL.raw(qualityFilter('S'))}
+                  ${SQL.raw(speciesFilter('S'))}      -- NOTE No results if species_group's species are all excluded
+                  ${SQL.raw(speciesGroupFilter('S'))} -- NOTE No results if species_group is excluded
+                  ${SQL.raw(recFilter('S'))}
+              ),
+              xs_1 as (
+                select *
+                from xs_0
+                order by i asc, random()
+                limit ${this.props.n_recs}
+              )
+            select *
+            from xs_1
             order by
               ${SQL.raw(matchKey(puts(this.props.sortListResults), {
                 species_then_random: () => 'taxon_order_num asc, random()',
@@ -804,7 +816,6 @@ export class SearchScreen extends PureComponent<Props, State> {
                 quality:             () => 'quality desc',
               }))},
               xc_id desc
-            limit ${this.props.n_recs}
           `, {
             logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
             // logQueryPlan: true, // XXX Debug
