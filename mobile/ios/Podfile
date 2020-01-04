@@ -79,6 +79,9 @@ target 'Birdgram' do
   # Disabled from `react-native link react-native-sentry`
   #   - https://sentry.io/onboarding/dan-brown/birdgram/configure/react-native/
   # pod 'SentryReactNative', :path => '../node_modules/react-native-sentry'
+  #
+  # Disabled from `react-native link react-native-sqlite-plugin-legacy-support`
+  # pod 'SQLiteSupport', :path => '../node_modules/react-native-sqlite-plugin-legacy-support'
 
   # This causes warnings. Commented out for now.
   # target 'BirdgramTests' do

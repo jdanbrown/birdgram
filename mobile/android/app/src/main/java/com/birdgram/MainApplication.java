@@ -3,6 +3,7 @@ package com.birdgram;
 import android.app.Application;
 
 import com.facebook.react.ReactApplication;
+import io.sqlc.SQLiteSupportPackage;
 import io.sentry.RNSentryPackage;
 import com.learnium.RNDeviceInfo.RNDeviceInfo;
 import com.lugg.ReactNativeConfig.ReactNativeConfigPackage;
@@ -34,6 +35,7 @@ public class MainApplication extends Application implements ReactApplication {
     protected List<ReactPackage> getPackages() {
       return Arrays.<ReactPackage>asList(
           new MainReactPackage(),
+            new SQLiteSupportPackage(),
             new RNSentryPackage(),
             new RNDeviceInfo(),
             new ReactNativeConfigPackage(),
