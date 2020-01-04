@@ -27,12 +27,8 @@ export class DB {
       throw `DB file not found: ${absolutePath}`;
     }
     const sqlite = await SQLite.openDatabase({
-
-      // TODO TODO This works! (with a small vendored patch)
-      //  - TODO TODO US Debug build works! Doesn't segfault like Mon Mar 11 (see notes/birdgram.md)
       name: absolutePath,
       location: 'default', // This is ignored when name is an abs path
-
     });
     return new DB(
       sqlite,

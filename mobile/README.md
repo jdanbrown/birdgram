@@ -147,6 +147,49 @@ android
   - TODO
 
 # Troubleshooting (newest to oldest)
+- Reset which code signing certificate is used by Xcode
+  - `CONFIGURATION=Debug bin/fastlane-env CA100 match development`
+  - And then click around a bunch in Xcode -> [Project] -> Signing & Capabitilies
+- Regenerate code signing certificates for ios / app store (these expire every ~year)
+  - Use `fastlane match`
+    - https://docs.fastlane.tools/actions/match
+  - Monitor certs as fastlane updates them
+    - https://developer.apple.com/account/resources/certificates/list
+    - https://developer.apple.com/account/resources/profiles/list
+  - Revoke and delete old certs (this won't break apps already in App Store and TestFlight)
+    - `bin/fastlane-env CA100 match nuke development`
+    - `bin/fastlane-env CA100 match nuke distribution`
+  - Generate and install new certs (for future builds and uploads to App Store and TestFlight)
+    - HACK Might have to interactively copy/paste APP_BUNDLE_ID value out of mobile/.env
+      - Is something wrong with MATCH_APP_IDENTIFIER in ios/fastlane/Fastfile?
+    - Each runs create the provisioning profile per app bundle id
+    - First run per development/appstore creates the cert
+    - `CONFIGURATION=Debug bin/fastlane-env CA100 match development`
+    - `CONFIGURATION=Debug bin/fastlane-env CA3500 match development`
+    - `CONFIGURATION=Debug bin/fastlane-env US match development`
+    - `CONFIGURATION=Debug bin/fastlane-env CR match development`
+    - `CONFIGURATION=Release bin/fastlane-env CA100 match appstore`
+    - `CONFIGURATION=Release bin/fastlane-env CA3500 match appstore`
+    - `CONFIGURATION=Release bin/fastlane-env US match appstore`
+    - `CONFIGURATION=Release bin/fastlane-env CR match appstore`
+- App Store warning about deprecated UIWebView (but app upload is still accepted) [2nd time!]
+  - Problem
+    - Email after upload: `ITMS-90809: Deprecated API Usage - Apple will stop accepting submissions of apps that use UIWebView APIs`
+    - Our react-native is really old and still has RCTWebView
+  - Solution
+    - Rip out RCTWebView
+      - `git show --stat 482d7558`
+      - `git cherry-pick 482d7558`
+      - From https://github.com/facebook/react-native/issues/26255#issuecomment-528275747
+    - Future react-native versions move WebView out to https://github.com/react-native-community/react-native-webview
+      - https://github.com/facebook/react-native/pull/16792#issuecomment-429483747
+- Loading sqlite db (search_recs.sqlite3) fails / show spinner forever
+  - Problem
+    - react-native-sqlite-plugin-legacy-support doesn't support paths, only filenames (wat)
+  - Solution
+    - Apply manual patch
+    - `git show --stat 4abcf618`
+    - `git cherry-pick 4abcf618`
 - How to read .wav tags outside of Birdgram app
   - Solution
     - `pyprinttags3 <file.wav>`
@@ -168,7 +211,7 @@ android
     - Apply 3 backports from react-native 0.59.3, 0.59.10, and 0.61.1
     - `git show --stat 7643d8b2 92d4cc99 0f4f1b87`
     - `git cherry-pick 7643d8b2 92d4cc99 0f4f1b87`
-- App Store warning about deprecated UIWebView (but app upload is still accepted)
+- App Store warning about deprecated UIWebView (but app upload is still accepted) [1st time]
   - ITMS-90809: Deprecated API Usage - Apple will stop accepting submissions of apps that use UIWebView APIs. See
     https://developer.apple.com/documentation/uikit/uiwebview for more information.
   - Not useful for me, but relevant context
