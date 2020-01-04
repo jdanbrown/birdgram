@@ -1,8 +1,8 @@
 import _ from 'lodash';
-import { SQLiteDatabase } from 'react-native-sqlite-storage';
 import _SQL from 'sqlstring-sqlite';
 
 import { Log, rich } from 'app/log';
+import * as SQLite from 'app/sqlite-async';
 import { noawait, Timer, yamlPretty } from 'app/utils';
 
 const log = new Log('sql');
@@ -46,7 +46,7 @@ export interface QuerySqlOpts {
   logQueryPlan?: boolean,
 }
 export type QuerySqlResults<Row> = <X>(onResults: (results: ResultSet<Row>) => Promise<X>) => Promise<X>;
-export const querySql = (db: SQLiteDatabase) => <Row>(sql: string, opts?: QuerySqlOpts): QuerySqlResults<Row> => {
+export const querySql = (db: SQLite.Database) => <Row>(sql: string, opts?: QuerySqlOpts): QuerySqlResults<Row> => {
   opts = opts || {}; // Manual default arg (defaults not supported in lambdas)
 
   // Default opts
@@ -111,7 +111,7 @@ export const querySql = (db: SQLiteDatabase) => <Row>(sql: string, opts?: QueryS
 export interface ResultSet<Row> {
   rows: ResultSetRowList<Row>;
   rowsAffected: number;
-  insertId: number;
+  insertId?: number;
 }
 export interface ResultSetRowList<Row> {
   length: number;

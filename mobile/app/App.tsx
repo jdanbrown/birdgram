@@ -138,7 +138,7 @@ timed('ReactNative',        () => global.RN              = require('ReactNative'
 timed('rn-fetch-blob',      () => global.RNFB            = require('rn-fetch-blob').default);   // 0ms
 timed('Gesture',            () => global.Gesture         = require('react-native-gesture-handler')); // ?
 timed('./sound',            () => global.Sound           = require('./sound').default);         // 1ms
-timed('SQLite',             () => global.SQLite          = require('react-native-sqlite-storage')); // 0ms
+timed('SQLite',             () => global.sqlitePlugin    = require('react-native-sqlite-plugin-legacy-support').default); // ?
 timed('traverse',           () => global.traverse        = require('traverse'));                // ?
 timed('typography',         () => global.typography      = require('react-native-typography')); // 27ms
 timed('wavefile',           () => global.WaveFile        = require('wavefile/dist/wavefile'));  // ?

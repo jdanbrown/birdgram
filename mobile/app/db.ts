@@ -1,5 +1,4 @@
 import _ from 'lodash';
-import SQLite, { SQLiteDatabase } from 'react-native-sqlite-storage';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
@@ -8,6 +7,7 @@ import { Log, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import Sound from 'app/sound';
 import { querySql, QuerySql, sqlf } from 'app/sql';
+import * as SQLite from 'app/sqlite-async';
 import { local, matchNull, typed } from 'app/utils';
 
 const log = new Log('DB');
@@ -15,21 +15,34 @@ const log = new Log('DB');
 export class DB {
 
   constructor(
-    public sqlite:   SQLiteDatabase,
+    public sqlite:   SQLite.Database,
     public filename: string,
   ) {}
 
   static newAsync = async (
     filename: string = SearchRecs.dbPath,
   ): Promise<DB> => {
-    if (!await fs.exists(`${fs.dirs.MainBundleDir}/${filename}`)) {
-      throw `DB file not found: ${filename}`;
-    }
-    const createFromLocation = `~/${filename}`; // Relative to app bundle (copied into the bundle root by react-native-asset)
+    // if (!await fs.exists(`${fs.dirs.MainBundleDir}/${filename}`)) {
+    //   throw `DB file not found: ${filename}`;
+    // }
+    // const createFromLocation = `~/${filename}`; // Relative to app bundle (copied into the bundle root by react-native-asset) // TODO TODO XXX Old
     const sqlite = await SQLite.openDatabase({
-      name: filename,     // Just for SQLite bookkeeping, I think
-      readOnly: true,     // Else it will copy the (huge!) db file from the app bundle to the documents dir
-      createFromLocation, // Else readOnly will silently not work
+
+      // TODO TODO Old
+      // name: filename,     // Just for SQLite bookkeeping, I think
+      // readOnly: true,     // Else it will copy the (huge!) db file from the app bundle to the documents dir // TODO TODO Is this now ignored?
+      // createFromLocation, // Else readOnly will silently not work // TODO TODO XXX Defunct interface (now int i/o str)
+
+      // TODO TODO New
+      name: filename, location: 'default', createFromLocation: 1, // TODO TODO Verify that this avoids copying the (huge!) db file from app bundle to documents dir
+      // name: filename, location: 'default',
+      // name: filename, location: 'docs',
+      // name: 'name-xxx', location: 'location-xxx',
+      // name: 'demo.db', location: 'default',
+      // name: 'demo.db',
+      // name: 'xxx.sqlite3', iosDatabaseLocation: 'Documents', // TODO TODO HACK Need symlink from Docs
+      // name: 'search_recs.sqlite3', location: 'default',
+
     });
     return new DB(
       sqlite,
