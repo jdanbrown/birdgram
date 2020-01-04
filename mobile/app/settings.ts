@@ -8,7 +8,7 @@ import { PlaceLoading } from 'app/components/PlacesScreen';
 import { SortListResults, SortSearchResults } from 'app/components/SearchScreen';
 import { Place, PlaceId, Quality, Species, SpeciesGroup } from 'app/datatypes';
 import { debug_print, Log, puts, rich } from 'app/log';
-import { json, mapPairsTyped, match, objectKeysTyped, pretty, typed, yaml } from 'app/utils';
+import { json, mapPairsTyped, match, matchKey, objectKeysTyped, pretty, throwsError, typed, yaml } from 'app/utils';
 
 const log = new Log('Settings');
 
@@ -72,7 +72,7 @@ export const DEFAULTS: Props = {
   n_per_sp: 3,  // For rec queries
   n_recs:   30, // For non-rec queries
   filterQuality: new Set<Quality>(['A', 'B']),
-  sortListResults: 'taxon_order',
+  sortListResults: 'species_then_random',
   sortSearchResults: 'slp__d_pc',
   showMetadataLeft: true,
   showMetadataBelow: false,
@@ -108,6 +108,23 @@ export const DEFAULTS: Props = {
 export const VALIDATE: {[K in keyof Props]?: (x: Props[K]) => boolean} = {
   // NOTE Keep attrs in sync (3/6)
   filterQuality: x => x.size > 0, // Disallow an empty set of quality filters
+  // Reject invalid enum values (from old code or corrupt settings)
+  sortListResults: x => !throwsError(() => puts(matchKey(x, {
+    species_then_random: () => null,
+    random:              () => null,
+    xc_id:               () => null,
+    month_day:           () => null,
+    date:                () => null,
+    lat:                 () => null,
+    lng:                 () => null,
+    country__state:      () => null,
+    quality:             () => null,
+  }))),
+  // Reject invalid enum values (from old code or corrupt settings)
+  sortSearchResults: x => !throwsError(() => matchKey(x, {
+    slp__d_pc: () => null,
+    d_pc:      () => null,
+  })),
 };
 export const TYPES: {[key: string]: Array<string | Function>} = {
   // NOTE Keep attrs in sync (4/6)

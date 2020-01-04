@@ -73,22 +73,25 @@ interface ScrollViewState {
 }
 
 // (Callers: RecentScreen, SavedScreen)
-export type Query = QueryNone | QueryRandom | QuerySpecies | QueryRec;
-export type QueryNone    = {kind: 'none'}; // e.g. so we can show nothing on redirect from '/'
-export type QueryRandom  = {kind: 'random',  filters: Filters, seed: number};
-export type QuerySpecies = {kind: 'species', filters: Filters, species: string};
-export type QueryRec     = {kind: 'rec',     filters: Filters, source: Source};
+export type Query = QueryNone | QueryRandom | QuerySpeciesGroup | QuerySpecies | QueryRec;
+export type QueryNone         = {kind: 'none'}; // e.g. so we can show nothing on redirect from '/'
+export type QueryRandom       = {kind: 'random',        filters: Filters, seed: number};
+export type QuerySpeciesGroup = {kind: 'species_group', filters: Filters, species_group: string};
+export type QuerySpecies      = {kind: 'species',       filters: Filters, species: string};
+export type QueryRec          = {kind: 'rec',           filters: Filters, source: Source};
 export function matchQuery<X>(query: Query, cases: {
-  none:    (query: QueryNone)    => X,
-  random:  (query: QueryRandom)  => X,
-  species: (query: QuerySpecies) => X,
-  rec:     (query: QueryRec)     => X,
+  none:          (query: QueryNone)         => X,
+  random:        (query: QueryRandom)       => X,
+  species_group: (query: QuerySpeciesGroup) => X,
+  species:       (query: QuerySpecies)      => X,
+  rec:           (query: QueryRec)          => X,
 }): X {
   switch (query.kind) {
-    case 'none':    return cases.none(query);
-    case 'random':  return cases.random(query);
-    case 'species': return cases.species(query);
-    case 'rec':     return cases.rec(query);
+    case 'none':          return cases.none(query);
+    case 'random':        return cases.random(query);
+    case 'species_group': return cases.species_group(query);
+    case 'species':       return cases.species(query);
+    case 'rec':           return cases.rec(query);
   }
 }
 
@@ -98,10 +101,11 @@ export const Query = {
   //  - (Callers: updateForLocation, RecentScreen, SavedScreen)
   loadFromLocation: async (location: Location): Promise<Query | null> => {
     return await matchSearchPathParams<Promise<Query | null>>(searchPathParamsFromLocation(location), {
-      root:    async ()                    => ({kind: 'species', filters: {}, species: ''}),
-      random:  async ({filters, seed})     => ({kind: 'random',  filters, seed}),
-      species: async ({filters, species})  => ({kind: 'species', filters, species}),
-      rec:     async ({filters, sourceId}) => {
+      root:          async ()                          => ({kind: 'species',       filters: {}, species: ''}),
+      random:        async ({filters, seed})           => ({kind: 'random',        filters, seed}),
+      species_group: async ({filters, species_group})  => ({kind: 'species_group', filters, species_group}),
+      species:       async ({filters, species})        => ({kind: 'species',       filters, species}),
+      rec:           async ({filters, sourceId})       => {
         if (SourceId.isOldStyleEdit(sourceId)) {
           return null; // Treat old-style edit recs (e.g. from history) like source not found
         } else {
@@ -140,7 +144,8 @@ export const Filters = {
 };
 
 export type SortListResults =
-  | 'taxon_order'
+  | 'species_then_random'
+  | 'random'
   | 'xc_id'
   | 'month_day'
   | 'date'
@@ -559,10 +564,11 @@ export class SearchScreen extends PureComponent<Props, State> {
     return matchNull(this.state.query, {
       null: ()    => '...',
       x:    query => matchQuery(query, {
-        none:    ()                   => 'none',
-        random:  ({filters, seed})    => `random/${seed}`,
-        species: ({filters, species}) => species,
-        rec:     ({filters, source})  => Source.show(source, {
+        none:          ()                         => 'none',
+        random:        ({filters, seed})          => `random/${seed}`,
+        species_group: ({filters, species_group}) => species_group,
+        species:       ({filters, species})       => species,
+        rec:           ({filters, source})        => Source.show(source, {
           species: this.props.xc,
         }),
       }),
@@ -713,14 +719,15 @@ export class SearchScreen extends PureComponent<Props, State> {
             )
             order by
               ${SQL.raw(matchKey(this.props.sortListResults, {
-                taxon_order:    () => 'taxon_order_num asc, random()',
-                xc_id:          () => 'xc_id desc',
-                month_day:      () => 'month_day asc',
-                date:           () => 'date desc',
-                lat:            () => 'lat desc', // +90 N -> -90 S
-                lng:            () => 'lng asc',  // -180 ~HI -> +180 ~NZ
-                country__state: () => 'country asc, state asc',
-                quality:        () => 'quality desc',
+                species_then_random: () => 'taxon_order_num asc, random()',
+                random:              () => 'random()',
+                xc_id:               () => 'xc_id desc',
+                month_day:           () => 'month_day asc',
+                date:                () => 'date desc',
+                lat:                 () => 'lat desc', // +90 N -> -90 S
+                lng:                 () => 'lng asc',  // -180 ~HI -> +180 ~NZ
+                country__state:      () => 'country asc, state asc',
+                quality:             () => 'quality desc',
               }))},
               xc_id desc
           `, {
@@ -741,18 +748,60 @@ export class SearchScreen extends PureComponent<Props, State> {
             from search_recs S
             where true
               and species in (${species.split(',').map(x => _.trim(x).toUpperCase())})
-              ${SQL.raw(placeFilter('S'))} -- No results if selected species is outside of placeFilter
+              ${SQL.raw(placeFilter('S'))}        -- NOTE No results if species is outside of placeFilter
               ${SQL.raw(qualityFilter('S'))}
+              ${SQL.raw(speciesFilter('S'))}      -- NOTE No results if species is excluded
+              ${SQL.raw(speciesGroupFilter('S'))} -- NOTE No results if species's species_group is excluded
+              ${SQL.raw(recFilter('S'))}
             order by
               ${SQL.raw(matchKey(this.props.sortListResults, {
-                taxon_order:    () => 'taxon_order_num asc, random()',
-                xc_id:          () => 'xc_id desc',
-                month_day:      () => 'month_day asc',
-                date:           () => 'date desc',
-                lat:            () => 'lat desc', // +90 N -> -90 S
-                lng:            () => 'lng asc',  // -180 ~HI -> +180 ~NZ
-                country__state: () => 'country asc, state asc',
-                quality:        () => 'quality desc',
+                species_then_random: () => 'taxon_order_num asc, random()',
+                random:              () => 'random()',
+                xc_id:               () => 'xc_id desc',
+                month_day:           () => 'month_day asc',
+                date:                () => 'date desc',
+                lat:                 () => 'lat desc', // +90 N -> -90 S
+                lng:                 () => 'lng asc',  // -180 ~HI -> +180 ~NZ
+                country__state:      () => 'country asc, state asc',
+                quality:             () => 'quality desc',
+              }))},
+              xc_id desc
+            limit ${this.props.n_recs}
+          `, {
+            logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
+            // logQueryPlan: true, // XXX Debug
+          })(async results => {
+            const recs = results.rows.raw();
+            return {recs};
+          });
+        },
+
+        // TODO TODO How to sort by species? (e.g. query all species rec_id's and then re-query k per species?)
+        species_group: async ({filters, species_group}) => {
+          log.info('updateForLocation: Querying recs for species_group', {species_group});
+          return await this.props.db.query<XCRec>(sqlf`
+            select
+              *,
+              cast(taxon_order as real) as taxon_order_num
+            from search_recs S
+            where true
+              and species_species_group in (${species_group.split(';').map(x => _.trim(x))}) -- HACK species_group can contain ','
+              ${SQL.raw(placeFilter('S'))}        -- NOTE No results if species_group's species are all outside of placeFilter
+              ${SQL.raw(qualityFilter('S'))}
+              ${SQL.raw(speciesFilter('S'))}      -- NOTE No results if species_group's species are all excluded
+              ${SQL.raw(speciesGroupFilter('S'))} -- NOTE No results if species_group is excluded
+              ${SQL.raw(recFilter('S'))}
+            order by
+              ${SQL.raw(matchKey(puts(this.props.sortListResults), {
+                species_then_random: () => 'taxon_order_num asc, random()',
+                random:              () => 'random()',
+                xc_id:               () => 'xc_id desc',
+                month_day:           () => 'month_day asc',
+                date:                () => 'date desc',
+                lat:                 () => 'lat desc', // +90 N -> -90 S
+                lng:                 () => 'lng asc',  // -180 ~HI -> +180 ~NZ
+                country__state:      () => 'country asc, state asc',
+                quality:             () => 'quality desc',
               }))},
               xc_id desc
             limit ${this.props.n_recs}
@@ -1304,9 +1353,52 @@ export class SearchScreen extends PureComponent<Props, State> {
             none: () => [],
             random: () => [
               {
-                ...buttonProps(this.props.sortListResults === 'taxon_order'),
-                onPress: () => this.props.settings.set({sortListResults: 'taxon_order'}),
-                label: 'Taxo, then random',
+                ...buttonProps(this.props.sortListResults === 'species_then_random'),
+                onPress: () => this.props.settings.set({sortListResults: 'species_then_random'}),
+                label: 'Species, then random',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'random'),
+                onPress: () => this.props.settings.set({sortListResults: 'random'}),
+                label: 'Random',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'xc_id'),
+                onPress: () => this.props.settings.set({sortListResults: 'xc_id'}),
+                label: 'XC ID (new→old)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'month_day'),
+                onPress: () => this.props.settings.set({sortListResults: 'month_day'}),
+                label: 'Season (Jan→Dec)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'date'),
+                onPress: () => this.props.settings.set({sortListResults: 'date'}),
+                label: 'Date (new→old)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'lat'),
+                onPress: () => this.props.settings.set({sortListResults: 'lat'}),
+                label: 'Latitude (N→S)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'lng'),
+                onPress: () => this.props.settings.set({sortListResults: 'lng'}),
+                label: 'Longitude (W→E)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'country__state'),
+                onPress: () => this.props.settings.set({sortListResults: 'country__state'}),
+                label: 'Country/state (alphabetical)',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'quality'),
+                onPress: () => this.props.settings.set({sortListResults: 'quality'}),
+                label: 'Quality (good→bad)',
+              },
+            ],
+            species_group: () => [
+              {
+                ...buttonProps(this.props.sortListResults === 'species_then_random'),
+                onPress: () => this.props.settings.set({sortListResults: 'species_then_random'}),
+                label: 'Species, then random',
+              }, {
+                ...buttonProps(this.props.sortListResults === 'random'),
+                onPress: () => this.props.settings.set({sortListResults: 'random'}),
+                label: 'Random',
               }, {
                 ...buttonProps(this.props.sortListResults === 'xc_id'),
                 onPress: () => this.props.settings.set({sortListResults: 'xc_id'}),
@@ -1339,8 +1431,8 @@ export class SearchScreen extends PureComponent<Props, State> {
             ],
             species: () => [
               {
-                ...buttonProps(this.props.sortListResults === 'taxon_order'),
-                onPress: () => this.props.settings.set({sortListResults: 'taxon_order'}),
+                ...buttonProps(this.props.sortListResults === 'random'),
+                onPress: () => this.props.settings.set({sortListResults: 'random'}),
                 label: 'Random',
               }, {
                 ...buttonProps(this.props.sortListResults === 'xc_id'),

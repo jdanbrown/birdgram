@@ -415,6 +415,9 @@ export class RecentScreen extends PureComponent<Props, State> {
                             random: ({filters, seed}) => (
                               `Random`
                             ),
+                            species_group: ({filters, species_group}) => (
+                              species_group
+                            ),
                             species: ({filters, species}) => (
                               species === '_BLANK' ? '[BLANK]' :
                               matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {

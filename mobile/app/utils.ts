@@ -90,6 +90,13 @@ export function ifError<X>(f: () => X, g: (e: any) => X): X {
   return matchError(f, {error: g, x: x => x});
 }
 
+export function throwsError<X>(f: () => X): boolean {
+  return matchError(f, {
+    x:     x => false,
+    error: e => true,
+  });
+}
+
 // XXX Replace with ifError/matchError
 export function tryElse<Z, X extends Z = Z, Y extends Z = Z>(x: X, f: () => Y): Z {
   try {

@@ -414,45 +414,56 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
     // this.log.info('render'); // Debug
     const {species_group, ebird} = this.props;
     return (
-      <View
+      <RectButton
         style={[Styles.fill, {
-          flexDirection:   'row',
-          justifyContent:  'center',
-          alignItems:      'center',
-          paddingVertical: 3,
           backgroundColor: iOSColors.lightGray,
         }]}
-        // For SectionList.scrollToLocation({viewOffset})
-        onLayout={!this.props.isFirstSection ? undefined : this.props.browse.onFirstSectionHeaderLayout}
+        onPress={() => {
+          this.props.go('search', {path: `/species_group/${encodeURIComponent(species_group)}`});
+        }}
       >
+        <View
+          style={[Styles.fill, {
+            flexDirection:   'row',
+            justifyContent:  'center',
+            alignItems:      'center',
+            paddingVertical: 3,
+          }]}
+          // For SectionList.scrollToLocation({viewOffset})
+          onLayout={!this.props.isFirstSection ? undefined : this.props.browse.onFirstSectionHeaderLayout}
+        >
 
-        <Text style={{
-          flexGrow: 1,
-          paddingHorizontal: 5,
-          ...material.captionObject,
-          fontWeight: 'bold',
-          color:      '#444444',
-        }}>{species_group}</Text>
+          <View style={{
+            flexGrow:          1,
+            flexDirection:     'row',
+            alignItems:        'center',
+            paddingHorizontal: 5,
+          }}>
+            <Text style={[material.captionObject, {fontWeight: 'bold', color: '#444444'}]}>
+              {species_group}
+            </Text>
+          </View>
 
-        <BrowseItemButton
-          iconName='x'
-          activeButtonColor={!this.props.unexcludedAny ? iOSColors.red : iOSColors.yellow}
-          active={this.props.excluded}
-          onPress={() => {
-            // TODO(exclude_invariants): Dedupe with SearchScreen
-            this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
-              const unAny = this.props.unexcludedAny;
-              const g     = species_group;
-              const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
-              if      (!exG.has(g)          ) { exG = setAdd  (exG, g); exS = setDiff (exS, ss); } // !exG         -> exG+g, exS-ss
-              else if ( exG.has(g) && !unAny) { exG = setDiff (exG, g);                          } //  exG, !unAny -> exG-g
-              else if ( exG.has(g) &&  unAny) { exG = setDiff (exG, g); unS = setDiff (unS, ss); } //  exG,  unAny -> exG-g, unS-ss
-              return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
-            });
-          }}
-        />
+          <BrowseItemButton
+            iconName='x'
+            activeButtonColor={!this.props.unexcludedAny ? iOSColors.red : iOSColors.yellow}
+            active={this.props.excluded}
+            onPress={() => {
+              // TODO(exclude_invariants): Dedupe with SearchScreen
+              this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
+                const unAny = this.props.unexcludedAny;
+                const g     = species_group;
+                const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
+                if      (!exG.has(g)          ) { exG = setAdd  (exG, g); exS = setDiff (exS, ss); } // !exG         -> exG+g, exS-ss
+                else if ( exG.has(g) && !unAny) { exG = setDiff (exG, g);                          } //  exG, !unAny -> exG-g
+                else if ( exG.has(g) &&  unAny) { exG = setDiff (exG, g); unS = setDiff (unS, ss); } //  exG,  unAny -> exG-g, unS-ss
+                return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+              });
+            }}
+          />
 
-      </View>
+        </View>
+      </RectButton>
     );
   };
 
@@ -503,62 +514,64 @@ export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> 
     // this.log.info('render'); // Debug
     const {species, species_group, com_name, sci_name, ebird} = this.props;
     return (
-      <View style={{
-        flexDirection:   'row',
-        justifyContent:  'center',
-        alignItems:      'center',
-        paddingVertical: 3,
-        // Vertical borders
-        //  - Internal borders: top border on non-first items per section
-        //  - Plus bottom border on last item of last section
-        borderTopWidth: 1,
-        borderTopColor: iOSColors.lightGray,
-        ...(!this.props.isLastItem ? {} : {
-          borderBottomWidth: 1,
-          borderBottomColor: iOSColors.lightGray,
-        }),
-      }}>
-
-        <BrowseItemButton
-          iconName='search'
-          activeButtonColor={iOSColors.blue}
-          active={true}
-          onPress={() => {
-            this.props.go('search', {path: `/species/${encodeURIComponent(species)}`});
-          }}
-        />
-
+      <RectButton
+        style={{
+          // If you set a backgroundColor, it must be on RectButton i/o View for highlight-on-tap to work
+          backgroundColor: 'inherit',
+        }}
+        onPress={() => {
+          this.props.go('search', {path: `/species/${encodeURIComponent(species)}`});
+        }}
+      >
         <View style={{
-          flexGrow: 1,
-          paddingHorizontal: 5,
+          flexDirection:   'row',
+          justifyContent:  'center',
+          alignItems:      'center',
+          paddingVertical: 3,
+          // Vertical borders
+          //  - Internal borders: top border on non-first items per section
+          //  - Plus bottom border on last item of last section
+          borderTopWidth: 1,
+          borderTopColor: iOSColors.lightGray,
+          ...(!this.props.isLastItem ? {} : {
+            borderBottomWidth: 1,
+            borderBottomColor: iOSColors.lightGray,
+          }),
         }}>
-          <Text style={[material.captionObject, {color: 'black'}]}>
-            {com_name}
-          </Text>
-          <Text style={[material.captionObject, {fontSize: 10}]}>
-            {sci_name}
-          </Text>
+
+          <View style={{
+            flexGrow:          1,
+            flexDirection:     'column',
+            paddingHorizontal: 5,
+          }}>
+            <Text style={[material.captionObject, {color: 'black'}]}>
+              {com_name}
+            </Text>
+            <Text style={[material.captionObject, {fontSize: 10}]}>
+              {sci_name}
+            </Text>
+          </View>
+
+          <BrowseItemButton
+            iconName='x'
+            activeButtonColor={iOSColors.red}
+            active={this.props.excluded && !this.props.unexcluded}
+            onPress={() => {
+              // TODO(exclude_invariants): Dedupe with SearchScreen
+              this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
+                const s = species;
+                const g = species_group;
+                if      (!exG.has(g) && !exS.has(s)) { exS = setAdd  (exS, s); } // !exG, !exS -> exS+s
+                else if (!exG.has(g) &&  exS.has(s)) { exS = setDiff (exS, s); } // !exG,  exS -> exS-s
+                else if ( exG.has(g) && !unS.has(s)) { unS = setAdd  (unS, s); } //  exG, !unS -> unS+s
+                else if ( exG.has(g) &&  unS.has(s)) { unS = setDiff (unS, s); } //  exG,  unS -> unS-s
+                return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+              });
+            }}
+          />
+
         </View>
-
-        <BrowseItemButton
-          iconName='x'
-          activeButtonColor={iOSColors.red}
-          active={this.props.excluded && !this.props.unexcluded}
-          onPress={() => {
-            // TODO(exclude_invariants): Dedupe with SearchScreen
-            this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
-              const s = species;
-              const g = species_group;
-              if      (!exG.has(g) && !exS.has(s)) { exS = setAdd  (exS, s); } // !exG, !exS -> exS+s
-              else if (!exG.has(g) &&  exS.has(s)) { exS = setDiff (exS, s); } // !exG,  exS -> exS-s
-              else if ( exG.has(g) && !unS.has(s)) { unS = setAdd  (unS, s); } //  exG, !unS -> unS+s
-              else if ( exG.has(g) &&  unS.has(s)) { unS = setDiff (unS, s); } //  exG,  unS -> unS-s
-              return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
-            });
-          }}
-        />
-
-      </View>
+      </RectButton>
     );
   };
 

@@ -452,7 +452,7 @@ export class SavedScreen extends PureComponent<Props, State> {
                                   xc:   source => 'XC', // TODO [we don't yet save xc recs]
                                   user: source => (
                                     // TODO Show more metadata fields: species, ...
-                                    ifEmpty(puts(source.metadata.title), () => 'Untitled')
+                                    ifEmpty(source.metadata.title, () => 'Untitled')
                                   ),
                                 }),
                                 search: saved => matchQuery(saved.query, {
@@ -461,6 +461,9 @@ export class SavedScreen extends PureComponent<Props, State> {
                                   ),
                                   random: ({filters, seed}) => (
                                     `Random`
+                                  ),
+                                  species_group: ({filters, species_group}) => (
+                                    species_group
                                   ),
                                   species: ({filters, species}) => (
                                     species === '_BLANK' ? '[BLANK]' :

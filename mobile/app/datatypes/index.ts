@@ -148,10 +148,13 @@ export function recordPathParamsFromLocation(location: Location): RecordPathPara
   const {pathname: path, search} = location;
   const queries = queryString.parse(search);
   let match;
+
   match = matchPath<{}>(path, {path: '/', exact: true});
   if (match) return {kind: 'root'};
+
   match = matchPath<{sourceId: SourceId}>(path, {path: '/edit/:sourceId'});
   if (match) return {kind: 'edit', sourceId: decodeURIComponent(match.params.sourceId)};
+
   log.warn(`recordPathParamsFromLocation: Unknown location[${location}], returning {kind: root}`);
   return {kind: 'root'};
 }
@@ -164,24 +167,28 @@ export function recordPathParamsFromLocation(location: Location): RecordPathPara
 export type SearchPathParams =
   | SearchPathParamsRoot
   | SearchPathParamsRandom
+  | SearchPathParamsSpeciesGroup
   | SearchPathParamsSpecies
   | SearchPathParamsRec;
-export type SearchPathParamsRoot    = { kind: 'root' };
-export type SearchPathParamsRandom  = { kind: 'random',  filters: Filters, seed: number };
-export type SearchPathParamsSpecies = { kind: 'species', filters: Filters, species: string };
-export type SearchPathParamsRec     = { kind: 'rec',     filters: Filters, sourceId: SourceId };
+export type SearchPathParamsRoot         = { kind: 'root' };
+export type SearchPathParamsRandom       = { kind: 'random',        filters: Filters, seed: number };
+export type SearchPathParamsSpeciesGroup = { kind: 'species_group', filters: Filters, species_group: string };
+export type SearchPathParamsSpecies      = { kind: 'species',       filters: Filters, species: string };
+export type SearchPathParamsRec          = { kind: 'rec',           filters: Filters, sourceId: SourceId };
 
 export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cases: {
-  root:    (searchPathParams: SearchPathParamsRoot)    => X,
-  random:  (searchPathParams: SearchPathParamsRandom)  => X,
-  species: (searchPathParams: SearchPathParamsSpecies) => X,
-  rec:     (searchPathParams: SearchPathParamsRec)     => X,
+  root:          (searchPathParams: SearchPathParamsRoot)         => X,
+  random:        (searchPathParams: SearchPathParamsRandom)       => X,
+  species_group: (searchPathParams: SearchPathParamsSpeciesGroup) => X,
+  species:       (searchPathParams: SearchPathParamsSpecies)      => X,
+  rec:           (searchPathParams: SearchPathParamsRec)          => X,
 }): X {
   switch (searchPathParams.kind) {
-    case 'root':    return cases.root(searchPathParams);
-    case 'random':  return cases.random(searchPathParams);
-    case 'species': return cases.species(searchPathParams);
-    case 'rec':     return cases.rec(searchPathParams);
+    case 'root':          return cases.root(searchPathParams);
+    case 'random':        return cases.random(searchPathParams);
+    case 'species_group': return cases.species_group(searchPathParams);
+    case 'species':       return cases.species(searchPathParams);
+    case 'rec':           return cases.rec(searchPathParams);
   }
 }
 
@@ -191,14 +198,22 @@ export function searchPathParamsFromLocation(location: Location): SearchPathPara
   const {pathname: path, search} = location;
   const queries = queryString.parse(search);
   let match;
+
   match = matchPath<{}>(path, {path: '/', exact: true});
   if (match) return {kind: 'root'};
+
   match = matchPath<{seed: string}>(path, {path: '/random/:seed'});
   if (match) return {kind: 'random',  filters: {}, seed: tryParseInt(0, decodeURIComponent(match.params.seed))};
+
+  match = matchPath<{species_group: string}>(path, {path: '/species_group/:species_group'});
+  if (match) return {kind: 'species_group', filters: {}, species_group: decodeURIComponent(match.params.species_group)};
+
   match = matchPath<{species: string}>(path, {path: '/species/:species'});
   if (match) return {kind: 'species', filters: {}, species: decodeURIComponent(match.params.species)};
+
   match = matchPath<{sourceId: SourceId}>(path, {path: '/rec/:sourceId*'});
   if (match) return {kind: 'rec',     filters: {}, sourceId: decodeURIComponent(match.params.sourceId)};
-  log.warn(`searchPathParamsFromLocation: Unknown location[${location}], returning {kind: root}`);
+
+  log.warn(`searchPathParamsFromLocation: Unknown location[${json(location)}], returning {kind: root}`);
   return {kind: 'root'};
 }
