@@ -98,17 +98,23 @@ export class Log {
   timed = <X>(msg: string, f: () => X): X => {
     const timer = new Timer();
     try {
-      return f();
-    } finally {
+      const x = f();
       this.debug(sprintf(`timed: [%.3fs] %s`, timer.time(), msg)); // HACK 'timed:' to place nicely with name prefix
+      return x;
+    } catch (e) {
+      this.warn(sprintf(`timed: [%.3fs] %s -> threw: %s`, timer.time(), msg, e)); // HACK 'timed:' to place nicely with name prefix
+      throw e;
     }
   };
   timedAsync = async <X>(msg: string, f: () => Promise<X>): Promise<X> => {
     const timer = new Timer();
     try {
-      return await f();
-    } finally {
+      const x = await f();
       this.debug(sprintf(`timed: [%.3fs] %s`, timer.time(), msg)); // HACK 'timed:' to place nicely with name prefix
+      return x;
+    } catch (e) {
+      this.warn(sprintf(`timed: [%.3fs] %s -> threw: %s`, timer.time(), msg, e)); // HACK 'timed:' to place nicely with name prefix
+      throw e;
     }
   };
 
