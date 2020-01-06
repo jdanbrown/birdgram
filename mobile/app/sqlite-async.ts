@@ -22,7 +22,11 @@ export async function openDatabase(args: OpenArgs): Promise<Database> {
 
 export async function _openDatabase(args: OpenArgs): Promise<_Database> {
   return new Promise<_Database>((resolve, reject) => {
-    sqlitePlugin.openDatabase(args, resolve, reject);
+    sqlitePlugin.openDatabase(
+      args,
+      (_db: _Database) => resolve(_db),
+      (e: Error)       => reject(e),
+    );
   });
 }
 
@@ -36,7 +40,9 @@ export class Database {
     return new Promise<void>((resolve, reject) => {
       this._db.transaction(
         _tx => fn(new Transaction(_tx)),
-        reject, resolve, // NOTE Backwards args: (fn, error, success)
+        // NOTE Backwards args: (fn, error, success)
+        (e: Error) => reject(e),
+        ()         => resolve(),
       );
     });
   };

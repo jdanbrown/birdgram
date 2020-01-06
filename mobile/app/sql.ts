@@ -63,7 +63,7 @@ export const querySql = (db: SQLite.Database) => <Row>(sql: string, opts?: Query
         tx.executeSql(
           sqlf`explain query plan ${SQL.raw(sql)}`,
           [],
-          (tx, {rows}) => {
+          (tx, {rows}: SQLite.Results) => {
             const planRows = rows.raw() as QueryPlanRow[];
             const plan = queryPlanFromRows(planRows);
             log.debug('querySql: EXPLAIN QUERY PLAN', `timed[${timer.time()}s]`,
@@ -71,7 +71,7 @@ export const querySql = (db: SQLite.Database) => <Row>(sql: string, opts?: Query
             );
             resolve();
           },
-          e => reject(e),
+          (tx, e: Error) => reject(e),
         );
       });
     }));
@@ -88,7 +88,7 @@ export const querySql = (db: SQLite.Database) => <Row>(sql: string, opts?: Query
       tx.executeSql(
         sql,
         [],
-        (tx, {rows, rowsAffected, insertId}) => {
+        (tx, {rows, rowsAffected, insertId}: SQLite.Results) => {
           log.info(`querySql: timed[${timer.time()}s]`, `rows[${rows.length}]`, sqlTrunc);
           resolve(onResults({
             rows: {
@@ -100,7 +100,7 @@ export const querySql = (db: SQLite.Database) => <Row>(sql: string, opts?: Query
             rowsAffected,
           }))
         },
-        e => reject(e),
+        (tx, e: Error) => reject(e),
       );
     });
   });
