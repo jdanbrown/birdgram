@@ -884,9 +884,36 @@ export class SearchScreen extends PureComponent<Props, State> {
 
             // Compute in sql: cosine_distance(S.f_preds_*, query_rec.f_preds)
             //  - cosine_distance(x,y) = 1 - dot(x,y) / norm(x) / norm(y)
-            const sqlDot = (_.range(f_preds_cols.length)
-              // .slice(0, 2) // XXX Debug: smaller query
-              .map(i => sqlf`S.${SQL.raw(f_preds_col(i))}*${query_rec.f_preds[i]}`).join(' + ') || '0'
+            const joinOpWithBalancedParens = (op: string, exprs: Array<string>): string => {
+              // HACK Workaround a sqlite crash during query parsing when len(f_preds) is large (≥634)
+              //  - Without parens, `x_0 + ... + x_n`, 634 terms causes sqlite to crash somewhere in expr parsing code
+              //    - Error from sqlite parsing code: "EXC_BAD_ACCESS (code=2, address=0x...)"
+              //    - Using terms like: `S.f_preds_634*0.00003595540329115465`
+              //    - Using sqlite version: https://github.com/brodybits/react-native-sqlite-plugin-legacy-support#042f681
+              //  - Googling for "EXC_BAD_ACCESS code 2" turns up a lot of different leads, one of which is some
+              //    kind of stack overflow, and the sqlite stack upon crashing is pretty deep (~1k frames)
+              //  - With balanced parens, `(x_0 + ... + x_k) + (x_k + ... + x_n)`, sqlite parsing succeeds with:
+              //    - n=738 terms (US search_recs)
+              //    - k=100 maxTerms (hardcoded below)
+              //  - So if this hypothesis is correct, then this balanced-parens hack should work for all n < ~2^634
+              const maxTerms = 100;
+              const n = exprs.length;
+              if (n <= maxTerms) {
+                return exprs.join(` ${op} `);
+              } else {
+                const mid = Math.floor(n / 2);
+                const y1 = joinOpWithBalancedParens(op, _.slice(exprs, 0, mid));
+                const y2 = joinOpWithBalancedParens(op, _.slice(exprs, mid, n));
+                return `(${y1}) ${op} (${y2})`;
+              }
+            };
+            const sqlDot = (
+              joinOpWithBalancedParens('+', _
+                .range(f_preds_cols.length)
+                // .slice(0, 3) // XXX Debug: smaller query
+                .map(i => sqlf`S.${SQL.raw(f_preds_col(i))}*${query_rec.f_preds[i]}`)
+              )
+              || '0'
             );
             const sqlCosineDist = sqlf`
               1 - (${SQL.raw(sqlDot)}) / S.norm_f_preds / ${Rec.norm_f_preds(query_rec)}
