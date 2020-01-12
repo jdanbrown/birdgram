@@ -19,7 +19,7 @@ import {
   searchPathParamsFromLocation, Source, SourceId, UserRec, UserSource, XCRec,
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
-import { debug_print, Log, puts, rich } from 'app/log';
+import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
 import { Go, Location, locationKeyIsEqual, locationPathIsEqual, TabLocations, TabName } from 'app/router';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
@@ -108,7 +108,7 @@ export class SavedScreen extends PureComponent<Props, State> {
   // State
   _firstSectionHeaderHeight: number = 0; // For SectionList.scrollToLocation({viewOffset})
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount');
     global.SavedScreen = this; // XXX Debug
 
@@ -122,7 +122,7 @@ export class SavedScreen extends PureComponent<Props, State> {
     //  - TODO Load SearchSaved's from somewhere too
     await this.loadSavedsFromFs();
 
-  }
+  });
 
   loadSavedsFromFs = async () => {
     log.info('loadSavedsFromFs');
@@ -230,13 +230,13 @@ export class SavedScreen extends PureComponent<Props, State> {
     }
   }
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     log.info('componentWillUnmount');
-  }
+  });
 
-  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  }
+  });
 
   render = () => {
     log.info('render');

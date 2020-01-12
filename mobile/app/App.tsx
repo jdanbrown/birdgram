@@ -32,7 +32,7 @@ import {
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
-import { debug_print, Log, puts, rich } from 'app/log';
+import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
 import { NativeHttp } from 'app/native/Http';
 import { NativeSearch } from 'app/native/Search';
 import { NativeSpectro } from 'app/native/Spectro';
@@ -234,7 +234,7 @@ export default class App extends PureComponent<Props, State> {
     );
   }
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount');
     global.App = this; // XXX Debug
     await log.timedAsync('componentDidMount [total]', async () => {
@@ -423,16 +423,16 @@ export default class App extends PureComponent<Props, State> {
       });
 
     });
-  }
+  });
 
-  componentDidUpdate = (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     // log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state))); // Noisy in xcode
     global.histories = this.state.histories; // XXX Debug
     global.settings = this.state.settings; // XXX Debug
     global.xc = this.state.xc; // XXX Debug
     global.ebird = this.state.ebird; // XXX Debug
     global.db = this.state.db; // XXX Debug
-  }
+  });
 
   render = () => {
     log.info('render');
@@ -737,7 +737,7 @@ export default class App extends PureComponent<Props, State> {
       undefined: ()       => null,
       x:         settings => matchTabName(tab, {
         record:   () => null,
-        search:   () => this.state.nExcludeRecs && this.state.nExcludeRecs > 0 && (
+        search:   () => this.state.nExcludeRecs !== null && this.state.nExcludeRecs > 0 && (
           <Text style={{color: iOSColors.red}}>
             -{this.state.nExcludeRecs} rec
           </Text>

@@ -41,7 +41,7 @@ import {
 } from 'app/datatypes';
 import { DB } from 'app/db';
 import { Ebird } from 'app/ebird';
-import { debug_print, Log, puts, rich, tap } from 'app/log';
+import { debug_print, Log, logErrors, logErrorsAsync, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import { NativeSpectro } from 'app/native/Spectro';
 import { Go, History, Location, locationKeyIsEqual, locationPathIsEqual } from 'app/router';
@@ -332,7 +332,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   //  - Details
   //    - First render() happens before this (don't try to avoid it, it's ok)
   //    - Immediate setState() will trigger render() a second time before the first screen draw
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount');
     global.SearchScreen = this; // XXX Debug
 
@@ -393,14 +393,14 @@ export class SearchScreen extends PureComponent<Props, State> {
     // Show this.props.location
     await this.updateForLocation(null, null);
 
-  }
+  });
 
   // Before a component is removed from the DOM and destroyed
   //  - Commit phase (impure, may read/write DOM, called once per commit)
   //  - Best practices
   //    - Do unsubscribe listeners / cancel timers (created in componentDidMount)
   //    - Don't setState(), since no more render() will happen for this instance
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     log.info('componentWillUnmount');
 
     // Tell other apps we're no longer using the audio device
@@ -412,7 +412,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     // Clear timers
     timer.clearTimeout(this);
 
-  }
+  });
 
   // After props/state change; not called for the initial render()
   //  - Commit phase (impure, may read/write DOM, called once per commit)
@@ -420,7 +420,7 @@ export class SearchScreen extends PureComponent<Props, State> {
   //    - Do operate on DOM in response to changed props/state
   //    - Do fetch data, conditioned on changed props/state (else update loops)
   //    - Do setState(), conditioned on changed props (else update loops)
-  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
 
     // Reset view state if location changed
@@ -452,7 +452,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     // Show this.props.location
     await this.updateForLocation(prevProps, prevState);
 
-  }
+  });
 
   // Make these both randomSpeciesPath i/o randomRecsPath because randomSpeciesPath is surprisingly more fun
   //  - Also, randomRecsPath is really slow (TODO(slow_random)), so avoid it at least for defaultPath (else slow first UX)
@@ -2645,21 +2645,24 @@ export class KeyboardDismissingView extends PureComponent<KeyboardDismissingView
   _keyboardDidShowListener?: {remove: () => void};
   _keyboardDidHideListener?: {remove: () => void};
 
-  componentDidMount = () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     this.log.info('componentDidMount');
     this._keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', this.keyboardDidShow);
     this._keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', this.keyboardDidHide);
-  };
+  });
 
-  componentWillUnmount = () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     this.log.info('componentWillUnmount');
     this._keyboardDidShowListener!.remove();
     this._keyboardDidHideListener!.remove();
-  };
+  });
 
-  componentDidUpdate = (prevProps: KeyboardDismissingViewProps, prevState: KeyboardDismissingViewState) => {
+  componentDidUpdate = async (
+    prevProps: KeyboardDismissingViewProps,
+    prevState: KeyboardDismissingViewState,
+  ) => logErrorsAsync('componentDidUpdate', async () => {
     this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  };
+  });
 
   keyboardDidShow = () => this.setState({isKeyboardShown: true});
   keyboardDidHide = () => this.setState({isKeyboardShown: false});

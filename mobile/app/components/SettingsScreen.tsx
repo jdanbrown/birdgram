@@ -10,7 +10,7 @@ import { getStatusBarHeight } from 'react-native-status-bar-height';
 
 import { config } from 'app/config';
 import { ServerConfig } from 'app/datatypes';
-import { Log, rich } from 'app/log';
+import { Log, logErrors, logErrorsAsync, rich } from 'app/log';
 import { DEFAULTS, SettingsWrites } from 'app/settings';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
@@ -54,17 +54,17 @@ export class SettingsScreen extends PureComponent<Props, State> {
     };
   }
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount');
-  }
+  });
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     log.info('componentWillUnmount');
-  }
+  });
 
-  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  }
+  });
 
   // TODO https://github.com/evetstech/react-native-settings-list#a-more-realistic-example
   render = () => {

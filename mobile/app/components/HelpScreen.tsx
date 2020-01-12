@@ -3,7 +3,7 @@ import { Dimensions, Image, Platform, ScrollView, Text, View } from 'react-nativ
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import { Log, rich } from 'app/log';
+import { Log, logErrors, logErrorsAsync, rich } from 'app/log';
 import { Go, Histories, History, Location } from 'app/router';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
@@ -30,17 +30,17 @@ export class HelpScreen extends PureComponent<Props, State> {
   state = {
   };
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount');
-  }
+  });
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     log.info('componentWillUnmount');
-  }
+  });
 
-  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  }
+  });
 
   render = () => {
     log.info('render');

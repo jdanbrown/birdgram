@@ -206,7 +206,7 @@ export class RecordScreen extends Component<Props, State> {
   // Measure rate of render() vs. nominal refreshRate (for showDebug)
   _renderRate = new ExpWeightedRate(.1);
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount');
     global.RecordScreen = this; // XXX Debug
 
@@ -223,15 +223,15 @@ export class RecordScreen extends Component<Props, State> {
     // Show this.props.location
     await this.updateForLocation(null);
 
-  }
+  });
 
-  componentWillUnmount = () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     log.info('componentWillUnmount');
 
     // Unregister listeners
     this._listeners.forEach(listener => listener.remove());
 
-  }
+  });
 
   shouldComponentUpdate = (nextProps: Props, nextState: State): boolean => {
     // log.info('shouldComponentUpdate', () => rich(shallowDiffPropsState(nextProps, nextState, this.props, this.state))); // Debug
@@ -254,7 +254,7 @@ export class RecordScreen extends Component<Props, State> {
   }
 
   // Component updates in tight loop (spectro refresh)
-  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
 
     // If we're updating then shouldComponentUpdate didn't call updateNativeStats, so we should do it instead
@@ -270,7 +270,7 @@ export class RecordScreen extends Component<Props, State> {
     // Show this.props.location
     await this.updateForLocation(prevProps);
 
-  }
+  });
 
   updateForLocation = async (prevProps: null | Props) => {
     const {visible} = this.props;
@@ -927,17 +927,20 @@ export class WrappedSpectroImages extends PureComponent<WrappedSpectroImagesProp
   static defaultProps = {};
   state = {};
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     // this.log.info('componentDidMount');
-  }
+  });
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     // this.log.info('componentWillUnmount');
-  }
+  });
 
-  componentDidUpdate = async (prevProps: WrappedSpectroImagesProps, prevState: WrappedSpectroImagesState) => {
+  componentDidUpdate = async (
+    prevProps: WrappedSpectroImagesProps,
+    prevState: WrappedSpectroImagesState,
+  ) => logErrorsAsync('componentDidUpdate', async () => {
     this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  }
+  });
 
   render = () => {
     // this.log.info('render');
@@ -999,17 +1002,20 @@ export class SpectroImage extends PureComponent<SpectroImageProps, SpectroImageS
   static defaultProps = {};
   state = {};
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     // this.log.info('componentDidMount');
-  }
+  });
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     // this.log.info('componentWillUnmount');
-  }
+  });
 
-  componentDidUpdate = async (prevProps: SpectroImageProps, prevState: SpectroImageState) => {
+  componentDidUpdate = async (
+    prevProps: SpectroImageProps,
+    prevState: SpectroImageState,
+  ) => logErrorsAsync('componentDidUpdate', async () => {
     // this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  }
+  });
 
   render = () => {
     // this.log.info('render');
@@ -1148,17 +1154,20 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
   static defaultProps = {};
   state = {};
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     this.log.info('componentDidMount');
-  }
+  });
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     this.log.info('componentWillUnmount');
-  }
+  });
 
-  componentDidUpdate = async (prevProps: ControlsBarProps, prevState: ControlsBarState) => {
+  componentDidUpdate = async (
+    prevProps: ControlsBarProps,
+    prevState: ControlsBarState,
+  ) => logErrorsAsync('componentDidUpdate', async () => {
     this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  }
+  });
 
   render = () => {
     this.log.info('render');

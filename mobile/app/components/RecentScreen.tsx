@@ -14,7 +14,7 @@ import {
   matchRecordPathParams, matchSearchPathParams, recordPathParamsFromLocation, searchPathParamsFromLocation, Source,
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
-import { debug_print, Log, rich, puts, tap } from 'app/log';
+import { debug_print, Log, logErrors, logErrorsAsync, rich, puts, tap } from 'app/log';
 import {
   Go, Histories, History, Location, locationKeyIsEqual, locationPathIsEqual, locationStateOrEmpty, tabHistoriesKeys,
   TabLocations, TabName,
@@ -179,7 +179,7 @@ export class RecentScreen extends PureComponent<Props, State> {
   // State
   _firstSectionHeaderHeight: number = 0; // For SectionList.scrollToLocation({viewOffset})
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount');
     global.RecentScreen = this; // XXX Debug
 
@@ -225,7 +225,7 @@ export class RecentScreen extends PureComponent<Props, State> {
       status: 'ready',
     }));
 
-  }
+  });
 
   addRecents = (recents: Array<Recent>) => {
     this.setState((state, props) => ({
@@ -233,13 +233,13 @@ export class RecentScreen extends PureComponent<Props, State> {
     }));
   }
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     log.info('componentWillUnmount');
-  }
+  });
 
-  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  }
+  });
 
   render = () => {
     log.info('render');

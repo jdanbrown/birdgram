@@ -24,7 +24,7 @@ import {
   SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesGroup, SpeciesMetadata, SpectroPathOpts, UserRec, XCRec,
 } from 'app/datatypes';
 import { Ebird } from 'app/ebird';
-import { debug_print, Log, puts, rich, tap } from 'app/log';
+import { debug_print, Log, logErrors, logErrorsAsync, puts, rich, tap } from 'app/log';
 import { Go, Histories, History, Location, locationKeyIsEqual, locationPathIsEqual } from 'app/router';
 import { SettingsWrites } from 'app/settings';
 import { StyleSheet } from 'app/stylesheet';
@@ -77,14 +77,14 @@ export class BrowseScreen extends Component<Props, State> {
   // State
   _firstSectionHeaderHeight: number = 0; // For SectionList.scrollToLocation({viewOffset})
 
-  componentDidMount = () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     this.log.info('componentDidMount');
     global.BrowseScreen = this; // XXX Debug
-  };
+  });
 
-  componentWillUnmount = () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     this.log.info('componentWillUnmount');
-  };
+  });
 
   shouldComponentUpdate = (nextProps: Props, nextState: State): boolean => {
     log.info('shouldComponentUpdate', () => rich(shallowDiffPropsState(nextProps, nextState, this.props, this.state))); // Debug
@@ -100,10 +100,10 @@ export class BrowseScreen extends Component<Props, State> {
 
   }
 
-  componentDidUpdate = (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     // Noisy (in xcode)
     this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  };
+  });
 
   render = () => {
     // this.log.info('render'); // Debug
@@ -398,17 +398,20 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
   state: BrowseSectionHeaderState = {
   };
 
-  componentDidMount = () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     this.log.info('componentDidMount');
-  };
+  });
 
-  componentWillUnmount = () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     this.log.info('componentWillUnmount');
-  };
+  });
 
-  componentDidUpdate = (prevProps: BrowseSectionHeaderProps, prevState: BrowseSectionHeaderState) => {
+  componentDidUpdate = async (
+    prevProps: BrowseSectionHeaderProps,
+    prevState: BrowseSectionHeaderState,
+  ) => logErrorsAsync('componentDidUpdate', async () => {
     this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  };
+  });
 
   render = () => {
     // this.log.info('render'); // Debug
@@ -498,17 +501,20 @@ export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> 
     searchFilter: '',
   };
 
-  componentDidMount = () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     this.log.info('componentDidMount');
-  };
+  });
 
-  componentWillUnmount = () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     this.log.info('componentWillUnmount');
-  };
+  });
 
-  componentDidUpdate = (prevProps: BrowseItemProps, prevState: BrowseItemState) => {
+  componentDidUpdate = async (
+    prevProps: BrowseItemProps,
+    prevState: BrowseItemState,
+  ) => logErrorsAsync('componentDidUpdate', async () => {
     this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  };
+  });
 
   render = () => {
     // this.log.info('render'); // Debug

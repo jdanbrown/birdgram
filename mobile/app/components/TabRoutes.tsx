@@ -11,7 +11,7 @@ import { iOSColors, material, materialColors, systemWeights } from 'react-native
 import Feather from 'react-native-vector-icons/Feather';
 import { Link, matchPath, Redirect, Route, RouteProps, Switch } from 'react-router-native';
 
-import { Log, puts, rich } from 'app/log';
+import { Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
 import { memoizeOne, memoizeOneDeep } from 'app/memoize';
 import { getOrientation, matchOrientation, Orientation } from 'app/orientation';
 import { Histories, History, HistoryConsumer, Location, ObserveHistory, RouterWithHistory, TabName } from 'app/router';
@@ -88,19 +88,19 @@ export class TabRoutes extends PureComponent<Props, State> {
     }
   );
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount');
     this.updateLoaded();
-  }
+  });
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     log.info('componentWillUnmount');
-  }
+  });
 
-  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
     this.updateLoaded();
-  }
+  });
 
   // Update which tabs have been loaded, for lazy load
   updateLoaded = () => {

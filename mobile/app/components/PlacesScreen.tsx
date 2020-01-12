@@ -19,7 +19,7 @@ import { config } from 'app/config';
 import { Geo, GeoCoords, GeoError } from 'app/components/Geo';
 import { matchSearchPathParams, Place, PlaceId, Species } from 'app/datatypes';
 import { BarchartProps, Ebird, HotspotFindResult, HotspotGeoResult, RegionFindResult } from 'app/ebird';
-import { debug_print, Log, puts, rich } from 'app/log';
+import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
 import { Go, Histories, History, Location } from 'app/router';
 import { SettingsWrites } from 'app/settings';
 import { normalizeStyle, Styles } from 'app/styles';
@@ -121,7 +121,7 @@ export class PlacesScreen extends PureComponent<Props, State> {
   _regionSearchBarRef:  RefObject<SearchBar> = React.createRef();
   _hotspotSearchBarRef: RefObject<SearchBar> = React.createRef();
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount', {
       geo: this.props.geo, // XXX Debug: Why is this.props.geo sometimes null? (via this.geoRef.current! in App)
     });
@@ -130,22 +130,22 @@ export class PlacesScreen extends PureComponent<Props, State> {
     this.addGeoListeners();
     // this.updateSearchResults(null, null); // Not helpful, simpler without it
 
-  }
+  });
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     log.info('componentWillUnmount');
 
     // Unregister listeners (all types)
     this._listeners.forEach((listener, k) => listener.remove());
 
-  }
+  });
 
-  componentDidUpdate = async (prevProps: Props, prevState: State) => {
+  componentDidUpdate = async (prevProps: Props, prevState: State) => logErrorsAsync('componentDidUpdate', async () => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
 
     this.updateSearchResults(prevProps, prevState);
 
-  }
+  });
 
   addGeoListeners = () => {
 

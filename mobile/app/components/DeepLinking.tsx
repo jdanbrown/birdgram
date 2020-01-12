@@ -2,7 +2,7 @@ import React, { PureComponent } from 'react';
 import { Linking } from 'react-native';
 import { Route } from 'react-router-native';
 
-import { Log, rich } from 'app/log';
+import { Log, logErrors, logErrorsAsync, rich } from 'app/log';
 import { urlpack } from 'app/urlpack';
 import { shallowDiffPropsState } from 'app/utils';
 
@@ -32,7 +32,7 @@ export class DeepLinking extends PureComponent<DeepLinkingProps, DeepLinkingStat
 
   _listeners: {[key: string]: any} = {};
 
-  componentDidMount = async () => {
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
     log.info('componentDidMount');
 
     // Handle app urls opened while app is already running
@@ -48,16 +48,19 @@ export class DeepLinking extends PureComponent<DeepLinkingProps, DeepLinkingStat
       await this.openUrl(initialUrl);
     }
 
-  }
+  });
 
-  componentWillUnmount = async () => {
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
     log.info('componentWillUnmount');
     Linking.removeEventListener('url', this._listeners.url);
-  }
+  });
 
-  componentDidUpdate = async (prevProps: DeepLinkingProps, prevState: DeepLinkingState) => {
+  componentDidUpdate = async (
+    prevProps: DeepLinkingProps,
+    prevState: DeepLinkingState,
+  ) => logErrorsAsync('componentDidUpdate', async () => {
     log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
-  }
+  });
 
   render = () => null;
 
