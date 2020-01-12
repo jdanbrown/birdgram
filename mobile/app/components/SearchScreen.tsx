@@ -776,7 +776,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           });
         },
 
-        // TODO TODO Sort by species works -- thanks to window functions!!
+        // TODO TODO Clean up first messy cut at window functions
         species_group: async ({filters, species_group}) => {
           log.info('updateForLocation: Querying recs for species_group', {species_group});
           return await this.props.db.query<XCRec>(sqlf`
@@ -825,6 +825,9 @@ export class SearchScreen extends PureComponent<Props, State> {
           });
         },
 
+        // NOTE Window functions don't appear to do this faster than the one-per-sp unions we currently have
+        //  - I made 2 separate attempts at it, and the best I got was windowing at ~20% _slower_ than unions
+        //  - Notes in notebooks/20190226_mobile_dev_search_sqlite
         rec: async ({filters, source}) => {
           return await log.timedAsync<{recs: StateRecs}>('updateForLocation.rec', async () => {
             log.info('updateForLocation: Loading recs for query_rec', {source});
@@ -872,15 +875,16 @@ export class SearchScreen extends PureComponent<Props, State> {
               );
             }
 
-            // Read sp_p's (species probs) from query_rec.f_preds
+            // Compute slps (species (negative) log prob) from query_rec.f_preds
+            //  1. Read sp_ps (species probs) from query_rec.f_preds
+            //  2. Compute slps from sp_ps
             const sp_ps: Map<string, number> = new Map(zipSame(
               this.props.modelsSearch.classes_,
               query_rec.f_preds,
             ));
-
-            // Compute slp's (species (negative) log prob) from sp_p's
-            const slp = (sp_p: number): number => Math.abs(-Math.log(sp_p)) // (abs for 1->0 i/o -0)
-            const slps: Map<string, number> = mapMapValues(sp_ps, slp);
+            const slps: Map<string, number> = mapMapValues(sp_ps, sp_p => (
+              Math.abs(-Math.log(sp_p)) // (abs so that 1 -> 0 i/o -0)
+            ));
 
             // Compute in sql: cosine_distance(S.f_preds_*, query_rec.f_preds)
             //  - cosine_distance(x,y) = 1 - dot(x,y) / norm(x) / norm(y)
@@ -921,7 +925,6 @@ export class SearchScreen extends PureComponent<Props, State> {
 
             // Query which species are left after applying filters
             //  - This is difficult to make exact, but we can get very close
-            //    - e.g.
             //  - TODO Perf: Cache this once per filter update i/o redoing on every rec search
             //  - NOTE Perf: If this is slow (e.g. for a place with many species), make sure it's using a covering index
             //    - Query plan should say `USING COVERING INDEX`, not `USING INDEX` (or `SCAN TABLE`)
@@ -1016,6 +1019,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             log.info('updateForLocation: Querying recs for query_rec', rich({query_rec}));
             return await this.props.db.query<XCRec>(sql, {
               logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
+              // logQueryPlan: true, // XXX Debug
             })(async results => {
               const recs = results.rows.raw();
 

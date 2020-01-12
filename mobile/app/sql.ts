@@ -1,4 +1,5 @@
 import _ from 'lodash';
+import { sprintf } from 'sprintf-js';
 import _SQL from 'sqlstring-sqlite';
 
 import { Log, rich } from 'app/log';
@@ -89,8 +90,8 @@ export const querySql = (db: SQLite.Database) => <Row>(sql: string, opts?: Query
         sql,
         [],
         (tx, {rows, rowsAffected, insertId}: SQLite.Results) => {
-          log.info(`querySql: timed[${timer.time()}s]`, `rows[${rows.length}]`, sqlTrunc);
-          resolve(onResults({
+          const timeSql = timer.lap();
+          const x = onResults({
             rows: {
               length: rows.length,
               item: i => (rows.item(i) as unknown as Row),
@@ -98,7 +99,17 @@ export const querySql = (db: SQLite.Database) => <Row>(sql: string, opts?: Query
             },
             insertId,
             rowsAffected,
-          }))
+          });
+          const timeResults = timer.lap();
+          const timeTotal = timeSql + timeResults;
+          const formatTime = (x: number) => sprintf('%.3fs', x);
+          log.info(
+            `querySql:`,
+            `timed[${formatTime(timeTotal)} = ${formatTime(timeSql)} sql + ${formatTime(timeResults)} results]`,
+            `rows[${rows.length}]`,
+            sqlTrunc,
+          );
+          resolve(x);
         },
         (tx, e: Error) => reject(e),
       );
