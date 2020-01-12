@@ -776,16 +776,18 @@ export class SearchScreen extends PureComponent<Props, State> {
           });
         },
 
-        // TODO TODO Clean up first messy cut at window functions
         species_group: async ({filters, species_group}) => {
           log.info('updateForLocation: Querying recs for species_group', {species_group});
           return await this.props.db.query<XCRec>(sqlf`
             with
-              xs_0 as (
+              S_shuffled_per_sp as (
                 select
                   *,
-                  cast(taxon_order as real) as taxon_order_num,
-                  row_number() over (partition by species order by random()) as i
+                  cast(taxon_order as real) as taxon_order_num, -- For sortListResults:'species_then_random'
+                  row_number() over (
+                    partition by species -- Per sp
+                    order by random()    -- Shuffle
+                  ) as i
                 from search_recs S
                 where true
                   and species_species_group in (${species_group.split(';').map(x => _.trim(x))}) -- HACK species_group can contain ','
@@ -795,16 +797,16 @@ export class SearchScreen extends PureComponent<Props, State> {
                   ${SQL.raw(speciesGroupFilter('S'))} -- NOTE No results if species_group is excluded
                   ${SQL.raw(recFilter('S'))}
               ),
-              xs_1 as (
+              S_sampled_per_sp as (
                 select *
-                from xs_0
-                order by i asc, random()
-                limit ${this.props.n_recs}
+                from S_shuffled_per_sp
+                order by i asc, random()   -- Pick ~n_recs/n_sp recs per sp, ordered by i (= row_number())
+                limit ${this.props.n_recs} -- Limit by total rec count (i/o more approx n_sp * n_recs_per_sp)
               )
             select *
-            from xs_1
+            from S_sampled_per_sp
             order by
-              ${SQL.raw(matchKey(puts(this.props.sortListResults), {
+              ${SQL.raw(matchKey(this.props.sortListResults, {
                 species_then_random: () => 'taxon_order_num asc, random()',
                 random:              () => 'random()',
                 xc_id:               () => 'xc_id desc',
