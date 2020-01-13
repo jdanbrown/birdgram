@@ -27,8 +27,9 @@ import { sprintf } from 'sprintf-js';
 import WaveFile from 'wavefile/dist/wavefile';
 const {fs, base64} = RNFB;
 
-import { Geo, GeoCoords } from 'app/components/Geo';
 import * as Colors from 'app/colors';
+import { Geo, GeoCoords } from 'app/components/Geo';
+import { TitleBar } from 'app/components/Misc';
 import {
   DraftEdit, matchRec, matchRecordPathParams, matchSource, ModelsSearch, Rec, recordPathParamsFromLocation, Source,
   SourceId, UserMetadata, UserRec, UserSource,
@@ -37,7 +38,7 @@ import { DB } from 'app/db';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import { ImageFile, NativeSpectro, NativeSpectroStats } from 'app/native/Spectro';
-import { Go, Location, locationKeyIsEqual, locationPathIsEqual } from 'app/router';
+import { Go, Location, locationKeyIsEqual, locationPathIsEqual, TabName } from 'app/router';
 import { SettingsWrites } from 'app/settings';
 import Sound from 'app/sound';
 import { StyleSheet } from 'app/stylesheet';
@@ -89,6 +90,7 @@ export interface Props {
   db: DB;
   showDebug: boolean;
   // RecordScreen
+  iconForTab: {[key in TabName]: string};
   f_bins: number;
   sampleRate: number;
   channels: number;
@@ -410,6 +412,11 @@ export class RecordScreen extends Component<Props, State> {
         Styles.center,
       ]}>
 
+        <TitleBar
+          // title='Record'
+          title='Make a recording'
+        />
+
         {/* Loading spinner */}
         {this.state.recordingState === 'loading-for-edit' && (
           <View style={{
@@ -570,6 +577,7 @@ export class RecordScreen extends Component<Props, State> {
           go={this.props.go}
           geo={this.props.geo}
           showDebug={this.props.showDebug}
+          iconForTab={this.props.iconForTab}
           showMoreDebug={this.state.showMoreDebug}
           recordingState={this.state.recordingState}
           follow={this.state.follow}
@@ -1132,6 +1140,7 @@ export interface ControlsBarProps {
   go:                Props["go"];
   geo:               Props["geo"];
   showDebug:         Props["showDebug"];
+  iconForTab:        Props["iconForTab"];
   showMoreDebug:     State["showMoreDebug"];
   recordingState:    State["recordingState"];
   follow:            State["follow"];
@@ -1305,6 +1314,19 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
           />
         </RectButton>
 
+        {/* Share */}
+        <RectButton style={styles.bottomControlsButton} onPress={() => {
+          if (this.props.editRecording) {
+            this.props.shareRec(this.props.editRecording.rec);
+          }
+        }}>
+          <Feather style={[styles.bottomControlsButtonIcon, {
+            color: !this.props.editRecording || this.props.draftEditHasEdits ? iOSColors.gray : iOSColors.black,
+          }]}
+            name='share'
+          />
+        </RectButton>
+
         {this.props.editRecording && this.props.draftEditHasEdits ? (
 
           // Done editing: save and show edit rec
@@ -1333,24 +1355,12 @@ export class ControlsBar extends PureComponent<ControlsBarProps, ControlsBarStat
             <Feather style={[styles.bottomControlsButtonIcon, {
               ...(this.props.editRecording ? {} : {color: iOSColors.gray}),
             }]}
-              name='search'
+              // name='search'
+              name={this.props.iconForTab['search']}
             />
           </RectButton>
 
         )}
-
-        {/* Share */}
-        <RectButton style={styles.bottomControlsButton} onPress={() => {
-          if (this.props.editRecording) {
-            this.props.shareRec(this.props.editRecording.rec);
-          }
-        }}>
-          <Feather style={[styles.bottomControlsButtonIcon, {
-            color: !this.props.editRecording || this.props.draftEditHasEdits ? iOSColors.gray : iOSColors.black,
-          }]}
-            name='share'
-          />
-        </RectButton>
 
         {/* XXX Debug gps */}
         {this.props.showDebug && (

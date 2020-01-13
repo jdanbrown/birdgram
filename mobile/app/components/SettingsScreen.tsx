@@ -8,6 +8,7 @@ import SettingsList from 'react-native-settings-list';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 
+import { TitleBar } from 'app/components/Misc';
 import { config } from 'app/config';
 import { ServerConfig } from 'app/datatypes';
 import { Log, logErrors, logErrorsAsync, rich } from 'app/log';
@@ -74,20 +75,9 @@ export class SettingsScreen extends PureComponent<Props, State> {
         flex: 1,
       }}>
 
-        <View style={{
-          backgroundColor:   Styles.tabBar.backgroundColor,
-          borderBottomWidth: Styles.tabBar.borderTopWidth,
-          borderBottomColor: Styles.tabBar.borderTopColor,
-        }}>
-          <Text style={{
-            alignSelf: 'center',
-            marginTop: Styles.tabBarText.marginTop,
-            marginBottom: 10,
-            ...material.titleObject,
-          }}>
-            Settings
-          </Text>
-        </View>
+        <TitleBar
+          title='Settings'
+        />
 
         <View style={{
           flex: 1,

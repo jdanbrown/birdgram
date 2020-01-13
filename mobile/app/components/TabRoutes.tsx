@@ -333,13 +333,14 @@ export function TabLink(props: TabLinkProps) {
           // Helpful example of how to set {top,bottom,height} and {left,right,width} with position:absolute
           //  - https://stackoverflow.com/a/44488046/397334
           // position: 'absolute', // Default
-          top: 'auto', bottom: -1, height: 'auto',
+          top: 'auto', bottom: 1, height: 'auto',
           left: 'auto', right: 'auto',
+          borderRadius: 0, // i/o default 15
         }}
         BadgeElement={(
           <Text style={{
             ...material.captionObject,
-            fontSize: 9,
+            fontSize: 9, lineHeight: 11,
             color: props.focused ? TabBarStyle.activeTintColor : TabBarStyle.inactiveTintColor,
             fontWeight: 'bold',
           }}>

@@ -9,6 +9,7 @@ import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 
+import { TitleBar } from 'app/components/Misc';
 import { matchQuery, Query } from 'app/components/SearchScreen';
 import {
   matchRecordPathParams, matchSearchPathParams, recordPathParamsFromLocation, searchPathParamsFromLocation, Source,
@@ -276,20 +277,9 @@ export class RecentScreen extends PureComponent<Props, State> {
             }
           });
         }}>
-          <View style={{
-            backgroundColor:   Styles.tabBar.backgroundColor,
-            borderBottomWidth: Styles.tabBar.borderTopWidth,
-            borderBottomColor: Styles.tabBar.borderTopColor,
-          }}>
-            <Text style={{
-              alignSelf: 'center',
-              marginTop: Styles.tabBarText.marginTop,
-              marginBottom: 10,
-              ...material.titleObject,
-            }}>
-              History
-            </Text>
-          </View>
+          <TitleBar
+            title='History'
+          />
         </BaseButton>
 
         <View style={{

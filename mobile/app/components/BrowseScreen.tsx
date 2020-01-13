@@ -19,6 +19,7 @@ import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import { sprintf } from 'sprintf-js';
 
 import { App, AppProps, AppState } from 'app/App';
+import { TitleBar } from 'app/components/Misc';
 import {
   ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams, searchPathParamsFromLocation,
   SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesGroup, SpeciesMetadata, SpectroPathOpts, UserRec, XCRec,
@@ -168,20 +169,11 @@ export class BrowseScreen extends Component<Props, State> {
             }
           });
         }}>
-          <View style={{
-            backgroundColor:   Styles.tabBar.backgroundColor,
-            borderBottomWidth: Styles.tabBar.borderTopWidth,
-            borderBottomColor: Styles.tabBar.borderTopColor,
-          }}>
-            <Text style={{
-              alignSelf: 'center',
-              marginTop: Styles.tabBarText.marginTop,
-              marginBottom: 10,
-              ...material.titleObject,
-            }}>
-              Species
-            </Text>
-          </View>
+          <TitleBar
+            // title='Species'
+            title='Browse species'
+            // title='Search for species'
+          />
         </BaseButton>
 
         <View style={{
@@ -219,7 +211,9 @@ export class BrowseScreen extends Component<Props, State> {
                 ...material.body2Object,
                 marginHorizontal: 5,
               }}>
-                Place: {this.props.place.name} ({data.length}/{this.props.place.knownSpecies.length} species)
+                {/* Place: */}
+                Location:
+                {this.props.place.name} ({data.length}/{this.props.place.knownSpecies.length} species)
               </Text>
 
               {/* Toggle-all button */}

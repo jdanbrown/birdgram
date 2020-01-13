@@ -34,17 +34,16 @@ export const Styles = {
     backgroundColor: iOSDefaultBackgroundColor, // Match app bg to tabBar bg (only matters on notched ios)
   },
 
+  statusBarHeight: (!DeviceInfo.hasNotch()
+    ? getStatusBarHeight() // Adjust up b/c we hide the status bar
+    : 0                    // HACK Fudge the adjustment on notched ios [why?]
+  ),
+
   // For TabRoutes, and reused by others (e.g. screen headers)
   tabBar: {
     backgroundColor: iOSDefaultBackgroundColor, // Match app bg to tabBar bg (only matters on notched ios)
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(0,0,0,.3)',
-  },
-  tabBarText: {
-    marginTop: (!DeviceInfo.hasNotch()
-      ? 30 - getStatusBarHeight() // Adjust up b/c we hide the status bar
-      : 0                         // HACK Fudge the adjustment on notched ios [why?]
-    ),
   },
 
   // Debug styles

@@ -50,8 +50,8 @@ import { StyleSheet } from 'app/stylesheet';
 import { urlpack } from 'app/urlpack';
 import {
   assert, dirname, fastIsEqual, global, Interval, ifNil, ifNull, ifUndefined, into, json, local, mapNull, mapUndefined,
-  match, matchNil, matchNull, matchUndefined, Omit, pretty, qsSane, readJsonFile, setAdd, setDiff, shallowDiff,
-  shallowDiffPropsState, Style, Timer, typed, yaml,
+  match, matchNil, matchNils, matchNull, matchUndefined, Omit, pretty, qsSane, readJsonFile, setAdd, setDiff,
+  shallowDiff, shallowDiffPropsState, Style, Timer, typed, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -194,12 +194,16 @@ const AppContext = React.createContext(
 );
 
 const iconForTab: {[key in TabName]: string} = {
-  record:   'activity',
-  search:   'search',
+  // browse:   'list',
+  browse:   'search',
+  // search:   'search',
+  search:   'activity',
+  // record:   'activity',
+  record:   'mic',
+  // saved:    'bookmark',
+  saved:    'folder',
   // recent:   'list',
   recent:   'clock',
-  saved:    'bookmark',
-  browse:   'list',
   places:   'map-pin',
   settings: 'settings',
   help:     'help-circle',
@@ -536,6 +540,25 @@ export default class App extends PureComponent<Props, State> {
   ];
   // Must be a function, else screens won't update on App props/state change
   makeRoutes = (locationTabs: Location, historyTabs: History): Array<TabRoute> => typed<Array<false | TabRoute>>([
+    // Tab order is determined by the order of this list
+    {
+      key: 'browse', route: {path: '/browse'}, label: 'Browse', iconName: iconForTab['browse'],
+      badge: this.badgeForTab('browse'),
+      render: (props: TabRouteProps) => (
+        <BrowseScreen {...props}
+          // App globals
+          visible                 = {locationTabs.pathname === '/browse'} // Manual visible/dirty to avoid background updates
+          go                      = {this.go}
+          ebird                   = {this.state.ebird!}
+          place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
+          // Settings
+          settings                = {this.state.settingsWrites!}
+          excludeSpecies          = {this.state.settings!.excludeSpecies}
+          excludeSpeciesGroups    = {this.state.settings!.excludeSpeciesGroups}
+          unexcludeSpecies        = {this.state.settings!.unexcludeSpecies}
+        />
+      ),
+    },
     {
       key: 'record', route: {path: '/record'}, label: 'Record', iconName: iconForTab['record'],
       badge: this.badgeForTab('record'),
@@ -555,6 +578,7 @@ export default class App extends PureComponent<Props, State> {
           spectroChunkLimit       = {this.state.settings!.spectroChunkLimit}
           geoWarnIfNoCoords       = {this.state.settings!.geoWarnIfNoCoords}
           // RecordScreen
+          iconForTab              = {iconForTab}
           f_bins                  = {this.state.settings!.f_bins}
           sampleRate              = {this.props.sampleRate}
           channels                = {this.props.channels}
@@ -600,25 +624,23 @@ export default class App extends PureComponent<Props, State> {
           excludeSpeciesGroups    = {this.state.settings!.excludeSpeciesGroups}
           unexcludeSpecies        = {this.state.settings!.unexcludeSpecies}
           // SearchScreen
+          iconForTab              = {iconForTab}
           f_bins                  = {this.state.settings!.f_bins}
         />
       ),
     },
     {
-      key: 'browse', route: {path: '/browse'}, label: 'Browse', iconName: iconForTab['browse'],
-      badge: this.badgeForTab('browse'),
+      key: 'saved', route: {path: '/saved'}, label: 'Saved', iconName: iconForTab['saved'],
+      badge: this.badgeForTab('saved'),
       render: (props: TabRouteProps) => (
-        <BrowseScreen {...props}
+        <SavedScreen {...props}
           // App globals
-          visible                 = {locationTabs.pathname === '/browse'} // Manual visible/dirty to avoid background updates
           go                      = {this.go}
+          tabLocations            = {this.state.tabLocations!}
+          xc                      = {this.state.xc!}
           ebird                   = {this.state.ebird!}
-          place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
-          // Settings
-          settings                = {this.state.settingsWrites!}
-          excludeSpecies          = {this.state.settings!.excludeSpecies}
-          excludeSpeciesGroups    = {this.state.settings!.excludeSpeciesGroups}
-          unexcludeSpecies        = {this.state.settings!.unexcludeSpecies}
+          // SavedScreen
+          iconForTab              = {iconForTab}
         />
       ),
     },
@@ -655,21 +677,6 @@ export default class App extends PureComponent<Props, State> {
           showDebug               = {this.state.settings!.showDebug}
           maxHistory              = {this.state.settings!.maxHistory}
           // RecentScreen
-          iconForTab              = {iconForTab}
-        />
-      ),
-    },
-    {
-      key: 'saved', route: {path: '/saved'}, label: 'Saved', iconName: iconForTab['saved'],
-      badge: this.badgeForTab('saved'),
-      render: (props: TabRouteProps) => (
-        <SavedScreen {...props}
-          // App globals
-          go                      = {this.go}
-          tabLocations            = {this.state.tabLocations!}
-          xc                      = {this.state.xc!}
-          ebird                   = {this.state.ebird!}
-          // SavedScreen
           iconForTab              = {iconForTab}
         />
       ),
@@ -733,53 +740,69 @@ export default class App extends PureComponent<Props, State> {
   }
 
   badgeForTab = (tab: TabName): ReactNode => {
-    return matchUndefined(this.state.settings, {
-      undefined: ()       => null,
-      x:         settings => matchTabName(tab, {
-        record:   () => null,
-        search:   () => this.state.nExcludeRecs !== null && this.state.nExcludeRecs > 0 && (
-          <Text style={{color: iOSColors.red}}>
-            -{this.state.nExcludeRecs} rec
-          </Text>
-        ),
-        recent:   () => null,
-        saved:    () => null,
-        browse:   () => (
-          mapNull(this.place, place => (
-            mapUndefined(this.state.ebird, ebird => {
-              const placeSpecies = new Set(place.knownSpecies);
-              const groupsSpecies = (groups: Set<string>): Array<Species> => {
-                return (
-                  _(Array.from(groups))
-                  .flatMap(x => ebird.speciesForSpeciesGroup.get(x) || [])
-                  .filter(x => placeSpecies.has(x))
-                  .value()
-                );
-              };
-              const nExcludedSpecies = setDiff(
-                setAdd(settings.excludeSpecies, groupsSpecies(settings.excludeSpeciesGroups)),
-                settings.unexcludeSpecies,
-              ).size;
-              return nExcludedSpecies > 0 && (
-                <Text style={{color: iOSColors.red}}>
-                  -{nExcludedSpecies} sp
-                </Text>
-              );
-            })
-          ))
-        ),
-        places:   () => (
-          <Text>
-            {matchNull(this.place, {
-              null: ()    => this.state.nSpecies,
-              x:    place => place.knownSpecies.length,
-            })}
-            {} sp
-          </Text>
-        ),
-        settings: () => null,
-        help:     () => null,
-      }),
+    return matchNils([
+      this.state.settings,
+      this.state.ebird,
+      this.place,
+    ], {
+      nils: () => null, // If app init still in progress
+      xs:   ([
+        settings,
+        ebird,
+        place,
+      ]) => {
+        const placeSpecies = new Set(place.knownSpecies);
+        const groupsSpecies = (groups: Set<string>): Array<Species> => (
+          _(Array.from(groups))
+          .flatMap(x => ebird.speciesForSpeciesGroup.get(x) || [])
+          .filter(x => placeSpecies.has(x))
+          .value()
+        );
+        const nExcludedSpecies = setDiff(
+          setAdd(settings.excludeSpecies, groupsSpecies(settings.excludeSpeciesGroups)),
+          settings.unexcludeSpecies,
+        ).size;
+        const nExcludeRecs = matchNull(this.state.nExcludeRecs, {
+          null: () => 0, // If app init still in progress
+          x:    x  => x,
+        });
+        return matchTabName(tab, {
+          browse:   () => (
+            nExcludedSpecies == 0 ? (
+              <Text>{placeSpecies.size} sp</Text>
+            ) : (
+              <Text style={{color: iOSColors.red}}>{placeSpecies.size - nExcludedSpecies} sp</Text>
+            )
+          ),
+          record:   () => null,
+          search:   () => (
+            nExcludedSpecies == 0 && nExcludeRecs == 0 ? (
+              <Text>{placeSpecies.size} sp</Text>
+            ) : nExcludedSpecies > 0 && nExcludeRecs == 0 ? (
+              <Text style={{color: iOSColors.red}}>{placeSpecies.size - nExcludedSpecies} sp</Text>
+            ) : nExcludedSpecies == 0 && nExcludeRecs > 0 ? (
+              <Text>
+                <Text>{placeSpecies.size} sp</Text>
+                <Text style={{color: iOSColors.red}}>{'\n'}-{nExcludeRecs} rec</Text>
+              </Text>
+            ) : (
+              <Text>
+                <Text style={{color: iOSColors.red}}>{placeSpecies.size - nExcludedSpecies} sp</Text>
+                <Text style={{color: iOSColors.red}}>{'\n'}-{nExcludeRecs} rec</Text>
+              </Text>
+            )
+          ),
+          saved:    () => null,
+          places:   () => (
+            <Text>
+              {placeSpecies.size} sp
+            </Text>
+          ),
+          recent:   () => null,
+          settings: () => null,
+          help:     () => null,
+        });
+      },
     });
   }
 

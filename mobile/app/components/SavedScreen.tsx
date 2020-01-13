@@ -13,6 +13,7 @@ import Feather from 'react-native-vector-icons/Feather';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
+import { TitleBar } from 'app/components/Misc';
 import { matchQuery, Query } from 'app/components/SearchScreen';
 import {
   matchRecordPathParams, matchSearchPathParams, matchSource, recordPathParamsFromLocation, Rec,
@@ -273,20 +274,11 @@ export class SavedScreen extends PureComponent<Props, State> {
             }
           });
         }}>
-          <View style={{
-            backgroundColor:   Styles.tabBar.backgroundColor,
-            borderBottomWidth: Styles.tabBar.borderTopWidth,
-            borderBottomColor: Styles.tabBar.borderTopColor,
-          }}>
-            <Text style={{
-              alignSelf: 'center',
-              marginTop: Styles.tabBarText.marginTop,
-              marginBottom: 10,
-              ...material.titleObject,
-            }}>
-              Saved
-            </Text>
-          </View>
+          <TitleBar
+            // title='Saved'
+            // title='Saved recordings'
+            title='Your recordings'
+          />
         </BaseButton>
 
         <View style={{

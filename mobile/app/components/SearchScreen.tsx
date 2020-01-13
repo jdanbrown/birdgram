@@ -33,6 +33,7 @@ import {
   MetadataColumnBelow, MetadataColumnsBelow, MetadataColumnLeft, MetadataColumnsLeft, metadataLabel, MetadataLabel,
   MetadataText,
 } from 'app/components/MetadataColumns';
+import { TitleBar } from 'app/components/Misc';
 import { TabBarStyle } from 'app/components/TabRoutes';
 import { config } from 'app/config';
 import {
@@ -44,7 +45,7 @@ import { Ebird } from 'app/ebird';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich, tap } from 'app/log';
 import { NativeSearch } from 'app/native/Search';
 import { NativeSpectro } from 'app/native/Spectro';
-import { Go, History, Location, locationKeyIsEqual, locationPathIsEqual } from 'app/router';
+import { Go, History, Location, locationKeyIsEqual, locationPathIsEqual, TabName } from 'app/router';
 import { SettingsWrites } from 'app/settings';
 import Sound from 'app/sound';
 import { SQL, sqlf } from 'app/sql';
@@ -201,6 +202,7 @@ interface Props {
   excludeSpeciesGroups:    Set<SpeciesGroup>;
   unexcludeSpecies:        Set<Species>;
   // SearchScreen
+  iconForTab:              {[key in TabName]: string};
   f_bins:                  number;
   spectroBase:             Dim<number>;
   spectroScaleClamp:       Clamp<number>;
@@ -1538,6 +1540,10 @@ export class SearchScreen extends PureComponent<Props, State> {
     const Separator = () => (
       <View style={{height: 5}}/>
     );
+    const styleLikeMetadataLabel: TextStyle = {
+      ...material.captionObject,
+      fontWeight: 'bold',
+    };
     const defaults = {
       buttonStyle: {
         marginVertical: 1,
@@ -1547,244 +1553,310 @@ export class SearchScreen extends PureComponent<Props, State> {
       },
     };
     return (
-      <this.GenericModal>
-
-        <this.GenericModalTitle
-          title={Source.show(Rec.source(rec), {
-            species: this.props.xc,
-          })}
-        />
-
-        {/* Spectro */}
-        <Animated.Image
-          style={{
-            // ...this.spectroDimImage(rec), // XXX Bad(info_modal)
-            height: this.spectroDimImage(rec).height,
-            width: '100%',
-          }}
-          foo
-          resizeMode='stretch' // TODO(info_modal) Wrap to show whole spectro i/o stretching
-          source={{uri: Rec.spectroPath(rec, this.spectroPathOpts)}}
-        />
-
-        <Separator/>
-        <View style={{flexDirection: 'row'}}>
-          {this.ActionModalButtons({actions: [
-            {
-              ...defaults,
-              label: rec.species,
-              iconName: 'search',
-              buttonColor: iOSColors.blue,
-              onPress: () => this.props.go('search', {path: `/species/${encodeURIComponent(rec.species)}`}),
-            }, {
-              ...defaults,
-              label: Source.show(Rec.source(rec), {
-                species: this.props.xc,
-              }),
-              iconName: 'search',
-              buttonColor: iOSColors.blue,
-              onPress: () => this.props.go('search', {path: `/rec/${encodeURIComponent(rec.source_id)}`}),
-            },
-          ]})}
-        </View>
-
-        <Separator/>
-        <View style={{flexDirection: 'row'}}>
-          {this.ActionModalButtons({actions: [
-            {
-              ...defaults,
-              label: rec.species,
-              iconName: 'x',
-              buttonColor: iOSColors.red,
-              onPress: () => {
-                const species       = rec.species;
-                const species_group = rec.species_species_group;
-                // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
-                this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
-                  const s = species;
-                  const g = species_group;
-                  if      (!exG.has(g) && !exS.has(s)) { exS = setAdd  (exS, s); } // !exG, !exS -> exS+s
-                  else if (!exG.has(g) &&  exS.has(s)) { exS = setDiff (exS, s); } // !exG,  exS -> exS-s
-                  else if ( exG.has(g) && !unS.has(s)) { unS = setAdd  (unS, s); } //  exG, !unS -> unS+s
-                  else if ( exG.has(g) &&  unS.has(s)) { unS = setDiff (unS, s); } //  exG,  unS -> unS-s
-                  return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
-                });
-              },
-            }, {
-              ...defaults,
-              label: Source.show(Rec.source(rec), {
-                species: this.props.xc,
-              }),
-              iconName: 'x',
-              buttonColor: iOSColors.red,
-              onPress: () => this.setState((state: State, props: Props) => ({
-                excludeRecs: setAdd(state.excludeRecs, rec.source_id),
-              })),
-            }
-          ]})}
-        </View>
-
-        <Separator/>
-        <View style={{flexDirection: 'row'}}>
-          {this.ActionModalButtons({actions: [
-            {
-              ...defaults,
-              label: rec.species_species_group,
-              iconName: 'x',
-              buttonColor: iOSColors.red,
-              onPress: () => {
-                const {ebird} = this.props;
-                const species_group = rec.species_species_group;
-                // TODO(exclude_invariants): Dedupe with BrowseScreen
-                const unexcludedAny = (unS: Set<Species>) => (
-                  Array.from(unS)
-                  .map(x => ebird.speciesGroupFromSpecies(x))
-                  .includes(species_group)
-                );
-                // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
-                //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
-                this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
-                  const unAny = unexcludedAny(unS);
-                  const g     = species_group;
-                  const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
-                  if      (!exG.has(g)          ) { exG = setAdd  (exG, g); exS = setDiff (exS, ss); } // !exG         -> exG+g, exS-ss
-                  else if ( exG.has(g) && !unAny) { exG = setDiff (exG, g);                          } //  exG, !unAny -> exG-g
-                  else if ( exG.has(g) &&  unAny) { unS = setDiff (unS, ss);                         } //  exG,  unAny -> unS-ss
-                  return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
-                });
-              },
-            }
-          ]})}
-        </View>
-
-        <Separator/>
-        <View style={{flexDirection: 'row'}}>
-          {this.ActionModalButtons({actions: [
-            {
-              ...defaults,
-              label: rec.species,
-              iconName: 'maximize-2',
-              buttonColor: iOSColors.orange,
-              onPress: () => {
-                const {ebird} = this.props;
-                const species = rec.species;
-                // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
-                //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
-                this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
-                  const s = species;
-                  // HACK(exclude_invariants): Smash through existing state [is this good?]
-                  exS = setDiff(new Set(ebird.allSpecies), s);
-                  exG = new Set();
-                  unS = new Set();
-                  return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
-                });
-              },
-            }
-          ]})}
-        </View>
-
-        <Separator/>
-        <View style={{flexDirection: 'row'}}>
-          {this.ActionModalButtons({actions: [
-            {
-              ...defaults,
-              label: rec.species_species_group,
-              iconName: 'maximize-2',
-              buttonColor: iOSColors.orange,
-              onPress: () => {
-                const {ebird} = this.props;
-                const species_group = rec.species_species_group;
-                // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
-                //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
-                this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
-                  const g = species_group;
-                  // HACK(exclude_invariants): Smash through existing state [is this good?]
-                  exS = new Set();
-                  exG = setDiff(new Set(ebird.allSpeciesGroups), g);
-                  unS = new Set();
-                  return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
-                });
-              },
-            }
-          ]})}
-        </View>
-
-        <Separator/>
-        <View style={{flexDirection: 'row'}}>
-          {this.ActionModalButtons({actions: [
-            {
-              ...defaults,
-              label: 'Edit',
-              iconName: 'edit',
-              buttonColor: iOSColors.purple,
-              onPress: () => this.props.go('record', {path: `/edit/${encodeURIComponent(rec.source_id)}`}),
-            }
-          ]})}
-        </View>
-
-        {/* TODO(saved_lists) */}
-        {/* <Separator/>
-        {this.ActionModalButtons({actions: [
-          {
-            ...defaults,
-            label: `Save to list (${rec.species})`,
-            iconName: 'bookmark',
-            buttonColor: iOSColors.orange,
-            onPress: () => {},
-          }, {
-            ...defaults,
-            label: `Save to list (${Source.show(Rec.source(rec), {species: this.props.xc})})`,
-            iconName: 'bookmark',
-            buttonColor: iOSColors.orange,
-            onPress: () => {},
-          }, {
-            ...defaults,
-            label: 'Save all to new list',
-            iconName: 'bookmark',
-            buttonColor: iOSColors.orange,
-            onPress: () => {},
-          }, {
-            ...defaults,
-            label: 'Add all to existing list',
-            iconName: 'bookmark',
-            buttonColor: iOSColors.orange,
-            onPress: () => {},
-          },
-        ]})} */}
-
-        {/* TODO(share_results) */}
-        {/* <Separator/>
-        {this.ActionModalButtons({actions: [
-          {
-            ...defaults,
-            label: 'Share list',
-            iconName: 'share',
-            buttonColor: iOSColors.green,
-            onPress: () => {},
-          },
-        ]})} */}
-
-        <Separator/>
-        <View style={{
-          // width: Dimensions.get('window').width, // Fit within the left-most screen width of ScrollView content
-          flexDirection: 'column',
-          // // borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iOSColors.black, // TODO Make full width
-          // marginTop: 3,
-          // // marginBottom: 3,
+      <this.GenericModal style={{
+        width: '100%',
+        marginTop: 40, marginBottom: 40, // Enough margin so the user can tap outside the modal to close
+        padding: 0, // i/o default 15
+      }}>
+        <ScrollView style={{
+          padding: 15, // i/o 15 in GenericModal
         }}>
-          {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
-          {objectKeysTyped(MetadataColumnsBelow).map(c => this.props.metadataColumnsBelow.includes(c) && (
-            <MetadataText
-              key={c}
-              style={{
-                marginBottom: 3,
-              }}
-            >
-              <MetadataLabel col={c} /> {MetadataColumnsBelow[c](rec)}
-            </MetadataText>
-          ))}
-        </View>
 
+          {/* Rec title + Edit button */}
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between', // (horizontal) Push Edit button out to the right
+            alignItems: 'center', // (vertical)
+          }}>
+            <Text style={{...material.titleObject}}>
+              {Source.show(Rec.source(rec), {
+                species: this.props.xc,
+              })}
+            </Text>
+            {this.ActionModalButtons({actions: [
+              {
+                ...defaults,
+                label: 'Edit',
+                iconName: 'edit',
+                buttonColor: iOSColors.purple,
+                buttonStyle: {
+                  // No margins
+                  marginHorizontal:  0, // i/o default 10
+                  marginVertical:    0, // i/o default 2
+                  // HACK Why must we override padding:10 to make it look like other buttons?
+                  paddingHorizontal: 5,
+                  paddingVertical:   2,
+                },
+                onPress: () => this.props.go('record', {path: `/edit/${encodeURIComponent(rec.source_id)}`}),
+              }
+            ]})}
+          </View>
+
+          {/* Spectro */}
+          <Separator/>
+          <Animated.Image
+            // TODO Wrap spectro (e.g. over exactly 2 rows) instead of squishing horizontally
+            style={{
+              // ...this.spectroDimImage(rec), // XXX Bad(info_modal)
+              height: this.spectroDimImage(rec).height,
+              width: '100%',
+            }}
+            foo
+            resizeMode='stretch' // TODO(info_modal) Wrap to show whole spectro i/o stretching
+            source={{uri: Rec.spectroPath(rec, this.spectroPathOpts)}}
+          />
+
+          {/* 'search' buttons */}
+          <Separator/>
+          <Text style={styleLikeMetadataLabel}>
+            Search for:
+          </Text>
+          <Separator/>
+          <View style={{flexDirection: 'row'}}>
+            {this.ActionModalButtons({actions: [
+              {
+                ...defaults,
+                label: Source.show(Rec.source(rec), {
+                  species: this.props.xc,
+                }),
+                // iconName: 'search',
+                iconName: this.props.iconForTab['search'],
+                buttonColor: iOSColors.blue,
+                onPress: () => this.props.go('search', {path: `/rec/${encodeURIComponent(rec.source_id)}`}),
+              },
+            ]})}
+          </View>
+          <Separator/>
+          <View style={{flexDirection: 'row'}}>
+            {this.ActionModalButtons({actions: [
+              {
+                ...defaults,
+                // label: rec.species,
+                label: rec.species_com_name,
+                // iconName: 'search',
+                iconName: this.props.iconForTab['search'],
+                buttonColor: iOSColors.blue,
+                onPress: () => this.props.go('search', {path: `/species/${encodeURIComponent(rec.species)}`}),
+              },
+            ]})}
+          </View>
+          <Separator/>
+          <View style={{flexDirection: 'row'}}>
+            {this.ActionModalButtons({actions: [
+              {
+                ...defaults,
+                label: rec.species_species_group,
+                // iconName: 'search',
+                iconName: this.props.iconForTab['search'],
+                buttonColor: iOSColors.blue,
+                onPress: () => this.props.go('search', {path: `/species_group/${encodeURIComponent(rec.species_species_group)}`}),
+              }
+            ]})}
+          </View>
+
+          {/* 'filter' buttons */}
+          <Separator/>
+          <Text style={styleLikeMetadataLabel}>
+            Filter search results to only:
+          </Text>
+          <Separator/>
+          <View style={{flexDirection: 'row'}}>
+            {this.ActionModalButtons({actions: [
+              {
+                ...defaults,
+                // label: rec.species,
+                label: rec.species_com_name,
+                // iconName: 'maximize-2',
+                iconName: 'filter',
+                buttonColor: iOSColors.orange,
+                onPress: () => {
+                  const {ebird} = this.props;
+                  const species = rec.species;
+                  // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
+                  //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
+                  this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
+                    const s = species;
+                    // HACK(exclude_invariants): Smash through existing state [is this good?]
+                    exS = setDiff(new Set(ebird.allSpecies), s);
+                    exG = new Set();
+                    unS = new Set();
+                    return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+                  });
+                },
+              }
+            ]})}
+          </View>
+          <Separator/>
+          <View style={{flexDirection: 'row'}}>
+            {this.ActionModalButtons({actions: [
+              {
+                ...defaults,
+                label: rec.species_species_group,
+                // iconName: 'maximize-2',
+                iconName: 'filter',
+                buttonColor: iOSColors.orange,
+                onPress: () => {
+                  const {ebird} = this.props;
+                  const species_group = rec.species_species_group;
+                  // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
+                  //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
+                  this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
+                    const g = species_group;
+                    // HACK(exclude_invariants): Smash through existing state [is this good?]
+                    exS = new Set();
+                    exG = setDiff(new Set(ebird.allSpeciesGroups), g);
+                    unS = new Set();
+                    return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+                  });
+                },
+              }
+            ]})}
+          </View>
+
+          {/* 'x' buttons */}
+          <Separator/>
+          <Text style={styleLikeMetadataLabel}>
+            Exclude from search results:
+          </Text>
+          <Separator/>
+          <View style={{flexDirection: 'row'}}>
+            {this.ActionModalButtons({actions: [
+              {
+                ...defaults,
+                label: Source.show(Rec.source(rec), {
+                  species: this.props.xc,
+                }),
+                iconName: 'x',
+                buttonColor: iOSColors.red,
+                onPress: () => this.setState((state: State, props: Props) => ({
+                  excludeRecs: setAdd(state.excludeRecs, rec.source_id),
+                })),
+              }
+            ]})}
+          </View>
+          <Separator/>
+          <View style={{flexDirection: 'row'}}>
+            {this.ActionModalButtons({actions: [
+              {
+                ...defaults,
+                // label: rec.species,
+                label: rec.species_com_name,
+                iconName: 'x',
+                buttonColor: iOSColors.red,
+                onPress: () => {
+                  const species       = rec.species;
+                  const species_group = rec.species_species_group;
+                  // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
+                  this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
+                    const s = species;
+                    const g = species_group;
+                    if      (!exG.has(g) && !exS.has(s)) { exS = setAdd  (exS, s); } // !exG, !exS -> exS+s
+                    else if (!exG.has(g) &&  exS.has(s)) { exS = setDiff (exS, s); } // !exG,  exS -> exS-s
+                    else if ( exG.has(g) && !unS.has(s)) { unS = setAdd  (unS, s); } //  exG, !unS -> unS+s
+                    else if ( exG.has(g) &&  unS.has(s)) { unS = setDiff (unS, s); } //  exG,  unS -> unS-s
+                    return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+                  });
+                },
+              }
+            ]})}
+          </View>
+          <Separator/>
+          <View style={{flexDirection: 'row'}}>
+            {this.ActionModalButtons({actions: [
+              {
+                ...defaults,
+                label: rec.species_species_group,
+                iconName: 'x',
+                buttonColor: iOSColors.red,
+                onPress: () => {
+                  const {ebird} = this.props;
+                  const species_group = rec.species_species_group;
+                  // TODO(exclude_invariants): Dedupe with BrowseScreen
+                  const unexcludedAny = (unS: Set<Species>) => (
+                    Array.from(unS)
+                    .map(x => ebird.speciesGroupFromSpecies(x))
+                    .includes(species_group)
+                  );
+                  // TODO(exclude_invariants): Dedupe with BrowseSectionHeader/BrowseItem
+                  //  - (We're always in the !exG case b/c otherwise this rec wouldn't be in the results)
+                  this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
+                    const unAny = unexcludedAny(unS);
+                    const g     = species_group;
+                    const ss    = ebird.speciesForSpeciesGroup.get(g) || []; // (Degrade gracefully if g is somehow unknown)
+                    if      (!exG.has(g)          ) { exG = setAdd  (exG, g); exS = setDiff (exS, ss); } // !exG         -> exG+g, exS-ss
+                    else if ( exG.has(g) && !unAny) { exG = setDiff (exG, g);                          } //  exG, !unAny -> exG-g
+                    else if ( exG.has(g) &&  unAny) { unS = setDiff (unS, ss);                         } //  exG,  unAny -> unS-ss
+                    return {excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS};
+                  });
+                },
+              }
+            ]})}
+          </View>
+
+          {/* TODO(saved_lists) */}
+          {/* <Separator/>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: `Save to list (${rec.species})`,
+              iconName: 'bookmark',
+              buttonColor: iOSColors.orange,
+              onPress: () => {},
+            }, {
+              ...defaults,
+              label: `Save to list (${Source.show(Rec.source(rec), {species: this.props.xc})})`,
+              iconName: 'bookmark',
+              buttonColor: iOSColors.orange,
+              onPress: () => {},
+            }, {
+              ...defaults,
+              label: 'Save all to new list',
+              iconName: 'bookmark',
+              buttonColor: iOSColors.orange,
+              onPress: () => {},
+            }, {
+              ...defaults,
+              label: 'Add all to existing list',
+              iconName: 'bookmark',
+              buttonColor: iOSColors.orange,
+              onPress: () => {},
+            },
+          ]})} */}
+
+          {/* TODO(share_results) */}
+          {/* <Separator/>
+          {this.ActionModalButtons({actions: [
+            {
+              ...defaults,
+              label: 'Share list',
+              iconName: 'share',
+              buttonColor: iOSColors.green,
+              onPress: () => {},
+            },
+          ]})} */}
+
+          <Separator/>
+          <View style={{
+            // width: Dimensions.get('window').width, // Fit within the left-most screen width of ScrollView content
+            flexDirection: 'column',
+            // // borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iOSColors.black, // TODO Make full width
+            // marginTop: 3,
+            // // marginBottom: 3,
+          }}>
+            {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
+            {objectKeysTyped(MetadataColumnsBelow).map(c => this.props.metadataColumnsBelow.includes(c) && (
+              <MetadataText
+                key={c}
+                style={{
+                  marginBottom: 3,
+                }}
+              >
+                <MetadataLabel col={c} /> {MetadataColumnsBelow[c](rec)}
+              </MetadataText>
+            ))}
+          </View>
+
+        </ScrollView>
       </this.GenericModal>
     );
   }
@@ -2130,6 +2202,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     title: string,
     viewStyle?: ViewStyle,
     textStyle?: TextStyle,
+    children?: ReactNode,
   }) => (
     <View style={{
       ...props.viewStyle,
@@ -2142,6 +2215,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       }}>
         {props.title}
       </Text>
+      {props.children}
     </View>
   );
 
@@ -2289,6 +2363,10 @@ export class SearchScreen extends PureComponent<Props, State> {
           <Redirect to={this.defaultPath()} />
         )}/>
 
+        <TitleBar
+          title='Search results'
+        />
+
         {/* Loading spinner */}
         {this.state.recs === 'loading' && (
           <View style={{
@@ -2318,8 +2396,6 @@ export class SearchScreen extends PureComponent<Props, State> {
             contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
               // log.debug('render.contentOffset', {x}); // XXX Debug
             })}
-            bounces={false}
-            bouncesZoom={false}
             directionalLockEnabled={true} // Don't scroll vertical and horizontal at the same time (ios only)
             minimumZoomScale={this.props.spectroScaleClamp.min / this.state._spectroScale}
             maximumZoomScale={this.props.spectroScaleClamp.max / this.state._spectroScale}

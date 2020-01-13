@@ -193,6 +193,30 @@ export function matchEmpty<X, Y>(x: X, cases: {nonEmpty: (x: X) => Y, empty: (x:
   );
 }
 
+// TODO Generate overloads for other arities
+export function matchNils<X0, X1, X2, Y>(
+  xs: [
+    X0 | undefined | null,
+    X1 | undefined | null,
+    X2 | undefined | null
+  ],
+  cases: {
+    xs: (xs: [X0, X1, X2]) => Y,
+    nils: (xs: [
+      X0 | undefined | null,
+      X1 | undefined | null,
+      X2 | undefined | null
+    ]) => Y,
+  },
+): Y {
+  const [x0, x1, x2] = xs;
+  return (
+    _.isNil(x0) || _.isNil(x1) || _.isNil(x2)
+    ? cases.nils([x0, x1, x2])
+    : cases.xs([x0, x1, x2])
+  );
+}
+
 export function mapNull<X, Y>(x: null | X, f: (x: X) => Y): null | Y {
   return matchNull(x, {null: () => null, x: f});
 }

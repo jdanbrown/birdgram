@@ -17,6 +17,7 @@ import Feather from 'react-native-vector-icons/Feather';
 
 import { config } from 'app/config';
 import { Geo, GeoCoords, GeoError } from 'app/components/Geo';
+import { TitleBar } from 'app/components/Misc';
 import { matchSearchPathParams, Place, PlaceId, Species } from 'app/datatypes';
 import { BarchartProps, Ebird, HotspotFindResult, HotspotGeoResult, RegionFindResult } from 'app/ebird';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
@@ -319,19 +320,11 @@ export class PlacesScreen extends PureComponent<Props, State> {
         flex: 1,
       }}>
 
-        <View style={{
-          borderBottomWidth: 1,
-          borderColor: iOSColors.midGray,
-        }}>
-          <Text style={{
-            alignSelf: 'center',
-            marginTop: Styles.tabBarText.marginTop,
-            marginBottom: 10,
-            ...material.titleObject,
-          }}>
-            Places
-          </Text>
-        </View>
+        <TitleBar
+          // title='Places'
+          // title='Filter species by place'
+          title='Set location(s) to filter species'
+        />
 
         <View style={{
           flex: 1,

@@ -3,6 +3,7 @@ import { Dimensions, Image, Platform, ScrollView, Text, View } from 'react-nativ
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
+import { TitleBar } from 'app/components/Misc';
 import { Log, logErrors, logErrorsAsync, rich } from 'app/log';
 import { Go, Histories, History, Location } from 'app/router';
 import { Styles } from 'app/styles';
@@ -49,19 +50,9 @@ export class HelpScreen extends PureComponent<Props, State> {
         flex: 1,
       }}>
 
-        <View style={{
-          borderBottomWidth: 1,
-          borderColor: iOSColors.midGray,
-        }}>
-          <Text style={{
-            alignSelf: 'center',
-            marginTop: Styles.tabBarText.marginTop,
-            marginBottom: 10,
-            ...material.titleObject,
-          }}>
-            Help
-          </Text>
-        </View>
+        <TitleBar
+          title='Help'
+        />
 
         <ScrollView style={{
           flex: 1,
