@@ -9,8 +9,8 @@ import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 
-import { TitleBar } from 'app/components/Misc';
 import { matchQuery, Query } from 'app/components/SearchScreen';
+import { TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
 import {
   matchRecordPathParams, matchSearchPathParams, recordPathParamsFromLocation, searchPathParamsFromLocation, Source,
 } from 'app/datatypes';
@@ -20,7 +20,7 @@ import {
   Go, Histories, History, Location, locationKeyIsEqual, locationPathIsEqual, locationStateOrEmpty, tabHistoriesKeys,
   TabLocations, TabName,
 } from 'app/router';
-import { Settings } from 'app/settings';
+import { SettingsWrites } from 'app/settings';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
@@ -56,6 +56,8 @@ interface Props {
   xc:           XC;
   ebird:        Ebird;
   // Settings
+  settings:     SettingsWrites;
+  showHelp:     boolean;
   showDebug:    boolean;
   maxHistory:   number;
   // RecentScreen
@@ -277,8 +279,11 @@ export class RecentScreen extends PureComponent<Props, State> {
             }
           });
         }}>
-          <TitleBar
+          <TitleBarWithHelp
             title='History'
+            settings={this.props.settings}
+            showHelp={this.props.showHelp}
+            help={null} // TODO TODO
           />
         </BaseButton>
 

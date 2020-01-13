@@ -13,8 +13,8 @@ import Feather from 'react-native-vector-icons/Feather';
 import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
-import { TitleBar } from 'app/components/Misc';
 import { matchQuery, Query } from 'app/components/SearchScreen';
+import { TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
 import {
   matchRecordPathParams, matchSearchPathParams, matchSource, recordPathParamsFromLocation, Rec,
   searchPathParamsFromLocation, Source, SourceId, UserRec, UserSource, XCRec,
@@ -22,6 +22,7 @@ import {
 import { Ebird } from 'app/ebird';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
 import { Go, Location, locationKeyIsEqual, locationPathIsEqual, TabLocations, TabName } from 'app/router';
+import { SettingsWrites } from 'app/settings';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
@@ -48,6 +49,9 @@ interface Props {
   tabLocations: TabLocations;
   xc:           XC;
   ebird:        Ebird;
+  // Settings
+  settings:     SettingsWrites;
+  showHelp:     boolean;
   // RecentScreen
   iconForTab:   {[key in TabName]: string};
 }
@@ -274,10 +278,13 @@ export class SavedScreen extends PureComponent<Props, State> {
             }
           });
         }}>
-          <TitleBar
+          <TitleBarWithHelp
             // title='Saved'
             // title='Saved recordings'
             title='Your recordings'
+            settings={this.props.settings}
+            showHelp={this.props.showHelp}
+            help={null} // TODO TODO
           />
         </BaseButton>
 

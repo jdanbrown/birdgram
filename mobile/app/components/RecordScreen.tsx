@@ -29,7 +29,7 @@ const {fs, base64} = RNFB;
 
 import * as Colors from 'app/colors';
 import { Geo, GeoCoords } from 'app/components/Geo';
-import { TitleBar } from 'app/components/Misc';
+import { TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
 import {
   DraftEdit, matchRec, matchRecordPathParams, matchSource, ModelsSearch, Rec, recordPathParamsFromLocation, Source,
   SourceId, UserMetadata, UserRec, UserSource,
@@ -85,9 +85,10 @@ export interface Props {
   location: Location;
   go: Go;
   geo: Geo;
+  db: DB;
   // Settings
   settings: SettingsWrites;
-  db: DB;
+  showHelp: boolean;
   showDebug: boolean;
   // RecordScreen
   iconForTab: {[key in TabName]: string};
@@ -412,9 +413,12 @@ export class RecordScreen extends Component<Props, State> {
         Styles.center,
       ]}>
 
-        <TitleBar
+        <TitleBarWithHelp
           // title='Record'
           title='Make a recording'
+          settings={this.props.settings}
+          showHelp={this.props.showHelp}
+          help={null} // TODO TODO
         />
 
         {/* Loading spinner */}

@@ -8,7 +8,7 @@ import SettingsList from 'react-native-settings-list';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 
-import { TitleBar } from 'app/components/Misc';
+import { TitleBar } from 'app/components/TitleBar';
 import { config } from 'app/config';
 import { ServerConfig } from 'app/datatypes';
 import { Log, logErrors, logErrorsAsync, rich } from 'app/log';

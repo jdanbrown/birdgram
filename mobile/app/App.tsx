@@ -553,6 +553,7 @@ export default class App extends PureComponent<Props, State> {
           place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
           // Settings
           settings                = {this.state.settingsWrites!}
+          showHelp                = {this.state.settings!.showHelp}
           excludeSpecies          = {this.state.settings!.excludeSpecies}
           excludeSpeciesGroups    = {this.state.settings!.excludeSpeciesGroups}
           unexcludeSpecies        = {this.state.settings!.unexcludeSpecies}
@@ -569,9 +570,10 @@ export default class App extends PureComponent<Props, State> {
           modelsSearch            = {this.state.modelsSearch!}
           go                      = {this.go}
           geo                     = {this.state.geo!}
+          db                      = {this.state.db!}
           // Settings
           settings                = {this.state.settingsWrites!}
-          db                      = {this.state.db!}
+          showHelp                = {this.state.settings!.showHelp}
           showDebug               = {this.state.settings!.showDebug}
           refreshRate             = {this.state.settings!.refreshRate}
           doneSpectroChunkWidth   = {this.state.settings!.doneSpectroChunkWidth}
@@ -599,9 +601,10 @@ export default class App extends PureComponent<Props, State> {
           xc                      = {this.state.xc!}
           ebird                   = {this.state.ebird!}
           app                     = {this}
+          db                      = {this.state.db!}
           // Settings
           settings                = {this.state.settingsWrites!}
-          db                      = {this.state.db!}
+          showHelp                = {this.state.settings!.showHelp}
           showDebug               = {this.state.settings!.showDebug}
           n_per_sp                = {this.state.settings!.n_per_sp}
           n_recs                  = {this.state.settings!.n_recs}
@@ -638,6 +641,9 @@ export default class App extends PureComponent<Props, State> {
           tabLocations            = {this.state.tabLocations!}
           xc                      = {this.state.xc!}
           ebird                   = {this.state.ebird!}
+          // Settings
+          settings                = {this.state.settingsWrites!}
+          showHelp                = {this.state.settings!.showHelp}
           // SavedScreen
           iconForTab              = {iconForTab}
         />
@@ -655,6 +661,7 @@ export default class App extends PureComponent<Props, State> {
           nSpecies                = {this.state.nSpecies!}
           // Settings
           settings                = {this.state.settingsWrites!}
+          showHelp                = {this.state.settings!.showHelp}
           showDebug               = {this.state.settings!.showDebug}
           place                   = {this.place!} // FIXME Why does this cause unnecessary updates? (fails shallowCompare?)
           savedPlaces             = {this.state.settings!.savedPlaces}
@@ -673,6 +680,8 @@ export default class App extends PureComponent<Props, State> {
           xc                      = {this.state.xc!}
           ebird                   = {this.state.ebird!}
           // Settings
+          settings                = {this.state.settingsWrites!}
+          showHelp                = {this.state.settings!.showHelp}
           showDebug               = {this.state.settings!.showDebug}
           maxHistory              = {this.state.settings!.maxHistory}
           // RecentScreen

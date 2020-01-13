@@ -1,4 +1,5 @@
 import * as d3sc from 'd3-scale-chromatic';
+import dedent from 'dedent';
 import _ from 'lodash';
 import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import RN, {
@@ -33,8 +34,8 @@ import {
   MetadataColumnBelow, MetadataColumnsBelow, MetadataColumnLeft, MetadataColumnsLeft, metadataLabel, MetadataLabel,
   MetadataText,
 } from 'app/components/MetadataColumns';
-import { TitleBar } from 'app/components/Misc';
 import { TabBarStyle } from 'app/components/TabRoutes';
+import { TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
 import { config } from 'app/config';
 import {
   ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams, searchPathParamsFromLocation,
@@ -173,10 +174,11 @@ interface Props {
   go:                      Go;
   xc:                      XC;
   ebird:                   Ebird;
+  db:                      DB;
   app:                     App;
   // Settings
   settings:                SettingsWrites;
-  db:                      DB;
+  showHelp:                boolean;
   showDebug:               boolean;
   n_per_sp:                number;
   n_recs:                  number;
@@ -212,7 +214,6 @@ interface State {
   scrollViewKey: string;
   scrollViewState: ScrollViewState;
   showGenericModal: null | (() => ReactNode);
-  showHelp: boolean;
   totalRecs?: number;
   non_f_preds_cols?: Array<string>;
   f_preds_cols?: Array<string>;
@@ -270,7 +271,6 @@ export class SearchScreen extends PureComponent<Props, State> {
     showGenericModal:       null,
     // showGenericModal:       () => this.FiltersModal(), // XXX Debug
     // showGenericModal:       () => this.SortModal(), // XXX Debug
-    showHelp:               false,
     query:                  null,
     refreshQuery:           false,
     excludeRecs:            new Set(),
@@ -1251,14 +1251,6 @@ export class SearchScreen extends PureComponent<Props, State> {
     }
   }
 
-  onBottomControlsLongPress = async (event: Gesture.LongPressGestureHandlerStateChangeEvent) => {
-    const {nativeEvent: {state}} = event; // Unpack SyntheticEvent (before async)
-    await match(state,
-      [Gesture.State.ACTIVE, () => this.setState({showHelp: true})],
-      [Gesture.State.END,    () => this.setState({showHelp: false})],
-    );
-  }
-
   FiltersModal = () => {
     const Separator = () => (
       <View style={{height: 5}}/>
@@ -2084,18 +2076,19 @@ export class SearchScreen extends PureComponent<Props, State> {
     return (
       <LongPressGestureHandler
         onHandlerStateChange={event => (
-          props.onLongPress
-            ? event.nativeEvent.state === Gesture.State.ACTIVE && props.onLongPress()
-            : this.onBottomControlsLongPress(event)
+          event.nativeEvent.state === Gesture.State.ACTIVE && props.onLongPress && (
+            props.onLongPress()
+          )
         )}
       >
         <BorderlessButton
           style={styles.bottomControlsButton}
           onPress={props.disabled ? undefined : props.onPress}
         >
-          {this.state.showHelp && (
+          {/* XXX Subsumed by TitleBarWithHelp */}
+          {/* {this.props.showHelp && (
             <Text style={styles.bottomControlsButtonHelp}>{props.help}</Text>
-          )}
+          )} */}
           <Feather
             style={[
               styles.bottomControlsButtonIcon,
@@ -2375,8 +2368,29 @@ export class SearchScreen extends PureComponent<Props, State> {
           <Redirect to={this.defaultPath()} />
         )}/>
 
-        <TitleBar
+        <TitleBarWithHelp
           title='Search results'
+          settings={this.props.settings}
+          showHelp={this.props.showHelp}
+          help={(
+            <Text style={{
+              margin: 10,
+            }}>
+              Help {'\n'}
+              • Tap a recording to play it {'\n'}
+              • Long-press a recording to see more actions {'\n'}
+              • Tap <Feather name='shuffle' /> to show a random species {'\n'}
+              • Tap <Feather name='filter' /> to change how many results are shown {'\n'}
+              • Tap <Feather name='rotate-ccw' /> to reset filters and exclusions {'\n'}
+              • Tap <Feather name='chevrons-down' /> to change sorting {'\n'}
+              • Tap <Feather name='sidebar' /> to show/hide metadata on the left {'\n'}
+              • Tap <Feather name='credit-card' style={Styles.flipVertical} /> to show/hide metadata inline {'\n'}
+              • Long-press <Feather name='sidebar' />/<Feather name='credit-card' style={Styles.flipVertical} /> to
+                change which metadata is shown {'\n'}
+              • Tap <Feather name='crosshair' /> to toggle whether playback starts from where you tap or from the beginning {'\n'}
+              • Tap <Feather name='zoom-out' />/<Feather name='zoom-in' /> to resize the spectrograms
+            </Text>
+          )}
         />
 
         {/* Loading spinner */}

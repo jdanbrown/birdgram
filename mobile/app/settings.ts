@@ -17,6 +17,7 @@ export interface Props {
   // NOTE Keep attrs in sync (1/6)
   readonly showSettingsTab: boolean;
   readonly showDebug: boolean;
+  readonly showHelp: boolean;
   readonly allowUploads: boolean;
   readonly maxHistory: number;
   readonly f_bins: number;
@@ -56,6 +57,7 @@ export const DEFAULTS: Props = {
   // NOTE Keep attrs in sync (2/6)
   showSettingsTab: false,
   showDebug: false,
+  showHelp: false,
   allowUploads: true,
   maxHistory: 100, // 0 for unlimited
   f_bins: 80, // Show higher-res spectros for user recs than model uses to query xc recs (f_bins=40)
@@ -128,6 +130,7 @@ export const TYPES: {[key: string]: Array<string | Function>} = {
   // NOTE Keep attrs in sync (4/6)
   showSettingsTab: ['boolean'],
   showDebug: ['boolean'],
+  showHelp: ['boolean'],
   allowUploads: ['boolean'],
   maxHistory: ['number'],
   f_bins: ['number'],
@@ -168,6 +171,7 @@ export const KEYS: Array<keyof Props> = [
   //  - Keys in the order expected by the constructor
   'showSettingsTab',
   'showDebug',
+  'showHelp',
   'allowUploads',
   'maxHistory',
   'f_bins',
@@ -238,6 +242,7 @@ export class Settings implements SettingsWrites, Props {
     // NOTE Keep attrs in sync (6/6)
     public readonly showSettingsTab: boolean,
     public readonly showDebug: boolean,
+    public readonly showHelp: boolean,
     public readonly allowUploads: boolean,
     public readonly maxHistory: number,
     public readonly f_bins: number,

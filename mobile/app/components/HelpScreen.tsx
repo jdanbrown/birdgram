@@ -3,7 +3,7 @@ import { Dimensions, Image, Platform, ScrollView, Text, View } from 'react-nativ
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { human, iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
-import { TitleBar } from 'app/components/Misc';
+import { TitleBar } from 'app/components/TitleBar';
 import { Log, logErrors, logErrorsAsync, rich } from 'app/log';
 import { Go, Histories, History, Location } from 'app/router';
 import { Styles } from 'app/styles';
