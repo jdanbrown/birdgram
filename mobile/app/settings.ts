@@ -28,7 +28,6 @@ export interface Props {
   readonly doneSpectroChunkWidth: number
   readonly spectroChunkLimit: number;
   // For SearchScreen
-  readonly n_sp: number;
   readonly n_per_sp: number;
   readonly n_recs: number;
   readonly filterQuality: Set<Quality>;
@@ -68,9 +67,8 @@ export const DEFAULTS: Props = {
   doneSpectroChunkWidth: 5, // (ios dims: https://tinyurl.com/y8xsdvnk)
   spectroChunkLimit: 0, // 0 for unlimited
   // For SearchScreen
-  n_sp:     10, // For rec queries
-  n_per_sp: 3,  // For rec queries
-  n_recs:   30, // For non-rec queries
+  n_per_sp: 3,
+  n_recs:   25,
   filterQuality: new Set<Quality>(['A', 'B']),
   sortListResults: 'species_then_random',
   sortSearchResults: 'slp__d_pc',
@@ -141,7 +139,6 @@ export const TYPES: {[key: string]: Array<string | Function>} = {
   doneSpectroChunkWidth: ['number'],
   spectroChunkLimit: ['number'],
   // For SearchScreen
-  n_sp: ['number'],
   n_per_sp: ['number'],
   n_recs: ['number'],
   filterQuality: [Set],
@@ -182,7 +179,6 @@ export const KEYS: Array<keyof Props> = [
   'doneSpectroChunkWidth',
   'spectroChunkLimit',
   // For SearchScreen
-  'n_sp',
   'n_per_sp',
   'n_recs',
   'filterQuality',
@@ -253,7 +249,6 @@ export class Settings implements SettingsWrites, Props {
     public readonly doneSpectroChunkWidth: number,
     public readonly spectroChunkLimit: number,
     // For SearchScreen
-    public readonly n_sp: number,
     public readonly n_per_sp: number,
     public readonly n_recs: number,
     public readonly filterQuality: Set<Quality>,

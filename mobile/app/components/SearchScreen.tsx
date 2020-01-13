@@ -178,10 +178,8 @@ interface Props {
   settings:                SettingsWrites;
   db:                      DB;
   showDebug:               boolean;
-  n_sp:                    number;
   n_per_sp:                number;
   n_recs:                  number;
-  range_n_sp:              Array<number>;
   range_n_per_sp:          Array<number>;
   range_n_recs:            Array<number>;
   filterQuality:           Set<Quality>;
@@ -253,7 +251,6 @@ function matchStateRecs<X>(recs: StateRecs, cases: {
 export class SearchScreen extends PureComponent<Props, State> {
 
   static defaultProps = {
-    range_n_sp:             [1, 2, 3, 5, 10, 25, 50, 100],
     range_n_per_sp:         _.range(1, 100 + 1),
     range_n_recs:           [10, 25, 50, 100, 250], // Stop at 250 b/c no build currently has >250 recs per sp
     spectroBase:            {height: 20, width: Dimensions.get('window').width},
@@ -535,14 +532,13 @@ export class SearchScreen extends PureComponent<Props, State> {
     };
   }
 
-  edit_n_sp     = (sign: Sign) => this._edit_n(sign, 'n_sp',     'range_n_sp');
   edit_n_per_sp = (sign: Sign) => this._edit_n(sign, 'n_per_sp', 'range_n_per_sp');
   edit_n_recs   = (sign: Sign) => this._edit_n(sign, 'n_recs',   'range_n_recs');
 
   _edit_n = async (
     sign:    Sign,
-    k:       'n_sp'       | 'n_per_sp'       | 'n_recs',
-    range_k: 'range_n_sp' | 'range_n_per_sp' | 'range_n_recs',
+    k:       'n_per_sp'       | 'n_recs',
+    range_k: 'range_n_per_sp' | 'range_n_recs',
   ): Promise<void> => {
     await this.props.settings.set(settings => ({
       [k]: this._next_n(sign, settings[k], this.props[range_k]),
@@ -607,7 +603,6 @@ export class SearchScreen extends PureComponent<Props, State> {
         !fastIsEqual(this.props.excludeSpecies,       _.get(prevProps, 'excludeSpecies')) ||
         !fastIsEqual(this.props.excludeSpeciesGroups, _.get(prevProps, 'excludeSpeciesGroups')) ||
         !fastIsEqual(this.props.unexcludeSpecies,     _.get(prevProps, 'unexcludeSpecies')) ||
-        !fastIsEqual(this.props.n_sp,                 _.get(prevProps, 'n_sp')) ||
         !fastIsEqual(this.props.n_per_sp,             _.get(prevProps, 'n_per_sp')) ||
         !fastIsEqual(this.props.n_recs,               _.get(prevProps, 'n_recs')) ||
         !fastIsEqual(this.props.filterQuality,        _.get(prevProps, 'filterQuality')) ||
@@ -802,8 +797,8 @@ export class SearchScreen extends PureComponent<Props, State> {
               S_sampled_per_sp as (
                 select *
                 from S_shuffled_per_sp
-                order by i asc, random()   -- Pick ~n_recs/n_sp recs per sp, ordered by i (= row_number())
-                limit ${this.props.n_recs} -- Limit by total rec count (i/o more approx n_sp * n_recs_per_sp)
+                order by i asc, random()   -- Pick ~n_per_sp recs per sp, ordered by i (= row_number())
+                limit ${this.props.n_recs} -- Limit by total rec count
               )
             select *
             from S_sampled_per_sp
@@ -852,7 +847,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             // Params
             const f_preds_cols = this.state.f_preds_cols!; // Guarded above
             const f_preds_col  = this.state.f_preds_col!;  // Guarded above
-            const {n_sp, n_per_sp, n_recs} = this.props;
+            const {n_per_sp, n_recs} = this.props;
 
             // Load query_rec from db
             const query_rec = await this.props.db.loadRec(source);
@@ -956,6 +951,7 @@ export class SearchScreen extends PureComponent<Props, State> {
 
             // Rank species by slp (slp asc b/c sgn(slp) ~ -sgn(sp_p))
             //  - Filter species to match rec filters, else we'll return too few rec results below
+            const n_sp = Math.ceil(n_recs / n_per_sp);
             const topSlps: Array<{species: string, slp: number}> = (
               _(Array.from(slps.entries()))
               .map(([species, slp]) => ({species, slp}))
@@ -1285,9 +1281,8 @@ export class SearchScreen extends PureComponent<Props, State> {
           alignContent:   'flex-start', // Cross axis (if wrapped)
         }}>
           {typed<Array<[number, (sign: Sign) => Promise<void>, string]>>([
-            [this.props.n_sp,     this.edit_n_sp,     'species'],
-            [this.props.n_per_sp, this.edit_n_per_sp, 'recs per species'],
-            [this.props.n_recs,   this.edit_n_recs,   'recs'],
+            [this.props.n_recs,   this.edit_n_recs,   'Results'],
+            [this.props.n_per_sp, this.edit_n_per_sp, 'Results per species'],
           ]).map(([n, edit_n, label], i) => (
             <View
               key={i}

@@ -603,7 +603,6 @@ export default class App extends PureComponent<Props, State> {
           settings                = {this.state.settingsWrites!}
           db                      = {this.state.db!}
           showDebug               = {this.state.settings!.showDebug}
-          n_sp                    = {this.state.settings!.n_sp}
           n_per_sp                = {this.state.settings!.n_per_sp}
           n_recs                  = {this.state.settings!.n_recs}
           filterQuality           = {this.state.settings!.filterQuality}
