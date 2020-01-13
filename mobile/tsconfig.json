@@ -13,7 +13,8 @@
     "module": "commonjs",                     // Specify module code generation: 'none', 'commonjs', 'amd', 'system', 'umd', 'es2015', or 'ESNext'.
     // "lib": ["DOM", "ES5", "ScriptHost"],   // Specify library files to be included in the compilation.
     // "lib": ["es5"],
-    "lib": ["es2017"],
+    // "lib": ["es2017"], // TODO This was last known good, but `gco node_modules/` seems to be nondeterministic wrt. `yarn run tsc`...
+    "lib": ["es2017", "ScriptHost"], // TODO Trying this one until I run into further errors...
 
     // Basic Options
     // "allowJs": false,                      // Allow javascript files to be compiled.
