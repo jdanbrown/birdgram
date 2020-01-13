@@ -235,9 +235,9 @@ export class BrowseScreen extends Component<Props, State> {
                 );
                 return (
                   <BrowseItemButton
-                    iconName='x'
-                    activeButtonColor={allExcluded ? iOSColors.red : iOSColors.yellow}
+                    iconName={!noneExcluded ? 'eye-off' : 'eye'}
                     active={!noneExcluded}
+                    activeButtonColor={allExcluded ? iOSColors.red : iOSColors.yellow}
                     onPress={() => this.props.settings.set(!noneExcluded ? {
                       excludeSpecies:       new Set(),
                       excludeSpeciesGroups: new Set(),
@@ -446,9 +446,9 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
           </View>
 
           <BrowseItemButton
-            iconName='x'
-            activeButtonColor={!this.props.unexcludedAny ? iOSColors.red : iOSColors.yellow}
+            iconName={this.props.excluded ? 'eye-off' : 'eye'}
             active={this.props.excluded}
+            activeButtonColor={!this.props.unexcludedAny ? iOSColors.red : iOSColors.yellow}
             onPress={() => {
               // TODO(exclude_invariants): Dedupe with SearchScreen
               this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
@@ -557,9 +557,9 @@ export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> 
           </View>
 
           <BrowseItemButton
-            iconName='x'
-            activeButtonColor={iOSColors.red}
+            iconName={this.props.excluded && !this.props.unexcluded ? 'eye-off' : 'eye'}
             active={this.props.excluded && !this.props.unexcluded}
+            activeButtonColor={iOSColors.red}
             onPress={() => {
               // TODO(exclude_invariants): Dedupe with SearchScreen
               this.props.settings.set(({excludeSpecies: exS, excludeSpeciesGroups: exG, unexcludeSpecies: unS}) => {
@@ -596,7 +596,7 @@ function BrowseItemButton(props: {
     <RectButton
       style={[
         {
-          backgroundColor:  !props.active ? iOSColors.gray : props.activeButtonColor,
+          backgroundColor:  !props.active ? undefined : props.activeButtonColor,
           justifyContent:   'center',
           alignItems:       'center',
           width:            30,
@@ -610,7 +610,7 @@ function BrowseItemButton(props: {
     >
         <Feather style={{
           ...material.buttonObject,
-          color: iOSColors.white,
+          color: iOSColors.black,
         }}
         name={props.iconName}
       />

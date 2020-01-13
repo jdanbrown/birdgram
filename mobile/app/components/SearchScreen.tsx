@@ -1641,7 +1641,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             ]})}
           </View>
 
-          {/* 'filter' buttons */}
+          {/* 'eye' buttons */}
           <Separator/>
           <Text style={styleLikeMetadataLabel}>
             Filter search results to only:
@@ -1654,7 +1654,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 // label: rec.species,
                 label: rec.species_com_name,
                 // iconName: 'maximize-2',
-                iconName: 'filter',
+                iconName: 'eye',
                 buttonColor: iOSColors.orange,
                 onPress: () => {
                   const {ebird} = this.props;
@@ -1680,7 +1680,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 ...defaults,
                 label: rec.species_species_group,
                 // iconName: 'maximize-2',
-                iconName: 'filter',
+                iconName: 'eye',
                 buttonColor: iOSColors.orange,
                 onPress: () => {
                   const {ebird} = this.props;
@@ -1700,7 +1700,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             ]})}
           </View>
 
-          {/* 'x' buttons */}
+          {/* 'eye-off' buttons */}
           <Separator/>
           <Text style={styleLikeMetadataLabel}>
             Exclude from search results:
@@ -1713,7 +1713,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 label: Source.show(Rec.source(rec), {
                   species: this.props.xc,
                 }),
-                iconName: 'x',
+                iconName: 'eye-off',
                 buttonColor: iOSColors.red,
                 onPress: () => this.setState((state: State, props: Props) => ({
                   excludeRecs: setAdd(state.excludeRecs, rec.source_id),
@@ -1728,7 +1728,7 @@ export class SearchScreen extends PureComponent<Props, State> {
                 ...defaults,
                 // label: rec.species,
                 label: rec.species_com_name,
-                iconName: 'x',
+                iconName: 'eye-off',
                 buttonColor: iOSColors.red,
                 onPress: () => {
                   const species       = rec.species;
@@ -1753,7 +1753,7 @@ export class SearchScreen extends PureComponent<Props, State> {
               {
                 ...defaults,
                 label: rec.species_species_group,
-                iconName: 'x',
+                iconName: 'eye-off',
                 buttonColor: iOSColors.red,
                 onPress: () => {
                   const {ebird} = this.props;
