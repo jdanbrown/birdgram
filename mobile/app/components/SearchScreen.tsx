@@ -1893,12 +1893,14 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   BottomControls = (props: {}) => (
     <View style={styles.bottomControls}>
+
       {/* Random recs */}
       <this.BottomControlsButton
         help='Shuffle'
         iconProps={{name: 'shuffle'}}
         onPress={() => this.props.go('search', {path: this.shufflePath()})}
       />
+
       {/* Reset filters */}
       <this.BottomControlsButton
         help='Reset'
@@ -1925,6 +1927,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           });
         }}
       />
+
       {/* Filters */}
       <this.BottomControlsButton
         help='Filters'
@@ -1933,12 +1936,14 @@ export class SearchScreen extends PureComponent<Props, State> {
           showGenericModal: () => this.FiltersModal(),
         })}
       />
+
       {/* XXX Dev: Query that returns no results */}
       {/* <this.BottomControlsButton
         help='Blank'
         iconProps={{name: 'power'}}
         onPress={() => this.props.go('search', {path: `/species/${encodeURIComponent('_BLANK')}`})} // HACK No results via junk species
       /> */}
+
       {/* Toggle sort */}
       <this.BottomControlsButton
         help='Sort'
@@ -1950,6 +1955,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           showGenericModal: () => this.SortModal(),
         })}
       />
+
       {/* Toggle metadata: left */}
       <this.BottomControlsButton
         help='Info'
@@ -1985,6 +1991,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           ),
         })}
       />
+
       {/* Toggle metadata: below */}
       <this.BottomControlsButton
         help='Info'
@@ -2014,6 +2021,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           ),
         })}
       />
+
       {/* Toggle seekOnPlay crosshairs */}
       <this.BottomControlsButton
         help='Seek'
@@ -2029,13 +2037,21 @@ export class SearchScreen extends PureComponent<Props, State> {
         onPress={async () => {
           var {playOnTap, seekOnPlay} = this.props;
           [playOnTap, seekOnPlay] = (
+
+            // XXX Red !playOnTap is too complex, too confusing for UX
+            // playOnTap && seekOnPlay  ? [true,  false] : // blue  -> black
+            // playOnTap && !seekOnPlay ? [false, false] : // black -> red
+            //                            [true,  true]    // red   -> blue
+
+            // Simpler (skip red !playOnTap)
             playOnTap && seekOnPlay  ? [true,  false] : // blue  -> black
-            playOnTap && !seekOnPlay ? [false, false] : // black -> gray
-                                       [true,  true]    // gray  -> blue
+                                       [true,  true]    // black -> blue
+
           );
           await this.props.settings.set({seekOnPlay, playOnTap});
         }}
       />
+
       {/* Zoom more/fewer recs (spectro height) */}
       {/* - TODO Disable when spectroScale is min/max */}
       <this.BottomControlsButton
@@ -2052,6 +2068,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         iconProps={{name: 'zoom-in'}}
         onPress={async () => await this.scaleSpectros(+1)}
       />
+
     </View>
   );
 
