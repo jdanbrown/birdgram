@@ -147,8 +147,43 @@ android
   - TODO
 
 # Troubleshooting (newest to oldest)
+- How to download old versions of Xcode
+  - Because you have to upgrade Xcode (and macOS!!) for each upgrade of iOS (ugh terrible!!)
+    - Xcode 11.5, iOS 13.5, macOS Catalina ≥10.15.2 [https://developer.apple.com/documentation/xcode_release_notes/xcode_11_5_release_notes]
+    - Xcode 11.4, iOS 13.4, macOS Catalina ≥10.15.2 [https://developer.apple.com/documentation/xcode_release_notes/xcode_11_4_release_notes]
+    - Xcode 11.3, iOS 13.3, macOS Mojave   ≥10.14.4 [https://developer.apple.com/documentation/xcode_release_notes/xcode_11_3_release_notes]
+  - App Store only has latest version, which usually requires latest macOS (e.g. Catalina which I don't want yet)
+    - Download: https://developer.apple.com/download/more/
+    - More info: https://xcodereleases.com/
+  - To download more quickly
+    - Apple download speeds are ridiculous
+      - apple->laptop   ~200-700KB/s   ~5h
+      - apple->gcloud     ~20-60MB/s   ~3m
+      - gcloud->laptop        ~3MB/s  ~40m
+    - https://console.cloud.google.com/ -> open Cloud Shell
+      - In Chrome, "Copy as cURL" any request from https://developer.apple.com/download/more/
+      - `curl xcode-url ... >xcode-file`
+      - `gsutil cp xcode-file gs://xcode-downloads/...`
+    - Locally
+      - `gsutil cp gs://xcode-downloads/... ~/Desktop`
+- Fix code signing certificate / provisioning profile after getting new phone
+  - Approach 1: Manually add new device's UDID to device list
+    - https://developer.apple.com/account/resources/devices/list
+    - XXX Aborted, couldn't get it to work
+  - Approach 2: Build once with "Automatically manage signing" enabled, to let Xcode register the device
+    - "If you use automatic signing, Xcode registers connected devices for you"
+      - From: https://developer.apple.com/account/resources/devices/add
+    - Steps
+      1. Xcode -> project Birdgram -> target Birdgram -> Signing & Capabitilies -> Signing (Debug) -> Automatically manage signing
+        - Normally disabled (for fastlane)
+        - Enable -> Build once -> Disable
+      2. Manually add new device to _each_ provisioning profile (ugh)
+        - https://developer.apple.com/account/resources/profiles/list
+        - Click into each "Development" profile (x4) -> Edit -> Devices -> add new device -> Save
+          - (If new device isn't present, then step 1 didn't work)
 - Reset which code signing certificate is used by Xcode
   - `CONFIGURATION=Debug bin/fastlane-env CA100 match development`
+    - TODO Or maybe? `CONFIGURATION=Debug PROVISIONING_PROFILE_TYPE=Development bin/fastlane-env CA100 match development`
   - And then click around a bunch in Xcode -> [Project] -> Signing & Capabitilies
 - Regenerate code signing certificates for ios / app store (these expire every ~year)
   - Use `fastlane match`
