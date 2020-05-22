@@ -4,6 +4,7 @@ import DeviceInfo from 'react-native-device-info';
 import { getStatusBarHeight } from 'react-native-status-bar-height';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 
+import * as Colors from 'app/colors';
 import { StyleSheet } from 'app/stylesheet';
 
 const iOSDefaultBackgroundColor = '#f7f7f7'; // Default background color (in iOS 10)
@@ -44,6 +45,11 @@ export const Styles = {
     backgroundColor: iOSDefaultBackgroundColor, // Match app bg to tabBar bg (only matters on notched ios)
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(0,0,0,.3)',
+  },
+
+  help: {
+    color: Colors.tab20b.purple1,
+    backgroundColor: Colors.Pastel1.pink,
   },
 
   // Debug styles

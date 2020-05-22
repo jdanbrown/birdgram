@@ -29,6 +29,7 @@ import stringHash from "string-hash";
 const fs = RNFB.fs;
 
 import { App, AppProps, AppState } from 'app/App';
+import * as Colors from 'app/colors';
 import { ActionSheetBasic } from 'app/components/ActionSheets';
 import {
   MetadataColumnBelow, MetadataColumnsBelow, MetadataColumnLeft, MetadataColumnsLeft, metadataLabel, MetadataLabel,
@@ -2374,9 +2375,13 @@ export class SearchScreen extends PureComponent<Props, State> {
           showHelp={this.props.showHelp}
           help={(
             <Text style={{
-              margin: 10,
+              padding: 10,
+              // borderTopWidth: 1, borderBottomWidth: 1, // XXX Not supported for Text [https://github.com/facebook/react-native/issues/29]
+              borderWidth: 3,
+              borderColor: Styles.help.color,
+              backgroundColor: Styles.help.backgroundColor,
             }}>
-              Help {'\n'}
+              <Text style={{fontWeight: 'bold'}}>Help</Text> {'\n'}
               • Tap a recording to play it {'\n'}
               • Long-press a recording to see more actions {'\n'}
               • Tap <Feather name='shuffle' /> to show a random species {'\n'}
@@ -2387,8 +2392,9 @@ export class SearchScreen extends PureComponent<Props, State> {
               • Tap <Feather name='credit-card' style={Styles.flipVertical} /> to show/hide metadata inline {'\n'}
               • Long-press <Feather name='sidebar' />/<Feather name='credit-card' style={Styles.flipVertical} /> to
                 change which metadata is shown {'\n'}
-              • Tap <Feather name='crosshair' /> to toggle whether playback starts from where you tap or from the beginning {'\n'}
-              • Tap <Feather name='zoom-out' />/<Feather name='zoom-in' /> to resize the spectrograms
+              • Tap <Feather name='crosshair' /> to toggle playback: start from where you tap or start from the beginning {'\n'}
+              • Tap <Feather name='zoom-out' />/<Feather name='zoom-in' /> to resize the spectrograms {'\n'}
+              • Pinch in/out to resize the spectrograms
             </Text>
           )}
         />

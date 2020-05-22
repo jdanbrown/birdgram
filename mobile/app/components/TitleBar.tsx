@@ -9,6 +9,7 @@ import {
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 
+import * as Colors from 'app/colors';
 import { debug_print, Log, logErrors, logErrorsAsync, rich, puts, tap } from 'app/log';
 import { SettingsWrites } from 'app/settings';
 import { Styles } from 'app/styles';
@@ -62,7 +63,7 @@ export function TitleBar(props: {
       }}>
         <Text style={{
           ...material.subheadingObject,
-          fontWeight: '500', // (Override 'normal') Between 'normal' (400) and 'bold' (700)
+          fontWeight: '600', // (Override 'normal') Between 'normal' (400) and 'bold' (700)
           ...props.textProps,
         }}>
           {props.title}
@@ -143,7 +144,7 @@ export class TitleBarWithHelp extends PureComponent<TitleBarWithHelpProps, Title
                   ...material.buttonObject,
                   fontSize: 20,
                   ...(!this.props.showHelp ? {} : {
-                    color: iOSColors.blue,
+                    color: Styles.help.color,
                   }),
                 }}
                 name='help-circle'
