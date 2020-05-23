@@ -69,6 +69,7 @@ import sklearn as sk
 import sqlalchemy as sqla
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+import stringcase
 from tqdm import tqdm
 import yaml
 import xgboost as xgb
