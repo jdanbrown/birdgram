@@ -7,6 +7,12 @@ import {
 } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import KeepAwake from 'react-native-keep-awake';
+// FIXME Parts of the js api for react-native-safe-area-context require react-native >0.57
+//  - HACK Bypass via NativeSafeAreaView
+//  - Known good (so far): react-native-safe-area-context@0.6.4 + react-native@0.57.2
+import { SafeAreaContext } from 'react-native-safe-area-context';
+import NativeSafeAreaView from 'react-native-safe-area-context/src/NativeSafeAreaView';
+import { EdgeInsets, InsetChangedEvent } from 'react-native-safe-area-context/src/SafeArea.types';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 import { BackButton, Link, matchPath, Redirect, Route, Switch } from 'react-router-native';
@@ -180,6 +186,8 @@ interface State {
   nSpecies?: number;
   geo?: Geo;
   appContext?: AppContext;
+  // Loaded async (from render)
+  insets: null | EdgeInsets;
   // From SearchScreen
   nExcludeRecs: null | number;
 }
@@ -222,6 +230,7 @@ export default class App extends PureComponent<Props, State> {
     tabIndex: 2, // TODO
     orientation: getOrientation(),
     loading: true,
+    insets: null,
     nExcludeRecs: null,
   };
 
@@ -441,88 +450,107 @@ export default class App extends PureComponent<Props, State> {
   render = () => {
     log.info('render');
     return (
+      <NativeSafeAreaView
+        style={{
+          flex: 1,
+          backgroundColor: Styles.app.backgroundColor,
+        }}
+        onInsetsChange={this.onInsetsChange}
+      >
+        {this.state.insets && (
+          <SafeAreaContext.Provider value={this.state.insets}>
+            <SafeAreaContext.Consumer children={insets => insets && (
 
-      // Avoid rounded corners and camera notches (ios ≥11)
-      //  - https://facebook.github.io/react-native/docs/safeareaview
-      <SafeAreaView style={{
-        flex: 1,
-        backgroundColor: Styles.app.backgroundColor,
-      }}>
+              <View style={{
+                flex: 1,
+                backgroundColor: Styles.app.backgroundColor,
 
-        {/* For onLayout -> orientation */}
-        <View style={{flex: 1}} onLayout={this.onLayout}>
+                // These both look like too much space, but all other apps appear to stick to them...?
+                // paddingTop: insets.top, paddingBottom: insets.bottom,
+                //
+                // TODO Nvm let's get crazy
+                paddingTop: insets.top - 10, paddingBottom: insets.bottom - 10,
 
-          {/* Show loading spinner */}
-          {this.state.loading ? (
-            <View style={{
-              flex: 1,
-              justifyContent: 'center',
-            }}>
-              <ActivityIndicator size='large' />
-            </View>
-          ) : (
+              }}>
 
-            // Provide app-global stuff via context
-            <AppContext.Provider value={this.state.appContext!}>
+                {/* For onLayout -> orientation */}
+                <View style={{flex: 1}} onLayout={this.onLayout}>
 
-              {/* Keep screen awake (in dev) */}
-              {__DEV__ && <KeepAwake/>}
+                  {/* Show loading spinner */}
+                  {this.state.loading ? (
+                    <View style={{
+                      flex: 1,
+                      justifyContent: 'center',
+                    }}>
+                      <ActivityIndicator size='large' />
+                    </View>
+                  ) : (
 
-              {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
-              <StatusBar hidden />
+                    // Provide app-global stuff via context
+                    <AppContext.Provider value={this.state.appContext!}>
 
-              {/* Top-level tab router (nested stacks will have their own router) */}
-              <RouterWithHistory history={this.state.histories!.tabs}>
-                <View style={styles.fill}>
+                      {/* Keep screen awake (in dev) */}
+                      {__DEV__ && <KeepAwake/>}
 
-                  {/* Route the back button (android) */}
-                  {/* - FIXME Update for multiple histories (will require moving into TabRoutes since it owns tab index state) */}
-                  <BackButton/>
+                      {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
+                      <StatusBar hidden />
 
-                  {/* Route deep links */}
-                  {/* - TODO(nav_router): Do Linking.openURL('birdgram-us://open/search/species/HOWR') twice -> /search/search/HOWR */}
-                  <DeepLinking
-                    prefix='birdgram-us://open'
-                    onUrl={this.onDeepLinkingUrl}
-                  />
+                      {/* Top-level tab router (nested stacks will have their own router) */}
+                      <RouterWithHistory history={this.state.histories!.tabs}>
+                        <View style={styles.fill}>
 
-                  {/* Tabs + screen pager */}
-                  {/* - NOTE Avoid history.location [https://reacttraining.com/react-router/native/api/history/history-is-mutable] */}
-                  <HistoryConsumer children={({location: locationTabs, history: historyTabs}) => (
-                    <Route children={({location}) => (
-                      <TabRoutes
-                        tabLocation={location}
-                        histories={this.state.histories!}
-                        settings={this.state.settingsWrites!}
-                        routes={this.makeRoutes(locationTabs, historyTabs)}
-                        defaultPath={this.defaultPath}
-                        priorityTabs={this.priorityTabs}
-                      />
-                    )}/>
-                  )}/>
+                          {/* Route the back button (android) */}
+                          {/* - FIXME Update for multiple histories (will require moving into TabRoutes since it owns tab index state) */}
+                          <BackButton/>
 
-                  {/* [Examples of] Global redirects */}
-                  <Route exact path='/test-redir-fixed' render={() => (
-                    <Redirect to='/settings' />
-                  )}/>
-                  <Route exact path='/test-redir-part/:part' render={({match: {params: {part}}}) => (
-                    <Redirect to={`/${part}`} />
-                  )}/>
-                  <Route exact path='/test-redir-path/*' render={({match: {params: {0: path}}}) => (
-                    <Redirect to={`/${path}`} />
-                  )}/>
+                          {/* Route deep links */}
+                          {/* - TODO(nav_router): Do Linking.openURL('birdgram-us://open/search/species/HOWR') twice -> /search/search/HOWR */}
+                          <DeepLinking
+                            prefix='birdgram-us://open'
+                            onUrl={this.onDeepLinkingUrl}
+                          />
+
+                          {/* Tabs + screen pager */}
+                          {/* - NOTE Avoid history.location [https://reacttraining.com/react-router/native/api/history/history-is-mutable] */}
+                          <HistoryConsumer children={({location: locationTabs, history: historyTabs}) => (
+                            <Route children={({location}) => (
+                              <TabRoutes
+                                tabLocation={location}
+                                histories={this.state.histories!}
+                                settings={this.state.settingsWrites!}
+                                routes={this.makeRoutes(locationTabs, historyTabs)}
+                                defaultPath={this.defaultPath}
+                                priorityTabs={this.priorityTabs}
+                              />
+                            )}/>
+                          )}/>
+
+                          {/* [Examples of] Global redirects */}
+                          <Route exact path='/test-redir-fixed' render={() => (
+                            <Redirect to='/settings' />
+                          )}/>
+                          <Route exact path='/test-redir-part/:part' render={({match: {params: {part}}}) => (
+                            <Redirect to={`/${part}`} />
+                          )}/>
+                          <Route exact path='/test-redir-path/*' render={({match: {params: {0: path}}}) => (
+                            <Redirect to={`/${path}`} />
+                          )}/>
+
+                        </View>
+                      </RouterWithHistory>
+
+                    </AppContext.Provider>
+
+                  )}
 
                 </View>
-              </RouterWithHistory>
 
-            </AppContext.Provider>
+              </View>
 
-          )}
-
-        </View>
-
-      </SafeAreaView>
-
+            )}/>
+          </SafeAreaContext.Provider>
+        )}
+      </NativeSafeAreaView>
     );
   }
 
@@ -738,6 +766,12 @@ export default class App extends PureComponent<Props, State> {
       orientation: getOrientation(),
     });
   }
+
+  onInsetsChange = async (event: InsetChangedEvent) => logErrorsAsync('onInsetsChange', async () => {
+    const {insets} = event.nativeEvent;
+    log.info('onInsetsChange', {insets});
+    this.state.insets = insets;
+  });
 
   onDeepLinkingUrl = ({path}: {path: string}) => {
     const match = matchPath(path, '/:tab/:tabPath*');

@@ -51,6 +51,7 @@
 		B72CC80C21A34706009D8690 /* Bubo.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B7019D5821A1FA6300F6E12B /* Bubo.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B72CC80F21A349FA009D8690 /* Spectro.swift in Sources */ = {isa = PBXBuildFile; fileRef = B72CC80E21A349FA009D8690 /* Spectro.swift */; };
 		B72CC81321A34DBC009D8690 /* Spectro.m in Sources */ = {isa = PBXBuildFile; fileRef = B72CC81221A34DBC009D8690 /* Spectro.m */; };
+		B72E64B62478913300E641D1 /* libRNCSafeAreaContext.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B72E64B4247890FC00E641D1 /* libRNCSafeAreaContext.a */; };
 		B74413F421C1C13800572D12 /* Http.swift in Sources */ = {isa = PBXBuildFile; fileRef = B74413F321C1C13800572D12 /* Http.swift */; };
 		B76003CC21A3A7E200E1347A /* RCTSwiftLog.m in Sources */ = {isa = PBXBuildFile; fileRef = B76003C921A3A7E200E1347A /* RCTSwiftLog.m */; };
 		B76003CD21A3A7E200E1347A /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = B76003CB21A3A7E200E1347A /* Log.swift */; };
@@ -427,6 +428,13 @@
 			remoteGlobalIDString = A39873CE1EA65EE60051E01A;
 			remoteInfo = "RNVectorIcons-tvOS";
 		};
+		B72E64B3247890FC00E641D1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B72E647A247890FB00E641D1 /* SafeAreaView.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 134814201AA4EA6300B7C361;
+			remoteInfo = RNCSafeAreaContext;
+		};
 		B73A78BE21EEBC39000BC054 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
@@ -556,6 +564,7 @@
 		B7160EFD21FBB50A00FA8250 /* RNDeviceInfo.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RNDeviceInfo.xcodeproj; path = "../node_modules/react-native-device-info/ios/RNDeviceInfo.xcodeproj"; sourceTree = "<group>"; };
 		B72CC80E21A349FA009D8690 /* Spectro.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Spectro.swift; path = Birdgram/Spectro.swift; sourceTree = "<group>"; };
 		B72CC81221A34DBC009D8690 /* Spectro.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Spectro.m; path = Birdgram/Spectro.m; sourceTree = "<group>"; };
+		B72E647A247890FB00E641D1 /* SafeAreaView.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = SafeAreaView.xcodeproj; path = "../node_modules/react-native-safe-area-context/ios/SafeAreaView.xcodeproj"; sourceTree = "<group>"; };
 		B74413F321C1C13800572D12 /* Http.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Http.swift; path = Birdgram/Http.swift; sourceTree = "<group>"; };
 		B76003C921A3A7E200E1347A /* RCTSwiftLog.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = RCTSwiftLog.m; path = Birdgram/RCTSwiftLog.m; sourceTree = "<group>"; };
 		B76003CA21A3A7E200E1347A /* RCTSwiftLog.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = RCTSwiftLog.h; path = Birdgram/RCTSwiftLog.h; sourceTree = "<group>"; };
@@ -604,6 +613,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B72E64B62478913300E641D1 /* libRNCSafeAreaContext.a in Frameworks */,
 				B714147523C0521700A431D1 /* libSQLiteSupport.a in Frameworks */,
 				B72CC80B21A34706009D8690 /* Bubo.framework in Frameworks */,
 				7A245EFCCB59431FB0ADAD55 /* Pods_Birdgram.framework in Frameworks */,
@@ -840,6 +850,7 @@
 		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
 			isa = PBXGroup;
 			children = (
+				B72E647A247890FB00E641D1 /* SafeAreaView.xcodeproj */,
 				B714146F23C0517500A431D1 /* SQLiteSupport.xcodeproj */,
 				B7160EFD21FBB50A00FA8250 /* RNDeviceInfo.xcodeproj */,
 				B76432F621ED4C87008A7254 /* ReactNativeConfig.xcodeproj */,
@@ -1004,6 +1015,14 @@
 			children = (
 				B728932C21755AC1009FF1ED /* libRNVectorIcons.a */,
 				B728932E21755AC1009FF1ED /* libRNVectorIcons-tvOS.a */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B72E647B247890FB00E641D1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B72E64B4247890FC00E641D1 /* libRNCSafeAreaContext.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -1253,6 +1272,10 @@
 				{
 					ProductGroup = B728932721755AC1009FF1ED /* Products */;
 					ProjectRef = 95D338A68A224B59BF0B0214 /* RNVectorIcons.xcodeproj */;
+				},
+				{
+					ProductGroup = B72E647B247890FB00E641D1 /* Products */;
+					ProjectRef = B72E647A247890FB00E641D1 /* SafeAreaView.xcodeproj */;
 				},
 				{
 					ProductGroup = B714147023C0517500A431D1 /* Products */;
@@ -1603,6 +1626,13 @@
 			fileType = archive.ar;
 			path = "libRNVectorIcons-tvOS.a";
 			remoteRef = B728932D21755AC1009FF1ED /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		B72E64B4247890FC00E641D1 /* libRNCSafeAreaContext.a */ = {
+			isa = PBXReferenceProxy;
+			fileType = archive.ar;
+			path = libRNCSafeAreaContext.a;
+			remoteRef = B72E64B3247890FC00E641D1 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 		B76432FC21ED4C87008A7254 /* libReactNativeConfig.a */ = {

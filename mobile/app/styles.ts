@@ -32,17 +32,18 @@ export const Styles = {
   flipBoth:       {transform: [{scaleX: -1}, {scaleY: -1}]},
 
   app: {
-    backgroundColor: iOSDefaultBackgroundColor, // Match app bg to tabBar bg (only matters on notched ios)
+    backgroundColor: iOSDefaultBackgroundColor, // Match app bg to tabBar bg (in case of notch)
   },
 
-  statusBarHeight: (!DeviceInfo.hasNotch()
-    ? getStatusBarHeight() // Adjust up b/c we hide the status bar
-    : 0                    // HACK Fudge the adjustment on notched ios [why?]
-  ),
+  // XXX No longer needed after adding SafeAreaContext (.Producer/.Consumer)
+  // statusBarHeight: (!DeviceInfo.hasNotch()
+  //   ? getStatusBarHeight() // Adjust up b/c we hide the status bar
+  //   : 0                    // HACK Fudge the adjustment on notched ios [why?]
+  // ),
 
   // For TabRoutes, and reused by others (e.g. screen headers)
   tabBar: {
-    backgroundColor: iOSDefaultBackgroundColor, // Match app bg to tabBar bg (only matters on notched ios)
+    backgroundColor: iOSDefaultBackgroundColor, // Match app bg to tabBar bg (in case of notch)
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: 'rgba(0,0,0,.3)',
   },

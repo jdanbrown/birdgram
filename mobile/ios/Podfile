@@ -69,6 +69,7 @@ target 'Birdgram' do
   #   - e.g. https://github.com/react-native-community/react-native-camera/issues/1747
   #   - e.g. https://github.com/bugsnag/bugsnag-react-native/issues/193
   # - Workaround: do the link steps manually for each native dep (usually in their README)
+  #   - e.g. https://github.com/react-native-community/react-native-device-info#manual
   #
   # Disabled from `react-native link react-native-config`
   # pod 'react-native-config', :path => '../node_modules/react-native-config'
@@ -82,6 +83,9 @@ target 'Birdgram' do
   #
   # Disabled from `react-native link react-native-sqlite-plugin-legacy-support`
   # pod 'SQLiteSupport', :path => '../node_modules/react-native-sqlite-plugin-legacy-support'
+  #
+  # Disabled from `react-native link react-native link react-native-safe-area-context`
+  # pod 'react-native-safe-area-context', :path => '../node_modules/react-native-safe-area-context'
 
   # This causes warnings. Commented out for now.
   # target 'BirdgramTests' do

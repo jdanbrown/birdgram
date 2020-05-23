@@ -6,6 +6,7 @@ import {
   PinchGestureHandler, RectButton, TapGestureHandler,
   // FlatList, ScrollView, Slider, Switch, TextInput, // TODO Needed?
 } from 'react-native-gesture-handler';
+import { SafeAreaContext } from 'react-native-safe-area-context';
 import { iOSColors, material, materialColors, systemWeights } from 'react-native-typography'
 import Feather from 'react-native-vector-icons/Feather';
 
@@ -58,10 +59,12 @@ export function TitleBar(props: {
         // backgroundColor: 'yellow', // XXX Debug
         flex: 5,
         alignItems: 'center', // (horizontal)
-        paddingTop: 25 - Styles.statusBarHeight,
+        justifyContent: 'center',
+        paddingTop: 5,
         paddingBottom: 5,
       }}>
         <Text style={{
+          // borderWidth: 1, borderColor: 'red', // XXX Debug
           ...material.subheadingObject,
           fontWeight: '600', // (Override 'normal') Between 'normal' (400) and 'bold' (700)
           ...props.textProps,
