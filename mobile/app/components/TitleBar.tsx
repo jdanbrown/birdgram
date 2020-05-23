@@ -161,3 +161,51 @@ export class TitleBarWithHelp extends PureComponent<TitleBarWithHelpProps, Title
   );
 
 }
+
+//
+// HelpText
+//
+
+interface HelpTextProps {
+  children: ReactNode;
+}
+
+interface HelpTextState {
+}
+
+export class HelpText extends PureComponent<HelpTextProps, HelpTextState> {
+
+  log = new Log('HelpText');
+
+  state = {
+  };
+
+  componentDidMount = async () => logErrorsAsync('componentDidMount', async () => {
+    this.log.info('componentDidMount');
+  });
+
+  componentWillUnmount = async () => logErrorsAsync('componentWillUnmount', async () => {
+    this.log.info('componentWillUnmount');
+  });
+
+  componentDidUpdate = async (
+    prevProps: HelpTextProps,
+    prevState: HelpTextState,
+  ) => logErrorsAsync('componentDidUpdate', async () => {
+    this.log.info('componentDidUpdate', () => rich(shallowDiffPropsState(prevProps, prevState, this.props, this.state)));
+  });
+
+  render = () => (
+    <Text style={{
+      padding: 10,
+      // borderTopWidth: 1, borderBottomWidth: 1, // XXX Not supported for Text [https://github.com/facebook/react-native/issues/29]
+      borderWidth: 3,
+      borderColor: Styles.help.color,
+      backgroundColor: Styles.help.backgroundColor,
+    }}>
+      <Text style={{fontWeight: 'bold'}}>Help</Text> {'\n'}
+      {this.props.children}
+    </Text>
+  );
+
+}
