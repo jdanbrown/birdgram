@@ -324,7 +324,8 @@ export class PlacesScreen extends PureComponent<Props, State> {
         <TitleBarWithHelp
           // title='Places'
           // title='Filter species by place'
-          title='Choose locations to filter species'
+          // title='Choose locations to filter species'
+          title='Choose locations for fewer species'
           settings={this.props.settings}
           showHelp={this.props.showHelp}
           help={null} // TODO TODO

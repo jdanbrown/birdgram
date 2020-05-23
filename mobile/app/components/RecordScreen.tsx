@@ -473,9 +473,20 @@ export class RecordScreen extends Component<Props, State> {
                     //    - Requires testing
                     <View style={[Styles.center, Styles.fill, {padding: 30}]}>
                       <Text style={material.subheading}>
-                        {/* Recording not found */}
-                        Start a recording
+                        Press {' '}
+                        <FontAwesome5 style={[styles.bottomControlsButtonIcon, {color: Colors.Paired.darkGreen}]}
+                          name='circle' solid
+                        />
+                        {' '} below to start recording
                       </Text>
+                      {/*
+                      // FIXME Make the button work -- nothing happens [why?]
+                      <RectButton onPress={this.startRecording}>
+                        <FontAwesome5 style={[styles.bottomControlsButtonIcon, {color: Colors.Paired.darkGreen}]}
+                          name='circle' solid
+                        />
+                      </RectButton>
+                      */}
                     </View>
 
                   ) : (

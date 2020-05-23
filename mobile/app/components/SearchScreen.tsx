@@ -1597,7 +1597,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           {/* 'search' buttons */}
           <Separator/>
           <Text style={styleLikeMetadataLabel}>
-            Search for:
+            Find recordings similar to:
           </Text>
           <Separator/>
           <View style={{flexDirection: 'row'}}>
@@ -1645,7 +1645,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           {/* 'eye' buttons */}
           <Separator/>
           <Text style={styleLikeMetadataLabel}>
-            Filter search results to only:
+            Filter results to only:
           </Text>
           <Separator/>
           <View style={{flexDirection: 'row'}}>
@@ -1704,7 +1704,7 @@ export class SearchScreen extends PureComponent<Props, State> {
           {/* 'eye-off' buttons */}
           <Separator/>
           <Text style={styleLikeMetadataLabel}>
-            Exclude from search results:
+            Exclude from results:
           </Text>
           <Separator/>
           <View style={{flexDirection: 'row'}}>
@@ -2370,7 +2370,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         )}/>
 
         <TitleBarWithHelp
-          title='Search results'
+          title='Similar recordings'
           settings={this.props.settings}
           showHelp={this.props.showHelp}
           help={(
