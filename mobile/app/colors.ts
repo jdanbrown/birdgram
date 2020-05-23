@@ -100,7 +100,7 @@ export const Accent = {
 export const Dark2 = {
   [Symbol.iterator]: function*() { for (let v of Object.values(this)) yield v; }, // TODO Factor out [how to type?]
   green1: '#1b9e77',
-  brown: '#d95f02',
+  orange: '#d95f02',
   purple: '#7570b3',
   pink: '#e7298a',
   green2: '#66a61e',
