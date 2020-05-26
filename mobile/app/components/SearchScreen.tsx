@@ -645,52 +645,59 @@ export class SearchScreen extends PureComponent<Props, State> {
       const query = await Query.loadFromLocation(this.props.location);
       log.info('updateForLocation: Query', () => pretty({query}));
 
-      // Prepare exit behavior
-      const _setRecs = ({recs}: {recs: StateRecs}): void => {
-        log.info(`updateForLocation: state.recs = ${matchStateRecs(recs, {
-          loading:  x    => x,
-          notfound: x    => x,
-          recs:     recs => `(${recs.length} recs)`,
-        })}`);
-        this.setState({
-          query,
-          recs,
-          recsQueryTime: timer.time(),
-        });
-      };
+      // Load query -> recs
+      const recs = await this.recsFromQuery(query);
 
-      // Handle /rec/:sourceId not found (e.g. user deleted a user rec, or xc dataset changed)
-      if (query === null) {
-        return _setRecs({recs: 'notfound'});
-      }
+      // Set done state
+      log.info(`updateForLocation: state.recs = ${matchStateRecs(recs, {
+        loading:  x    => x,
+        notfound: x    => x,
+        recs:     recs => `(${recs.length} recs)`,
+      })}`);
+      this.setState({
+        query,
+        recs,
+        recsQueryTime: timer.time(),
+      });
 
-      // Global filters
-      //  - TODO(put_all_query_state_in_location)
-      const qualityFilter = (table: string) => (
-        sqlf`and ${SQL.raw(table)}.quality in (${ifEmpty(Array.from(this.props.filterQuality), () => Quality.values)})`
-      );
-      const placeFilter   = (table: string) => (
-        sqlf`and ${SQL.raw(table)}.species in (${this.props.place.knownSpecies})`
-      );
-      const speciesFilter = (table: string) => (
-        sqlf`and ${SQL.raw(table)}.species not in (${Array.from(this.props.excludeSpecies)})`
-      );
-      const speciesGroupFilter = (table: string) => (
-        sqlf`and (false
-          or ${SQL.raw(table)}.species_species_group not in (${Array.from(this.props.excludeSpeciesGroups)})
-          or ${SQL.raw(table)}.species in (${Array.from(this.props.unexcludeSpecies)})
-        )`
-      );
-      const recFilter = (table: string) => (
-        sqlf`and ${SQL.raw(table)}.source_id not in (${Array.from(this.state.excludeRecs)})`
-      );
+    }
+  }
 
-      // TODO Factor these big matchQuery cases into functions, for readability
-      return _setRecs(await matchQuery<Promise<{recs: StateRecs}>>(query, {
+  // TODO Factor these big matchQuery cases into functions, for readability
+  recsFromQuery = async (query: Query | null): Promise<StateRecs> => {
+
+    // TODO TODO
+
+    // Global filters
+    //  - TODO(put_all_query_state_in_location)
+    const qualityFilter = (table: string) => (
+      sqlf`and ${SQL.raw(table)}.quality in (${ifEmpty(Array.from(this.props.filterQuality), () => Quality.values)})`
+    );
+    const placeFilter   = (table: string) => (
+      sqlf`and ${SQL.raw(table)}.species in (${this.props.place.knownSpecies})`
+    );
+    const speciesFilter = (table: string) => (
+      sqlf`and ${SQL.raw(table)}.species not in (${Array.from(this.props.excludeSpecies)})`
+    );
+    const speciesGroupFilter = (table: string) => (
+      sqlf`and (false
+        or ${SQL.raw(table)}.species_species_group not in (${Array.from(this.props.excludeSpeciesGroups)})
+        or ${SQL.raw(table)}.species in (${Array.from(this.props.unexcludeSpecies)})
+      )`
+    );
+    const recFilter = (table: string) => (
+      sqlf`and ${SQL.raw(table)}.source_id not in (${Array.from(this.state.excludeRecs)})`
+    );
+
+    // Handle /rec/:sourceId not found (e.g. user deleted a user rec, or xc dataset changed)
+    if (query === null) {
+      return 'notfound';
+    } else {
+      return await matchQuery<Promise<StateRecs>>(query, {
 
         none: async () => {
           log.info(`updateForLocation: QueryNone -> 'notfound'...`);
-          return {recs: 'notfound'};
+          return 'notfound';
         },
 
         // TODO(slow_random): Perf: Very slow (~5s on US) b/c full table scan
@@ -733,7 +740,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             // logQueryPlan: true, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
-            return {recs};
+            return recs;
           });
         },
 
@@ -770,7 +777,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             // logQueryPlan: true, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
-            return {recs};
+            return recs;
           });
         },
 
@@ -821,7 +828,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             // logQueryPlan: true, // XXX Debug
           })(async results => {
             const recs = results.rows.raw();
-            return {recs};
+            return recs;
           });
         },
 
@@ -829,7 +836,7 @@ export class SearchScreen extends PureComponent<Props, State> {
         //  - I made 2 separate attempts at it, and the best I got was windowing at ~20% _slower_ than unions
         //  - Notes in notebooks/20190226_mobile_dev_search_sqlite
         rec: async ({filters, source}) => {
-          return await log.timedAsync<{recs: StateRecs}>('updateForLocation.rec', async () => {
+          return await log.timedAsync<StateRecs>('updateForLocation.rec', async () => {
             log.info('updateForLocation: Loading recs for query_rec', {source});
 
             // Compute top n_per_sp recs per species by d_pc (cosine_distance)
@@ -854,7 +861,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             const query_rec = await this.props.db.loadRec(source);
             if (query_rec === null) {
               // query_rec not found (e.g. user deleted a user rec, or xc dataset changed)
-              return {recs: 'notfound'};
+              return 'notfound';
             }
 
             // Ensure spectro exists
@@ -1044,18 +1051,17 @@ export class SearchScreen extends PureComponent<Props, State> {
 
               // Inject query_rec as first result so it's visible at top
               //  - TODO Replace this with a proper display of query_rec at the top
-              return {recs: [
+              return [
                 query_rec,
                 ...recs,
-              ]};
+              ];
 
             });
 
           });
         },
 
-      }));
-
+      });
     }
   }
 
