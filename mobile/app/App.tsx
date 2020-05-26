@@ -493,7 +493,11 @@ export default class App extends PureComponent<Props, State> {
                       {__DEV__ && <KeepAwake/>}
 
                       {/* Hide status bar on all screens [I tried to toggle it on/off on different screens and got weird behaviors] */}
-                      <StatusBar hidden />
+                      {/*   - Show if notch -- since status bar doesn't take up vertical space */}
+                      {/*   - Hide if no notch -- to increase available vertical space */}
+                      {false && !DeviceInfo.hasNotch() && (
+                        <StatusBar hidden />
+                      )}
 
                       {/* Top-level tab router (nested stacks will have their own router) */}
                       <RouterWithHistory history={this.state.histories!.tabs}>
