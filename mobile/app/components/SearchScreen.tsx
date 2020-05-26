@@ -56,8 +56,8 @@ import { normalizeStyle, LabelStyle, labelStyles, Styles } from 'app/styles';
 import {
   all, any, assert, chance, Clamp, Dim, ensureParentDir, fastIsEqual, finallyAsync, getOrSet, global, ifEmpty, ifNull,
   into, json, local, mapMapValues, mapNull, mapUndefined, match, matchEmpty, matchKey, matchNull, matchUndefined,
-  noawait, objectKeysTyped, Omit, Point, pretty, QueryString, round, setAdd, setDiff, setToggle, shallowDiffPropsState,
-  Sign, Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
+  noawait, objectKeysTyped, Omit, Point, pretty, QueryString, recursively, round, setAdd, setDiff, setToggle,
+  shallowDiffPropsState, showDate, Sign, Style, throw_, Timer, typed, yaml, yamlPretty, zipSame,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -76,18 +76,20 @@ interface ScrollViewState {
 }
 
 // (Callers: RecentScreen, SavedScreen)
-export type Query = QueryNone | QueryRandom | QuerySpeciesGroup | QuerySpecies | QueryRec;
+export type Query = QueryNone | QueryRandom | QuerySpeciesGroup | QuerySpecies | QueryRec | QueryCompare;
 export type QueryNone         = {kind: 'none'}; // e.g. so we can show nothing on redirect from '/'
 export type QueryRandom       = {kind: 'random',        filters: Filters, seed: number};
 export type QuerySpeciesGroup = {kind: 'species_group', filters: Filters, species_group: string};
 export type QuerySpecies      = {kind: 'species',       filters: Filters, species: string};
 export type QueryRec          = {kind: 'rec',           filters: Filters, source: Source};
+export type QueryCompare      = {kind: 'compare',       filters: Filters, queries: Array<Query>};
 export function matchQuery<X>(query: Query, cases: {
   none:          (query: QueryNone)         => X,
   random:        (query: QueryRandom)       => X,
   species_group: (query: QuerySpeciesGroup) => X,
   species:       (query: QuerySpecies)      => X,
   rec:           (query: QueryRec)          => X,
+  compare:       (query: QueryCompare)      => X,
 }): X {
   switch (query.kind) {
     case 'none':          return cases.none(query);
@@ -95,6 +97,7 @@ export function matchQuery<X>(query: Query, cases: {
     case 'species_group': return cases.species_group(query);
     case 'species':       return cases.species(query);
     case 'rec':           return cases.rec(query);
+    case 'compare':       return cases.compare(query);
   }
 }
 
@@ -102,8 +105,14 @@ export const Query = {
 
   // null if source not found
   //  - (Callers: updateForLocation, RecentScreen, SavedScreen)
+
   loadFromLocation: async (location: Location): Promise<Query | null> => {
-    return await matchSearchPathParams<Promise<Query | null>>(searchPathParamsFromLocation(location), {
+    const searchPathParams = searchPathParamsFromLocation(location);
+    return await Query.loadFromSearchPathParams(searchPathParams);
+  },
+
+  loadFromSearchPathParams: async (searchPathParams: SearchPathParams): Promise<Query | null> => {
+    return await matchSearchPathParams<Promise<Query | null>>(searchPathParams, {
       root:          async ()                          => ({kind: 'species',       filters: {}, species: ''}),
       random:        async ({filters, seed})           => ({kind: 'random',        filters, seed}),
       species_group: async ({filters, species_group})  => ({kind: 'species_group', filters, species_group}),
@@ -120,6 +129,16 @@ export const Query = {
           );
         }
       },
+      compare: async ({filters, searchPathParamss}) => ({
+        kind: 'compare',
+        filters,
+        queries: await Promise.all(searchPathParamss.map(async searchPathParams => (
+          ifNull<Query>(
+            await Query.loadFromSearchPathParams(searchPathParams),
+            () => ({kind: 'none'}), // HACK What UX makes sense for nested nulls? / Should they even happen here?
+          )
+        ))),
+      }),
     });
   },
 
@@ -238,16 +257,23 @@ interface State {
   _spectroScale: number; // Sync from/to Settings (1/3)
 };
 
-type StateRecs = 'loading' | 'notfound' | Array<Rec>;
-
+type StateRecs = StateRecsLoading | StateRecsNotFound | StateRecsRecs | StateRecsCompare;
+type StateRecsLoading  = {kind: 'loading'};
+type StateRecsNotFound = {kind: 'notfound'};
+type StateRecsRecs     = {kind: 'recs',    recs:  Array<Rec>};
+type StateRecsCompare  = {kind: 'compare', recss: Array<StateRecs>};
 function matchStateRecs<X>(recs: StateRecs, cases: {
-  loading:  (x: 'loading')  => X,
-  notfound: (x: 'notfound') => X,
-  recs:     (x: Array<Rec>) => X,
+  loading:  (recs: StateRecsLoading)  => X,
+  notfound: (recs: StateRecsNotFound) => X,
+  recs:     (recs: StateRecsRecs)     => X,
+  compare:  (recs: StateRecsCompare)  => X,
 }): X {
-  if (recs === 'loading')  return cases.loading(recs);
-  if (recs === 'notfound') return cases.notfound(recs);
-  else                     return cases.recs(recs);
+  switch (recs.kind) {
+    case 'loading':  return cases.loading(recs);
+    case 'notfound': return cases.notfound(recs);
+    case 'recs':     return cases.recs(recs);
+    case 'compare':  return cases.compare(recs);
+  }
 }
 
 export class SearchScreen extends PureComponent<Props, State> {
@@ -275,7 +301,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     query:                  null,
     refreshQuery:           false,
     excludeRecs:            new Set(),
-    recs:                   'loading',
+    recs:                   {kind: 'loading'},
     _spectroScale:          this.props.spectroScale, // Sync from/to Settings (2/3)
   };
 
@@ -285,19 +311,14 @@ export class SearchScreen extends PureComponent<Props, State> {
     denoise: true,              // For predict (like Bubo/py/model.swift:Features.denoise=true)
   }}
 
-  // Getters for state
-  get recsOrEmpty(): Array<Rec> {
-    return matchStateRecs(this.state.recs, {
-      loading:  ()   => [],
-      notfound: ()   => [],
-      recs:     recs => recs,
-    });
-  }
-  get query_rec(): null | Rec {
-    return matchStateRecs(this.state.recs, {
-      loading:  ()   => null,
-      notfound: ()   => null,
-      recs:     recs => recs[0] || null, // null if empty recs
+  get queryRecOrNull(): null | Rec {
+    return recursively(this.state.recs, (recs, recur) => {
+      return matchStateRecs(recs, {
+        loading:  ()        => null,
+        notfound: ()        => null,
+        recs:     ({recs})  => recs[0] || null, // null if empty recs
+        compare:  ({recss}) => recss.map(recur)[0] || null, // HACK
+      });
     });
   }
 
@@ -511,7 +532,7 @@ export class SearchScreen extends PureComponent<Props, State> {
     // Grow width to fit query_rec (if longer than search_recs)
     const recsMaxDurationS = Math.max(
       this.props.searchRecsMaxDurationS,
-      matchNull(this.query_rec, {null: () => -Infinity, x: x => x.duration_s}),
+      matchNull(this.queryRecOrNull, {null: () => -Infinity, x: x => x.duration_s}),
     );
     return _.sum(_.values(this.scrollViewContentWidths)) / this.props.searchRecsMaxDurationS * recsMaxDurationS;
   }
@@ -560,17 +581,18 @@ export class SearchScreen extends PureComponent<Props, State> {
   }
 
   get queryDesc(): string {
-    return matchNull(this.state.query, {
-      null: ()    => '...',
-      x:    query => matchQuery(query, {
-        none:          ()                         => 'none',
-        random:        ({filters, seed})          => `random/${seed}`,
-        species_group: ({filters, species_group}) => species_group,
-        species:       ({filters, species})       => species,
-        rec:           ({filters, source})        => Source.show(source, {
-          species: this.props.xc,
+    return recursively(this.state.query, (query, recur) => {
+      return matchNull(query, {
+        null: ()    => '...',
+        x:    query => matchQuery(query, {
+          none:          ()                         => 'none',
+          random:        ({filters, seed})          => `random/${seed}`,
+          species_group: ({filters, species_group}) => species_group,
+          species:       ({filters, species})       => species,
+          rec:           ({filters, source})        => Source.show(source, {species: this.props.xc}),
+          compare:       ({filters, queries})       => _.join(queries.map(recur), '|'),
         }),
-      }),
+      });
     });
   }
 
@@ -635,7 +657,7 @@ export class SearchScreen extends PureComponent<Props, State> {
       log.info("updateForLocation: state.recs = 'loading'");
       this.setState({
         query: null,
-        recs: 'loading',
+        recs: {kind: 'loading'},
         refreshQuery: false,
       });
       await this.releaseSounds(); // (Safe to do after clearing state.recs, since it uses this.soundsCache)
@@ -649,11 +671,16 @@ export class SearchScreen extends PureComponent<Props, State> {
       const recs = await this.recsFromQuery(query);
 
       // Set done state
-      log.info(`updateForLocation: state.recs = ${matchStateRecs(recs, {
-        loading:  x    => x,
-        notfound: x    => x,
-        recs:     recs => `(${recs.length} recs)`,
-      })}`);
+      log.info(`updateForLocation: state.recs = ${
+        recursively(recs, (recs, recur) => (
+          matchStateRecs(recs, {
+            loading:  ({kind})  => kind,
+            notfound: ({kind})  => kind,
+            recs:     ({recs})  => `(${recs.length} recs)`,
+            compare:  ({recss}) => _.join(recss.map(recur), '|'),
+          })
+        ))
+      }`);
       this.setState({
         query,
         recs,
@@ -665,8 +692,6 @@ export class SearchScreen extends PureComponent<Props, State> {
 
   // TODO Factor these big matchQuery cases into functions, for readability
   recsFromQuery = async (query: Query | null): Promise<StateRecs> => {
-
-    // TODO TODO
 
     // Global filters
     //  - TODO(put_all_query_state_in_location)
@@ -691,13 +716,13 @@ export class SearchScreen extends PureComponent<Props, State> {
 
     // Handle /rec/:sourceId not found (e.g. user deleted a user rec, or xc dataset changed)
     if (query === null) {
-      return 'notfound';
+      return {kind: 'notfound'};
     } else {
       return await matchQuery<Promise<StateRecs>>(query, {
 
         none: async () => {
           log.info(`updateForLocation: QueryNone -> 'notfound'...`);
-          return 'notfound';
+          return {kind: 'notfound'};
         },
 
         // TODO(slow_random): Perf: Very slow (~5s on US) b/c full table scan
@@ -738,9 +763,9 @@ export class SearchScreen extends PureComponent<Props, State> {
           `, {
             logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
             // logQueryPlan: true, // XXX Debug
-          })(async results => {
+          })<StateRecs>(async results => {
             const recs = results.rows.raw();
-            return recs;
+            return {kind: 'recs', recs};
           });
         },
 
@@ -775,9 +800,9 @@ export class SearchScreen extends PureComponent<Props, State> {
           `, {
             logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
             // logQueryPlan: true, // XXX Debug
-          })(async results => {
+          })<StateRecs>(async results => {
             const recs = results.rows.raw();
-            return recs;
+            return {kind: 'recs', recs};
           });
         },
 
@@ -826,9 +851,9 @@ export class SearchScreen extends PureComponent<Props, State> {
           `, {
             logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
             // logQueryPlan: true, // XXX Debug
-          })(async results => {
+          })<StateRecs>(async results => {
             const recs = results.rows.raw();
-            return recs;
+            return {kind: 'recs', recs};
           });
         },
 
@@ -861,7 +886,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             const query_rec = await this.props.db.loadRec(source);
             if (query_rec === null) {
               // query_rec not found (e.g. user deleted a user rec, or xc dataset changed)
-              return 'notfound';
+              return {kind: 'notfound'};
             }
 
             // Ensure spectro exists
@@ -1028,7 +1053,7 @@ export class SearchScreen extends PureComponent<Props, State> {
             return await this.props.db.query<XCRec>(sql, {
               logTruncate: null, // XXX Debug (safe to always log full query, no perf concerns)
               // logQueryPlan: true, // XXX Debug
-            })(async results => {
+            })<StateRecs>(async results => {
               const recs = results.rows.raw();
 
               // XXX Debug
@@ -1051,14 +1076,20 @@ export class SearchScreen extends PureComponent<Props, State> {
 
               // Inject query_rec as first result so it's visible at top
               //  - TODO Replace this with a proper display of query_rec at the top
-              return [
-                query_rec,
-                ...recs,
-              ];
+              return {
+                kind: 'recs',
+                recs: [query_rec, ...recs],
+              };
 
             });
 
           });
+        },
+
+        compare: async ({filters, queries}) => {
+          log.info('updateForLocation: Querying recs for compare', {queries});
+          const recss = await Promise.all(queries.map(this.recsFromQuery));
+          return {kind: 'compare', recss};
         },
 
       });
@@ -1513,6 +1544,14 @@ export class SearchScreen extends PureComponent<Props, State> {
                 ...buttonProps(this.props.sortSearchResults === 'd_pc'),
                 onPress: () => this.props.settings.set({sortSearchResults: 'd_pc'}),
                 label: 'Similar recs only (ignore species match)',
+              },
+            ],
+            compare: ({queries}) => [
+              // TODO How to present sorting options for compare view?
+              {
+                ...buttonProps(false),
+                onPress: () => {},
+                label: '(Disabled for compare view)',
               },
             ],
           }),
@@ -2364,7 +2403,23 @@ export class SearchScreen extends PureComponent<Props, State> {
   //  - Render phase (pure, no read/write DOM, may be called multiple times per commit or interrupted)
   render = () => {
     log.info('render');
-    const styleForSpecies = this.stylesForSpecies(_.uniq(this.recsOrEmpty.map(rec => rec.species)));
+
+    // Assign styles to all species across displayed recs
+    const styleForSpecies = this.stylesForSpecies(
+      // Compute unique species across displayed recs
+      _(recursively<StateRecs, Array<Rec>>(this.state.recs, (recs, recur) => (
+        matchStateRecs(recs, {
+          loading:  ()        => [],
+          notfound: ()        => [],
+          recs:     ({recs})  => recs,
+          compare:  ({recss}) => _.flatten(recss.map(recur)),
+        })
+      )))
+      .map(rec => rec.species)
+      .uniq()
+      .value()
+    );
+
     return (
       <View style={{
         flex: 1,
@@ -2376,7 +2431,49 @@ export class SearchScreen extends PureComponent<Props, State> {
         )}/>
 
         <TitleBarWithHelp
-          title='Similar recordings'
+
+          // TODO TODO compare_view
+          // title='Result recordings'
+          title={
+            // TODO Dedupe with SavedScreen.render + RecentScreen.render
+            recursively({query: this.state.query, verbose: true}, ({query, verbose}, recur) => (
+              !query ? (
+                'Loading...'
+              ) : (
+                matchQuery(query, {
+                  none: () => (
+                    '[None]' // [Does this ever happen?]
+                  ),
+                  random: ({filters, seed}) => (
+                    `Random`
+                  ),
+                  species_group: ({filters, species_group}) => (
+                    species_group
+                  ),
+                  species: ({filters, species}) => (
+                    species === '_BLANK' ? '[BLANK]' :
+                    !verbose ? species :
+                    matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+                      undefined: () => `? (${species})`,
+                      x:         x  => `${x.com_name} (${species})`,
+                    })
+                  ),
+                  rec: ({filters, source}) => (
+                    Source.show(source, {
+                      species:  this.props.xc,
+                      long:     true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                      showDate: x => showDate(x),
+                      // showDate: x => showDate(x).replace(`${section.title} `, ''), // HACK showTime if date = section date
+                    })
+                  ),
+                  compare: ({filters, queries}) => (
+                    `Compare: ${_.join(queries.map(query => recur({query, verbose: false})), ' | ')}`
+                  ),
+                })
+              )
+            ))
+          }
+
           settings={this.props.settings}
           showHelp={this.props.showHelp}
           help={(
@@ -2398,298 +2495,337 @@ export class SearchScreen extends PureComponent<Props, State> {
           )}
         />
 
-        {/* Loading spinner */}
-        {this.state.recs === 'loading' && (
-          <View style={{
-            flex: 1,
-            justifyContent: 'center',
-          }}>
-            <ActivityIndicator size='large' />
-          </View>
-        )}
+        {/* TODO Extract this as a named function for easier readability */}
+        {recursively(this.state.recs, (recs, recur) => (
 
-        {/* Recs list (with pan/pinch) */}
-        {/* - We use ScrollView instead of SectionList to avoid _lots_ of opaque pinch-to-zoom bugs */}
-        {/* - We use ScrollView instead of manual gestures (react-native-gesture-handler) to avoid _lots_ of opaque animation bugs */}
-        {this.state.recs !== 'loading' && (
-          <ScrollView
-            ref={this.scrollViewRef}
+          // Loading spinner
+          recs.kind === 'loading' ? (
+            <View style={{
+              flex: 1,
+              justifyContent: 'center',
+            }}>
+              <ActivityIndicator size='large' />
+            </View>
 
-            // Scroll/zoom
-            //  - Force re-layout on zoom change, else bad things (that I don't understand)
-            key={this.state.scrollViewKey}
-            contentContainerStyle={{
-              // ScrollView needs manually computed width to scroll in overflow direction (horizontal)
-              //  - https://github.com/facebook/react-native/issues/8579#issuecomment-233162695
-              width: this.scrollViewContentWidth,
-            }}
-            // This is (currently) the only place we use state.scrollViewState i/o this._scrollViewState
-            contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
-              // log.debug('render.contentOffset', {x}); // XXX Debug
-            })}
-            directionalLockEnabled={true} // Don't scroll vertical and horizontal at the same time (ios only)
-            minimumZoomScale={this.props.spectroScaleClamp.min / this.state._spectroScale}
-            maximumZoomScale={this.props.spectroScaleClamp.max / this.state._spectroScale}
-            onScrollEndDrag={async ({nativeEvent}) => {
-              // log.debug('onScrollEndDrag', {nativeEvent}); // XXX Debug
-              const {contentOffset, zoomScale, velocity} = nativeEvent;
-              this._scrollViewState = {contentOffset};
-              if (
-                zoomScale !== 1              // Don't trigger zoom if no zooming happened (e.g. only scrolling)
-                // && velocity !== undefined // [XXX Unreliable] Don't trigger zoom on 1/2 fingers released, wait for 2/2
-              ) {
-                const scale = zoomScale * this.state._spectroScale;
-                // log.debug('ZOOM', {nativeEvent}); // XXX Debug
-                // Trigger re-layout so non-image components (e.g. text) redraw at non-zoomed size
-                this.setState({
-                  scrollViewState: this._scrollViewState,
-                  _spectroScale: this.clampSpectroScaleY(scale),
-                  scrollViewKey: chance.hash(), // Else bad things (that I don't understand)
-                });
-              }
-            }}
+          // Compare view
+          //  - NOTE Must recur outside of the ScrollView (below) else the nested ScrollViews will behave like vanilla
+          //    Views (no scrolling)
+          ) : recs.kind === 'compare' ? (
+            recs.recss.map((recs, i) => (
+              <View key={i} style={{
+                flex: 1,
+                borderTopWidth: i === 0 ? 0 : 5,
+                borderColor: iOSColors.gray,
+              }}>
+                {recur(recs)}
+              </View>
+            ))
 
-            // TODO Sticky headers: manually calculate indices of species header rows
-            // stickyHeaderIndices={!this.props.showMetadataBelow ? undefined : ...}
+          ) : (
+            // Recs list (with pan/pinch)
+            //  - We use ScrollView instead of SectionList to avoid _lots_ of opaque pinch-to-zoom bugs
+            //  - We use ScrollView instead of manual gestures (react-native-gesture-handler) to avoid _lots_ of opaque animation bugs
+            <ScrollView
+              ref={this.scrollViewRef}
 
-          >
-            {/* Mimic a FlatList */}
+              // Scroll/zoom
+              //  - Force re-layout on zoom change, else bad things (that I don't understand)
+              key={this.state.scrollViewKey}
+              contentContainerStyle={{
+                // ScrollView needs manually computed width to scroll in overflow direction (horizontal)
+                //  - https://github.com/facebook/react-native/issues/8579#issuecomment-233162695
+                width: this.scrollViewContentWidth,
+              }}
+              // This is (currently) the only place we use state.scrollViewState i/o this._scrollViewState
+              contentOffset={tap(this.state.scrollViewState.contentOffset, x => {
+                // log.debug('render.contentOffset', {x}); // XXX Debug
+              })}
+              directionalLockEnabled={true} // Don't scroll vertical and horizontal at the same time (ios only)
+              minimumZoomScale={this.props.spectroScaleClamp.min / this.state._spectroScale}
+              maximumZoomScale={this.props.spectroScaleClamp.max / this.state._spectroScale}
+              onScrollEndDrag={async ({nativeEvent}) => {
+                // log.debug('onScrollEndDrag', {nativeEvent}); // XXX Debug
+                const {contentOffset, zoomScale, velocity} = nativeEvent;
+                this._scrollViewState = {contentOffset};
+                if (
+                  zoomScale !== 1              // Don't trigger zoom if no zooming happened (e.g. only scrolling)
+                  // && velocity !== undefined // [XXX Unreliable] Don't trigger zoom on 1/2 fingers released, wait for 2/2
+                ) {
+                  const scale = zoomScale * this.state._spectroScale;
+                  // log.debug('ZOOM', {nativeEvent}); // XXX Debug
+                  // Trigger re-layout so non-image components (e.g. text) redraw at non-zoomed size
+                  this.setState({
+                    scrollViewState: this._scrollViewState,
+                    _spectroScale: this.clampSpectroScaleY(scale),
+                    scrollViewKey: chance.hash(), // Else bad things (that I don't understand)
+                  });
+                }
+              }}
 
-            {/*
-            // (Unused, keeping for reference)
-            // _.flatten(this.sectionsForRecs(this.state.recs).map(({
-            //   title,
-            //   data: recs,
-            //   species,
-            //   species_taxon_order,
-            //   species_com_name,
-            //   species_sci_name,
-            //   recs_for_sp,
-            // }, sectionIndex) => [
-            //
-            //   Species header
-            //   this.props.showMetadataBelow && (
-            //     <View
-            //       key={`section-${sectionIndex}-${title}`}
-            //       style={styles.sectionSpecies}
-            //     >
-            //       <Text numberOfLines={1} style={styles.sectionSpeciesText}>
-            //         {species_com_name} (<Text style={{fontStyle: 'italic'}}>{species_sci_name}</Text>)
-            //       </Text>
-            //       {this.props.showDebug && (
-            //         // FIXME Off screen unless zoom=1
-            //         <this.DebugText numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}]}>
-            //           ({recs_for_sp} recs)
-            //         </this.DebugText>
-            //       )}
-            //     </View>
-            //   ),
-            */}
+              // TODO Sticky headers: manually calculate indices of species header rows
+              // stickyHeaderIndices={!this.props.showMetadataBelow ? undefined : ...}
 
-            {/* Rec rows */}
-            <View style={{flex: 1}}>
-              {this.state.recs === 'notfound' ? (
+            >
+              {/* Mimic a FlatList */}
 
-                <View style={[Styles.center, {padding: 30,
-                  width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
-                }]}>
-                  <Text style={material.subheading}>
-                    Recording not found
-                  </Text>
-                </View>
+              {/*
+              // (Unused, keeping for reference)
+              // _.flatten(this.sectionsForRecs(recs).map(({
+              //   title,
+              //   data: recs,
+              //   species,
+              //   species_taxon_order,
+              //   species_com_name,
+              //   species_sci_name,
+              //   recs_for_sp,
+              // }, sectionIndex) => [
+              //
+              //   Species header
+              //   this.props.showMetadataBelow && (
+              //     <View
+              //       key={`section-${sectionIndex}-${title}`}
+              //       style={styles.sectionSpecies}
+              //     >
+              //       <Text numberOfLines={1} style={styles.sectionSpeciesText}>
+              //         {species_com_name} (<Text style={{fontStyle: 'italic'}}>{species_sci_name}</Text>)
+              //       </Text>
+              //       {this.props.showDebug && (
+              //         // FIXME Off screen unless zoom=1
+              //         <this.DebugText numberOfLines={1} style={[{marginLeft: 'auto', alignSelf: 'center'}]}>
+              //           ({recs_for_sp} recs)
+              //         </this.DebugText>
+              //       )}
+              //     </View>
+              //   ),
+              */}
 
-              ) : fastIsEqual(this.state.recs, []) ? (
+              {/* Rec rows */}
+              <View style={{flex: 1}}>
+                {matchStateRecs<ReactNode>(recs, {
+                  loading: () => {
 
-                <View style={[Styles.center, {padding: 30,
-                  width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
-                }]}>
-                  <Text style={material.subheading}>
-                    No results
-                  </Text>
-                </View>
+                    // Dispatched above
+                    throw new Error('Unreachable');
 
-              ) : (
-                this.state.recs.map((rec, recIndex) => [
+                  },
+                  notfound: () => (
 
-                  // Rec row (with editing buttons)
-                  <Animated.View
-                    key={`row-${recIndex}-${rec.source_id}`}
-                    style={{
-                      flex: 1, flexDirection: 'row',
-                      // Alternating row colors
-                      // backgroundColor: recIndex % 2 == 0 ? iOSColors.white : iOSColors.lightGray,
-                      // Compact controls/labels when zoom makes image smaller than controls/labels
-                      ...(this.props.showMetadataBelow ? {} : {
-                        height: this.spectroDimImage(rec).height,
-                      }),
-                    }}
-                  >
+                    <View style={[Styles.center, {padding: 30,
+                      width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
+                    }]}>
+                      <Text style={material.subheading}>
+                        Recording not found
+                      </Text>
+                    </View>
 
-                    {/* Rec editing buttons */}
-                    {/* - NOTE Condition duplicated in scrollViewContentWidths */}
-                    {this.props.editing && (
-                      <this.RecEditingButtons rec={rec} />
-                    )}
+                  ),
+                  recs: ({recs}) => (
+                    fastIsEqual(recs, []) ? (
 
-                    {/* Rec region without the editing buttons  */}
-                    <LongPressGestureHandler onHandlerStateChange={this.onSpectroLongPress(rec)}>
-                      <Animated.View style={{
-                        flex: 1, flexDirection: 'column',
-                      }}>
+                      <View style={[Styles.center, {padding: 30,
+                        width: Dimensions.get('window').width, // HACK Fix width else we drift right with scrollViewContentWidth
+                      }]}>
+                        <Text style={material.subheading}>
+                          No results
+                        </Text>
+                      </View>
 
-                        {/* Rec row */}
-                        <View
+                    ) : (
+                      recs.map((rec, recIndex) => [
+
+                        // Rec row (with editing buttons)
+                        <Animated.View
+                          key={`row-${recIndex}-${rec.source_id}`}
                           style={{
-                            flexDirection: 'row',
+                            flex: 1, flexDirection: 'row',
+                            // Alternating row colors
+                            // backgroundColor: recIndex % 2 == 0 ? iOSColors.white : iOSColors.lightGray,
+                            // Compact controls/labels when zoom makes image smaller than controls/labels
                             ...(this.props.showMetadataBelow ? {} : {
-                              // Compact controls/labels when zoom makes image smaller than controls/labels
                               height: this.spectroDimImage(rec).height,
                             }),
                           }}
                         >
 
-                          {/* Rec debug info */}
-                          {this.props.showMetadataLeft && (
-                            <this.DebugView style={{
-                              padding: 0, // Reset padding:3 from debugView
-                              width: this.scrollViewContentWidths.debugInfo,
-                            }}>
-                              <MetadataText style={Styles.debugText}>slp: {rec.slp && round(rec.slp, 2)}</MetadataText>
-                              <MetadataText style={Styles.debugText}>d_pc: {rec.d_pc && round(rec.d_pc, 2)}</MetadataText>
-                              <MetadataText style={Styles.debugText}>n_recs: {rec.recs_for_sp}</MetadataText>
-                            </this.DebugView>
+                          {/* Rec editing buttons */}
+                          {/* - NOTE Condition duplicated in scrollViewContentWidths */}
+                          {this.props.editing && (
+                            <this.RecEditingButtons rec={rec} />
                           )}
 
-                          {/* Rec metadata left */}
-                          {this.props.showMetadataLeft && !this.props.showMetadataBelow && (
-                            <View style={{
-                              flexDirection: 'column',
-                              width: this.scrollViewContentWidths.metadataLeft,
-                              borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: iOSColors.midGray,
+                          {/* Rec region without the editing buttons  */}
+                          <LongPressGestureHandler onHandlerStateChange={this.onSpectroLongPress(rec)}>
+                            <Animated.View style={{
+                              flex: 1, flexDirection: 'column',
                             }}>
-                              {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
-                              {objectKeysTyped(MetadataColumnsLeft).map(c => this.props.metadataColumnsLeft.includes(c) && (
-                                <MetadataText key={c} children={MetadataColumnsLeft[c](rec)} />
-                              ))}
-                            </View>
-                          )}
 
-                          {/* Sideways species label */}
-                          {/* - After controls/metadata so that label+spectro always abut (e.g. if scrolled all the way to the right) */}
-                          {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
-                          <View style={[styles.recSpeciesSidewaysView, {
-                            backgroundColor: styleForSpecies.get(rec.species)!.backgroundColor,
-                          }]}>
-                            <View style={styles.recSpeciesSidewaysViewInner}>
-                              <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
-                                fontSize: this.state._spectroScale >= 2 ? 11 : 6, // Compact species label to fit within tiny rows
-                                color: styleForSpecies.get(rec.species)!.color,
-                              }]}>
-                                {rec.species}
-                              </Text>
-                            </View>
-                          </View>
+                              {/* Rec row */}
+                              <View
+                                style={{
+                                  flexDirection: 'row',
+                                  ...(this.props.showMetadataBelow ? {} : {
+                                    // Compact controls/labels when zoom makes image smaller than controls/labels
+                                    height: this.spectroDimImage(rec).height,
+                                  }),
+                                }}
+                              >
 
-                          {/* Spectro (tap) */}
-                          <TapGestureHandler onHandlerStateChange={this.onSpectroHandlerStateChange(rec)}>
-                            <Animated.View>
+                                {/* Rec debug info */}
+                                {this.props.showMetadataLeft && (
+                                  <this.DebugView style={{
+                                    padding: 0, // Reset padding:3 from debugView
+                                    width: this.scrollViewContentWidths.debugInfo,
+                                  }}>
+                                    <MetadataText style={Styles.debugText}>slp: {rec.slp && round(rec.slp, 2)}</MetadataText>
+                                    <MetadataText style={Styles.debugText}>d_pc: {rec.d_pc && round(rec.d_pc, 2)}</MetadataText>
+                                    <MetadataText style={Styles.debugText}>n_recs: {rec.recs_for_sp}</MetadataText>
+                                  </this.DebugView>
+                                )}
 
-                              {/* Image */}
-                              <Animated.Image
-                                style={this.spectroDimImage(rec)}
-                                resizeMode='stretch'
-                                source={{uri: Rec.spectroPath(rec, this.spectroPathOpts)}}
-                              />
-
-                              {/* Start time cursor (if playing + startTime) */}
-                              {this.recIsPlaying(rec.source_id, this.state.playing) && (
-                                this.state.playing!.startTime && (
+                                {/* Rec metadata left */}
+                                {this.props.showMetadataLeft && !this.props.showMetadataBelow && (
                                   <View style={{
-                                    position: 'absolute', width: 1, height: '100%',
-                                    left: this.spectroXFromTime(this.state.playing!.rec, this.state.playing!.startTime!),
-                                    backgroundColor: iOSColors.gray,
-                                  }}/>
-                                )
-                              )}
+                                    flexDirection: 'column',
+                                    width: this.scrollViewContentWidths.metadataLeft,
+                                    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: iOSColors.midGray,
+                                  }}>
+                                    {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
+                                    {objectKeysTyped(MetadataColumnsLeft).map(c => this.props.metadataColumnsLeft.includes(c) && (
+                                      <MetadataText key={c} children={MetadataColumnsLeft[c](rec)} />
+                                    ))}
+                                  </View>
+                                )}
 
-                              {/* Progress time cursor (if playing + playingCurrentTime) */}
-                              {this.recIsPlaying(rec.source_id, this.state.playing) && (
-                                this.state.playing!.startTime && this.state.playingCurrentTime !== undefined && (
-                                  <View style={{
-                                    position: 'absolute', width: 1, height: '100%',
-                                    left: this.spectroXFromTime(this.state.playing!.rec, this.state.playingCurrentTime),
-                                    backgroundColor: iOSColors.black,
-                                  }}/>
-                                )
-                              )}
+                                {/* Sideways species label */}
+                                {/* - After controls/metadata so that label+spectro always abut (e.g. if scrolled all the way to the right) */}
+                                {/* - NOTE Keep outside of TapGestureHandler else spectroTimeFromX/spectroXFromTime have to adjust */}
+                                <View style={[styles.recSpeciesSidewaysView, {
+                                  backgroundColor: styleForSpecies.get(rec.species)!.backgroundColor,
+                                }]}>
+                                  <View style={styles.recSpeciesSidewaysViewInner}>
+                                    <Text numberOfLines={1} style={[styles.recSpeciesSidewaysText, {
+                                      fontSize: this.state._spectroScale >= 2 ? 11 : 6, // Compact species label to fit within tiny rows
+                                      color: styleForSpecies.get(rec.species)!.color,
+                                    }]}>
+                                      {rec.species}
+                                    </Text>
+                                  </View>
+                                </View>
 
-                              {/* HACK Visual feedback for playing rec [XXX after adding progress bar by default] */}
-                              {this.recIsPlaying(rec.source_id, this.state.playing) && (
+                                {/* Spectro (tap) */}
+                                <TapGestureHandler onHandlerStateChange={this.onSpectroHandlerStateChange(rec)}>
+                                  <Animated.View>
+
+                                    {/* Image */}
+                                    <Animated.Image
+                                      style={this.spectroDimImage(rec)}
+                                      resizeMode='stretch'
+                                      source={{uri: Rec.spectroPath(rec, this.spectroPathOpts)}}
+                                    />
+
+                                    {/* Start time cursor (if playing + startTime) */}
+                                    {this.recIsPlaying(rec.source_id, this.state.playing) && (
+                                      this.state.playing!.startTime && (
+                                        <View style={{
+                                          position: 'absolute', width: 1, height: '100%',
+                                          left: this.spectroXFromTime(this.state.playing!.rec, this.state.playing!.startTime!),
+                                          backgroundColor: iOSColors.gray,
+                                        }}/>
+                                      )
+                                    )}
+
+                                    {/* Progress time cursor (if playing + playingCurrentTime) */}
+                                    {this.recIsPlaying(rec.source_id, this.state.playing) && (
+                                      this.state.playing!.startTime && this.state.playingCurrentTime !== undefined && (
+                                        <View style={{
+                                          position: 'absolute', width: 1, height: '100%',
+                                          left: this.spectroXFromTime(this.state.playing!.rec, this.state.playingCurrentTime),
+                                          backgroundColor: iOSColors.black,
+                                        }}/>
+                                      )
+                                    )}
+
+                                    {/* HACK Visual feedback for playing rec [XXX after adding progress bar by default] */}
+                                    {this.recIsPlaying(rec.source_id, this.state.playing) && (
+                                      <View style={{
+                                        position: 'absolute', height: '100%', width: 5,
+                                        left: 0,
+                                        backgroundColor: iOSColors.red,
+                                      }}/>
+                                    )}
+
+                                    {/* HACK Visual feedback for long-press ActionModal rec */}
+                                    {/* - HACK Condition on showGenericModal b/c we can't (yet) onDismiss to unset sourceIdForActionModal */}
+                                    {this.state.showGenericModal && this.state.sourceIdForActionModal === rec.source_id && (
+                                      <View style={{
+                                        position: 'absolute', height: '100%', width: 5,
+                                        left: 0,
+                                        backgroundColor: iOSColors.black,
+                                      }}/>
+                                    )}
+
+                                  </Animated.View>
+                                </TapGestureHandler>
+
+                              </View>
+
+                              {/* Rec metadata below */}
+                              {this.props.showMetadataBelow && (
                                 <View style={{
-                                  position: 'absolute', height: '100%', width: 5,
-                                  left: 0,
-                                  backgroundColor: iOSColors.red,
-                                }}/>
-                              )}
-
-                              {/* HACK Visual feedback for long-press ActionModal rec */}
-                              {/* - HACK Condition on showGenericModal b/c we can't (yet) onDismiss to unset sourceIdForActionModal */}
-                              {this.state.showGenericModal && this.state.sourceIdForActionModal === rec.source_id && (
-                                <View style={{
-                                  position: 'absolute', height: '100%', width: 5,
-                                  left: 0,
-                                  backgroundColor: iOSColors.black,
-                                }}/>
+                                  width: Dimensions.get('window').width, // Fit within the left-most screen width of ScrollView content
+                                  flexDirection: 'column',
+                                  // borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iOSColors.black, // TODO Make full width
+                                  marginTop: 3,
+                                  // marginBottom: 3,
+                                }}>
+                                  {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
+                                  {objectKeysTyped(MetadataColumnsBelow).map(c => this.props.metadataColumnsBelow.includes(c) && (
+                                    <MetadataText
+                                      key={c}
+                                      style={{
+                                        marginBottom: 3,
+                                      }}
+                                    >
+                                      <MetadataLabel col={c} /> {MetadataColumnsBelow[c](rec)}
+                                    </MetadataText>
+                                  ))}
+                                </View>
                               )}
 
                             </Animated.View>
-                          </TapGestureHandler>
+                          </LongPressGestureHandler>
 
-                        </View>
+                        </Animated.View>
 
-                        {/* Rec metadata below */}
-                        {this.props.showMetadataBelow && (
-                          <View style={{
-                            width: Dimensions.get('window').width, // Fit within the left-most screen width of ScrollView content
-                            flexDirection: 'column',
-                            // borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: iOSColors.black, // TODO Make full width
-                            marginTop: 3,
-                            // marginBottom: 3,
-                          }}>
-                            {/* Ignore invalid keys. Show in order of MetadataColumnsLeft. */}
-                            {objectKeysTyped(MetadataColumnsBelow).map(c => this.props.metadataColumnsBelow.includes(c) && (
-                              <MetadataText
-                                key={c}
-                                style={{
-                                  marginBottom: 3,
-                                }}
-                              >
-                                <MetadataLabel col={c} /> {MetadataColumnsBelow[c](rec)}
-                              </MetadataText>
-                            ))}
-                          </View>
-                        )}
+                      ])
+                    )
 
-                      </Animated.View>
-                    </LongPressGestureHandler>
+                  ),
+                  compare: ({recss}) => {
 
-                  </Animated.View>
+                    // Dispatched above
+                    throw new Error('Unreachable');
 
-                ])
-              )}
-            </View>
+                  },
+                })}
+              </View>
 
-          </ScrollView>
-        )}
+            </ScrollView>
+          )
+        ))}
 
         {/* Debug info */}
         <this.DebugView>
           <this.DebugText>queryDesc: {this.queryDesc}</this.DebugText>
           <this.DebugText>
-            Recs: {typeof this.state.recs === 'string'
-              ? `.../${this.state.totalRecs || '?'}`
-              : `${this.state.recs.length}/${this.state.totalRecs || '?'} (${sprintf('%.3f', this.state.recsQueryTime)}s)`
-            }
+            Recs: {recursively(this.state.recs, (recs, recur) => {
+              matchStateRecs(recs, {
+                loading:  ()        => `.../${this.state.totalRecs || '?'}`,
+                notfound: ()        => `.../${this.state.totalRecs || '?'}`,
+                recs:     ({recs})  => `${recs.length}/${this.state.totalRecs || '?'} (${sprintf('%.3f', this.state.recsQueryTime)}s)`,
+                compare:  ({recss}) => _.join(_.flatten(recss.map(recs => recur(recs))), ' | '),
+              })
+            })}
           </this.DebugText>
           <this.DebugText>
             Filters: {yaml({

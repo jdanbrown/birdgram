@@ -26,9 +26,8 @@ import { SettingsWrites } from 'app/settings';
 import { Styles } from 'app/styles';
 import { StyleSheet } from 'app/stylesheet';
 import {
-  global, ifEmpty, ifNull, into, json, local, mapNil, mapNull, mapUndefined, match, matchNil,
-  matchNull, matchUndefined, mergeArraysWith, pretty, shallowDiffPropsState, showDate,
-  showDateNoTime, showTime, throw_, typed, yaml,
+  global, ifEmpty, ifNull, into, json, local, mapNil, mapNull, mapUndefined, match, matchNil, matchNull, matchUndefined,
+  mergeArraysWith, pretty, recursively, shallowDiffPropsState, showDate, showDateNoTime, showTime, throw_, typed, yaml,
 } from 'app/utils';
 import { XC } from 'app/xc';
 
@@ -442,7 +441,7 @@ export class SavedScreen extends PureComponent<Props, State> {
                             flexDirection: 'column',
                             paddingLeft: 5,
                           }}>
-                            {/* TODO Dedupe with RecentScreen.render */}
+                            {/* TODO Dedupe with SavedScreen.render + RecentScreen.render */}
                             <Text style={material.body1}>
 
                               {/* Item title */}
@@ -454,30 +453,40 @@ export class SavedScreen extends PureComponent<Props, State> {
                                     ifEmpty(source.metadata.title, () => 'Untitled')
                                   ),
                                 }),
-                                search: saved => matchQuery(saved.query, {
-                                  none: () => (
-                                    '[None]' // [Does this ever happen?]
-                                  ),
-                                  random: ({filters, seed}) => (
-                                    `Random`
-                                  ),
-                                  species_group: ({filters, species_group}) => (
-                                    species_group
-                                  ),
-                                  species: ({filters, species}) => (
-                                    species === '_BLANK' ? '[BLANK]' :
-                                    matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
-                                      undefined: () => `${species} (?)`,
-                                      x:         x  => `${species} (${x.com_name})`,
+
+                                search: saved => (
+                                  recursively({query: saved.query, verbose: true}, ({query, verbose}, recur) => (
+                                    matchQuery(saved.query, {
+                                      none: () => (
+                                        '[None]' // [Does this ever happen?]
+                                      ),
+                                      random: ({filters, seed}) => (
+                                        `Random`
+                                      ),
+                                      species_group: ({filters, species_group}) => (
+                                        species_group
+                                      ),
+                                      species: ({filters, species}) => (
+                                        species === '_BLANK' ? '[BLANK]' :
+                                        !verbose ? species :
+                                        matchUndefined(this.props.ebird.speciesMetadataFromSpecies.get(species), {
+                                          undefined: () => `? (${species})`,
+                                          x:         x  => `${x.com_name} (${species})`,
+                                        })
+                                      ),
+                                      rec: ({filters, source}) => (
+                                        Source.show(source, {
+                                          species: this.props.xc,
+                                          long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
+                                        })
+                                      ),
+                                      compare: ({filters, queries}) => (
+                                        `Compare: ${_.join(queries.map(query => recur({query, verbose: false})), ' | ')}`
+                                      ),
                                     })
-                                  ),
-                                  rec: ({filters, source}) => (
-                                    Source.show(source, {
-                                      species: this.props.xc,
-                                      long:    true, // e.g. 'User recording: ...' / 'XC recording: ...'
-                                    })
-                                  ),
-                                }),
+                                  ))
+                                ),
+
                               })}
 
                             </Text>

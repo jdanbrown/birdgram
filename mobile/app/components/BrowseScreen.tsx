@@ -1,3 +1,4 @@
+import jsonStableStringify from 'json-stable-stringify';
 import _ from 'lodash';
 import React, { Component, PureComponent, ReactNode, RefObject } from 'react';
 import shallowCompare from 'react-addons-shallow-compare';
@@ -59,6 +60,7 @@ interface Props {
   excludeSpecies:       Set<Species>;
   excludeSpeciesGroups: Set<SpeciesGroup>;
   unexcludeSpecies:     Set<Species>;
+  compareSelect:        boolean;
 }
 
 interface State {
@@ -154,6 +156,11 @@ export class BrowseScreen extends Component<Props, State> {
     const isLastSection  = (section: Section) => lastSection  && section.title === lastSection.title;
     const isLastItem     = (section: Section, index: number) => isLastSection(section) && index === section.data.length - 1;
 
+    // Precompute state for compareSelect
+    const searchSelectedForCompare: Set<string> = new Set(
+      this.searchSearchPathParamss().map(x => jsonStableStringify(x))
+    );
+
     return (
       <View style={{
         flex: 1,
@@ -219,6 +226,18 @@ export class BrowseScreen extends Component<Props, State> {
                 Location:
                 {this.props.place.name} ({data.length}/{this.props.place.knownSpecies.length} species)
               </Text>
+
+              {/* Compare button */}
+              {local(() => {
+                return (
+                  <BrowseItemButton
+                    iconName='copy'
+                    active={this.props.compareSelect}
+                    activeButtonColor={iOSColors.blue}
+                    onPress={() => this.props.settings.toggle('compareSelect')}
+                  />
+                );
+              })}
 
               {/* Toggle-all button */}
               {local(() => {
@@ -314,6 +333,7 @@ export class BrowseScreen extends Component<Props, State> {
             //  - (Why does it sometimes unmount/mount anyway?)
             renderSectionHeader={({section}) => {
               const {species_group} = section.data[0];
+              const searchPathParams: SearchPathParams = {kind: 'species_group', filters: {}, species_group};
               return (
                 <BrowseSectionHeader
                   key={species_group}
@@ -325,6 +345,12 @@ export class BrowseScreen extends Component<Props, State> {
                     Array.from(this.props.unexcludeSpecies)
                     .map(x => this.props.ebird.speciesGroupFromSpecies(x))
                     .includes(species_group)
+                  }
+                  compareSelect={this.props.compareSelect}
+                  searchPathParams={searchPathParams}
+                  isSelectedForCompare={
+                    this.props.compareSelect && // Short-circuit (small perf)
+                    searchSelectedForCompare.has(jsonStableStringify(searchPathParams))
                   }
                   browse={this}
                   go={this.props.go}
@@ -339,6 +365,7 @@ export class BrowseScreen extends Component<Props, State> {
               com_name,
               sci_name,
             }}) => {
+              const searchPathParams: SearchPathParams = {kind: 'species', filters: {}, species};
               return (
                 <BrowseItem
                   key={species}
@@ -349,6 +376,13 @@ export class BrowseScreen extends Component<Props, State> {
                   isLastItem={isLastItem(section, index)}
                   excluded={this.props.excludeSpecies.has(species) || this.props.excludeSpeciesGroups.has(species_group)}
                   unexcluded={this.props.unexcludeSpecies.has(species)}
+                  compareSelect={this.props.compareSelect}
+                  searchPathParams={searchPathParams}
+                  isSelectedForCompare={
+                    this.props.compareSelect && // Short-circuit (small perf)
+                    searchSelectedForCompare.has(jsonStableStringify(searchPathParams))
+                  }
+                  browse={this}
                   go={this.props.go}
                   ebird={this.props.ebird}
                   settings={this.props.settings}
@@ -368,6 +402,24 @@ export class BrowseScreen extends Component<Props, State> {
     this._firstSectionHeaderHeight = height;
   }
 
+  searchSearchPathParamss = (): Array<SearchPathParams> => {
+    const searchSearchPathParams = searchPathParamsFromLocation(this.props.histories.search.location);
+    return matchSearchPathParams(searchSearchPathParams, {
+      root:          x                     => [x],
+      random:        x                     => [x],
+      species_group: x                     => [x],
+      species:       x                     => [x],
+      rec:           x                     => [x],
+      compare:       ({searchPathParamss}) => searchPathParamss,
+    });
+  }
+  addSearchSearchPathParamss = (searchPathParams: SearchPathParams): Array<SearchPathParams> => {
+    return [...this.searchSearchPathParamss(), searchPathParams];
+  }
+  delSearchSearchPathParamss = (searchPathParams: SearchPathParams): Array<SearchPathParams> => {
+    return this.searchSearchPathParamss().filter(x => !fastIsEqual(x, searchPathParams));
+  }
+
 }
 
 //
@@ -376,14 +428,17 @@ export class BrowseScreen extends Component<Props, State> {
 //
 
 interface BrowseSectionHeaderProps {
-  species_group:  string;
-  isFirstSection: boolean | undefined;
-  excluded:       boolean;
-  unexcludedAny:  boolean;
-  browse:         BrowseScreen;
-  go:             Go;
-  ebird:          Ebird;
-  settings:       SettingsWrites;
+  species_group:        string;
+  isFirstSection:       boolean | undefined;
+  excluded:             boolean;
+  unexcludedAny:        boolean;
+  compareSelect:        boolean;
+  searchPathParams:     SearchPathParams;
+  isSelectedForCompare: boolean;
+  browse:               BrowseScreen;
+  go:                   Go;
+  ebird:                Ebird;
+  settings:             SettingsWrites;
 }
 
 interface BrowseSectionHeaderState {
@@ -445,6 +500,24 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
             </Text>
           </View>
 
+          {this.props.compareSelect && (
+            <BrowseItemButton
+              iconName='copy'
+              active={this.props.isSelectedForCompare}
+              activeButtonColor={iOSColors.blue}
+              onPress={() => {
+                this.props.go('search', {path: `/compare/${
+                  _(this.props.isSelectedForCompare
+                    ? this.props.browse.delSearchSearchPathParamss(this.props.searchPathParams)
+                    : this.props.browse.addSearchSearchPathParamss(this.props.searchPathParams)
+                  )
+                  .map(x => encodeURIComponent(json(x)))
+                  .join(',')
+                }`});
+              }}
+            />
+          )}
+
           <BrowseItemButton
             iconName={this.props.excluded ? 'eye-off' : 'eye'}
             active={this.props.excluded}
@@ -476,16 +549,20 @@ export class BrowseSectionHeader extends PureComponent<BrowseSectionHeaderProps,
 //
 
 interface BrowseItemProps {
-  species:       Species;
-  species_group: SpeciesGroup;
-  com_name:      string;
-  sci_name:      string;
-  isLastItem:    boolean | undefined;
-  excluded:      boolean;
-  unexcluded:    boolean;
-  go:            Go;
-  ebird:         Ebird;
-  settings:      SettingsWrites;
+  species:              Species;
+  species_group:        SpeciesGroup;
+  com_name:             string;
+  sci_name:             string;
+  isLastItem:           boolean | undefined;
+  excluded:             boolean;
+  unexcluded:           boolean;
+  compareSelect:        boolean;
+  searchPathParams:     SearchPathParams;
+  isSelectedForCompare: boolean;
+  browse:               BrowseScreen;
+  go:                   Go;
+  ebird:                Ebird;
+  settings:             SettingsWrites;
 }
 
 interface BrowseItemState {
@@ -555,6 +632,24 @@ export class BrowseItem extends PureComponent<BrowseItemProps, BrowseItemState> 
               {sci_name}
             </Text>
           </View>
+
+          {this.props.compareSelect && (
+            <BrowseItemButton
+              iconName='copy'
+              active={this.props.isSelectedForCompare}
+              activeButtonColor={iOSColors.blue}
+              onPress={() => {
+                this.props.go('search', {path: `/compare/${
+                  _(this.props.isSelectedForCompare
+                    ? this.props.browse.delSearchSearchPathParamss(this.props.searchPathParams)
+                    : this.props.browse.addSearchSearchPathParamss(this.props.searchPathParams)
+                  )
+                  .map(x => encodeURIComponent(json(x)))
+                  .join(',')
+                }`});
+              }}
+            />
+          )}
 
           <BrowseItemButton
             iconName={this.props.excluded && !this.props.unexcluded ? 'eye-off' : 'eye'}

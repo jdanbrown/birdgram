@@ -589,6 +589,7 @@ export default class App extends PureComponent<Props, State> {
           excludeSpecies          = {this.state.settings!.excludeSpecies}
           excludeSpeciesGroups    = {this.state.settings!.excludeSpeciesGroups}
           unexcludeSpecies        = {this.state.settings!.unexcludeSpecies}
+          compareSelect           = {this.state.settings!.compareSelect}
         />
       ),
     },

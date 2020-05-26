@@ -12,7 +12,7 @@ import { Location } from 'app/router';
 import {
   assert, basename, chance, ensureDir, ensureParentDir, extname, ifEmpty, ifNil, ifNull, ifUndefined, json,
   JsonSafeNumber, Interval, local, mapEmpty, mapNil, mapNull, mapUndefined, match, matchNull, matchUndefined, NoKind,
-  Omit, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane, requireSafePath, safeParseInt,
+  Omit, one, parseUrl, parseUrlNoQuery, parseUrlWithQuery, pretty, qsSane, requireSafePath, safeParseInt,
   safeParseIntElseNull, safePath, showDate, showSuffix, splitFirst, stripExt, throw_, tryElse, typed, unjson,
 } from 'app/utils';
 
@@ -169,12 +169,14 @@ export type SearchPathParams =
   | SearchPathParamsRandom
   | SearchPathParamsSpeciesGroup
   | SearchPathParamsSpecies
-  | SearchPathParamsRec;
+  | SearchPathParamsRec
+  | SearchPathParamsCompare;
 export type SearchPathParamsRoot         = { kind: 'root' };
 export type SearchPathParamsRandom       = { kind: 'random',        filters: Filters, seed: number };
 export type SearchPathParamsSpeciesGroup = { kind: 'species_group', filters: Filters, species_group: string };
 export type SearchPathParamsSpecies      = { kind: 'species',       filters: Filters, species: string };
 export type SearchPathParamsRec          = { kind: 'rec',           filters: Filters, sourceId: SourceId };
+export type SearchPathParamsCompare      = { kind: 'compare',       filters: Filters, searchPathParamss: Array<SearchPathParams> };
 
 export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cases: {
   root:          (searchPathParams: SearchPathParamsRoot)         => X,
@@ -182,6 +184,7 @@ export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cas
   species_group: (searchPathParams: SearchPathParamsSpeciesGroup) => X,
   species:       (searchPathParams: SearchPathParamsSpecies)      => X,
   rec:           (searchPathParams: SearchPathParamsRec)          => X,
+  compare:       (searchPathParams: SearchPathParamsCompare)      => X,
 }): X {
   switch (searchPathParams.kind) {
     case 'root':          return cases.root(searchPathParams);
@@ -189,6 +192,7 @@ export function matchSearchPathParams<X>(searchPathParams: SearchPathParams, cas
     case 'species_group': return cases.species_group(searchPathParams);
     case 'species':       return cases.species(searchPathParams);
     case 'rec':           return cases.rec(searchPathParams);
+    case 'compare':       return cases.compare(searchPathParams);
   }
 }
 
@@ -212,7 +216,34 @@ export function searchPathParamsFromLocation(location: Location): SearchPathPara
   if (match) return {kind: 'species', filters: {}, species: decodeURIComponent(match.params.species)};
 
   match = matchPath<{sourceId: SourceId}>(path, {path: '/rec/:sourceId*'});
-  if (match) return {kind: 'rec',     filters: {}, sourceId: decodeURIComponent(match.params.sourceId)};
+  if (match) return {kind: 'rec', filters: {}, sourceId: decodeURIComponent(match.params.sourceId)};
+
+  // Avoid warnings from 0-item compares
+  //  - HACK Maybe these happened only in dev? -- in which case this is safe to remove
+  match = matchPath<{}>(path, {path: '/compare/', exact: true});
+  if (match) return {kind: 'root'};
+
+  match = matchPath<{searchPathParamss: string}>(path, {path: '/compare/:searchPathParamss'});
+  if (match) {
+    const compare: SearchPathParamsCompare = {
+      kind: 'compare',
+      filters: {},
+      searchPathParamss: (
+        _(match.params.searchPathParamss)
+        .split(',')
+        .map(searchPathParams => unjson(decodeURIComponent(searchPathParams)))
+        .filter(({kind}) => kind !== 'root') // Drop empty searches
+        .value()
+      ),
+    };
+    if (compare.searchPathParamss.length > 1) {
+      return compare;
+    } else if (compare.searchPathParamss.length === 1) {
+      // Map 1-item compares back to the 1 item
+      //  - Else various bits of UX gets weird trying to show 1-item compares
+      return one(compare.searchPathParamss);
+    }
+  }
 
   log.warn(`searchPathParamsFromLocation: Unknown location[${json(location)}], returning {kind: root}`);
   return {kind: 'root'};

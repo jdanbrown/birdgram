@@ -486,6 +486,18 @@ export function times<X>(n: number, f: () => X) {
   }
 }
 
+export function recursively<X, Y>(x: X, f: (x2: X, recur: (_: X) => Y) => Y): Y {
+  return f(x, x2 => recursively(x2, f));
+}
+
+export function one<X>(xs: Array<X>): X {
+  if (xs.length !== 1) {
+    throw new Error(`Expected length 1, got[${xs.length}], in xs[${json(xs)}]`);
+  } else {
+    return xs[0];
+  }
+}
+
 // HACK Globals for dev
 global.timed = timed;
 global.times = times;

@@ -49,6 +49,7 @@ export interface Props {
   readonly excludeSpecies:       Set<Species>;
   readonly excludeSpeciesGroups: Set<SpeciesGroup>;
   readonly unexcludeSpecies:     Set<Species>;
+  readonly compareSelect:        boolean;
   // For PlacesScreen
   readonly savedPlaces: Array<Place | PlaceLoading>;
   readonly places:      Set<PlaceId>;
@@ -101,6 +102,7 @@ export const DEFAULTS: Props = {
   excludeSpecies:       new Set(),
   excludeSpeciesGroups: new Set(),
   unexcludeSpecies:     new Set(),
+  compareSelect:        false,
   // For PlacesScreen
   savedPlaces: [],
   places:      new Set(),
@@ -162,6 +164,7 @@ export const TYPES: {[key: string]: Array<string | Function>} = {
   excludeSpecies:       [Set],
   excludeSpeciesGroups: [Set],
   unexcludeSpecies:     [Set],
+  compareSelect:        ['boolean'],
   // For PlacesScreen
   savedPlaces: ['object'],
   places:      [Set],
@@ -203,6 +206,7 @@ export const KEYS: Array<keyof Props> = [
   'excludeSpecies',
   'excludeSpeciesGroups',
   'unexcludeSpecies',
+  'compareSelect',
   // For PlacesScreen
   'savedPlaces',
   'places',
@@ -274,6 +278,7 @@ export class Settings implements SettingsWrites, Props {
     public readonly excludeSpecies:       Set<Species>,
     public readonly excludeSpeciesGroups: Set<SpeciesGroup>,
     public readonly unexcludeSpecies:     Set<Species>,
+    public readonly compareSelect:        boolean,
     // For PlacesScreen
     public readonly savedPlaces: Array<Place | PlaceLoading>,
     public readonly places:      Set<PlaceId>,
