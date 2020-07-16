@@ -28,7 +28,7 @@
     "js-yaml": "^3.12.0",
     "json-stable-stringify": "^1.0.1",
     "json-url": "^2.3.4",
-    "lodash": "^4.17.11",
+    "lodash": "^4.17.19",
     "memoize-one": "^5.0.0",
     "moment": "^2.23.0",
     "ndarray": "^1.0.18",
