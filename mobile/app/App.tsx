@@ -464,12 +464,15 @@ export default class App extends PureComponent<Props, State> {
               <View style={{
                 flex: 1,
                 backgroundColor: Styles.app.backgroundColor,
+                // backgroundColor: 'green', // XXX Debug
 
                 // These both look like too much space, but all other apps appear to stick to them...?
                 // paddingTop: insets.top, paddingBottom: insets.bottom,
                 //
                 // TODO Nvm let's get crazy
-                paddingTop: insets.top - 10, paddingBottom: insets.bottom - 10,
+                //  - XXX Nah, feels too cramped on the actual phone
+                // paddingTop: insets.top - 10, paddingBottom: insets.bottom - 10,
+                paddingTop: insets.top, paddingBottom: insets.bottom,
 
               }}>
 

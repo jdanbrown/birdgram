@@ -65,8 +65,9 @@ export function TitleBar(props: {
       }}>
         <Text style={{
           // borderWidth: 1, borderColor: 'red', // XXX Debug
-          ...material.subheadingObject,
-          fontWeight: '600', // (Override 'normal') Between 'normal' (400) and 'bold' (700)
+          // ...material.titleObject, // XXX Too big (e.g. in SearchScreen)
+          ...material.subheadingObject, fontWeight: '600', // (Override 'normal') Between 'normal' (400) and 'bold' (700)
+          // fontSize: 16, // XXX Not helpful
           ...props.textProps,
         }}>
           {props.title}
@@ -148,6 +149,8 @@ export class TitleBarWithHelp extends PureComponent<TitleBarWithHelpProps, Title
                   fontSize: 20,
                   ...(!this.props.showHelp ? {} : {
                     color: Styles.help.color,
+                    // TODO Make this a backgroundColor like the blue/red/yellow buttons on BrowseScreen
+                    //  - Will require some style twiddling in TitleBar
                   }),
                 }}
                 name='help-circle'
@@ -203,7 +206,7 @@ export class HelpText extends PureComponent<HelpTextProps, HelpTextState> {
       borderColor: Styles.help.color,
       backgroundColor: Styles.help.backgroundColor,
     }}>
-      <Text style={{fontWeight: 'bold'}}>Help</Text> {'\n'}
+      {/* <Text style={{fontWeight: 'bold'}}>Help</Text>{'\n'} */}
       {this.props.children}
     </Text>
   );

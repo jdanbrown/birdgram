@@ -17,7 +17,7 @@ import Feather from 'react-native-vector-icons/Feather';
 
 import { config } from 'app/config';
 import { Geo, GeoCoords, GeoError } from 'app/components/Geo';
-import { TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
+import { HelpText, TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
 import { matchSearchPathParams, Place, PlaceId, Species } from 'app/datatypes';
 import { BarchartProps, Ebird, HotspotFindResult, HotspotGeoResult, RegionFindResult } from 'app/ebird';
 import { debug_print, Log, logErrors, logErrorsAsync, puts, rich } from 'app/log';
@@ -325,10 +325,18 @@ export class PlacesScreen extends PureComponent<Props, State> {
           // title='Places'
           // title='Filter species by place'
           // title='Choose locations to filter species'
-          title='Choose locations for fewer species'
+          // title='Choose locations for fewer species'
+          title='Filter by locations'
           settings={this.props.settings}
           showHelp={this.props.showHelp}
-          help={null} // TODO TODO
+          help={(
+            // TODO TODO
+            <HelpText>
+              Select locations to filter down to fewer species{'\n'}
+              • foo <Feather name='shuffle'/> bar{'\n'}
+              • baz
+            </HelpText>
+          )}
         />
 
         <View style={{

@@ -50,11 +50,11 @@ export const Edit = {
   },
 
   show: (edit: Edit, opts: SourceShowOpts): string => {
-    const parts = [
-      Source.show(edit.parent, opts),
-      ...edit.edits.map(x => DraftEdit.show(x)),
-    ];
-    return (parts
+    return (
+      [
+        Source.show(edit.parent, opts),
+        ...edit.edits.map(x => DraftEdit.show(x)),
+      ]
       .filter(x => !_.isEmpty(x)) // Exclude null, undefined, '' (and [], {})
       .join(' ')
     );

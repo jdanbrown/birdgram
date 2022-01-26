@@ -20,7 +20,7 @@ import FontAwesome5 from 'react-native-vector-icons/FontAwesome5';
 import { sprintf } from 'sprintf-js';
 
 import { App, AppProps, AppState } from 'app/App';
-import { TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
+import { HelpText, TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
 import {
   ModelsSearch, matchRec, matchSearchPathParams, Place, Quality, Rec, SearchPathParams, searchPathParamsFromLocation,
   SearchRecs, ServerConfig, Source, SourceId, Species, SpeciesGroup, SpeciesMetadata, SpectroPathOpts, UserRec, XCRec,
@@ -183,7 +183,13 @@ export class BrowseScreen extends Component<Props, State> {
             title='Browse species'
             settings={this.props.settings}
             showHelp={this.props.showHelp}
-            help={null} // TODO TODO
+            help={(
+              // TODO TODO
+              <HelpText>
+                • foo <Feather name='shuffle'/> bar {'\n'}
+                • baz
+              </HelpText>
+            )}
           />
         </BaseButton>
 
@@ -223,7 +229,7 @@ export class BrowseScreen extends Component<Props, State> {
                 marginHorizontal: 5,
               }}>
                 {/* Place: */}
-                Location:
+                Location: {}
                 {this.props.place.name} ({data.length}/{this.props.place.knownSpecies.length} species)
               </Text>
 

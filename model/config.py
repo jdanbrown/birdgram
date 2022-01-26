@@ -107,8 +107,8 @@ config = AttrDict(
             ),
             xc_meta=dict(
                 # countries_k='am', com_names_k='us', num_recs=None,  # TODO All Americas i/o just US/CA/MX? Only +16%: 53k->63k recs
-                # countries_k='na', com_names_k='us', num_recs=None,  # 52705 recs [TODO How big is this?]
-                countries_k='na', com_names_k='us', num_recs=200,     # 47367 recs [chosen based on ballpark match ~2.92g CR payload] -- Birdgram US
+                countries_k='na', com_names_k='us', num_recs=None,  # 52705 recs [TODO How big is this?]
+                # countries_k='na', com_names_k='us', num_recs=200,     # 47367 recs [chosen based on ballpark match ~2.92g CR payload] -- Birdgram US
             ),
 
             # # CR

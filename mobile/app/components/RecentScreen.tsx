@@ -10,7 +10,7 @@ import { human, iOSColors, material, materialColors, systemWeights } from 'react
 import Feather from 'react-native-vector-icons/Feather';
 
 import { matchQuery, Query } from 'app/components/SearchScreen';
-import { TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
+import { HelpText, TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
 import {
   matchRecordPathParams, matchSearchPathParams, recordPathParamsFromLocation, searchPathParamsFromLocation, Source,
 } from 'app/datatypes';
@@ -283,7 +283,13 @@ export class RecentScreen extends PureComponent<Props, State> {
             title='History'
             settings={this.props.settings}
             showHelp={this.props.showHelp}
-            help={null} // TODO TODO
+            help={(
+              <HelpText>
+                Go back to things you've recently viewed{'\n'}
+                • Tap a <Feather name='mic'/> row to view it in the Record <Feather name='mic'/> tab{'\n'}
+                • Tap a <Feather name='activity'/> row to view it in the Results <Feather name='activity'/> tab
+              </HelpText>
+            )}
           />
         </BaseButton>
 

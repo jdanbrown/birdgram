@@ -2477,19 +2477,20 @@ export class SearchScreen extends PureComponent<Props, State> {
           settings={this.props.settings}
           showHelp={this.props.showHelp}
           help={(
+            // TODO TODO Add a headline ("These are search results" or whatever)
             <HelpText>
-              • Tap a recording to play it {'\n'}
-              • Long-press a recording to see more actions {'\n'}
-              • Tap <Feather name='shuffle' /> to show a random species {'\n'}
-              • Tap <Feather name='filter' /> to change how many results are shown {'\n'}
-              • Tap <Feather name='rotate-ccw' /> to reset filters and exclusions {'\n'}
-              • Tap <Feather name='chevrons-down' /> to change sorting {'\n'}
-              • Tap <Feather name='sidebar' /> to show/hide metadata on the left {'\n'}
-              • Tap <Feather name='credit-card' style={Styles.flipVertical} /> to show/hide metadata inline {'\n'}
-              • Long-press <Feather name='sidebar' />/<Feather name='credit-card' style={Styles.flipVertical} /> to
-                change which metadata is shown {'\n'}
-              • Tap <Feather name='crosshair' /> to toggle playback: start from where you tap or start from the beginning {'\n'}
-              • Tap <Feather name='zoom-out' />/<Feather name='zoom-in' /> to resize the spectrograms {'\n'}
+              • Tap a recording to play it{'\n'}
+              • Long-press a recording to see more actions{'\n'}
+              • Tap <Feather name='shuffle'/> to show a random species{'\n'}
+              • Tap <Feather name='filter'/> to change how many results are shown{'\n'}
+              • Tap <Feather name='rotate-ccw'/> to reset filters and exclusions{'\n'}
+              • Tap <Feather name='chevrons-down'/> to change sorting{'\n'}
+              • Tap <Feather name='sidebar'/> to show/hide metadata on the left{'\n'}
+              • Tap <Feather name='credit-card' style={Styles.flipVertical}/> to show/hide metadata inline{'\n'}
+              • Long-press <Feather name='sidebar'/>/<Feather name='credit-card' style={Styles.flipVertical}/> to
+                change which metadata is shown{'\n'}
+              • Tap <Feather name='crosshair'/> to toggle playback: start from where you tap or start from the beginning{'\n'}
+              • Tap <Feather name='zoom-out'/>/<Feather name='zoom-in'/> to resize the spectrograms{'\n'}
               • Pinch in/out to resize the spectrograms
             </HelpText>
           )}

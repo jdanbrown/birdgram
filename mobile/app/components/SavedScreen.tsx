@@ -14,7 +14,7 @@ import RNFB from 'rn-fetch-blob';
 const fs = RNFB.fs;
 
 import { matchQuery, Query } from 'app/components/SearchScreen';
-import { TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
+import { HelpText, TitleBar, TitleBarWithHelp } from 'app/components/TitleBar';
 import {
   matchRecordPathParams, matchSearchPathParams, matchSource, recordPathParamsFromLocation, Rec,
   searchPathParamsFromLocation, Source, SourceId, UserRec, UserSource, XCRec,
@@ -198,14 +198,14 @@ export class SavedScreen extends PureComponent<Props, State> {
       // Docs: https://facebook.github.io/react-native/docs/alertios#prompt
       //  - TODO(android): Won't work on android
       AlertIOS.prompt(
-        'Title',      // title
-        undefined,    // message
-        [             // callbackOrButtons
+        'Rename recording', // title
+        undefined,          // message
+        [                   // callbackOrButtons
           {text: 'Cancel', style: 'cancel',  onPress: () => resolve(null)},
           {text: 'Save',   style: 'default', onPress: s  => resolve(s)},
         ],
         'plain-text', // type ('plain-text' | 'secure-text' | 'login-password')
-        ifNull(metadata.title, () => undefined), // defaultValue
+        ifNull(metadata.title, () => ''), // defaultValue
         'default',    // keyboardType (see https://facebook.github.io/react-native/docs/alertios#prompt)
       );
     });
@@ -283,7 +283,15 @@ export class SavedScreen extends PureComponent<Props, State> {
             title='Your recordings'
             settings={this.props.settings}
             showHelp={this.props.showHelp}
-            help={null} // TODO TODO
+            help={(
+              <HelpText>
+                All the recordings you've made or edited{'\n'}
+                • Tap a recording to view it in the Record <Feather name='mic'/> tab{'\n'}
+                • Swipe right on a recording to rename <Feather name='edit'/>{'\n'}
+                • Swipe left on a recording to delete <Feather name='trash-2'/>{'\n'}
+                • "Edit: ..." means it's an edited copy of a recording
+              </HelpText>
+            )}
           />
         </BaseButton>
 
@@ -447,13 +455,14 @@ export class SavedScreen extends PureComponent<Props, State> {
                               {/* Item title */}
                               {matchSaved(saved, {
                                 record: saved => matchSource(saved.source, {
-                                  xc:   source => 'XC', // TODO [we don't yet save xc recs]
+                                  xc:   source => 'XC', // TODO We don't yet save xc recs
                                   user: source => (
                                     // TODO Show more metadata fields: species, ...
                                     ifEmpty(source.metadata.title, () => 'Untitled')
                                   ),
                                 }),
 
+                                // TODO We don't yet save searches
                                 search: saved => (
                                   recursively({query: saved.query, verbose: true}, ({query, verbose}, recur) => (
                                     matchQuery(saved.query, {
@@ -500,6 +509,24 @@ export class SavedScreen extends PureComponent<Props, State> {
                                   showDate: showTime,
                                 }),
                                 search: saved => null,
+                              })}
+
+                              {/* Item coords */}
+                              {/*   - TODO Should this be part of Source.show? */}
+                              {matchSaved(saved, {
+                                search: saved => null,
+                                record: saved => recursively(saved.source, (source, recur) => (
+                                  matchSource(source, {
+                                    xc: ({xc_id}) => null, // TODO Show xc coords
+                                    user: ({ext, metadata}) => (
+                                      metadata.edit
+                                        ? recur(metadata.edit.parent)
+                                        : metadata.coords && (
+                                          `\nLocation: (${metadata.coords.coords.latitude}, ${metadata.coords.coords.longitude})`
+                                        )
+                                    ),
+                                  })
+                                ))
                               })}
 
                             </Text>
