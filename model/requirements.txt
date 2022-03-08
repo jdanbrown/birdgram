@@ -28,7 +28,7 @@ glances==2.11.1
 # google-cloud==0.33.1 # XXX Had to upgrade google-cloud-bigquery for pandas-gbq, hope it didn't break anything...
 google-cloud-bigquery==1.9.0
 graphviz==0.8.4
-httpie==0.9.9
+httpie==3.1.0
 ipykernel==4.9.0 # Includes fix for https://github.com/plotly/dash/issues/257#issuecomment-395610889
 joypy==0.1.8
 jupyter==1.0.0
