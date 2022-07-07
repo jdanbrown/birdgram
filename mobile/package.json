@@ -30,7 +30,7 @@
     "json-url": "^2.3.4",
     "lodash": "^4.17.11",
     "memoize-one": "^5.0.0",
-    "moment": "^2.23.0",
+    "moment": "^2.29.4",
     "ndarray": "^1.0.18",
     "ndarray-ops": "^1.2.2",
     "ndarray-resample": "^1.0.1",
