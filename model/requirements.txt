@@ -24,7 +24,7 @@ flake8-commas==2.0.0
 flake8-import-order==0.17.1
 frozendict==1.2
 gcsfs==0.1.0
-glances==2.11.1
+glances==3.2.1
 # google-cloud==0.33.1 # XXX Had to upgrade google-cloud-bigquery for pandas-gbq, hope it didn't break anything...
 google-cloud-bigquery==1.9.0
 graphviz==0.8.4
