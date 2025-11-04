@@ -1,5 +1,14 @@
-# pyright docs:
+# ruff
+# - https://github.com/astral-sh/ruff
+# - https://beta.ruff.rs/docs/configuration/
+[tool.ruff]
+line-length = 120
+[tool.ruff.format]
+quote-style = "single"
+
+# pyright
 # - https://github.com/microsoft/pyright/blob/main/docs/configuration.md
+# - https://microsoft.github.io/pyright/#/configuration?id=sample-pyprojecttoml-file
 [tool.pyright]
 include = [
   ".",
@@ -16,3 +25,4 @@ ignore = [
   "pydub",
   "sp14",
 ]
+typeCheckingMode = "strict"
